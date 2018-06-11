@@ -1,0 +1,11 @@
+var a = nil;
+var b = "string";
+print a;
+print b;
+print (a or b);
+print (b or a);
+if (a) {
+  print a;
+} else {
+  print b;
+}

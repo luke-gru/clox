@@ -1,0 +1,46 @@
+class Animal {
+  init(name) {
+    this.name = name;
+  }
+  computedcolor {
+    return "color: " + this.color;
+  }
+}
+
+class Snake < Animal {
+  init(name, color) {
+    super.init(name);
+    this.color = color;
+  }
+  computedcolor {
+    return "my " + super.computedcolor;
+  }
+}
+
+var s = Snake("Jake", "red");
+var s2 = Snake("Leo", "blue");
+print s.color;
+print s;
+print s.computedcolor;
+print s == s2;
+print s == s;
+
+class A {
+  method() {
+    print "A method";
+  }
+}
+
+class B < A {
+  method() {
+    print "B method";
+  }
+
+  test() {
+    super.method();
+  }
+}
+
+class C < B {}
+
+C().test(); // "A method"

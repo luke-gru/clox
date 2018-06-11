@@ -1,0 +1,15 @@
+class A {
+  color=(color) {
+    print "A color set: " + color;
+  }
+}
+
+class B < A {
+  color=(color) {
+    super.color = color;
+    print "B color set: " + color;
+  }
+}
+
+var b = B();
+b.color = "red";

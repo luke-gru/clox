@@ -1,0 +1,27 @@
+fun throws(throwExpr) {
+  print "throwing";
+  throw throwExpr;
+}
+
+try {
+  throws("hi");
+} catch ("hi") {
+  print "caught hi";
+} catch ("other") {
+  print "caught other";
+}
+
+class Error {
+  init(msg) {
+    this.msg = msg;
+  }
+}
+class ErrorB < Error {}
+
+try {
+  throws(ErrorB("uh oh"));
+} catch (Error err) {
+  print "caught Error: msg: " + err.msg;
+}
+
+throw "error";

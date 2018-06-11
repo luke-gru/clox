@@ -1,0 +1,11 @@
+var a = 1;
+if (a == 1) {
+  print "YAY1";
+  if (a == 0) {
+    print "ERROR2";
+  } else {
+    print "YAY2";
+  }
+} else {
+  print "ERROR";
+}

@@ -1,0 +1,18 @@
+class Shape {
+  init(color) {
+    this.color = color;
+  }
+  computedColor {
+    return "color: " + this.color;
+  }
+}
+
+class Square < Shape {
+  toString() {
+    return "Square (" + this.color + ")";
+  }
+}
+
+var sq = Square("red");
+print sq.toString();
+print sq.computedColor;

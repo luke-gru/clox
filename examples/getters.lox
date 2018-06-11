@@ -1,0 +1,17 @@
+class Circle {
+  init(radius) {
+    this.radius = radius;
+  }
+
+  area {
+    return 3.141592653 * this.radius * this.radius;
+  }
+  color=(color) {
+    this.mycolor = "color: " + color;
+  }
+}
+
+var circle = Circle(4);
+print circle.area; // Prints roughly "50.2655".
+circle.color = "red";
+print circle.mycolor;

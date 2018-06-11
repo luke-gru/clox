@@ -1,0 +1,17 @@
+class Math {
+  class square(n) {
+    return n * n;
+  }
+  class me() {
+    return this;
+  }
+  class pi() {
+    return this.PI;
+  }
+}
+
+print Math.square(3); // Prints "9".
+print Math.me();
+Math.PI = 3.14;
+print Math.PI;
+print Math.pi();

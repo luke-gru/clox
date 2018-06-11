@@ -1,0 +1,18 @@
+var a = fun(a, b) {
+  print a+b;
+};
+a(1, 2);
+
+print "callbacks:";
+
+fun thrice(fn) {
+  for (var i = 1; i <= 3; i = i + 1) {
+    fn(i);
+  }
+}
+
+thrice(fun (a) {
+  print a;
+});
+
+fun(a) { print a; }("called!");

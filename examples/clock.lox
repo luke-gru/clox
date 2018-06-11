@@ -1,0 +1,2 @@
+var ms = clock();
+print ms;
