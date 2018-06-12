@@ -27,7 +27,8 @@ Node *createNode(node_type_t type, Token tok, vec_nodep_t *children) {
 void nodeAddChild(Node *node, Node *child) {
     ASSERT_MEM(node->children);
     vec_push(node->children, child);
-    child->parent = node;
+    if (child != NULL)
+        child->parent = node;
 }
 
 void nodeAddData(Node *node, void *data) {
@@ -243,18 +244,47 @@ static char *outputWhileStmt(Node *n, int indentLevel) {
     buf = strAdd(buf, ")\n"); // TODO: add indent
     return buf;
 }
+
 static char *outputForStmt(Node *n, int indentLevel) {
-    return "";
+    char *indent = i(indentLevel);
+    Node *init = vec_first(n->children);
+    Node *test = n->children->data[1];
+    Node *incr = n->children->data[2];
+    char *initOutput = "nil";
+    char *testOutput = "true";
+    char *incrOutput = "nil";
+    if (init != NULL) {
+        initOutput = outputASTString(init, indentLevel);
+    }
+    if (test != NULL) {
+        testOutput = outputASTString(test, indentLevel);
+    }
+    if (incr != NULL) {
+        incrOutput = outputASTString(incr, indentLevel);
+    }
+    char *startFmt = "%s(for %s %s %s\n";
+    char *buf = calloc(strlen(indent)+1+strlen(initOutput)+
+            strlen(testOutput)+strlen(incrOutput)+8, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, startFmt, indent, initOutput, testOutput, incrOutput);
+    Node *blockNode = n->children->data[3];
+    buf = strAdd(buf, outputASTString(blockNode, indentLevel+1));
+    buf = strAdd(buf, ")\n"); // TODO: add indent
+    return buf;
 }
+
 static char *outputForeachStmt(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputContinueStmt(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputBreakStmt(Node *n, int indentLevel) {
     return "";
 }
+
 // fn decl
 static char *outputFunctionStmt(Node *n, int indentLevel) {
     char *indent = i(indentLevel);
@@ -314,11 +344,47 @@ static char *outputModuleStmt(Node *n, int indentLevel) {
     return "";
 }
 static char *outputTryStmt(Node *n, int indentLevel) {
-    return "";
+    char *indent = i(indentLevel);
+    char *startFmt = "%s(try\n";
+    char *buf = calloc(strlen(indent)+1+5, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, startFmt, indent);
+    Node *tryBlk = vec_first(n->children);
+    buf = strAdd(buf, outputASTString(tryBlk, indentLevel+1));
+    if (n->children->length > 1) {
+        Node *catchStmt = NULL;
+        int i = 0;
+        vec_foreach(n->children, catchStmt, i) {
+            if (i == 0) continue;
+            buf = strAdd(buf, outputASTString(catchStmt, indentLevel));
+        }
+    }
+    buf = strAdd(buf, ")\n"); // TODO: indent
+    return buf;
 }
 
+// NOTE: 2 or 3 children, depending on if variableexpr (child 2) is given
 static char *outputCatchStmt(Node *n, int indentLevel) {
-    return "";
+    fprintf(stderr, "outputCatch\n");
+    char *indent = i(indentLevel);
+    Node *catchExpr = vec_first(n->children);
+    char *catchExprOut = outputASTString(catchExpr, indentLevel);
+    char *catchVarOut = "";
+    bool catchVarGiven = n->children->length > 2;
+    if (catchVarGiven) {
+        catchVarOut = outputASTString(n->children->data[1], indentLevel);
+        catchVarOut = strAdd(" ", catchVarOut);
+    }
+    char *startFmt = "%s(catch %s%s\n";
+    char *buf = calloc(strlen(indent)+1+strlen(catchExprOut)+
+            strlen(catchVarOut)+8, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, startFmt, indent, catchExprOut, catchVarOut);
+    Node *block = vec_last(n->children);
+    buf = strAdd(buf, outputASTString(block, indentLevel+1));
+    buf = strAdd(buf, ")\n"); // TODO: indent
+    fprintf(stderr, "/outputCatch\n");
+    return buf;
 }
 
 static char *outputThrowStmt(Node *n, int indentLevel) {

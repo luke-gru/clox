@@ -150,6 +150,47 @@ cleanup:
     return 0;
 }
 
+static int test_output_nodes_from_parser_for1(void) {
+    const char *src = "for (;;) {\n"
+                      "  print \"again...\";\n"
+                      "}";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    T_ASSERT(strcmp("(for nil true nil\n"
+                    "(block\n"
+                    "    (print \"again...\")\n"
+                    ")\n)\n", output) == 0);
+
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_try1(void) {
+    const char *src = "try {\n"
+                      "  print \"again...\";\n"
+                      "} catch (\"uh oh\") { }";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    T_ASSERT(strcmp("(try\n"
+                    "(block\n"
+                    "    (print \"again...\")\n"
+                    ")\n"
+                    "(catch \"uh oh\"\n"
+                    "  (block))\n"
+                    ")\n" , output) == 0);
+
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     INIT_TESTS();
     RUN_TEST(test_output_node_literal_string);
@@ -160,5 +201,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_output_nodes_from_parser_classdecl1);
     RUN_TEST(test_output_nodes_from_parser_if1);
     RUN_TEST(test_output_nodes_from_parser_while1);
+    RUN_TEST(test_output_nodes_from_parser_for1);
+    RUN_TEST(test_output_nodes_from_parser_try1);
     END_TESTS();
 }

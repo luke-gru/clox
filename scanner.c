@@ -25,6 +25,8 @@ static Keyword keywords[] = {
   {"fun",     3, TOKEN_FUN},
   {"if",      2, TOKEN_IF},
   {"nil",     3, TOKEN_NIL},
+  {"try",     3, TOKEN_TRY},
+  {"catch",   5, TOKEN_CATCH},
   {"or",      2, TOKEN_OR},
   {"print",   5, TOKEN_PRINT},
   {"return",  6, TOKEN_RETURN},

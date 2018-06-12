@@ -124,6 +124,7 @@ static Node *classBody(void);
 static Node *statement(void);
 static Node *printStatement(void);
 static Node *blockStatements(void);
+static Node *expressionStatement(void);
 
 static bool isAtEnd(void) {
     return parser.previous.type == TOKEN_EOF || check(TOKEN_EOF);
@@ -245,6 +246,94 @@ static Node *statement() {
         nodeAddChild(whileNode, blockStmt);
         return whileNode;
     }
+
+    // for (var i = 0; i < n; i++) { }
+    if (match(TOKEN_FOR)) {
+        node_type_t forT = {
+            .type = NODE_STMT,
+            .kind = FOR_STMT,
+        };
+        Token forTok = parser.previous;
+        Node *forNode = createNode(forT, forTok, NULL);
+        consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'for'");
+        Node *initializer = NULL; // can be null
+        if (match(TOKEN_SEMICOLON)) {
+            // leave NULL
+        } else {
+            if (match(TOKEN_VAR)) {
+                initializer = varDeclaration();
+            } else {
+                initializer = expressionStatement();
+            }
+        }
+        nodeAddChild(forNode, initializer);
+        Node *expr = NULL;
+        if (match(TOKEN_SEMICOLON)) {
+            // leave NULL
+        } else {
+            expr = expression();
+            consume(TOKEN_SEMICOLON, "Expected ';' after test expression in 'for'");
+        }
+        nodeAddChild(forNode, expr);
+
+        Node *incrExpr = NULL;
+        if (check(TOKEN_RIGHT_PAREN)) {
+            // leave NULL
+        } else {
+            incrExpr = expression();
+        }
+        nodeAddChild(forNode, incrExpr);
+        consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'for' increment/decrement expression");
+        Node *blockNode = statement();
+        nodeAddChild(forNode, blockNode);
+        return forNode;
+    }
+
+    // try { } catch (Error e) { }
+    if (match(TOKEN_TRY)) {
+        Token tryTok = parser.previous;
+        node_type_t nType = {
+            .type = NODE_STMT,
+            .kind = TRY_STMT,
+        };
+        Node *try = createNode(nType, tryTok, NULL);
+        consume(TOKEN_LEFT_BRACE, "Expected '{' after keyword 'try'");
+        Token lbraceTok = parser.previous;
+        Node *stmtList = blockStatements();
+        Node *tryBlock = wrapStmtsInBlock(stmtList, lbraceTok);
+        nodeAddChild(try, tryBlock);
+        while (match(TOKEN_CATCH)) {
+            Token catchTok = parser.previous;
+            consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'catch'");
+            Node *catchExpr = expression();
+            Token *identToken = NULL;
+            if (match(TOKEN_IDENTIFIER)) {
+                identToken = &parser.previous;
+            }
+            consume(TOKEN_RIGHT_PAREN, "Expected ')' to end 'catch' expression");
+            consume(TOKEN_LEFT_BRACE, "Expected '{' after 'catch' expression");
+            lbraceTok = parser.previous;
+            Node *catchStmtList = blockStatements();
+            Node *catchBlock = wrapStmtsInBlock(catchStmtList, lbraceTok);
+            node_type_t catchT = {
+                .type = NODE_STMT,
+                .kind = CATCH_STMT,
+            };
+            Node *catchStmt = createNode(catchT, catchTok, NULL);
+            nodeAddChild(catchStmt, catchExpr); // class or string or instance, etc.
+            if (identToken != NULL) {
+                node_type_t varT = {
+                    .type = NODE_EXPR,
+                    .kind = VARIABLE_EXPR,
+                };
+                Node *varExpr = createNode(varT, *identToken, NULL);
+                nodeAddChild(catchStmt, varExpr); // variable to be bound to in block
+            }
+            nodeAddChild(catchStmt, catchBlock);
+            nodeAddChild(try, catchStmt);
+        }
+        return try;
+    }
     fprintf(stderr, "statement() fallthru");
 }
 
@@ -276,6 +365,18 @@ static Node *blockStatements() {
     return stmtList;
 }
 
+static Node *expressionStatement() {
+    Token tok = parser.current;
+    Node *expr = expression();
+    node_type_t stmtT = {
+        .type = NODE_STMT,
+        .kind = EXPR_STMT,
+    };
+    Node *exprStmt = createNode(stmtT, tok, NULL);
+    nodeAddChild(exprStmt, expr);
+    return exprStmt;
+}
+
 // '{' already parsed. Continue parsing up to and including closing '}'
 static Node *classBody() {
     Token lbraceTok = parser.previous;
@@ -298,6 +399,7 @@ static Node *classBody() {
     return block;
 }
 
+// TOKEN_VAR is already consumed.
 static Node *varDeclaration(void) {
     consume(TOKEN_IDENTIFIER, "Expected identifier after keyword 'var'");
     Token identTok = parser.previous;
