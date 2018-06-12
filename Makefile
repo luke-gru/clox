@@ -1,7 +1,7 @@
 CC=gcc
-SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c options.c
-TEST_SRCS = debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c options.c
-TEST_FILES = test/test_object.c test/vec.c
+SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c
+TEST_SRCS = debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c
+TEST_FILES = test/test_object.c test/test_nodes.c
 DEBUG_FLAGS=-DDEBUG_TRACE_EXECUTION -g
 TEST_FLAGS=-g -Itest/include -I.
 BUILD_DIR=bin
@@ -27,5 +27,6 @@ clean:
 
 .PHONY: test
 test: build
-	${CC} $(TEST_SRCS) $(TEST_FILES) ${TEST_FLAGS} -o bin/test
+	${CC} $(TEST_SRCS) test/test_object.c ${TEST_FLAGS} -o bin/test_object
+	${CC} $(TEST_SRCS) test/test_nodes.c ${TEST_FLAGS} -o bin/test_nodes
 

@@ -1,0 +1,97 @@
+#ifndef clox_nodes_h
+#define clox_nodes_h
+
+#include <stdbool.h>
+#include "vec.h"
+#include "scanner.h"
+
+struct sNode;
+typedef vec_t(struct sNode*) vec_nodep_t;
+
+typedef enum eExprType {
+    BINARY_EXPR = 1,
+    LOGICAL_EXPR,
+    GROUPING_EXPR,
+    LITERAL_EXPR,
+    ARRAY_EXPR,
+    INDEX_GET_EXPR,
+    INDEX_SET_EXPR,
+    UNARY_EXPR,
+    VARIABLE_EXPR,
+    ASSIGN_EXPR,
+    CALL_EXPR,
+    ANON_FN_EXPR,
+    PROP_ACCESS_EXPR,
+    PROP_SET_EXPR,
+    THIS_EXPR,
+    SUPER_EXPR,
+    SPLAT_CALL_EXPR,
+    KEYWORD_ARG_EXPR,
+} ExprType;
+
+typedef enum eStmtType {
+    EXPR_STMT = 20,
+    PRINT_STMT,
+    VAR_STMT,
+    BLOCK_STMT,
+    IF_STMT,
+    WHILE_STMT,
+    FOR_STMT,
+    FOREACH_STMT,
+    CONTINUE_STMT,
+    BREAK_STMT,
+    FUNCTION_STMT,
+    RETURN_STMT,
+    CLASS_STMT,
+    MODULE_STMT,
+    TRY_STMT,
+    CATCH_STMT,
+    THROW_STMT,
+    IN_STMT,
+    STMTLIST_STMT,
+} StmtType;
+
+typedef enum eOtherType {
+    PARAM_NODE = 1,
+    TOKEN_NODE,
+} OtherType;
+
+typedef enum eNodeType {
+    NODE_EXPR = 1,
+    NODE_STMT,
+    NODE_OTHER // ex: param nodes
+} NodeType;
+
+typedef enum eLiteralType {
+    LIT_TYPE_NONE = 0,
+    NUMBER_TYPE,
+    STRING_TYPE,
+    NIL_TYPE,
+    BOOL_TYPE,
+} LiteralType;
+
+typedef struct sNodeType {
+    NodeType type; // stmt or expr
+    int kind; // what kind of stmt/expr/other
+    int litKind; // if a literal expr, what kind?
+} node_type_t;
+
+typedef struct sNode {
+    void *data; // used in some circumstances, but try to avoid it
+    node_type_t type;
+    Token tok;
+    vec_nodep_t *children;
+    struct sNode *parent;
+} Node;
+
+typedef void (*NodeCallback)(Node *n, int idx);
+
+Node *createNode(node_type_t type, Token tok, vec_nodep_t *children);
+void nodeAddChild(Node *node, Node *child);
+void nodeAddData(Node *node, void *data);
+void nodeForeachChild(Node *node, NodeCallback cb);
+void freeNode(Node *node, bool freeChildren);
+
+char *outputASTString(Node *node, int indentLevel);
+
+#endif

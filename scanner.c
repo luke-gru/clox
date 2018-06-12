@@ -2,7 +2,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "scanner.h"
+#include "stdlib.h"
+#include "memory.h"
 
+// global
 Scanner scanner;
 
 typedef struct {
@@ -81,6 +84,7 @@ static Token makeToken(TokenType type) {
   token.type = type;
   token.start = scanner.tokenStart;
   token.length = (int)(scanner.current - scanner.tokenStart);
+  token.lexeme = NULL; // only created on demand, see tokStr()
   token.line = scanner.line;
   return token;
 }
@@ -224,6 +228,8 @@ void initScanner(const char *src) {
 
 const char *tokTypeStr(TokenType ttype) {
   switch (ttype) {
+    case TOKEN_EMPTY:
+      return "(EMPTY)";
     case TOKEN_LEFT_PAREN:
       return "LEFT_PAREN";
     case TOKEN_RIGHT_PAREN:
@@ -324,4 +330,30 @@ void scanAllPrint(const char *src) {
 
         if (token.type == TOKEN_EOF) break;
     }
+}
+
+char *tokStr(Token *tok) {
+    if (tok->lexeme != NULL) return tok->lexeme;
+    char *buf = calloc(tok->length+1, 1);
+    memcpy(buf, tok->start, tok->length);
+    tok->lexeme = buf;
+    return buf;
+}
+
+Token emptyTok(void) {
+    Token t = {
+        .type = TOKEN_EMPTY,
+        .start = NULL,
+        .lexeme = NULL,
+        .length = 0,
+        .line = 0,
+    };
+    return t;
+}
+
+// copy given token to the heap
+Token *copyToken(Token *tok) {
+    Token *ret = ALLOCATE(Token, 1);
+    memcpy(ret, tok, sizeof(Token));
+    return ret;
 }

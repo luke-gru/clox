@@ -2,6 +2,9 @@
 #define clox_scanner_h
 
 typedef enum {
+  // all AST nodes need a token, so this is just a
+  // placeholder token type for nodes that don't need one.
+  TOKEN_EMPTY,
   TOKEN_LEFT_PAREN,
   TOKEN_RIGHT_PAREN,
   TOKEN_LEFT_BRACE,
@@ -50,8 +53,8 @@ typedef enum {
 typedef struct {
   TokenType type;
   const char *start;
-  int length;
-  const char *file; // TODO: use
+  char *lexeme;
+  int length; // not including NULL byte
   int line;
 } Token;
 
@@ -64,9 +67,14 @@ typedef struct {
 
 extern Scanner scanner; // global
 
+// init/reinit scanner
 void initScanner(const char *src);
 const char *tokTypeStr(TokenType ttype);
 Token scanToken();
 void scanAllPrint(const char *src);
+
+Token emptyTok(void);
+char *tokStr(Token *tok);
+Token *copyToken(Token *tok);
 
 #endif

@@ -2,9 +2,12 @@
 #include "memory.h"
 #include "object.h"
 #include "value.h"
+#include "vm.h"
 
 #define ALLOCATE_OBJ(type, objectType) \
     (type*)allocateObject(sizeof(type), objectType)
+
+extern VM vm;
 
 static Obj* allocateObject(size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
@@ -51,9 +54,9 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     string->chars = GROW_ARRAY(string->chars, char, string->length,
         string->length+lenToAdd);
     for (int i = 0; i < lenToAdd; i++) {
-        char c = chars[i];
+        char *c = chars+i;
         if (c == NULL) break;
-        string->chars[string->length + i] = c;
+        string->chars[string->length + i] = *c;
     }
     string->length += lenToAdd;
 }

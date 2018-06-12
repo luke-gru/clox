@@ -3,37 +3,18 @@
 
 #include "scanner.h"
 #include "object.h"
+#include "vec.h"
+#include "nodes.h"
+
+typedef vec_t(Token) vec_tok_t;
 
 typedef struct sParser {
   bool hadError;
   bool panicMode;
   Token current;
   Token previous;
-  ObjString *debugBuf;
+  vec_tok_t peekBuf;
 } Parser;
-
-// precedence, low to high
-typedef enum {
-  PREC_NONE, // lowest
-  PREC_ASSIGNMENT,  // =
-  PREC_OR,          // or
-  PREC_AND,         // and
-  PREC_EQUALITY,    // == !=
-  PREC_COMPARISON,  // < > <= >=
-  PREC_TERM,        // + -
-  PREC_FACTOR,      // * /
-  PREC_UNARY,       // ! - +
-  PREC_CALL,        // . () []
-  PREC_PRIMARY
-} Precedence;
-
-typedef void (*ParseFn)(bool canAssign);
-
-typedef struct sParseRule {
-  ParseFn prefix;
-  ParseFn infix;
-  Precedence precedence;
-} ParseRule;
 
 typedef struct sLocal {
   // The name of the local variable.
@@ -55,8 +36,6 @@ typedef struct {
   // function.
   bool isLocal;
 } Upvalue;
-//< Closures not-yet
-//> Calls and Functions not-yet
 
 typedef enum {
   TYPE_FUNCTION,
@@ -65,6 +44,9 @@ typedef enum {
   TYPE_TOP_LEVEL
 } FunctionType;
 
-void initParser(Parser *p);
+void initParser(void);
+Node *parse(void);
+
+extern Parser parser;
 
 #endif
