@@ -18,6 +18,7 @@ typedef struct {
 static Keyword keywords[] = {
   {"and",     3, TOKEN_AND},
   {"class",   5, TOKEN_CLASS},
+  {"module",  6, TOKEN_MODULE},
   {"else",    4, TOKEN_ELSE},
   {"false",   5, TOKEN_FALSE},
   {"for",     3, TOKEN_FOR},
@@ -278,6 +279,8 @@ const char *tokTypeStr(TokenType ttype) {
       return "AND";
     case TOKEN_CLASS:
       return "CLASS";
+    case TOKEN_MODULE:
+      return "MODULE";
     case TOKEN_ELSE:
       return "ELSE";
     case TOKEN_FALSE:

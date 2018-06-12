@@ -121,6 +121,9 @@ static Node *funDeclaration(void);
 static Node *expression(void);
 static Node *blockStmts(void);
 static Node *classBody(void);
+static Node *statement(void);
+static Node *printStatement(void);
+static Node *blockStatements(void);
 
 static bool isAtEnd(void) {
     return parser.previous.type == TOKEN_EOF || check(TOKEN_EOF);
@@ -170,8 +173,91 @@ static Node *declaration(void) {
         nodeAddChild(classNode, body);
         return classNode;
     }
-    fprintf(stderr, "declaration fallthru\n");
-    return NULL;
+    if (match(TOKEN_MODULE)) {
+        // TODO
+        return NULL;
+    }
+    return statement();
+}
+
+static Node *wrapStmtsInBlock(Node *stmtList, Token lbraceTok) {
+    node_type_t blockType = {
+        .type = NODE_STMT,
+        .kind = BLOCK_STMT,
+    };
+    Node *ret = createNode(blockType, lbraceTok, NULL);
+    nodeAddChild(ret, stmtList);
+    return ret;
+}
+
+static Node *statement() {
+    if (match(TOKEN_PRINT)) {
+        return printStatement();
+    }
+    if (match(TOKEN_LEFT_BRACE)) {
+        Node *stmtList = blockStatements();
+        node_type_t blockType = {
+            .type = NODE_STMT,
+            .kind = BLOCK_STMT,
+        };
+        Node *block = createNode(blockType, parser.previous, NULL);
+        nodeAddChild(block, stmtList);
+        return block;
+    }
+    if (match(TOKEN_IF)) {
+        Token ifTok = parser.previous;
+        consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'if'");
+        node_type_t ifType = {
+            .type = NODE_STMT,
+            .kind = IF_STMT,
+        };
+        Node *ifNode = createNode(ifType, ifTok, NULL);
+        Node *cond = expression();
+        consume(TOKEN_RIGHT_PAREN, "Expected ')' to end 'if' condition");
+        consume(TOKEN_LEFT_BRACE, "Expected '{' after 'if' condition");
+        Token lbraceTok = parser.previous;
+        nodeAddChild(ifNode, cond);
+        Node *ifStmtList = blockStatements();
+        Node *ifBlock = wrapStmtsInBlock(ifStmtList, lbraceTok);
+
+        nodeAddChild(ifNode, ifBlock);
+
+        if (match(TOKEN_ELSE)) {
+            Node *elseStmt = statement();
+            nodeAddChild(ifNode, elseStmt);
+            // NOTE: for now, no elseifs
+        }
+        return ifNode;
+    }
+    fprintf(stderr, "statement() fallthru");
+}
+
+// 'print' is already parsed.
+static Node *printStatement() {
+    node_type_t printType = {
+        .type = NODE_STMT,
+        .kind = PRINT_STMT,
+    };
+    Node *printNode = createNode(printType, parser.previous, NULL);
+    Node *expr = expression();
+    consume(TOKEN_SEMICOLON, "Expected ';' after 'print' statement");
+    nodeAddChild(printNode, expr);
+    return printNode;
+}
+
+// '{' is already parsed. Parse up until and including the ending '}'
+static Node *blockStatements() {
+    node_type_t stmtListT = {
+        .type = NODE_STMT,
+        .kind = STMTLIST_STMT,
+    };
+    Node *stmtList = createNode(stmtListT, parser.previous, NULL);
+    while (!isAtEnd() && !check(TOKEN_RIGHT_BRACE)) {
+        Node *decl = declaration();
+        nodeAddChild(stmtList, decl);
+    }
+    consume(TOKEN_RIGHT_BRACE, "Expected '}' to end block statement");
+    return stmtList;
 }
 
 // '{' already parsed. Continue parsing up to and including closing '}'
@@ -249,7 +335,7 @@ static Node *expression(void) {
         };
         return createNode(nType, boolTok, NULL);
     }
-    fprintf(stderr, "NULL expression\n");
+    fprintf(stderr, "expression() fallthru\n");
     return NULL;
 }
 

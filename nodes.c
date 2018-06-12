@@ -97,9 +97,9 @@ static char *outputLiteralExpr(Node *n, int indentLevel) {
             return buf;
         }
         case STRING_TYPE: {
-            char *buf = calloc(strlen(tokStr(&n->tok))+1+2, 1);
+            char *buf = calloc(strlen(tokStr(&n->tok))+1, 1);
             ASSERT_MEM(buf);
-            sprintf(buf, "\"%s\"", tokStr(&n->tok));
+            sprintf(buf, "%s", tokStr(&n->tok));
             return buf;
         }
         default:
@@ -177,9 +177,9 @@ static char *outputPrintStmt(Node *n, int indentLevel) {
     char *indent = i(indentLevel);
     Node *printExpr = vec_first(n->children);
     char *printStr = outputASTString(printExpr, indentLevel);
-    char *buf = calloc(strlen(indent)+1+strlen(printStr)+8, 1);
+    char *buf = calloc(strlen(indent)+1+strlen(printStr)+9, 1);
     ASSERT_MEM(buf);
-    sprintf(buf, "%s(print %s)", indent, printStr);
+    sprintf(buf, "%s(print %s)\n", indent, printStr);
     return buf;
 }
 static char *outputVarStmt(Node *n, int indentLevel) {
@@ -200,7 +200,7 @@ static char *outputBlockStmt(Node *n, int indentLevel) {
         buf = "(block\n";
         char *stmtListOutput = outputASTString(stmtListNode, indentLevel+1);
         buf = strAdd(buf, stmtListOutput);
-        buf = strAdd(buf, "\n)\n");
+        buf = strAdd(buf, ")\n");
     } else {
         char *bufFmt = "%s(block)";
         buf = calloc(strlen(indent)+1+7, 1);
@@ -210,7 +210,25 @@ static char *outputBlockStmt(Node *n, int indentLevel) {
     return buf;
 }
 static char *outputIfStmt(Node *n, int indentLevel) {
-    return "";
+    char *indent = i(indentLevel);
+    Node *cond = vec_first(n->children);
+    char *condOutput = outputASTString(cond, indentLevel);
+    char *startFmt =  "%s(if %s\n";
+    char *buf = calloc(strlen(condOutput)+1+strlen(indent)+5, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, startFmt, indent, condOutput);
+    buf = strAdd(buf, outputASTString(n->children->data[1], indentLevel+1));
+    // has else
+    if (n->children->length > 2) {
+        char *elseFmt = "%s(else\n";
+        char *elseBuf = calloc(strlen(indent)+1+6, 1);
+        ASSERT_MEM(elseBuf);
+        sprintf(elseBuf, elseFmt, indent);
+        buf = strAdd(buf, elseBuf);
+        buf = strAdd(buf, outputASTString(n->children->data[2], indentLevel+1));
+        buf = strAdd(buf, ")\n"); // TODO: add indent
+    }
+    return buf;
 }
 static char *outputWhileStmt(Node *n, int indentLevel) {
     return "";

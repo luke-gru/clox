@@ -31,6 +31,7 @@ typedef enum {
 
   TOKEN_AND,
   TOKEN_CLASS,
+  TOKEN_MODULE,
   TOKEN_ELSE,
   TOKEN_FALSE,
   TOKEN_FUN,

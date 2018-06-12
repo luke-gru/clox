@@ -12,8 +12,8 @@ static int test_output_node_literal_string(void) {
     };
     Token strTok = {
         .type = TOKEN_STRING,
-        .start = "testing\n",
-        .length = strlen("testing\n")+1,
+        .start = "\"testing\n\"",
+        .length = strlen("\"testing\n\"")+1,
         .line = 1
     };
     n = createNode(nType, strTok, NULL);
@@ -73,14 +73,13 @@ cleanup:
 }
 
 static int test_output_nodes_from_parser_print(void) {
-    const char *src = "print a;";
+    const char *src = "print \"hi\";";
     initScanner(src);
     Node *program = parse();
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
-    fprintf(stderr, "\n%s\n", output);
-    T_ASSERT(strcmp("(print (var a))\n", output) == 0);
+    T_ASSERT(strcmp("(print \"hi\")\n", output) == 0);
 cleanup:
     return 0;
 }
@@ -109,13 +108,37 @@ cleanup:
     return 0;
 }
 
+static int test_output_nodes_from_parser_if1(void) {
+    const char *src = "if (nil) {\n"
+                      "  print \"got nil\";\n"
+                      "} else { print \"not nil\"; }";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    T_ASSERT(strcmp("(if nil\n"
+                    "(block\n"
+                    "    (print \"got nil\")\n"
+                    ")\n"
+                    "(else\n"
+                    "(block\n"
+                    "    (print \"not nil\")\n"
+                    ")\n)\n", output) == 0);
+
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     INIT_TESTS();
     RUN_TEST(test_output_node_literal_string);
     RUN_TEST(test_output_node_literal_number);
     RUN_TEST(test_output_nodes_from_parser_vardecl);
     RUN_TEST(test_output_nodes_from_parser_funcdecl);
-    /*RUN_TEST(test_output_nodes_from_parser_print);*/
+    RUN_TEST(test_output_nodes_from_parser_print);
     RUN_TEST(test_output_nodes_from_parser_classdecl1);
+    RUN_TEST(test_output_nodes_from_parser_if1);
     END_TESTS();
 }
