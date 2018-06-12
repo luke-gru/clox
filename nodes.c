@@ -231,7 +231,17 @@ static char *outputIfStmt(Node *n, int indentLevel) {
     return buf;
 }
 static char *outputWhileStmt(Node *n, int indentLevel) {
-    return "";
+    char *indent = i(indentLevel);
+    char *startFmt = "%s(while %s\n";
+    Node *cond = vec_first(n->children);
+    char *condOutput = outputASTString(cond, indentLevel);
+    char *buf = calloc(strlen(indent)+1+8+strlen(condOutput), 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, startFmt, indent, condOutput);
+    Node *body = n->children->data[1];
+    buf = strAdd(buf, outputASTString(body, indentLevel+1));
+    buf = strAdd(buf, ")\n"); // TODO: add indent
+    return buf;
 }
 static char *outputForStmt(Node *n, int indentLevel) {
     return "";

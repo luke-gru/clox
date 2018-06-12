@@ -131,6 +131,25 @@ cleanup:
     return 0;
 }
 
+static int test_output_nodes_from_parser_while1(void) {
+    const char *src = "while (true) {\n"
+                      "  print \"again...\";\n"
+                      "}";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    T_ASSERT(strcmp("(while true\n"
+                    "(block\n"
+                    "    (print \"again...\")\n"
+                    ")\n)\n", output) == 0);
+
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     INIT_TESTS();
     RUN_TEST(test_output_node_literal_string);
@@ -140,5 +159,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_output_nodes_from_parser_print);
     RUN_TEST(test_output_nodes_from_parser_classdecl1);
     RUN_TEST(test_output_nodes_from_parser_if1);
+    RUN_TEST(test_output_nodes_from_parser_while1);
     END_TESTS();
 }

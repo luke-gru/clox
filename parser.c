@@ -229,6 +229,22 @@ static Node *statement() {
         }
         return ifNode;
     }
+
+    if (match(TOKEN_WHILE)) {
+        Token whileTok = parser.previous;
+        consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'while'");
+        Node *cond = expression();
+        consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'while' condition");
+        Node *blockStmt = statement();
+        node_type_t whileT = {
+            .type = NODE_STMT,
+            .kind = WHILE_STMT,
+        };
+        Node *whileNode = createNode(whileT, whileTok, NULL);
+        nodeAddChild(whileNode, cond);
+        nodeAddChild(whileNode, blockStmt);
+        return whileNode;
+    }
     fprintf(stderr, "statement() fallthru");
 }
 
