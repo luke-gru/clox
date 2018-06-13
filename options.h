@@ -6,7 +6,9 @@
 typedef struct sCloxOptions {
     bool debugParser; // default false
     bool traceParserCalls;
-
+    bool traceVMExecution;
+    bool parseOnly;
+    bool compileOnly;
     bool _inited;
 } CloxOptions;
 

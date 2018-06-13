@@ -12,17 +12,18 @@ typedef struct {
   Value stack[STACK_MAX]; // stack VM, this is the stack of operands
   Value *stackTop;
   struct sObj *objects;
+  Value *lastValue;
 } VM;
 
 typedef enum {
   INTERPRET_OK,
-  INTERPRET_COMPILE_ERROR,
   INTERPRET_RUNTIME_ERROR
 } InterpretResult;
 
 void initVM();
 void freeVM();
 InterpretResult interpret(Chunk *chunk);
+Value *getLastValue();
 void push(Value value);
 Value pop();
 

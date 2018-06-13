@@ -31,6 +31,18 @@ char *opName(OpCode code) {
         return "OP_RETURN";
     case OP_NIL:
         return "OP_NIL";
+    case OP_GET_LOCAL:
+        return "OP_GET_LOCAL";
+    case OP_SET_LOCAL:
+        return "OP_SET_LOCAL";
+    case OP_CALL:
+        return "OP_CALL";
+    case OP_PRINT:
+        return "OP_PRINT";
+    case OP_TRUE:
+        return "OP_TRUE";
+    case OP_FALSE:
+        return "OP_FALSE";
     default:
         return "!Unknown instruction!";
     }

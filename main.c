@@ -8,14 +8,12 @@
 
 static void usage(int exitstatus) {
     fprintf(stdout, "Usage:\n"
-        "clox [-f FILE] [-DDEBUG_PARSER] [-DTRACE_PARSER_CALLS]\n"
+        "clox -f FILE [-DDEBUG_PARSER] [-DTRACE_PARSER_CALLS] [-DTRACE_VM_EXECUTION]\n"
     );
     exit(exitstatus);
 }
 
 int main(int argc, char *argv[]) {
-    Chunk chunk;
-    initChunk(&chunk);
 
     initOptions();
     char *fname = NULL;
@@ -36,27 +34,39 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (fname != NULL) {
-        CompileErr err = COMPILE_ERR_NONE;
-        return compile_file(fname, &chunk, &err);
+    CompileErr err = COMPILE_ERR_NONE;
+    int compile_res = 0;
+    if (fname == NULL) { // TODO: take src from stdin a line at a time
+        usage(1);
     }
 
-    initVM();
-    // -((1.2 + 3.4) / 5.6)
-    int constant = addConstant(&chunk, NUMBER_VAL(1.2));
-    writeChunk(&chunk, OP_CONSTANT, 1);
-    writeChunk(&chunk, constant, 1); // 1.2
-    int constant2 = addConstant(&chunk, NUMBER_VAL(3.4));
-    writeChunk(&chunk, OP_CONSTANT, 1);
-    writeChunk(&chunk, constant2, 1); // 3.4
-    writeChunk(&chunk, OP_ADD, 1); // +
-    int constant3 = addConstant(&chunk, NUMBER_VAL(5.6));
-    writeChunk(&chunk, OP_CONSTANT, 1);
-    writeChunk(&chunk, constant3, 1); // 5.6
-    writeChunk(&chunk, OP_DIVIDE, 1);
-    writeChunk(&chunk, OP_NEGATE, 1);
-    writeChunk(&chunk, OP_RETURN, 1);
-    interpret(&chunk);
+    Chunk chunk;
+    initChunk(&chunk);
+    compile_res = compile_file(fname, &chunk, &err);
+
+    if (compile_res != 0) {
+        if (err == COMPILE_ERR_SYNTAX) {
+            freeVM();
+            freeChunk(&chunk);
+            die("Syntax error\n");
+        } else {
+            freeVM();
+            freeChunk(&chunk);
+            die("Compile error\n");
+        }
+    }
+
+    if (CLOX_OPTION_T(compileOnly)) {
+        printf("No compilation errors\n");
+        exit(0);
+    }
+
+    InterpretResult ires = interpret(&chunk);
+    if (ires != INTERPRET_OK) {
+        freeVM();
+        freeChunk(&chunk);
+        die("Interpreter runtime error\n");
+    }
 
     freeVM();
     freeChunk(&chunk);

@@ -16,6 +16,12 @@ typedef enum {
     OP_NOT,
     OP_RETURN,
     OP_NIL,
+    OP_GET_LOCAL, // get local var, next byte is frame slot index
+    OP_SET_LOCAL, // set local var, next byte is frame slot index, value is stacktop
+    OP_CALL,
+    OP_PRINT,
+    OP_TRUE,
+    OP_FALSE,
 } OpCode;
 
 #endif

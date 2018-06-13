@@ -9,10 +9,10 @@ typedef enum {
   OBJ_STRING,
 } ObjType;
 
-struct sObj {
+typedef struct sObj {
   ObjType type;
   struct sObj *next;
-};
+} Obj;
 
 typedef struct sObjString {
   struct sObj object;

@@ -2,6 +2,7 @@
 
 #include "memory.h"
 #include "value.h"
+#include "object.h"
 
 void initValueArray(ValueArray *array) {
     array->values = NULL;
@@ -39,11 +40,19 @@ static void printNumber(double number) {
 void printValue(Value value) {
     if (IS_BOOL(value)) {
         printBool(AS_BOOL(value));
+        return;
     } else if (IS_NIL(value)) {
         printf("nil");
+        return;
     } else if (IS_NUMBER(value)) {
         printNumber(AS_NUMBER(value));
-    } else {
-        printf("Unknown value type: %d. Cannot print!", value.type);
+        return;
+    } else if (IS_OBJ(value)) {
+        if (OBJ_TYPE(value) == OBJ_STRING) {
+            char *cstring = AS_CSTRING(value);
+            printf("%s", cstring);
+            return;
+        }
     }
+    printf("Unknown value type: %d. Cannot print!", value.type);
 }

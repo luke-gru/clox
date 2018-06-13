@@ -11,6 +11,7 @@
 #include "parser.h"
 #include "value.h"
 #include "debug.h"
+#include "options.h"
 
 typedef struct {
   // The name of the local variable.
@@ -134,7 +135,7 @@ static void emitNode(Node *n) {
         } else if (n->tok.type == TOKEN_SLASH) {
             emitByte(OP_DIVIDE);
         } else {
-            error("invalid node");
+            error("invalid binary expr node");
         }
         return;
     }
@@ -145,7 +146,7 @@ static void emitNode(Node *n) {
         } else if (n->tok.type == TOKEN_BANG) {
             emitByte(OP_NOT);
         } else {
-            error("invalid node");
+            error("invalid unary expr node");
         }
         return;
     }
@@ -157,13 +158,22 @@ static void emitNode(Node *n) {
         } else if (n->tok.type == TOKEN_STRING) {
             Token *name = &n->tok;
             emitConstant(OBJ_VAL(copyString(name->start+1, name->length-2)));
+        } else if (n->tok.type == TOKEN_TRUE) {
+            emitByte(OP_TRUE);
+        } else if (n->tok.type == TOKEN_FALSE) {
+            emitByte(OP_FALSE);
         } else {
-            error("invalid node");
+            error("invalid literal expr node");
         }
         return;
     }
+    case PRINT_STMT: {
+        emitChildren(n);
+        emitByte(OP_PRINT);
+        return;
+    }
     default:
-        error("invalid node");
+        error("invalid (unknown) node");
     }
 }
 
@@ -172,6 +182,9 @@ int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     Compiler mainCompiler;
     initCompiler(&mainCompiler);
     Node *program = parse();
+    if (CLOX_OPTION_T(parseOnly)) {
+        return parser.hadError ? -1 : 0;
+    }
     compilingChunk = chunk;
     emitNode(program);
     endCompiler();

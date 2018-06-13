@@ -2,6 +2,7 @@
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
+#include "options.h"
 
 VM vm;
 
@@ -12,6 +13,10 @@ void initVM() {
 void freeVM() {
 }
 
+static bool isStackEmpty() {
+    return vm.stackTop <= vm.stack;
+}
+
 void push(Value value) {
     *vm.stackTop = value;
     vm.stackTop++;
@@ -20,6 +25,14 @@ void push(Value value) {
 Value pop() {
     vm.stackTop--;
     return *vm.stackTop;
+}
+
+Value *getLastValue() {
+    if (isStackEmpty()) {
+        return NULL;
+    } else {
+        return vm.stackTop-1;
+    }
 }
 
 /**
@@ -36,17 +49,19 @@ static InterpretResult run(void) {
     } while (0)
 
   for (;;) {
-#ifdef DEBUG_TRACE_EXECUTION
-    printf("          ");
-    // print VM stack values from bottom of stack to top
-    for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
-        printf("[ ");
-        printValue(*slot);
-        printf(" ]");
+
+    if (CLOX_OPTION_T(traceVMExecution)) {
+        printf("          ");
+        // print VM stack values from bottom of stack to top
+        for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
+            printf("[ ");
+            printValue(*slot);
+            printf(" ]");
+        }
+        printf("\n");
+        printDisassembledInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code));
     }
-    printf("\n");
-    printDisassembledInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code));
-#endif
+
     uint8_t instruction = READ_BYTE();
     switch (instruction) {
       case OP_CONSTANT: {
@@ -63,15 +78,20 @@ static InterpretResult run(void) {
         push(NUMBER_VAL(-AS_NUMBER(val)));
         break;
       }
+      case OP_PRINT: {
+        Value val = pop();
+        printValue(val);
+        break;
+      }
       case OP_RETURN:
-        printValue(pop());
-        printf("\n");
         return INTERPRET_OK;
       default:
         printf("Unknown opcode instruction: %s", opName(instruction));
+        return INTERPRET_RUNTIME_ERROR;
     }
   }
 
+  return INTERPRET_RUNTIME_ERROR;
 #undef READ_BYTE
 #undef READ_CONSTANT
 #undef BINARY_OP

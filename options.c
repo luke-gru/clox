@@ -6,6 +6,9 @@ CloxOptions options;
 char *boolOptNames[] = {
     "debugParser",
     "traceParserCalls",
+    "traceVMExecution",
+    "parseOnly",
+    "compileOnly",
     NULL,
 };
 
@@ -15,6 +18,9 @@ void initOptions(void) {
     }
     options.debugParser = false;
     options.traceParserCalls = false;
+    options.traceVMExecution = false;
+    options.parseOnly = false;
+    options.compileOnly = false;
     options._inited = true;
 }
 
@@ -47,6 +53,18 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "-DTRACE_PARSER_CALLS") == 0) {
         SET_OPTION(traceParserCalls, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "-DTRACE_VM_EXECUTION") == 0) {
+        SET_OPTION(traceVMExecution, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--compile-only") == 0) {
+        SET_OPTION(compileOnly, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--parse-only") == 0) {
+        SET_OPTION(parseOnly, true);
         return 1;
     }
     return 0;

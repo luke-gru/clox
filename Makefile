@@ -23,8 +23,8 @@ build:
 
 .PHONY: clean
 clean:
-	rm -f ${BUILD_DIR}
-	rm *.o
+	rm -rf ${BUILD_DIR}
+	rm -f *.o
 
 .PHONY: test
 test: build
