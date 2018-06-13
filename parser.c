@@ -11,6 +11,16 @@
 #define ASSERT_MEM(n)
 #endif
 
+#define TRACE_START(name) _trace_start(name)
+#define TRACE_END(name) _trace_end(name)
+
+static void _trace_start(const char *name) {
+    /*fprintf(stderr, "[-- <%s> --]\n", name);*/
+}
+static void _trace_end(const char *name) {
+    /*fprintf(stderr, "[-- </%s> --]\n", name);*/
+}
+
 // global
 Parser parser;
 
@@ -119,6 +129,16 @@ static Node *declaration(void);
 static Node *varDeclaration(void);
 static Node *funDeclaration(void);
 static Node *expression(void);
+static Node *assignment(void);
+static Node *logicOr(void);
+static Node *logicAnd(void);
+static Node *equality(void);
+static Node *comparison(void);
+static Node *addition(void);
+static Node *multiplication(void);
+static Node *unary(void);
+static Node *call(void);
+static Node *primary(void);
 static Node *blockStmts(void);
 static Node *classBody(void);
 static Node *statement(void);
@@ -139,21 +159,28 @@ Node *parse(void) {
     };
     Node *ret = createNode(nType, emptyTok(), NULL);
     advance(); // prime parser with parser.current
+    TRACE_START("parse");
     while (!isAtEnd()) {
         Node *stmt = declaration();
         ASSERT(stmt->type.type == NODE_STMT);
         nodeAddChild(ret, stmt);
     }
+    TRACE_END("parse");
     return ret;
 }
 
 static Node *declaration(void) {
+    TRACE_START("declaration");
     if (match(TOKEN_VAR)) {
-        return varDeclaration();
+        Node *ret = varDeclaration();
+        TRACE_END("declaration");
+        return ret;
     }
     if (check(TOKEN_FUN) && peekTokN(1).type == TOKEN_IDENTIFIER) {
         advance();
-        return funDeclaration();
+        Node *ret = funDeclaration();
+        TRACE_END("declaration");
+        return ret;
     }
     if (match(TOKEN_CLASS)) {
         consume(TOKEN_IDENTIFIER, "Expected class name (identifier) after keyword 'class'");
@@ -172,13 +199,17 @@ static Node *declaration(void) {
         consume(TOKEN_LEFT_BRACE, "Expected '{' after class name");
         Node *body = classBody(); // block node
         nodeAddChild(classNode, body);
+        TRACE_END("declaration");
         return classNode;
     }
     if (match(TOKEN_MODULE)) {
         // TODO
+        TRACE_END("declaration");
         return NULL;
     }
-    return statement();
+    Node *ret = statement();
+    TRACE_END("declaration");
+    return ret;
 }
 
 static Node *wrapStmtsInBlock(Node *stmtList, Token lbraceTok) {
@@ -192,8 +223,11 @@ static Node *wrapStmtsInBlock(Node *stmtList, Token lbraceTok) {
 }
 
 static Node *statement() {
+    TRACE_START("statement");
     if (match(TOKEN_PRINT)) {
-        return printStatement();
+        Node *ret = printStatement();
+        TRACE_END("statement");
+        return ret;
     }
     if (match(TOKEN_LEFT_BRACE)) {
         Node *stmtList = blockStatements();
@@ -203,6 +237,7 @@ static Node *statement() {
         };
         Node *block = createNode(blockType, parser.previous, NULL);
         nodeAddChild(block, stmtList);
+        TRACE_END("statement");
         return block;
     }
     if (match(TOKEN_IF)) {
@@ -228,6 +263,7 @@ static Node *statement() {
             nodeAddChild(ifNode, elseStmt);
             // NOTE: for now, no elseifs
         }
+        TRACE_END("statement");
         return ifNode;
     }
 
@@ -244,6 +280,7 @@ static Node *statement() {
         Node *whileNode = createNode(whileT, whileTok, NULL);
         nodeAddChild(whileNode, cond);
         nodeAddChild(whileNode, blockStmt);
+        TRACE_END("statement");
         return whileNode;
     }
 
@@ -286,6 +323,7 @@ static Node *statement() {
         consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'for' increment/decrement expression");
         Node *blockNode = statement();
         nodeAddChild(forNode, blockNode);
+        TRACE_END("statement");
         return forNode;
     }
 
@@ -332,13 +370,69 @@ static Node *statement() {
             nodeAddChild(catchStmt, catchBlock);
             nodeAddChild(try, catchStmt);
         }
+        TRACE_END("statement");
         return try;
     }
-    fprintf(stderr, "statement() fallthru");
+
+    if (match(TOKEN_THROW)) {
+        Token throwTok = parser.previous;
+        Node *expr = expression();
+        consume(TOKEN_SEMICOLON, "Expected ';' to end 'throw' statement");
+        node_type_t throwT = {
+            .type = NODE_STMT,
+            .kind = THROW_STMT,
+        };
+        Node *throw = createNode(throwT, throwTok, NULL);
+        nodeAddChild(throw, expr);
+        TRACE_END("statement");
+        return throw;
+    }
+    if (match(TOKEN_CONTINUE)) {
+        Token contTok = parser.previous;
+        node_type_t contT = {
+            .type = NODE_STMT,
+            .kind = CONTINUE_STMT,
+        };
+        Node *cont = createNode(contT, contTok, NULL);
+        consume(TOKEN_SEMICOLON, "Expected ';' after keyword 'continue'");
+        TRACE_END("statement");
+        return cont;
+    }
+    if (match(TOKEN_BREAK)) {
+        Token breakTok = parser.previous;
+        node_type_t breakT = {
+            .type = NODE_STMT,
+            .kind = BREAK_STMT,
+        };
+        Node *breakNode = createNode(breakT, breakTok, NULL);
+        consume(TOKEN_SEMICOLON, "Expected ';' after keyword 'break'");
+        TRACE_END("statement");
+        return breakNode;
+    }
+    if (match(TOKEN_RETURN)) {
+        Token retTok = parser.previous;
+        node_type_t retT = {
+            .type = NODE_STMT,
+            .kind = RETURN_STMT,
+        };
+        Node *retNode = createNode(retT, retTok, NULL);
+        if (match(TOKEN_SEMICOLON)) {
+        } else {
+            Node *retExpr = expression();
+            nodeAddChild(retNode, retExpr);
+            consume(TOKEN_SEMICOLON, "Expected ';' to end 'return' statement");
+        }
+        TRACE_END("statement");
+        return retNode;
+    }
+    Node *ret = expressionStatement();
+    TRACE_END("statement");
+    return ret;
 }
 
 // 'print' is already parsed.
 static Node *printStatement() {
+    TRACE_START("printStatement");
     node_type_t printType = {
         .type = NODE_STMT,
         .kind = PRINT_STMT,
@@ -347,11 +441,13 @@ static Node *printStatement() {
     Node *expr = expression();
     consume(TOKEN_SEMICOLON, "Expected ';' after 'print' statement");
     nodeAddChild(printNode, expr);
+    TRACE_END("printStatement");
     return printNode;
 }
 
 // '{' is already parsed. Parse up until and including the ending '}'
 static Node *blockStatements() {
+    TRACE_START("blockStatements");
     node_type_t stmtListT = {
         .type = NODE_STMT,
         .kind = STMTLIST_STMT,
@@ -362,10 +458,12 @@ static Node *blockStatements() {
         nodeAddChild(stmtList, decl);
     }
     consume(TOKEN_RIGHT_BRACE, "Expected '}' to end block statement");
+    TRACE_END("blockStatements");
     return stmtList;
 }
 
 static Node *expressionStatement() {
+    TRACE_START("expressionStatement");
     Token tok = parser.current;
     Node *expr = expression();
     node_type_t stmtT = {
@@ -374,11 +472,14 @@ static Node *expressionStatement() {
     };
     Node *exprStmt = createNode(stmtT, tok, NULL);
     nodeAddChild(exprStmt, expr);
+    consume(TOKEN_SEMICOLON, "Expected ';' after expression");
+    TRACE_END("expressionStatement");
     return exprStmt;
 }
 
 // '{' already parsed. Continue parsing up to and including closing '}'
 static Node *classBody() {
+    TRACE_START("classBody");
     Token lbraceTok = parser.previous;
     node_type_t nType = {
         .type = NODE_STMT,
@@ -396,65 +497,34 @@ static Node *classBody() {
     };
     Node *block = createNode(blockType, lbraceTok, NULL);
     nodeAddChild(block, stmtListNode);
+    TRACE_END("classBody");
     return block;
 }
 
 // TOKEN_VAR is already consumed.
 static Node *varDeclaration(void) {
+    TRACE_START("varDeclaration");
     consume(TOKEN_IDENTIFIER, "Expected identifier after keyword 'var'");
     Token identTok = parser.previous;
-    consume(TOKEN_EQUAL, "Expected '=' after identifier in variable declaration");
-    Node *expr = expression();
-    ASSERT(expr != NULL)
-    consume(TOKEN_SEMICOLON, "Expected ';' after variable declaration");
     node_type_t nType = {
         .type = NODE_STMT,
         .kind = VAR_STMT,
     };
     Node *varDecl = createNode(nType, identTok, NULL);
-    nodeAddChild(varDecl, expr);
+    if (match(TOKEN_EQUAL)) {
+        Node *expr = expression();
+        nodeAddChild(varDecl, expr);
+    }
+    consume(TOKEN_SEMICOLON, "Expected ';' after variable declaration");
+    TRACE_END("varDeclaration");
     return varDecl;
 }
 
 static Node *expression(void) {
-    if (match(TOKEN_STRING)) {
-        Token strTok = parser.previous;
-        node_type_t nType = {
-            .type = NODE_EXPR,
-            .kind = LITERAL_EXPR,
-            .litKind = STRING_TYPE,
-        };
-        return createNode(nType, strTok, NULL);
-    }
-    if (match(TOKEN_NUMBER)) {
-        Token numTok = parser.previous;
-        node_type_t nType = {
-            .type = NODE_EXPR,
-            .kind = LITERAL_EXPR,
-            .litKind = NUMBER_TYPE,
-        };
-        return createNode(nType, numTok, NULL);
-    }
-    if (match(TOKEN_NIL)) {
-        Token nilTok = parser.previous;
-        node_type_t nType = {
-            .type = NODE_EXPR,
-            .kind = LITERAL_EXPR,
-            .litKind = NIL_TYPE,
-        };
-        return createNode(nType, nilTok, NULL);
-    }
-    if (match(TOKEN_TRUE) || match(TOKEN_FALSE)) {
-        Token boolTok = parser.previous;
-        node_type_t nType = {
-            .type = NODE_EXPR,
-            .kind = LITERAL_EXPR,
-            .litKind = BOOL_TYPE,
-        };
-        return createNode(nType, boolTok, NULL);
-    }
-    fprintf(stderr, "expression() fallthru\n");
-    return NULL;
+    TRACE_START("expression");
+    Node *ret = assignment();
+    TRACE_END("expression");
+    return ret;
 }
 
 static vec_nodep_t *createNodeVec(void) {
@@ -465,6 +535,7 @@ static vec_nodep_t *createNodeVec(void) {
 }
 
 static Node *funDeclaration(void) {
+    TRACE_START("funDeclaration");
     consume(TOKEN_IDENTIFIER, "Expect function name (identifier) after 'fun' keyword");
     Token nameTok = parser.previous;
     consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");
@@ -498,11 +569,13 @@ static Node *funDeclaration(void) {
     Node *funcNode = createNode(funcType, nameTok, NULL);
     nodeAddData(funcNode, (void*)paramNodes);
     nodeAddChild(funcNode, blockNode);
+    TRACE_END("funDeclaration");
     return funcNode;
 }
 
 // a list of stmts
 static Node *blockStmts() {
+    TRACE_START("blockStmts");
     Token lbraceTok = parser.previous;
     node_type_t nType = {
         .type = NODE_STMT,
@@ -514,7 +587,297 @@ static Node *blockStmts() {
         nodeAddChild(blockNode, stmt);
     }
     consume(TOKEN_RIGHT_BRACE, "Expect '}' to end function block");
+    TRACE_END("blockStmts");
     return blockNode;
+}
+
+static Node *assignment() {
+    TRACE_START("assignment");
+    Node *lval = logicOr();
+    // TODO: support +=, -=, /=, *=
+    if (match(TOKEN_EQUAL)) {
+        Token eqTok = parser.previous;
+        Node *rval = assignment(); // assignment goes right to left in precedence (a = (b = c))
+        node_type_t assignT = {
+            .type = NODE_EXPR,
+            .kind = ASSIGN_EXPR,
+        };
+        // TODO: match logic in java version
+        Node *assign = createNode(assignT, eqTok, NULL);
+        nodeAddChild(assign, lval);
+        nodeAddChild(assign, rval);
+        TRACE_END("assignment");
+        return assign;
+    }
+    TRACE_END("assignment");
+    return lval;
+}
+
+static Node *logicOr() {
+    TRACE_START("logicOr");
+    Node *left = logicAnd();
+    // precedence left to right ((this or that) or other)
+    while (match(TOKEN_OR)) {
+        Token orTok = parser.previous;
+        node_type_t orT = {
+            .type = NODE_EXPR,
+            .kind = LOGICAL_EXPR,
+        };
+        Node *orNode = createNode(orT, orTok, NULL);
+        Node *right = logicAnd();
+        nodeAddChild(orNode, left);
+        nodeAddChild(orNode, right);
+        left = orNode;
+    }
+    TRACE_END("logicOr");
+    return left;
+}
+
+static Node *logicAnd() {
+    TRACE_START("logicAnd");
+    Node *left = equality();
+    while (match(TOKEN_AND)) {
+        Token andTok = parser.previous;
+        node_type_t andT = {
+            .type = NODE_EXPR,
+            .kind = LOGICAL_EXPR,
+        };
+        Node *andNode = createNode(andT, andTok, NULL);
+        Node *right = equality();
+        nodeAddChild(andNode, left);
+        nodeAddChild(andNode, right);
+        left = andNode;
+    }
+    TRACE_END("logicAnd");
+    return left;
+}
+
+static Node *equality() {
+    TRACE_START("equality");
+    Node *left = comparison();
+    while (match(TOKEN_EQUAL_EQUAL) || match(TOKEN_BANG_EQUAL)) {
+        Token eqTok = parser.previous;
+        node_type_t eqT = {
+            .type = NODE_EXPR,
+            .kind = BINARY_EXPR,
+        };
+        Node *eqNode = createNode(eqT, eqTok, NULL);
+        nodeAddChild(eqNode, left);
+        Node *right = comparison();
+        nodeAddChild(eqNode, right);
+        left = eqNode;
+    }
+    TRACE_END("equality");
+    return left;
+}
+
+static Node *comparison() {
+    TRACE_START("comparison");
+    Node *left = addition();
+    while (match(TOKEN_LESS) || match(TOKEN_LESS_EQUAL) ||
+           match(TOKEN_GREATER) || match(TOKEN_GREATER_EQUAL)) {
+        Token cmpTok = parser.previous;
+        node_type_t cmpT = {
+            .type = NODE_EXPR,
+            .kind = BINARY_EXPR,
+        };
+        Node *cmpNode = createNode(cmpT, cmpTok, NULL);
+        Node *right = addition();
+        nodeAddChild(cmpNode, left);
+        nodeAddChild(cmpNode, right);
+        left = cmpNode;
+    }
+    TRACE_END("comparison");
+    return left;
+}
+
+static Node *addition() {
+    TRACE_START("addition");
+    Node *left = multiplication();
+    while (match(TOKEN_PLUS) || match(TOKEN_MINUS)) {
+        Token addTok = parser.previous;
+        node_type_t addT = {
+            .type = NODE_EXPR,
+            .kind = BINARY_EXPR,
+        };
+        Node *addNode = createNode(addT, addTok, NULL);
+        Node *right = multiplication();
+        nodeAddChild(addNode, left);
+        nodeAddChild(addNode, right);
+        left = addNode;
+    }
+    TRACE_END("addition");
+    return left;
+}
+
+static Node *multiplication() {
+    TRACE_START("multiplication");
+    Node *left = unary();
+    while (match(TOKEN_STAR) || match(TOKEN_SLASH)) {
+        Token mulTok = parser.previous;
+        node_type_t mulT = {
+            .type = NODE_EXPR,
+            .kind = BINARY_EXPR,
+        };
+        Node *mulNode = createNode(mulT, mulTok, NULL);
+        Node *right = unary();
+        nodeAddChild(mulNode, left);
+        nodeAddChild(mulNode, right);
+        left = mulNode;
+    }
+    TRACE_END("multiplication");
+    return left;
+}
+
+// precedence from right to left (!!a) == (!(!a))
+static Node *unary() {
+    TRACE_START("unary");
+    if (match(TOKEN_BANG) || match(TOKEN_MINUS)) {
+        Token unTok = parser.previous;
+        node_type_t unT = {
+            .type = NODE_EXPR,
+            .kind = UNARY_EXPR,
+        };
+        Node *unNode = createNode(unT, unTok, NULL);
+        nodeAddChild(unNode, unary()); // slurp up from right
+        TRACE_END("unary");
+        return unNode;
+    }
+    Node *ret = call();
+    TRACE_END("unary");
+    return ret;
+}
+
+static Node *call() {
+    TRACE_START("call");
+    Node *expr = primary();
+    while (true) {
+        if (match(TOKEN_LEFT_PAREN)) {
+            node_type_t callT = {
+                .type = NODE_EXPR,
+                .kind = CALL_EXPR,
+            };
+            Token lparenTok = parser.previous;
+            Node *callNode = createNode(callT, lparenTok, NULL);
+            nodeAddChild(callNode, expr);
+            expr = callNode;
+            if (match(TOKEN_RIGHT_PAREN)) {
+                // no args
+            } else {
+                while (true) {
+                    Node *argExpr = expression();
+                    nodeAddChild(callNode, argExpr);
+                    if (!match(TOKEN_COMMA)) {
+                        break;
+                    }
+                }
+                consume(TOKEN_RIGHT_PAREN, "Expected ')' to end call expression");
+            }
+        } else if (match(TOKEN_DOT)) {
+            consume(TOKEN_IDENTIFIER, "Expected identifier (property name) after '.' in property access");
+            Token propName = parser.previous;
+            node_type_t propT = {
+                .type = NODE_EXPR,
+                .kind = PROP_ACCESS_EXPR,
+            };
+            Node *propAccess = createNode(propT, propName, NULL);
+            nodeAddChild(propAccess, expr);
+            expr = propAccess;
+        } else if (match(TOKEN_LEFT_BRACKET)) {
+            Token lBracket = parser.previous;
+            Node *indexExpr = expression();
+            node_type_t idxGetT = {
+                .type = NODE_EXPR,
+                .kind = INDEX_GET_EXPR,
+            };
+            Node *idxGet = createNode(idxGetT, lBracket, NULL);
+            nodeAddChild(idxGet, expr);
+            nodeAddChild(idxGet, indexExpr);
+            expr = idxGet;
+        } else {
+            break;
+        }
+    }
+    TRACE_END("call");
+    return expr;
+}
+
+static Node *primary() {
+    TRACE_START("primary");
+    if (match(TOKEN_STRING)) {
+        Token strTok = parser.previous;
+        node_type_t nType = {
+            .type = NODE_EXPR,
+            .kind = LITERAL_EXPR,
+            .litKind = STRING_TYPE,
+        };
+        Node *ret = createNode(nType, strTok, NULL);
+        TRACE_END("primary");
+        return ret;
+    }
+    if (match(TOKEN_NUMBER)) {
+        Token numTok = parser.previous;
+        node_type_t nType = {
+            .type = NODE_EXPR,
+            .kind = LITERAL_EXPR,
+            .litKind = NUMBER_TYPE,
+        };
+        Node *ret = createNode(nType, numTok, NULL);
+        TRACE_END("primary");
+        return ret;
+    }
+    if (match(TOKEN_NIL)) {
+        Token nilTok = parser.previous;
+        node_type_t nType = {
+            .type = NODE_EXPR,
+            .kind = LITERAL_EXPR,
+            .litKind = NIL_TYPE,
+        };
+        Node *ret = createNode(nType, nilTok, NULL);
+        TRACE_END("primary");
+        return ret;
+    }
+    if (match(TOKEN_TRUE) || match(TOKEN_FALSE)) {
+        Token boolTok = parser.previous;
+        node_type_t nType = {
+            .type = NODE_EXPR,
+            .kind = LITERAL_EXPR,
+            .litKind = BOOL_TYPE,
+        };
+        Node *ret = createNode(nType, boolTok, NULL);
+        TRACE_END("primary");
+        return ret;
+    }
+    if (match(TOKEN_IDENTIFIER)) {
+        Token varName = parser.previous;
+        node_type_t nType = {
+            .type = NODE_EXPR,
+            .kind = VARIABLE_EXPR,
+        };
+        Node *ret = createNode(nType, varName, NULL);
+        TRACE_END("primary");
+        return ret;
+    }
+    if (match(TOKEN_LEFT_BRACKET)) {
+        Token lbrackTok = parser.previous;
+        node_type_t arrType = {
+            .type = NODE_EXPR,
+            .kind = ARRAY_EXPR,
+        };
+        Node *arr = createNode(arrType, lbrackTok, NULL);
+        while (!match(TOKEN_RIGHT_BRACKET)) {
+            if (match(TOKEN_COMMA)) {
+                // continue
+            } else {
+                Node *el = expression();
+                nodeAddChild(arr, el);
+            }
+        }
+        TRACE_END("primary");
+        return arr;
+    }
+    // TODO: arrays and anonymous functions `var f = fun() { }`
+    fprintf(stderr, "primary fallthru: %s\n", tokTypeStr(parser.current.type));
 }
 
 /*static bool identifiersEqual(Token* a, Token* b) {*/

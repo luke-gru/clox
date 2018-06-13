@@ -76,9 +76,12 @@ static char *i(int indentLevel) {
 static char *outputBinaryExpr(Node *n, int indentLevel) {
     return "";
 }
+
+// or/and
 static char *outputLogicalExpr(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputGroupingExpr(Node *n, int indentLevel) {
     Node *exprNode = vec_first(n->children);
     char *expr = outputASTString(exprNode, indentLevel);
@@ -87,6 +90,7 @@ static char *outputGroupingExpr(Node *n, int indentLevel) {
     sprintf(buf, "(group %s)", expr);
     return buf;
 }
+
 static char *outputLiteralExpr(Node *n, int indentLevel) {
     switch (n->type.litKind) {
         case NUMBER_TYPE:
@@ -107,15 +111,27 @@ static char *outputLiteralExpr(Node *n, int indentLevel) {
             return "unreachable";
     }
 }
+
 static char *outputArrayExpr(Node *n, int indentLevel) {
-    return "";
+    char *buf = "(array";
+    Node *el = NULL;
+    int i = 0;
+    vec_foreach(n->children, el, i) {
+        buf = strAdd(buf, " ");
+        buf = strAdd(buf, outputASTString(el, indentLevel));
+    }
+    buf = strAdd(buf, ")");
+    return buf;
 }
+
 static char *outputIndexGetExpr(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputIndexSetExpr(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputUnaryExpr(Node *n, int indentLevel) {
     const char *op = tokStr(&n->tok);
     char *expr = outputASTString(vec_first(n->children),
@@ -125,6 +141,7 @@ static char *outputUnaryExpr(Node *n, int indentLevel) {
     sprintf(buf, "(%s %s)", op, expr);
     return buf;
 }
+
 static char *outputVariableExpr(Node *n, int indentLevel) {
     const char *varName = tokStr(&n->tok);
     char *buf = calloc(strlen(varName)+1+6, 1);
@@ -132,35 +149,59 @@ static char *outputVariableExpr(Node *n, int indentLevel) {
     sprintf(buf, "(var %s)", varName);
     return buf;
 }
+
 static char *outputAssignExpr(Node *n, int indentLevel) {
-    const char *varName = tokStr(&n->tok);
-    char *value = outputASTString(n, indentLevel);
-    char *buf = calloc(strlen(varName)+1+strlen(value)+10, 1);
+    char *lhsOut = outputASTString(vec_first(n->children), indentLevel);
+    char *rhsOut = outputASTString(n->children->data[1], indentLevel);
+    char *buf = calloc(strlen(lhsOut)+1+strlen(rhsOut)+10, 1);
     ASSERT_MEM(buf);
-    sprintf(buf, "(assign %s %s)", varName, value);
+    sprintf(buf, "(assign %s %s)", lhsOut, rhsOut);
     return buf;
 }
+
 static char *outputCallExpr(Node *n, int indentLevel) {
-    return "";
+    Node *expr = vec_first(n->children);
+    char *exprOut = outputASTString(expr, indentLevel);
+    char *startFmt = "(call %s (";
+    char *buf = calloc(strlen(exprOut)+1+8, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, startFmt, exprOut);
+    int i = 0;
+    Node *arg = NULL;
+    vec_foreach(n->children, arg, i) {
+        if (i == 0) continue;
+        char *argOut = outputASTString(arg, indentLevel);
+        buf = strAdd(buf, argOut);
+        buf = strAdd(buf, " ");
+    }
+    buf = strAdd(buf, ")");
+    return buf;
 }
+
 static char *outputAnonFnExpr(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputPropAccessExpr(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputPropSetExpr(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputThisExpr(Node *n, int indentLevel) {
-    return "(var this)";
+    return "(var this)"; // FIXME
 }
+
 static char *outputSuperExpr(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputSplatCallExpr(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputKeywordArgExpr(Node *n, int indentLevel) {
     return "";
 }
@@ -169,11 +210,12 @@ static char *outputExpressionStmt(Node *n, int indentLevel) {
     Node *expr = vec_first(n->children);
     char *exprStr = outputASTString(expr, indentLevel);
     char *indent = i(indentLevel);
-    char *buf = calloc(strlen(indent)+1+strlen(exprStr), 1);
+    char *buf = calloc(strlen(indent)+1+strlen(exprStr)+1, 1);
     ASSERT_MEM(buf);
-    sprintf(buf, "%s%s", indent, exprStr);
+    sprintf(buf, "%s%s\n", indent, exprStr);
     return buf;
 }
+
 static char *outputPrintStmt(Node *n, int indentLevel) {
     char *indent = i(indentLevel);
     Node *printExpr = vec_first(n->children);
@@ -183,15 +225,23 @@ static char *outputPrintStmt(Node *n, int indentLevel) {
     sprintf(buf, "%s(print %s)\n", indent, printStr);
     return buf;
 }
+
 static char *outputVarStmt(Node *n, int indentLevel) {
     char *indent = i(indentLevel);
     const char *varName = tokStr(&n->tok);
-    char *varExpr = outputASTString(vec_first(n->children), indentLevel);
-    char *buf = calloc(strlen(indent)+1+strlen(varName)+strlen(varExpr)+12, 1);
+    char *varExpr = (char*)"";
+    if (n->children->length > 0) {
+        Node *val = vec_first(n->children);
+        varExpr = outputASTString(val, indentLevel);
+        varExpr = strAdd(" ", varExpr);
+    }
+    char *buf = calloc(strlen(indent)+1+strlen(varName)+
+        strlen(varExpr)+11, 1);
     ASSERT_MEM(buf);
-    sprintf(buf, "%s(varDecl %s %s)\n", indent, varName, varExpr);
+    sprintf(buf, "%s(varDecl %s%s)\n", indent, varName, varExpr);
     return buf;
 }
+
 static char *outputBlockStmt(Node *n, int indentLevel) {
     char *buf = "";
     char *indent = i(indentLevel);
@@ -201,15 +251,16 @@ static char *outputBlockStmt(Node *n, int indentLevel) {
         buf = "(block\n";
         char *stmtListOutput = outputASTString(stmtListNode, indentLevel+1);
         buf = strAdd(buf, stmtListOutput);
-        buf = strAdd(buf, ")\n");
+        buf = strAdd(buf, ")\n"); // TODO: add indent
     } else {
-        char *bufFmt = "%s(block)";
-        buf = calloc(strlen(indent)+1+7, 1);
+        char *bufFmt = "%s(block)\n";
+        buf = calloc(strlen(indent)+1+8, 1);
         ASSERT_MEM(buf);
         sprintf(buf, bufFmt, indent);
     }
     return buf;
 }
+
 static char *outputIfStmt(Node *n, int indentLevel) {
     char *indent = i(indentLevel);
     Node *cond = vec_first(n->children);
@@ -231,6 +282,7 @@ static char *outputIfStmt(Node *n, int indentLevel) {
     }
     return buf;
 }
+
 static char *outputWhileStmt(Node *n, int indentLevel) {
     char *indent = i(indentLevel);
     char *startFmt = "%s(while %s\n";
@@ -278,11 +330,21 @@ static char *outputForeachStmt(Node *n, int indentLevel) {
 }
 
 static char *outputContinueStmt(Node *n, int indentLevel) {
-    return "";
+    char *indent = i(indentLevel);
+    char *startFmt = "%s(continue)\n";
+    char *buf = calloc(strlen(indent)+1+11, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, startFmt, indent);
+    return buf;
 }
 
 static char *outputBreakStmt(Node *n, int indentLevel) {
-    return "";
+    char *indent = i(indentLevel);
+    char *startFmt = "%s(break)\n";
+    char *buf = calloc(strlen(indent)+1+8, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, startFmt, indent);
+    return buf;
 }
 
 // fn decl
@@ -295,6 +357,8 @@ static char *outputFunctionStmt(Node *n, int indentLevel) {
     Token tokName = n->tok;
     char *name = tokStr(&tokName);
     buf = strAdd(buf, name);
+
+    // parameters
     buf = strAdd(buf, " (");
     vec_nodep_t *params = (vec_nodep_t*)n->data;
     ASSERT_MEM(params);
@@ -306,15 +370,30 @@ static char *outputFunctionStmt(Node *n, int indentLevel) {
             buf = strAdd(buf, " ");
         }
     }
-    buf = strAdd(buf, ") ");
+    buf = strAdd(buf, ")\n"); // end of params
+
     Node *blockStmt = vec_first(n->children);
-    buf = strAdd(buf, outputASTString(blockStmt, indentLevel));
+    buf = strAdd(buf, outputASTString(blockStmt, indentLevel+1));
+
     buf = strAdd(buf, ")\n");
     return buf;
 }
+
 static char *outputReturnStmt(Node *n, int indentLevel) {
-    return "";
+    char *indent = i(indentLevel);
+    char *fmt = "%s(return";
+    char *buf = calloc(strlen(indent)+1+7, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, fmt, indent);
+    if (n->children->length > 0) {
+        Node *expr = vec_first(n->children);
+        buf = strAdd(buf, " ");
+        buf = strAdd(buf, outputASTString(expr, indentLevel));
+    }
+    buf = strAdd(buf, ")\n"); // TODO: add indent
+    return buf;
 }
+
 static char *outputClassStmt(Node *n, int indentLevel) {
     char *indent = i(indentLevel);
     char *className = tokStr(&n->tok);
@@ -343,6 +422,7 @@ static char *outputClassStmt(Node *n, int indentLevel) {
 static char *outputModuleStmt(Node *n, int indentLevel) {
     return "";
 }
+
 static char *outputTryStmt(Node *n, int indentLevel) {
     char *indent = i(indentLevel);
     char *startFmt = "%s(try\n";
@@ -365,7 +445,6 @@ static char *outputTryStmt(Node *n, int indentLevel) {
 
 // NOTE: 2 or 3 children, depending on if variableexpr (child 2) is given
 static char *outputCatchStmt(Node *n, int indentLevel) {
-    fprintf(stderr, "outputCatch\n");
     char *indent = i(indentLevel);
     Node *catchExpr = vec_first(n->children);
     char *catchExprOut = outputASTString(catchExpr, indentLevel);
@@ -383,7 +462,6 @@ static char *outputCatchStmt(Node *n, int indentLevel) {
     Node *block = vec_last(n->children);
     buf = strAdd(buf, outputASTString(block, indentLevel+1));
     buf = strAdd(buf, ")\n"); // TODO: indent
-    fprintf(stderr, "/outputCatch\n");
     return buf;
 }
 
@@ -510,4 +588,11 @@ char *outputASTString(Node *node, int indentLevel) {
         }
     }
     return "unreachable";
+}
+
+NodeType nodeType(Node *n) {
+    return n->type.type;
+}
+int nodeKind(Node *n) {
+    return n->type.kind;
 }

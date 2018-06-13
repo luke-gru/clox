@@ -27,6 +27,7 @@ static Keyword keywords[] = {
   {"nil",     3, TOKEN_NIL},
   {"try",     3, TOKEN_TRY},
   {"catch",   5, TOKEN_CATCH},
+  {"throw",   5, TOKEN_THROW},
   {"or",      2, TOKEN_OR},
   {"print",   5, TOKEN_PRINT},
   {"return",  6, TOKEN_RETURN},
@@ -35,6 +36,8 @@ static Keyword keywords[] = {
   {"true",    4, TOKEN_TRUE},
   {"var",     3, TOKEN_VAR},
   {"while",   5, TOKEN_WHILE},
+  {"continue",   8, TOKEN_CONTINUE},
+  {"break",   5, TOKEN_BREAK},
   // Sentinel to mark the end of the array.
   {NULL,      0, TOKEN_EOF}
 };
@@ -193,6 +196,8 @@ Token scanToken() {
     case ')': return makeToken(TOKEN_RIGHT_PAREN);
     case '{': return makeToken(TOKEN_LEFT_BRACE);
     case '}': return makeToken(TOKEN_RIGHT_BRACE);
+    case '[': return makeToken(TOKEN_LEFT_BRACKET);
+    case ']': return makeToken(TOKEN_RIGHT_BRACKET);
     case ';': return makeToken(TOKEN_SEMICOLON);
     case ',': return makeToken(TOKEN_COMMA);
     case '.': return makeToken(TOKEN_DOT);
@@ -241,6 +246,10 @@ const char *tokTypeStr(TokenType ttype) {
       return "LEFT_BRACE";
     case TOKEN_RIGHT_BRACE:
       return "RIGHT_BRACE";
+    case TOKEN_LEFT_BRACKET:
+      return "LEFT_BRACKET";
+    case TOKEN_RIGHT_BRACKET:
+      return "RIGHT_BRACKET";
     case TOKEN_BANG:
       return "BANG";
     case TOKEN_BANG_EQUAL:

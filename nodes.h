@@ -92,6 +92,9 @@ void nodeAddData(Node *node, void *data);
 void nodeForeachChild(Node *node, NodeCallback cb);
 void freeNode(Node *node, bool freeChildren);
 
+NodeType nodeType(Node *n); // expr or stmt or other
+int nodeKind(Node *n); // the actual node kind
+
 char *outputASTString(Node *node, int indentLevel);
 
 #endif
