@@ -1,4 +1,5 @@
 CC=gcc
+CFLAGS=-Wall -Wno-unused-label -Wno-unused-function
 SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c
 TEST_SRCS = debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c
 TEST_FILES = test/test_object.c test/test_nodes.c
@@ -10,11 +11,11 @@ BUILD_FILE_DEBUG=clox_debug
 
 .PHONY: clox
 clox: build
-	${CC} $(SRCS) -o ${BUILD_DIR}/${BUILD_FILE}
+	${CC} ${CFLAGS} $(SRCS) -o ${BUILD_DIR}/${BUILD_FILE}
 
 .PHONY: debug
 debug: build
-	${CC} $(SRCS) ${DEBUG_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_DEBUG}
+	${CC} ${CFLAGS} $(SRCS) ${DEBUG_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_DEBUG}
 
 .PHONY: build
 build:
@@ -27,6 +28,6 @@ clean:
 
 .PHONY: test
 test: build
-	${CC} $(TEST_SRCS) test/test_object.c ${TEST_FLAGS} -o bin/test_object
-	${CC} $(TEST_SRCS) test/test_nodes.c ${TEST_FLAGS} -o bin/test_nodes
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_object.c ${TEST_FLAGS} -o bin/test_object
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_nodes.c ${TEST_FLAGS} -o bin/test_nodes
 

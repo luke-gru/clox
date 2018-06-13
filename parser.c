@@ -15,10 +15,14 @@
 #define TRACE_END(name) _trace_end(name)
 
 static void _trace_start(const char *name) {
-    /*fprintf(stderr, "[-- <%s> --]\n", name);*/
+    if (CLOX_OPTION_T(traceParserCalls)) {
+        fprintf(stderr, "[-- <%s> --]\n", name);
+    }
 }
 static void _trace_end(const char *name) {
-    /*fprintf(stderr, "[-- </%s> --]\n", name);*/
+    if (CLOX_OPTION_T(traceParserCalls)) {
+        fprintf(stderr, "[-- </%s> --]\n", name);
+    }
 }
 
 // global
@@ -102,6 +106,7 @@ static bool check(TokenType type) {
   return parser.current.type == type;
 }
 
+// peekTokN(1) gives token that nextToken() will return on next call
 static Token peekTokN(int n) {
     ASSERT(n > 0);
     if (parser.peekBuf.length < n) {
@@ -127,7 +132,7 @@ static bool match(TokenType type) {
 // forward decls
 static Node *declaration(void);
 static Node *varDeclaration(void);
-static Node *funDeclaration(void);
+static Node *funDeclaration(ParseFunctionType);
 static Node *expression(void);
 static Node *assignment(void);
 static Node *logicOr(void);
@@ -178,7 +183,7 @@ static Node *declaration(void) {
     }
     if (check(TOKEN_FUN) && peekTokN(1).type == TOKEN_IDENTIFIER) {
         advance();
-        Node *ret = funDeclaration();
+        Node *ret = funDeclaration(FUNCTION_TYPE_NAMED);
         TRACE_END("declaration");
         return ret;
     }
@@ -534,10 +539,14 @@ static vec_nodep_t *createNodeVec(void) {
     return paramNodes;
 }
 
-static Node *funDeclaration(void) {
+// FUN keyword has already been parsed.
+static Node *funDeclaration(ParseFunctionType fnType) {
     TRACE_START("funDeclaration");
-    consume(TOKEN_IDENTIFIER, "Expect function name (identifier) after 'fun' keyword");
     Token nameTok = parser.previous;
+    if (fnType == FUNCTION_TYPE_NAMED) {
+        consume(TOKEN_IDENTIFIER, "Expect function name (identifier) after 'fun' keyword");
+        nameTok = parser.previous;
+    }
     consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");
     vec_nodep_t *paramNodes = createNodeVec();
     while (match(TOKEN_IDENTIFIER)) {
@@ -556,16 +565,24 @@ static Node *funDeclaration(void) {
     consume(TOKEN_LEFT_BRACE, "Expect '{' after function parameter list");
     Token lbrace = parser.previous;
     Node *stmtList = blockStmts();
-    node_type_t funcType = {
-        .type = NODE_STMT,
-        .kind = FUNCTION_STMT,
-    };
     node_type_t blockType = {
         .type = NODE_STMT,
         .kind = BLOCK_STMT,
     };
     Node *blockNode = createNode(blockType, lbrace, NULL);
     nodeAddChild(blockNode, stmtList);
+    node_type_t funcType;
+    if (fnType == FUNCTION_TYPE_NAMED) {
+        funcType = (node_type_t){
+            .type = NODE_STMT,
+            .kind = FUNCTION_STMT,
+        };
+    } else {
+        funcType = (node_type_t){
+            .type = NODE_EXPR,
+            .kind = ANON_FN_EXPR,
+        };
+    }
     Node *funcNode = createNode(funcType, nameTok, NULL);
     nodeAddData(funcNode, (void*)paramNodes);
     nodeAddChild(funcNode, blockNode);
@@ -598,16 +615,40 @@ static Node *assignment() {
     if (match(TOKEN_EQUAL)) {
         Token eqTok = parser.previous;
         Node *rval = assignment(); // assignment goes right to left in precedence (a = (b = c))
-        node_type_t assignT = {
-            .type = NODE_EXPR,
-            .kind = ASSIGN_EXPR,
-        };
-        // TODO: match logic in java version
-        Node *assign = createNode(assignT, eqTok, NULL);
-        nodeAddChild(assign, lval);
-        nodeAddChild(assign, rval);
+        Node *ret = NULL;
+        if (nodeKind(lval) == VARIABLE_EXPR) {
+            node_type_t assignT = {
+                .type = NODE_EXPR,
+                .kind = ASSIGN_EXPR,
+            };
+            ret = createNode(assignT, eqTok, NULL);
+            nodeAddChild(ret, lval);
+            nodeAddChild(ret, rval);
+        } else if (nodeKind(lval) == PROP_ACCESS_EXPR) {
+            node_type_t propsetT = {
+                .type = NODE_EXPR,
+                .kind = PROP_SET_EXPR,
+            };
+            ret = createNode(propsetT, lval->tok, NULL);
+            nodeAddChild(ret, vec_first(lval->children));
+            nodeAddChild(ret, rval);
+        } else if (nodeKind(lval) == INDEX_GET_EXPR) {
+            node_type_t indexsetT = {
+                .type = NODE_EXPR,
+                .kind = INDEX_SET_EXPR,
+            };
+            ret = createNode(indexsetT, lval->tok, NULL);
+            nodeAddChild(ret, vec_first(lval->children));
+            nodeAddChild(ret, lval->children->data[1]);
+            nodeAddChild(ret, rval);
+        } else if (nodeKind(lval) == SUPER_EXPR) {
+            // TODO
+        } else {
+            fprintf(stderr, "invalid assignment lvalue\n"); // FIXME
+            exit(1);
+        }
         TRACE_END("assignment");
-        return assign;
+        return ret;
     }
     TRACE_END("assignment");
     return lval;
@@ -793,6 +834,7 @@ static Node *call() {
             Node *idxGet = createNode(idxGetT, lBracket, NULL);
             nodeAddChild(idxGet, expr);
             nodeAddChild(idxGet, indexExpr);
+            consume(TOKEN_RIGHT_BRACKET, "Expected ']' to end index expression");
             expr = idxGet;
         } else {
             break;
@@ -876,8 +918,58 @@ static Node *primary() {
         TRACE_END("primary");
         return arr;
     }
-    // TODO: arrays and anonymous functions `var f = fun() { }`
+    if (match(TOKEN_LEFT_PAREN)) {
+        Token lparenTok = parser.previous;
+        node_type_t gType = {
+            .type = NODE_EXPR,
+            .kind = GROUPING_EXPR,
+        };
+        Node *grouping = createNode(gType, lparenTok, NULL);
+        Node *groupExpr = expression();
+        nodeAddChild(grouping, groupExpr);
+        consume(TOKEN_RIGHT_PAREN, "Expected ')' to end group expression");
+        TRACE_END("primary");
+        return grouping;
+    }
+    if (match(TOKEN_SUPER)) {
+        Token superTok = parser.previous;
+        consume(TOKEN_DOT, "Expected '.' after keyword 'super'");
+        consume(TOKEN_IDENTIFIER, "Expected identifier after 'super.'");
+        Token identTok = parser.previous;
+        node_type_t sType = {
+            .type = NODE_EXPR,
+            .kind = SUPER_EXPR,
+        };
+        node_type_t pType = {
+            .type = NODE_OTHER,
+            .kind = TOKEN_NODE,
+        };
+        Node *superExpr = createNode(sType, superTok, NULL);
+        Node *propNode = createNode(pType, identTok, NULL);
+        nodeAddChild(superExpr, propNode);
+        TRACE_END("primary");
+        return superExpr;
+    }
+    if (match(TOKEN_THIS)) {
+        Token thisTok = parser.previous;
+        node_type_t nType = {
+            .type = NODE_EXPR,
+            .kind = THIS_EXPR,
+        };
+        Node *thisExpr = createNode(nType, thisTok, NULL);
+        TRACE_END("primary");
+        return thisExpr;
+    }
+    // anonymous function
+    if (match(TOKEN_FUN)) {
+        Node *anonFn = funDeclaration(FUNCTION_TYPE_ANON);
+        TRACE_END("primary");
+        return anonFn;
+    }
+
+    // TODO: handle error
     fprintf(stderr, "primary fallthru: %s\n", tokTypeStr(parser.current.type));
+    return NULL;
 }
 
 /*static bool identifiersEqual(Token* a, Token* b) {*/

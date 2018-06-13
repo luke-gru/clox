@@ -58,6 +58,11 @@ typedef enum {
   TOKEN_EOF
 } TokenType;
 
+typedef enum {
+    FUNCTION_TYPE_NAMED = 1,
+    FUNCTION_TYPE_ANON,
+} ParseFunctionType;
+
 typedef struct {
   TokenType type;
   const char *start;

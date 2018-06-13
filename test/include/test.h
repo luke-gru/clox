@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <setjmp.h>
 #include <stdbool.h>
+#include "options.h"
 
 #include "vec.h"
 
@@ -133,6 +134,18 @@ static inline void _RUN_TEST(int (*test_fn)(void), const char *fnname) {
 static inline void _SKIP_TEST(const char *fnname) {
     LOG_ERR("-- Skipping %s --\n", fnname);
     tests_skipped++;
+}
+
+static inline void parseTestOptions(int argc, char *argv[]) {
+    int i = 0;
+    int incrOpt = 0;
+    while (argv[i] != NULL) {
+        if ((incrOpt = parseOption(argv, i)) > 0) {
+            i+=incrOpt;
+        } else {
+            i+=1;
+        }
+    }
 }
 
 #define T_ASSERT(expr) ((expr) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))

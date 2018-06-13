@@ -12,6 +12,7 @@ cleanup:
 }
 
 int main(int argc, char *argv[]) {
+    parseTestOptions(argc, argv);
     INIT_TESTS();
     RUN_TEST(test_string_object);
     END_TESTS();

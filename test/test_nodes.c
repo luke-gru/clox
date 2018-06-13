@@ -160,13 +160,14 @@ static int test_output_nodes_from_parser_if1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     T_ASSERT(strcmp("(if nil\n"
-                    "(block\n"
+                    "  (block\n"
                     "    (print \"got nil\")\n"
-                    ")\n"
+                    "  )\n"
                     "(else\n"
-                    "(block\n"
+                    "  (block\n"
                     "    (print \"not nil\")\n"
-                    ")\n)\n", output) == 0);
+                    "  )\n"
+                    ")\n", output) == 0);
 
 cleanup:
     return 0;
@@ -183,9 +184,10 @@ static int test_output_nodes_from_parser_while1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     T_ASSERT(strcmp("(while true\n"
-                    "(block\n"
+                    "  (block\n"
                     "    (print \"again...\")\n"
-                    ")\n)\n", output) == 0);
+                    "  )\n"
+                    ")\n", output) == 0);
 
 cleanup:
     return 0;
@@ -202,9 +204,10 @@ static int test_output_nodes_from_parser_for1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     T_ASSERT(strcmp("(for nil true nil\n"
-                    "(block\n"
+                    "  (block\n"
                     "    (print \"again...\")\n"
-                    ")\n)\n", output) == 0);
+                    "  )\n"
+                    ")\n", output) == 0);
 
 cleanup:
     return 0;
@@ -221,9 +224,9 @@ static int test_output_nodes_from_parser_try1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     T_ASSERT(strcmp("(try\n"
-                    "(block\n"
+                    "  (block\n"
                     "    (print \"again...\")\n"
-                    ")\n"
+                    "  )\n"
                     "(catch \"uh oh\"\n"
                     "  (block)\n"
                     ")\n"
@@ -256,9 +259,9 @@ static int test_output_nodes_from_parser_return1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(fnDecl a ()\n"
-                     "(block\n"
+                     "  (block\n"
                      "    (return)\n"
-                     ")\n"
+                     "  )\n"
                      ")\n";
     T_ASSERT(strcmp(expected, output) == 0);
 cleanup:
@@ -304,7 +307,133 @@ cleanup:
     return 0;
 }
 
+static int test_output_nodes_from_parser_binaryop1(void) {
+    const char *src = "1+101;";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(+ 1 101)\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_logicalop1(void) {
+    const char *src = "1 <= 101;";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(<= 1 101)\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_grouping1(void) {
+    const char *src = "(\"in parens\");";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(group \"in parens\")\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_superexpr(void) {
+    const char *src = "fun a(n) { return super.a(n); }";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(fnDecl a (n)\n"
+                     "  (block\n"
+                     "    (return (call (propGet super a) ((var n) ))\n"
+                     "  )\n"
+                     ")\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_thisexpr(void) {
+    const char *src = "fun me() { return this; }";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(fnDecl me ()\n"
+                     "  (block\n"
+                     "    (return (var this))\n"
+                     "  )\n"
+                     ")\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_anonfn(void) {
+    const char *src = "var f = fun() { return \"FUN\"; };";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(varDecl f (fnAnon ()\n"
+                     "  (block\n"
+                     "    (return \"FUN\")\n"
+                     "  )\n"
+                     ")\n"
+                     ")\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_indexget(void) {
+    const char *src = "var two = [1,2,3][1];";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(varDecl two (idxGet (array 1 2 3) 1))\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_indexset(void) {
+    const char *src = "[1,2,3][1] = 1;";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(idxSet (array 1 2 3) 1 1)\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
+    parseTestOptions(argc, argv);
     INIT_TESTS();
     RUN_TEST(test_output_node_literal_string);
     RUN_TEST(test_output_node_literal_number);
@@ -320,5 +449,13 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_output_nodes_from_parser_return1);
     RUN_TEST(test_output_nodes_from_parser_assign1);
     RUN_TEST(test_output_nodes_from_parser_array1);
+    RUN_TEST(test_output_nodes_from_parser_binaryop1);
+    RUN_TEST(test_output_nodes_from_parser_logicalop1);
+    RUN_TEST(test_output_nodes_from_parser_grouping1);
+    RUN_TEST(test_output_nodes_from_parser_superexpr);
+    RUN_TEST(test_output_nodes_from_parser_thisexpr);
+    RUN_TEST(test_output_nodes_from_parser_anonfn);
+    RUN_TEST(test_output_nodes_from_parser_indexget);
+    RUN_TEST(test_output_nodes_from_parser_indexset);
     END_TESTS();
 }
