@@ -4,9 +4,14 @@
 #include <stdarg.h>
 #include "common.h"
 #include "chunk.h"
+#include "object.h"
 
-void disassembleChunk(Chunk* chunk, const char* name);
-int disassembleInstruction(Chunk* chunk, int i);
+void printDisassembledChunk(Chunk *chunk, const char *name);
+int  printDisassembledInstruction(Chunk *chunk, int i);
+
+ObjString *disassembleChunk(Chunk *chunk);
+
+char *opName(OpCode code);
 
 extern void die(const char *fmt, ...);
 #define ASSERT(expr) ((expr) ? (void)0 : die("assertion failure (%s:%d) in %s\n", __FILE__, __LINE__, __func__))

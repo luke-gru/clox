@@ -3,13 +3,7 @@
 #include "parser.h"
 #include "options.h"
 #include "memory.h"
-
-#ifndef ASSERT
-#define ASSERT(n)
-#endif
-#ifndef ASSERT_MEM
-#define ASSERT_MEM(n)
-#endif
+#include "debug.h"
 
 #define TRACE_START(name) _trace_start(name)
 #define TRACE_END(name) _trace_end(name)
@@ -66,7 +60,7 @@ static void errorAtCurrent(const char *message) {
   errorAt(&parser.current, message);
 }
 
-// takes into account peekbuffer
+// takes into account peekbuffer, which scanToken() doesn't
 static Token nextToken() {
     if (parser.peekBuf.length > 0) {
         Token val = vec_first(&parser.peekBuf);
@@ -156,6 +150,8 @@ static bool isAtEnd(void) {
 }
 
 // returns program node that contains list of statement nodes
+// initScanner(char *src) must be called so the scanner is ready
+// to pass us the tokens to parse.
 Node *parse(void) {
     initParser();
     node_type_t nType = {
@@ -421,7 +417,7 @@ static Node *statement() {
             .kind = RETURN_STMT,
         };
         Node *retNode = createNode(retT, retTok, NULL);
-        if (match(TOKEN_SEMICOLON)) {
+        if (match(TOKEN_SEMICOLON)) { // do nothing, no child
         } else {
             Node *retExpr = expression();
             nodeAddChild(retNode, retExpr);
@@ -642,10 +638,9 @@ static Node *assignment() {
             nodeAddChild(ret, lval->children->data[1]);
             nodeAddChild(ret, rval);
         } else if (nodeKind(lval) == SUPER_EXPR) {
-            // TODO
+            // TODO turn into propset
         } else {
-            fprintf(stderr, "invalid assignment lvalue\n"); // FIXME
-            exit(1);
+            errorAtCurrent("invalid assignment lvalue");
         }
         TRACE_END("assignment");
         return ret;
@@ -967,8 +962,7 @@ static Node *primary() {
         return anonFn;
     }
 
-    // TODO: handle error
-    fprintf(stderr, "primary fallthru: %s\n", tokTypeStr(parser.current.type));
+    errorAtCurrent("Unexpected token");
     return NULL;
 }
 

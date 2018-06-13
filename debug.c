@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "debug.h"
+#include "object.h"
 
 void die(const char *fmt, ...) {
     va_list ap;
@@ -10,21 +11,46 @@ void die(const char *fmt, ...) {
     exit(1);
 }
 
+char *opName(OpCode code) {
+    switch (code) {
+    case OP_CONSTANT:
+        return "OP_CONSTANT";
+    case OP_ADD:
+        return "OP_ADD";
+    case OP_SUBTRACT:
+        return "OP_SUBTRACT";
+    case OP_MULTIPLY:
+        return "OP_MULTIPLY";
+    case OP_DIVIDE:
+        return "OP_DIVIDE";
+    case OP_NEGATE:
+        return "OP_NEGATE";
+    case OP_NOT:
+        return "OP_NOT";
+    case OP_RETURN:
+        return "OP_RETURN";
+    case OP_NIL:
+        return "OP_NIL";
+    default:
+        return "!Unknown instruction!";
+    }
+}
+
 /**
  * Print all operations and operands to the console.
  */
-void disassembleChunk(Chunk *chunk, const char *name) {
+void printDisassembledChunk(Chunk *chunk, const char *name) {
   printf("== %s ==\n", name);
 
   for (int i = 0; i < chunk->count;) {
-    i = disassembleInstruction(chunk, i);
+    i = printDisassembledInstruction(chunk, i);
     if (i <= 0) {
         break;
     }
   }
 }
 
-static int constantInstruction(char *op, Chunk *chunk, int i) {
+static int printConstantInstruction(char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
     printf("%-16s %4d '", op, constantIdx);
     printValue(getConstant(chunk, constantIdx));
@@ -32,12 +58,28 @@ static int constantInstruction(char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-static int simpleInstruction(char *op, int i) {
+static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    uint8_t constantIdx = chunk->code[i + 1];
+
+    char *cbuf = calloc(strlen(op)+1+6, 1);
+    ASSERT_MEM(cbuf);
+    sprintf(cbuf, "%s\t%04d\n", op, constantIdx);
+    pushCString(buf, cbuf, strlen(cbuf));
+    return i+2;
+}
+
+static int printSimpleInstruction(char *op, int i) {
     printf("%s\n", op);
     return i+1;
 }
 
-int disassembleInstruction(Chunk *chunk, int i) {
+static int simpleInstruction(ObjString *buf, char *op, int i) {
+    pushCString(buf, op, strlen(op));
+    pushCString(buf, "\n", 1);
+    return i+1;
+}
+
+int printDisassembledInstruction(Chunk *chunk, int i) {
     printf("%04d ", i);
     // same line as prev instruction
     if (i > 0 && chunk->lines[i] == chunk->lines[i - 1]) {
@@ -48,21 +90,53 @@ int disassembleInstruction(Chunk *chunk, int i) {
     uint8_t byte = chunk->code[i];
     switch (byte) {
         case OP_CONSTANT:
-            return constantInstruction("OP_CONSTANT", chunk, i);
+            return printConstantInstruction(opName(byte), chunk, i);
         case OP_NEGATE:
-            return simpleInstruction("OP_NEGATE", i);
         case OP_RETURN:
-            return simpleInstruction("OP_RETURN", i);
         case OP_ADD:
-            return simpleInstruction("OP_ADD", i);
         case OP_SUBTRACT:
-            return simpleInstruction("OP_SUBTRACT", i);
         case OP_MULTIPLY:
-            return simpleInstruction("OP_MULTIPLY", i);
         case OP_DIVIDE:
-            return simpleInstruction("OP_DIVIDE", i);
+            return printSimpleInstruction(opName(byte), i);
         default:
             printf("Unknown opcode %d\n", byte);
             return -1;
     }
+}
+
+static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i) {
+    char *numBuf = calloc(5+1, 1);
+    ASSERT_MEM(numBuf);
+    sprintf(numBuf, "%04d\t", i);
+    pushCString(buf, numBuf, strlen(numBuf));
+    uint8_t byte = chunk->code[i];
+    switch (byte) {
+        case OP_CONSTANT:
+            return constantInstruction(buf, opName(byte), chunk, i);
+        case OP_NEGATE:
+        case OP_RETURN:
+        case OP_ADD:
+        case OP_SUBTRACT:
+        case OP_MULTIPLY:
+        case OP_DIVIDE:
+            return simpleInstruction(buf, opName(byte), i);
+        default: {
+            char *cBuf = calloc(19+1, 1);
+            ASSERT_MEM(cBuf);
+            sprintf(cBuf, "Unknown opcode %03d\n", byte);
+            pushCString(buf, cBuf, strlen(cBuf));
+            return -1;
+        }
+    }
+}
+
+ObjString *disassembleChunk(Chunk *chunk) {
+    ObjString *buf = copyString("", 0);
+    for (int i = 0; i < chunk->count;) {
+        i = disassembledInstruction(buf, chunk, i);
+        if (i <= 0) {
+            break;
+        }
+    }
+    return buf;
 }

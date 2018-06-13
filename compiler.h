@@ -11,6 +11,13 @@ typedef enum {
     COMPILE_ERR_ERRNO,
 } CompileErr;
 
+typedef enum {
+  TYPE_FUNCTION,
+  TYPE_INITIALIZER,
+  TYPE_METHOD,
+  TYPE_TOP_LEVEL
+} FunctionType;
+
 int compile_src(char *src, Chunk *chunk, CompileErr *err);
 int compile_file(char *fname, Chunk *chunk, CompileErr *err);
 

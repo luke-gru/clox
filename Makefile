@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS=-Wall -Wno-unused-label -Wno-unused-function
 SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c
 TEST_SRCS = debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c
-TEST_FILES = test/test_object.c test/test_nodes.c
+TEST_FILES = test/test_object.c test/test_nodes.c test/test_compiler.c test/test_vm.c
 DEBUG_FLAGS=-DDEBUG_TRACE_EXECUTION -g
 TEST_FLAGS=-g -Itest/include -I.
 BUILD_DIR=bin
@@ -30,4 +30,6 @@ clean:
 test: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_object.c ${TEST_FLAGS} -o bin/test_object
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_nodes.c ${TEST_FLAGS} -o bin/test_nodes
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_compiler.c ${TEST_FLAGS} -o bin/test_compiler
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_vm.c ${TEST_FLAGS} -o bin/test_vm
 

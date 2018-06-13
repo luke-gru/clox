@@ -432,6 +432,48 @@ cleanup:
     return 0;
 }
 
+static int test_output_nodes_from_parser_propget(void) {
+    const char *src = "expr.propname;";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(propGet (var expr) propname)\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_propset(void) {
+    const char *src = "expr.propname = propval;";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(propSet (var expr) propname (var propval))\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
+static int test_output_nodes_from_parser_precedence1(void) {
+    const char *src = "1+2*3*4;";
+    initScanner(src);
+    Node *program = parse();
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(+ 1 (* (* 2 3) 4))\n";
+    T_ASSERT(strcmp(expected, output) == 0);
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
@@ -457,5 +499,8 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_output_nodes_from_parser_anonfn);
     RUN_TEST(test_output_nodes_from_parser_indexget);
     RUN_TEST(test_output_nodes_from_parser_indexset);
+    RUN_TEST(test_output_nodes_from_parser_propget);
+    RUN_TEST(test_output_nodes_from_parser_propset);
+    RUN_TEST(test_output_nodes_from_parser_precedence1);
     END_TESTS();
 }

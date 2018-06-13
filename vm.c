@@ -45,7 +45,7 @@ static InterpretResult run(void) {
         printf(" ]");
     }
     printf("\n");
-    disassembleInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code));
+    printDisassembledInstruction(vm.chunk, (int)(vm.ip - vm.chunk->code));
 #endif
     uint8_t instruction = READ_BYTE();
     switch (instruction) {
@@ -67,6 +67,8 @@ static InterpretResult run(void) {
         printValue(pop());
         printf("\n");
         return INTERPRET_OK;
+      default:
+        printf("Unknown opcode instruction: %s", opName(instruction));
     }
   }
 

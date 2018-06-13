@@ -3,10 +3,7 @@
 #include "scanner.h"
 #include "common.h"
 #include "memory.h"
-
-#ifndef ASSERT_MEM
-#define ASSERT_MEM(p)
-#endif
+#include "debug.h"
 
 Node *createNode(node_type_t type, Token tok, vec_nodep_t *children) {
     Node *n = ALLOCATE(Node, 1);
@@ -216,11 +213,28 @@ static char *outputAnonFnExpr(Node *n, int indentLevel) {
 }
 
 static char *outputPropAccessExpr(Node *n, int indentLevel) {
-    return "";
+    char *buf =  (char*)"(propGet ";
+    char *lhsOut = outputASTString(vec_first(n->children), indentLevel);
+    buf = strAdd(buf, lhsOut);
+    buf = strAdd(buf, " ");
+    char *propName = tokStr(&n->tok);
+    buf = strAdd(buf, propName);
+    buf = strAdd(buf, ")");
+    return buf;
 }
 
 static char *outputPropSetExpr(Node *n, int indentLevel) {
-    return "";
+    char *buf =  (char*)"(propSet ";
+    char *lhsOut = outputASTString(vec_first(n->children), indentLevel);
+    buf = strAdd(buf, lhsOut);
+    buf = strAdd(buf, " ");
+    char *propName = tokStr(&n->tok);
+    buf = strAdd(buf, propName);
+    buf = strAdd(buf, " ");
+    char *rhsOut = outputASTString(n->children->data[1], indentLevel);
+    buf = strAdd(buf, rhsOut);
+    buf = strAdd(buf, ")");
+    return buf;
 }
 
 static char *outputThisExpr(Node *n, int indentLevel) {

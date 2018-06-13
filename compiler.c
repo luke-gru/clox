@@ -4,39 +4,13 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "compiler.h"
+#include "nodes.h"
 #include "scanner.h"
+#include "parser.h"
 #include "value.h"
 #include "debug.h"
-
-typedef struct {
-  bool hadError;
-  bool panicMode;
-  Token current;
-  Token previous;
-} Parser;
-
-typedef enum {
-  PREC_NONE,
-  PREC_ASSIGNMENT,  // =
-  PREC_OR,          // or
-  PREC_AND,         // and
-  PREC_EQUALITY,    // == !=
-  PREC_COMPARISON,  // < > <= >=
-  PREC_TERM,        // + -
-  PREC_FACTOR,      // * /
-  PREC_UNARY,       // ! - +
-  PREC_CALL,        // . () []
-  PREC_PRIMARY
-} Precedence;
-
-typedef void (*ParseFn)();
-
-typedef struct {
-  ParseFn prefix;
-  ParseFn infix;
-  Precedence precedence;
-} ParseRule;
 
 typedef struct {
   // The name of the local variable.
@@ -48,12 +22,15 @@ typedef struct {
   int depth;
 } Local;
 
-typedef enum {
-  TYPE_FUNCTION,
-  TYPE_INITIALIZER,
-  TYPE_METHOD,
-  TYPE_TOP_LEVEL
-} FunctionType;
+typedef struct {
+  // The index of the local variable or upvalue being captured from the
+  // enclosing function.
+  uint8_t index;
+
+  // Whether the captured variable is a local or upvalue in the enclosing
+  // function.
+  bool isLocal;
+} Upvalue;
 
 typedef struct Compiler {
   // The currently in scope local variables.
@@ -65,6 +42,7 @@ typedef struct Compiler {
   // The current level of block scope nesting. Zero is the outermost local
   // scope (global scope)
   int scopeDepth;
+  bool hadError;
 } Compiler;
 
 /*typedef struct ClassCompiler {*/
@@ -73,7 +51,6 @@ typedef struct Compiler {
   /*Token name;*/
 /*} ClassCompiler;*/
 
-Parser parser;
 Compiler *current = NULL;
 /*ClassCompiler *currentClass = NULL;*/
 
@@ -81,75 +58,6 @@ Chunk *compilingChunk;
 
 static Chunk *currentChunk() {
   return compilingChunk;
-}
-
-
-static void errorAt(Token *token, const char *message) {
-  if (parser.panicMode) return;
-  parser.panicMode = true;
-
-  fprintf(stderr, "[line %d] Error", token->line);
-
-  if (token->type == TOKEN_EOF) {
-    fprintf(stderr, " at end");
-  } else if (token->type == TOKEN_ERROR) {
-    // Nothing.
-  } else {
-    fprintf(stderr, " at '%.*s'", token->length, token->start);
-  }
-
-  fprintf(stderr, ": %s\n", message);
-  parser.hadError = true;
-}
-
-
-static void error(const char* message) {
-  errorAt(&parser.previous, message);
-}
-
-static void errorAtCurrent(const char* message) {
-  errorAt(&parser.current, message);
-}
-
-static void advance() {
-  parser.previous = parser.current;
-
-  for (;;) {
-    parser.current = scanToken();
-    if (parser.current.type != TOKEN_ERROR) break;
-
-    errorAtCurrent(parser.current.start);
-  }
-}
-
-static void consume(TokenType type, const char* message) {
-  if (parser.current.type == type) {
-    advance();
-    return;
-  }
-
-  errorAtCurrent(message);
-}
-
-static bool check(TokenType type) {
-  return parser.current.type == type;
-}
-
-static bool match(TokenType type) {
-  if (!check(type)) return false;
-  advance();
-  return true;
-}
-
-/*static ParseRule* getRule(TokenType type) {*/
-  /*return &rules[type];*/
-/*}*/
-
-static void parsePrecedence(Precedence prec) {
-}
-
-static void expression() {
-    parsePrecedence(PREC_ASSIGNMENT);
 }
 
 static void emitByte(uint8_t byte) {
@@ -162,7 +70,7 @@ static void emitBytes(uint8_t byte1, uint8_t byte2) {
 }
 
 static void emitReturn() {
-    emitByte(OP_NIL);
+    //emitByte(OP_NIL);
     emitByte(OP_RETURN);
 }
 
@@ -176,21 +84,96 @@ static void endCompiler() {
     emitReturn();
 }
 
+static void error(const char *msg) {
+    fprintf(stderr, "[Compile Error]: %s\n", msg);
+    current->hadError = true;
+}
+
+// Adds a constant to the current chunk's constant pool and returns an index
+// to it.
+static uint8_t makeConstant(Value value) {
+  int constant = addConstant(currentChunk(), value);
+  if (constant > UINT8_MAX) {
+    error("Too many constants in one chunk.");
+    return 0;
+  }
+
+  return (uint8_t)constant;
+}
+
+
+static void emitConstant(Value constant) {
+    emitBytes(OP_CONSTANT, makeConstant(constant));
+}
+
+static void emitNode(Node *n);
+static void emitChildren(Node *n) {
+    Node *stmt = NULL;
+    int i = 0;
+    vec_foreach(n->children, stmt, i) {
+        emitNode(stmt);
+    }
+}
+
+static void emitNode(Node *n) {
+    switch (nodeKind(n)) {
+    case STMTLIST_STMT:
+    case EXPR_STMT: {
+        emitChildren(n);
+        return;
+    }
+    case BINARY_EXPR: {
+        emitNode(n->children->data[0]);
+        emitNode(n->children->data[1]);
+        if (n->tok.type == TOKEN_PLUS) {
+            emitByte(OP_ADD);
+        } else if (n->tok.type == TOKEN_MINUS) {
+            emitByte(OP_SUBTRACT);
+        } else if (n->tok.type == TOKEN_STAR) {
+            emitByte(OP_MULTIPLY);
+        } else if (n->tok.type == TOKEN_SLASH) {
+            emitByte(OP_DIVIDE);
+        } else {
+            error("invalid node");
+        }
+        return;
+    }
+    case UNARY_EXPR: {
+        emitNode(n->children->data[0]);
+        if (n->tok.type == TOKEN_MINUS) {
+            emitByte(OP_NEGATE);
+        } else if (n->tok.type == TOKEN_BANG) {
+            emitByte(OP_NOT);
+        } else {
+            error("invalid node");
+        }
+        return;
+    }
+    case LITERAL_EXPR: {
+        if (n->tok.type == TOKEN_NUMBER) {
+            // TODO: handle error condition
+            double d = strtod(tokStr(&n->tok), NULL);
+            emitConstant(NUMBER_VAL(d));
+        } else if (n->tok.type == TOKEN_STRING) {
+            Token *name = &n->tok;
+            emitConstant(OBJ_VAL(copyString(name->start+1, name->length-2)));
+        } else {
+            error("invalid node");
+        }
+        return;
+    }
+    default:
+        error("invalid node");
+    }
+}
+
 int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     initScanner(src);
     Compiler mainCompiler;
     initCompiler(&mainCompiler);
+    Node *program = parse();
     compilingChunk = chunk;
-
-    parser.hadError = false;
-    parser.panicMode = false;
-
-    // Prime the pump.
-    advance();
-
-    expression();
-    consume(TOKEN_EOF, "Expect end of expression.");
-
+    emitNode(program);
     endCompiler();
     return parser.hadError ? -1 : 0;
 }

@@ -9,7 +9,7 @@
 
 extern VM vm;
 
-static Obj* allocateObject(size_t size, ObjType type) {
+static Obj *allocateObject(size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
   object->type = type;
 
@@ -23,8 +23,8 @@ static Obj* allocateObject(size_t size, ObjType type) {
  * Allocate a new lox string object with given characters and length
  * NOTE: length here is strlen(chars)
  */
-static ObjString* allocateString(char *chars, int length) {
-  ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+static ObjString *allocateString(char *chars, int length) {
+  ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
   string->length = length;
   string->chars = chars;
   return string;
