@@ -15,7 +15,7 @@ static int test_compile_addition(void) {
     char *expected = "0000\t" "OP_CONSTANT\t" "0000\n"
                      "0002\t" "OP_CONSTANT\t" "0001\n"
                      "0004\t" "OP_ADD\n"
-                     "0005\t" "OP_RETURN\n";
+                     "0005\t" "OP_LEAVE\n";
     ASSERT(strcmp(cstring, expected) == 0);
 cleanup:
     return 0;

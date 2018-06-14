@@ -27,6 +27,10 @@ char *opName(OpCode code) {
         return "OP_NEGATE";
     case OP_NOT:
         return "OP_NOT";
+    case OP_LESS:
+        return "OP_LESS";
+    case OP_GREATER:
+        return "OP_GREATER";
     case OP_RETURN:
         return "OP_RETURN";
     case OP_NIL:
@@ -53,6 +57,20 @@ char *opName(OpCode code) {
         return "OP_TRUE";
     case OP_FALSE:
         return "OP_FALSE";
+    case OP_AND:
+        return "OP_AND";
+    case OP_OR:
+        return "OP_OR";
+    case OP_POP:
+        return "OP_POP";
+    case OP_LEAVE:
+        return "OP_LEAVE";
+    case OP_JUMP_IF_FALSE:
+        return "OP_JUMP_IF_FALSE";
+    case OP_JUMP:
+        return "OP_JUMP";
+    case OP_LOOP:
+        return "OP_LOOP";
     default:
         return "!Unknown instruction!";
     }
@@ -80,6 +98,25 @@ static int printConstantInstruction(char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
+static int printLocalVarInstruction(char *op, Chunk *chunk, int i) {
+    uint8_t slotIdx = chunk->code[i + 1];
+    printf("%-16s    [slot %d]\n", op, slotIdx);
+    return i+2;
+}
+
+static int printJumpInstruction(char *op, Chunk *chunk, int i) {
+    uint8_t jumpOffset = chunk->code[i + 1];
+    printf("%-16s %4d (addr=%04d)\n", op, jumpOffset+1, (i+1+jumpOffset+1));
+    return i+2;
+}
+
+static int printLoopInstruction(char *op, Chunk *chunk, int i) {
+    uint8_t loopOffset = chunk->code[i + 1];
+    printf("%-16s %4d (addr=%04d)\n", op, loopOffset, (i-loopOffset));
+    return i+2;
+}
+
+// instruction has 1 operand, a constant slot index
 static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
 
@@ -90,11 +127,22 @@ static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
+static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    uint8_t slotIdx = chunk->code[i + 1];
+    char *cbuf = calloc(strlen(op)+1+12, 1);
+    ASSERT_MEM(cbuf);
+    sprintf(cbuf, "%s\t[slot %3d]\n", op, slotIdx);
+    pushCString(buf, cbuf, strlen(cbuf));
+    return i+2;
+}
+
+// instruction has no operands
 static int printSimpleInstruction(char *op, int i) {
     printf("%s\n", op);
     return i+1;
 }
 
+// instruction has no operands
 static int simpleInstruction(ObjString *buf, char *op, int i) {
     pushCString(buf, op, strlen(op));
     pushCString(buf, "\n", 1);
@@ -116,14 +164,30 @@ int printDisassembledInstruction(Chunk *chunk, int i) {
         case OP_GET_GLOBAL:
         case OP_SET_GLOBAL:
             return printConstantInstruction(opName(byte), chunk, i);
+        case OP_GET_LOCAL:
+        case OP_SET_LOCAL:
+            return printLocalVarInstruction(opName(byte), chunk, i);
+        case OP_JUMP:
+        case OP_JUMP_IF_FALSE:
+            return printJumpInstruction(opName(byte), chunk, i);
+        case OP_LOOP:
+            return printLoopInstruction(opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
         case OP_ADD:
         case OP_SUBTRACT:
         case OP_MULTIPLY:
         case OP_DIVIDE:
+        case OP_LESS:
+        case OP_GREATER:
         case OP_PRINT:
+        case OP_TRUE:
+        case OP_FALSE:
         case OP_NIL:
+        case OP_AND:
+        case OP_OR:
+        case OP_POP:
+        case OP_LEAVE:
             return printSimpleInstruction(opName(byte), i);
         default:
             printf("Unknown opcode %d (%s)\n", byte, opName(byte));
@@ -139,13 +203,29 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i) {
     uint8_t byte = chunk->code[i];
     switch (byte) {
         case OP_CONSTANT:
+        case OP_DEFINE_GLOBAL:
+        case OP_GET_GLOBAL:
+        case OP_SET_GLOBAL:
             return constantInstruction(buf, opName(byte), chunk, i);
+        case OP_GET_LOCAL:
+        case OP_SET_LOCAL:
+            return localVarInstruction(buf, opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
         case OP_ADD:
         case OP_SUBTRACT:
         case OP_MULTIPLY:
         case OP_DIVIDE:
+        case OP_LESS:
+        case OP_GREATER:
+        case OP_PRINT:
+        case OP_TRUE:
+        case OP_FALSE:
+        case OP_NIL:
+        case OP_AND:
+        case OP_OR:
+        case OP_POP:
+        case OP_LEAVE:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             char *cBuf = calloc(19+1, 1);

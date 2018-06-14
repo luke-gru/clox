@@ -3,4 +3,6 @@ var a;
 print a;
 a = 10;
 print a;
+print false and true;
+print false or true;
 

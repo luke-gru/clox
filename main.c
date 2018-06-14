@@ -57,10 +57,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (CLOX_OPTION_T(debugBytecode)) {
-        printDisassembledChunk(&chunk, "Bytecode:");
-    }
-
     if (CLOX_OPTION_T(compileOnly)) {
         freeVM();
         freeChunk(&chunk);

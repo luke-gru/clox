@@ -214,6 +214,7 @@ static Node *declaration(void) {
 }
 
 static Node *wrapStmtsInBlock(Node *stmtList, Token lbraceTok) {
+    ASSERT(nodeKind(stmtList) == STMTLIST_STMT);
     node_type_t blockType = {
         .type = NODE_STMT,
         .kind = BLOCK_STMT,
@@ -965,8 +966,3 @@ static Node *primary() {
     errorAtCurrent("Unexpected token");
     return NULL;
 }
-
-/*static bool identifiersEqual(Token* a, Token* b) {*/
-  /*if (a->length != b->length) return false;*/
-  /*return memcmp(a->start, b->start, a->length) == 0;*/
-/*}*/

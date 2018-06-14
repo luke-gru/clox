@@ -82,6 +82,61 @@ cleanup:
     return 0;
 }
 
+static int test_simple_and(void) {
+    char *src = "true and false;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_BOOL(*val));
+    T_ASSERT_EQ(false, AS_BOOL(*val));
+cleanup:
+    return 0;
+}
+
+static int test_simple_or(void) {
+    char *src = "false or true;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_BOOL(*val));
+    T_ASSERT_EQ(true, AS_BOOL(*val));
+cleanup:
+    return 0;
+}
+
+static int test_simple_if(void) {
+    char *src = "if (false) { print(\"woops\"); \"woops\"; } else { print \"jumped\"; \"jumped\"; }";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_STRING(*val));
+    T_ASSERT(strcmp(AS_CSTRING(*val), "jumped") == 0);
+cleanup:
+    return 0;
+}
+
+static int test_vardecls_in_block_not_global(void) {
+    char *src = "var a = \"outer\"; if (true) { var a = \"in block\"; a; }";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_STRING(*val));
+    T_ASSERT(strcmp(AS_CSTRING(*val), "in block") == 0);
+cleanup:
+    return 0;
+}
+
+static int test_simple_while_loop(void) {
+    char *src = "var i = 0; while (i < 10) { print i; i = i + 1; } i;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_NUMBER(*val));
+    T_ASSERT_EQ(10.0, AS_NUMBER(*val));
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
@@ -91,5 +146,10 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_print_number);
     RUN_TEST(test_print_string);
     RUN_TEST(test_global_vars1);
+    RUN_TEST(test_simple_and);
+    RUN_TEST(test_simple_or);
+    RUN_TEST(test_simple_if);
+    RUN_TEST(test_vardecls_in_block_not_global);
+    RUN_TEST(test_simple_while_loop);
     END_TESTS();
 }

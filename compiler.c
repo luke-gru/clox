@@ -12,6 +12,7 @@
 #include "value.h"
 #include "debug.h"
 #include "options.h"
+#include "memory.h"
 
 typedef struct {
   // The name of the local variable.
@@ -49,6 +50,14 @@ typedef struct Compiler {
   bool hadError;
 } Compiler;
 
+typedef enum {
+    COMPILE_SCOPE_BLOCK = 1,
+    COMPILE_SCOPE_FUNCTION,
+    COMPILE_SCOPE_CLASS,
+    COMPILE_SCOPE_MODULE,
+} CompileScopeType;
+
+
 /*typedef struct ClassCompiler {*/
   /*struct ClassCompiler *enclosing;*/
 
@@ -56,10 +65,10 @@ typedef struct Compiler {
 /*} ClassCompiler;*/
 
 Compiler *current = NULL;
-Token *curTok;
+Token *curTok = NULL;
+Chunk *compilingChunk = NULL;
 /*ClassCompiler *currentClass = NULL;*/
 
-Chunk *compilingChunk;
 
 static Chunk *currentChunk() {
   return compilingChunk;
@@ -67,6 +76,31 @@ static Chunk *currentChunk() {
 
 static void emitByte(uint8_t byte) {
     writeChunk(currentChunk(), byte, curTok ? curTok->line : 0);
+}
+
+static void pushScope(CompileScopeType stype) {
+    if (stype == COMPILE_SCOPE_BLOCK) {
+        current->scopeDepth++;
+    } else {
+        ASSERT(0); // TODO;
+    }
+}
+
+static void popScope(CompileScopeType stype) {
+    if (stype == COMPILE_SCOPE_BLOCK) {
+        current->scopeDepth--;
+        while (current->localCount > 0 &&
+                current->locals[current->localCount - 1].depth > current->scopeDepth) {
+            /*if (current->locals[current->localCount - 1].isUpvalue) {*/
+                /*emitByte(OP_CLOSE_UPVALUE);*/
+            /*} else {*/
+                emitByte(OP_POP);
+            /*}*/
+            current->localCount--;
+        }
+    } else {
+        ASSERT(0);
+    }
 }
 
 static void emitBytes(uint8_t byte1, uint8_t byte2) {
@@ -77,6 +111,10 @@ static void emitBytes(uint8_t byte1, uint8_t byte2) {
 static void emitReturn() {
     //emitByte(OP_NIL);
     emitByte(OP_RETURN);
+}
+
+static void emitLeave() {
+    emitByte(OP_LEAVE);
 }
 
 static void emitNil() {
@@ -92,7 +130,11 @@ static void initCompiler(Compiler *compiler) {
 }
 
 static void endCompiler() {
-    emitReturn();
+    if (current->scopeDepth == 0) {
+        emitLeave();
+    } else {
+        emitReturn();
+    }
 }
 
 static void error(const char *msg) {
@@ -130,12 +172,77 @@ static void emitChildren(Node *n) {
     }
 }
 
-static uint8_t declareVariable(Token *name) {
+// emit a jump instruction, return a pointer to the byte that needs patching
+static uint8_t *emitJump(OpCode jumpOp) {
+    emitByte(jumpOp);
+    // TODO: make the offset bigger than 1 byte!
+    emitByte(0);
+    return currentChunk()->code + (currentChunk()->count-1);
+}
+
+// TODO: make the offset bigger than 1 byte!
+static void patchJump(uint8_t *byteToPatch, uint8_t byte) {
+    ASSERT(*byteToPatch == 0);
+    *byteToPatch = byte;
+}
+
+// TODO: make the offset bigger than 1 byte!
+static void emitLoop(int loopStart) {
+  emitByte(OP_LOOP);
+
+  int offset = (currentChunk()->count - loopStart + 1);
+  if (offset > UINT8_MAX) error("Loop body too large.");
+
+  emitByte(offset);
+}
+
+// adds local variable, returns slot
+static int addLocal(Token *name) {
+    if (current->localCount >= UINT8_MAX) {
+        error("Too many local variables");
+        return -1;
+    }
+    Local local = {
+        .name = *name,
+        .depth = current->scopeDepth,
+    };
+    current->locals[current->localCount] = local;
+    current->localCount++;
+    return current->localCount-1;
+}
+
+static bool identifiersEqual(Token *a, Token *b) {
+  if (a->length != b->length) return false;
+  return memcmp(a->start, b->start, a->length) == 0;
+}
+
+static int resolveLocal(Token* name) {
+  // Look it up in the local scopes. Look in reverse order so that the most
+  // nested variable is found first and shadows outer ones.
+  for (int i = current->localCount - 1; i >= 0; i--) {
+    Local *local = &current->locals[i];
+    if (identifiersEqual(name, &local->name)) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+static int declareVariable(Token *name) {
     if (current->scopeDepth == 0) {
         return identifierConstant(name);
     } else {
-        return 0;
-        // TODO: add local to table
+        // See if a local variable with this name is already declared in this scope.
+        for (int i = current->localCount - 1; i >= 0; i--) {
+            Local* local = &current->locals[i];
+            if (local->depth != -1 && local->depth < current->scopeDepth) break;
+            if (identifiersEqual(name, &local->name)) {
+                error("Variable with this name already declared in this scope.");
+                return -1;
+            }
+        }
+        return addLocal(name);
     }
 }
 
@@ -143,13 +250,13 @@ static void emitNode(Node *n) {
     curTok = &n->tok;
     switch (nodeKind(n)) {
     case STMTLIST_STMT:
+    case GROUPING_EXPR:
     case EXPR_STMT: {
         emitChildren(n);
         return;
     }
     case BINARY_EXPR: {
-        emitNode(n->children->data[0]);
-        emitNode(n->children->data[1]);
+        emitChildren(n);
         if (n->tok.type == TOKEN_PLUS) {
             emitByte(OP_ADD);
         } else if (n->tok.type == TOKEN_MINUS) {
@@ -158,8 +265,23 @@ static void emitNode(Node *n) {
             emitByte(OP_MULTIPLY);
         } else if (n->tok.type == TOKEN_SLASH) {
             emitByte(OP_DIVIDE);
+        } else if (n->tok.type == TOKEN_LESS) {
+            emitByte(OP_LESS);
+        } else if (n->tok.type == TOKEN_GREATER) {
+            emitByte(OP_GREATER);
         } else {
+            fprintf(stderr, "binary expr token: %s\n", tokStr(&n->tok));
             error("invalid binary expr node");
+        }
+        return;
+    }
+    // TODO: implement short-circuit semantics using jump
+    case LOGICAL_EXPR: {
+        emitChildren(n);
+        if (n->tok.type == TOKEN_AND) {
+            emitByte(OP_AND);
+        } else if (n->tok.type == TOKEN_OR) {
+            emitByte(OP_OR);
         }
         return;
     }
@@ -191,48 +313,119 @@ static void emitNode(Node *n) {
         }
         return;
     }
+    case IF_STMT: {
+        emitNode(n->children->data[0]); // condition
+        uint8_t *afterThenOffPtr = emitJump(OP_JUMP_IF_FALSE);
+        int startOffset = currentChunk()->count-1;
+        emitNode(n->children->data[1]); // then branch
+        Node *elseNode = NULL;
+        if (n->children->length > 2) {
+            elseNode = n->children->data[2];
+        }
+        uint8_t *jumpEndIfPtr = NULL;
+        int jumpEndIfOffset = 0;
+        if (elseNode != NULL) {
+            jumpEndIfPtr = emitJump(OP_JUMP);
+            jumpEndIfOffset = currentChunk()->count-1;
+            int endOffset = currentChunk()->count-1;
+            uint8_t offset = (uint8_t)(endOffset - startOffset);
+            patchJump(afterThenOffPtr, offset);
+            emitNode(elseNode);
+        }
+        int endOffset = currentChunk()->count-1;
+        // TODO: allow bigger jumps (uint16_t (short) offsets)
+        if (elseNode == NULL) {
+            uint8_t offset = (uint8_t)(endOffset - startOffset);
+            patchJump(afterThenOffPtr, offset);
+        }
+        if (jumpEndIfPtr != NULL) {
+            uint8_t offset = (uint8_t)(endOffset - jumpEndIfOffset);
+            patchJump(jumpEndIfPtr, offset);
+        }
+        break;
+    }
+    case WHILE_STMT: {
+        int loopStart = currentChunk()->count + 2;
+        emitNode(vec_first(n->children)); // cond
+        uint8_t *afterLoopPtr = emitJump(OP_JUMP_IF_FALSE);
+        emitNode(n->children->data[1]); // while block
+        emitLoop(loopStart);
+        int loopEnd = currentChunk()->count;
+        int offset = (loopEnd-loopStart-2);
+        patchJump(afterLoopPtr, offset);
+        emitByte(OP_POP); // pop condition off stack
+        break;
+    }
     case PRINT_STMT: {
         emitChildren(n);
         emitByte(OP_PRINT);
         return;
     }
     case VAR_STMT: {
-        uint8_t varNameRef = declareVariable(&n->tok);
+        int arg = declareVariable(&n->tok);
+        if (arg == -1) return; // error already printed
         if (n->children->length > 0) {
             emitChildren(n);
         } else {
             emitNil();
         }
         if (current->scopeDepth == 0) {
-            emitBytes(OP_DEFINE_GLOBAL, varNameRef);
+            emitBytes(OP_DEFINE_GLOBAL, (uint8_t)arg);
         } else {
-            // TODO
+            emitBytes(OP_SET_LOCAL, (uint8_t)arg);
         }
         return;
     }
     case VARIABLE_EXPR: {
-        uint8_t varNameRef = identifierConstant(&n->tok);
-        // TODO: find out which scope the var lives in
+        uint8_t arg = identifierConstant(&n->tok);
         OpCode getOp = OP_GET_LOCAL;
         if (current->scopeDepth == 0) {
             getOp = OP_GET_GLOBAL;
+        } else {
+            int slot = resolveLocal(&n->tok);
+            if (slot == -1) { // not a local variable
+                 getOp = OP_GET_GLOBAL;
+            } else {
+                getOp = OP_GET_LOCAL;
+                arg = (uint8_t)slot;
+            }
         }
-        emitBytes(getOp, varNameRef);
+        emitBytes(getOp, arg);
         break;
     }
     case ASSIGN_EXPR: {
-        // TODO: find out which scope the var lives in
+        Node *varNode = vec_first(n->children);
         OpCode setOp = OP_SET_LOCAL;
+        int slot = -1;
+        uint8_t arg;
         if (current->scopeDepth == 0) {
             setOp = OP_SET_GLOBAL;
+        } else {
+            slot = resolveLocal(&varNode->tok);
+            if (slot == -1) {
+                setOp = OP_SET_GLOBAL;
+            } else {
+                setOp = OP_SET_LOCAL;
+            }
         }
-        Node *varNode = vec_first(n->children);
-        uint8_t varNameRef = identifierConstant(&varNode->tok);
+        if (setOp == OP_SET_GLOBAL) {
+            arg = identifierConstant(&varNode->tok);
+        } else {
+            arg = slot;
+        }
         emitNode(n->children->data[1]); // rval
-        emitBytes(setOp, varNameRef);
+        emitBytes(setOp, arg);
+        break;
+    }
+    case BLOCK_STMT: {
+        pushScope(COMPILE_SCOPE_BLOCK);
+        emitChildren(n); // 1 child, list of statements
+        popScope(COMPILE_SCOPE_BLOCK);
         break;
     }
     default:
+        fprintf(stderr, "node kind %d not implemented (tok=%s)\n",
+            nodeKind(n), tokStr(&n->tok));
         error("invalid (unknown) node");
     }
 }
@@ -248,6 +441,9 @@ int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     compilingChunk = chunk;
     emitNode(program);
     endCompiler();
+    if (CLOX_OPTION_T(debugBytecode)) {
+        printDisassembledChunk(chunk, "Bytecode:");
+    }
     return parser.hadError ? -1 : 0;
 }
 
