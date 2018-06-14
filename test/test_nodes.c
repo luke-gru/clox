@@ -1,6 +1,7 @@
 #include "test.h"
 #include "nodes.h"
 #include "parser.h"
+#include "vm.h"
 
 // replace some blank characters with visible characters so it's easier
 // to diff 2 strings. Replace spaces, tabs and newlines
@@ -476,6 +477,7 @@ cleanup:
 
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
+    initVM();
     INIT_TESTS();
     RUN_TEST(test_output_node_literal_string);
     RUN_TEST(test_output_node_literal_number);

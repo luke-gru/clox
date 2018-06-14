@@ -4,6 +4,7 @@
 #include "scanner.h"
 #include "stdlib.h"
 #include "memory.h"
+#include "options.h"
 
 // global
 Scanner scanner;
@@ -92,6 +93,9 @@ static Token makeToken(TokenType type) {
   token.length = (int)(scanner.current - scanner.tokenStart);
   token.lexeme = NULL; // only created on demand, see tokStr()
   token.line = scanner.line;
+  if (CLOX_OPTION_T(debugTokens)) {
+      fprintf(stderr, "Tok: %s\n", tokTypeStr(type));
+  }
   return token;
 }
 

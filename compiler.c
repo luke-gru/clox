@@ -33,8 +33,11 @@ typedef struct {
   bool isLocal;
 } Upvalue;
 
+struct Compiler; // fwd decl
+
 typedef struct Compiler {
   // The currently in scope local variables.
+  struct Compiler *enclosing;
   Local locals[256];
 
   // The number of local variables currently in scope.
@@ -53,6 +56,7 @@ typedef struct Compiler {
 /*} ClassCompiler;*/
 
 Compiler *current = NULL;
+Token *curTok;
 /*ClassCompiler *currentClass = NULL;*/
 
 Chunk *compilingChunk;
@@ -62,7 +66,7 @@ static Chunk *currentChunk() {
 }
 
 static void emitByte(uint8_t byte) {
-    writeChunk(currentChunk(), byte, parser.previous.line);
+    writeChunk(currentChunk(), byte, curTok ? curTok->line : 0);
 }
 
 static void emitBytes(uint8_t byte1, uint8_t byte2) {
@@ -75,10 +79,16 @@ static void emitReturn() {
     emitByte(OP_RETURN);
 }
 
+static void emitNil() {
+    emitByte(OP_NIL);
+}
+
 static void initCompiler(Compiler *compiler) {
     compiler->localCount = 0;
     compiler->scopeDepth = 0;
+    compiler->enclosing = NULL;
     current = compiler;
+    curTok = NULL;
 }
 
 static void endCompiler() {
@@ -102,6 +112,10 @@ static uint8_t makeConstant(Value value) {
   return (uint8_t)constant;
 }
 
+// Add constant to constant pool, return index to it
+static uint8_t identifierConstant(Token* name) {
+  return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+}
 
 static void emitConstant(Value constant) {
     emitBytes(OP_CONSTANT, makeConstant(constant));
@@ -116,7 +130,17 @@ static void emitChildren(Node *n) {
     }
 }
 
+static uint8_t declareVariable(Token *name) {
+    if (current->scopeDepth == 0) {
+        return identifierConstant(name);
+    } else {
+        return 0;
+        // TODO: add local to table
+    }
+}
+
 static void emitNode(Node *n) {
+    curTok = &n->tok;
     switch (nodeKind(n)) {
     case STMTLIST_STMT:
     case EXPR_STMT: {
@@ -171,6 +195,42 @@ static void emitNode(Node *n) {
         emitChildren(n);
         emitByte(OP_PRINT);
         return;
+    }
+    case VAR_STMT: {
+        uint8_t varNameRef = declareVariable(&n->tok);
+        if (n->children->length > 0) {
+            emitChildren(n);
+        } else {
+            emitNil();
+        }
+        if (current->scopeDepth == 0) {
+            emitBytes(OP_DEFINE_GLOBAL, varNameRef);
+        } else {
+            // TODO
+        }
+        return;
+    }
+    case VARIABLE_EXPR: {
+        uint8_t varNameRef = identifierConstant(&n->tok);
+        // TODO: find out which scope the var lives in
+        OpCode getOp = OP_GET_LOCAL;
+        if (current->scopeDepth == 0) {
+            getOp = OP_GET_GLOBAL;
+        }
+        emitBytes(getOp, varNameRef);
+        break;
+    }
+    case ASSIGN_EXPR: {
+        // TODO: find out which scope the var lives in
+        OpCode setOp = OP_SET_LOCAL;
+        if (current->scopeDepth == 0) {
+            setOp = OP_SET_GLOBAL;
+        }
+        Node *varNode = vec_first(n->children);
+        uint8_t varNameRef = identifierConstant(&varNode->tok);
+        emitNode(n->children->data[1]); // rval
+        emitBytes(setOp, varNameRef);
+        break;
     }
     default:
         error("invalid (unknown) node");

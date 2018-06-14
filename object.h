@@ -18,6 +18,7 @@ typedef struct sObjString {
   struct sObj object;
   int length;
   char *chars;
+  uint32_t hash;
 } ObjString;
 
 typedef struct {

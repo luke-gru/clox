@@ -8,6 +8,10 @@ VM vm;
 
 void initVM() {
     vm.stackTop = vm.stack;
+    vm.objects = NULL;
+    vm.lastValue = NULL;
+    initTable(&vm.globals);
+    initTable(&vm.strings);
 }
 
 void freeVM() {
@@ -18,11 +22,13 @@ static bool isStackEmpty() {
 }
 
 void push(Value value) {
+    ASSERT(vm.stackTop >= vm.stack);
     *vm.stackTop = value;
     vm.stackTop++;
 }
 
 Value pop() {
+    ASSERT(vm.stackTop > vm.stack);
     vm.stackTop--;
     return *vm.stackTop;
 }
@@ -33,6 +39,14 @@ Value *getLastValue() {
     } else {
         return vm.stackTop-1;
     }
+}
+
+Value nilValue() {
+    Value v = {
+        .type = VAL_NIL,
+    };
+    v.as.number = 0;
+    return v;
 }
 
 /**
@@ -81,12 +95,50 @@ static InterpretResult run(void) {
       case OP_PRINT: {
         Value val = pop();
         printValue(val);
+        printf("\n");
+        break;
+      }
+      case OP_DEFINE_GLOBAL: {
+        Value varName = READ_CONSTANT();
+        Value val = pop();
+        tableSet(&vm.globals, AS_STRING(varName), val);
+        break;
+      }
+      case OP_GET_GLOBAL: {
+        Value varName = READ_CONSTANT();
+        Value val;
+        memset(&val, 0, sizeof(Value));
+        if (tableGet(&vm.globals, AS_STRING(varName), &val)) {
+            push(val);
+        } else {
+            push(nilValue()); // TODO: error out
+        }
+        break;
+      }
+      case OP_SET_GLOBAL: {
+        Value val = pop();
+        Value varName = READ_CONSTANT();
+        tableSet(&vm.globals, AS_STRING(varName), val);
+        push(val);
+        break;
+      }
+      case OP_NIL: {
+        push(nilValue());
+        break;
+      }
+      case OP_TRUE: {
+        push(BOOL_VAL(true));
+        break;
+      }
+      case OP_FALSE: {
+        push(BOOL_VAL(false));
         break;
       }
       case OP_RETURN:
+        /*fprintf(stderr, "returning\n");*/
         return INTERPRET_OK;
       default:
-        printf("Unknown opcode instruction: %s", opName(instruction));
+        printf("Unknown opcode instruction: %s\n", opName(instruction));
         return INTERPRET_RUNTIME_ERROR;
     }
   }
@@ -98,9 +150,9 @@ static InterpretResult run(void) {
 }
 
 InterpretResult interpret(Chunk *chunk) {
-  vm.chunk = chunk;
-  vm.ip = vm.chunk->code;
+    vm.chunk = chunk;
+    vm.ip = vm.chunk->code;
 
-  InterpretResult result = run();
-  return result;
+    InterpretResult result = run();
+    return result;
 }

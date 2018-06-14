@@ -19,9 +19,8 @@ static InterpretResult interp(char *src, bool expectSuccess) {
     if (expectSuccess) {
         T_ASSERT_EQ(INTERPRET_OK, ires);
     }
-    return ires;
 cleanup:
-    return INTERPRET_RUNTIME_ERROR;
+    return ires;
 }
 
 static int test_addition(void) {
@@ -57,11 +56,40 @@ cleanup:
     return 0;
 }
 
+static int test_print_number(void) {
+    char *src = "print 2.0;";
+    interp(src, true);
+cleanup:
+    return 0;
+}
+
+static int test_print_string(void) {
+    char *src = "print \"howdy\";";
+    interp(src, true);
+cleanup:
+    return 0;
+}
+
+static int test_global_vars1(void) {
+    char *src = "var greet = \"howdy\";"
+                "greet;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_STRING(*val));
+    T_ASSERT(strcmp(AS_CSTRING(*val), "howdy") == 0);
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
     RUN_TEST(test_addition);
     RUN_TEST(test_subtraction);
     RUN_TEST(test_negation);
+    RUN_TEST(test_print_number);
+    RUN_TEST(test_print_string);
+    RUN_TEST(test_global_vars1);
     END_TESTS();
 }

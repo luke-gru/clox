@@ -1,0 +1,6 @@
+print 1.0;
+var a;
+print a;
+a = 10;
+print a;
+

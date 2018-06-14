@@ -3,6 +3,7 @@
 
 #include "chunk.h"
 #include "object.h"
+#include "table.h"
 
 #define STACK_MAX 256
 
@@ -13,6 +14,8 @@ typedef struct {
   Value *stackTop;
   struct sObj *objects;
   Value *lastValue;
+  Table globals; // global variables
+  Table strings; // interned strings
 } VM;
 
 typedef enum {

@@ -9,6 +9,8 @@ typedef struct sCloxOptions {
     bool traceVMExecution;
     bool parseOnly;
     bool compileOnly;
+    bool debugTokens;
+    bool debugBytecode;
     bool _inited;
 } CloxOptions;
 

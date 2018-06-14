@@ -42,21 +42,28 @@ int main(int argc, char *argv[]) {
 
     Chunk chunk;
     initChunk(&chunk);
+    initVM();
     compile_res = compile_file(fname, &chunk, &err);
 
     if (compile_res != 0) {
         if (err == COMPILE_ERR_SYNTAX) {
             freeVM();
             freeChunk(&chunk);
-            die("Syntax error\n");
+            die("%s", "Syntax error\n");
         } else {
             freeVM();
             freeChunk(&chunk);
-            die("Compile error\n");
+            die("%s", "Compile error\n");
         }
     }
 
+    if (CLOX_OPTION_T(debugBytecode)) {
+        printDisassembledChunk(&chunk, "Bytecode:");
+    }
+
     if (CLOX_OPTION_T(compileOnly)) {
+        freeVM();
+        freeChunk(&chunk);
         printf("No compilation errors\n");
         exit(0);
     }
@@ -65,7 +72,7 @@ int main(int argc, char *argv[]) {
     if (ires != INTERPRET_OK) {
         freeVM();
         freeChunk(&chunk);
-        die("Interpreter runtime error\n");
+        die("%s", "Interpreter runtime error\n");
     }
 
     freeVM();

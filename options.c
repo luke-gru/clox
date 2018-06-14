@@ -9,6 +9,8 @@ char *boolOptNames[] = {
     "traceVMExecution",
     "parseOnly",
     "compileOnly",
+    "debugTokens",
+    "debugBytecode",
     NULL,
 };
 
@@ -21,6 +23,8 @@ void initOptions(void) {
     options.traceVMExecution = false;
     options.parseOnly = false;
     options.compileOnly = false;
+    options.debugTokens = false;
+    options.debugBytecode = false;
     options._inited = true;
 }
 
@@ -65,6 +69,14 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "--parse-only") == 0) {
         SET_OPTION(parseOnly, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--debug-tokens") == 0) {
+        SET_OPTION(debugTokens, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--debug-bytecode") == 0) {
+        SET_OPTION(debugBytecode, true);
         return 1;
     }
     return 0;

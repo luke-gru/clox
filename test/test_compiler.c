@@ -1,6 +1,7 @@
 #include "test.h"
 #include "compiler.h"
 #include "debug.h"
+#include "vm.h"
 
 static int test_compile_addition(void) {
     char *src = "1+1;";
@@ -22,6 +23,7 @@ cleanup:
 
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
+    initVM();
     INIT_TESTS();
     RUN_TEST(test_compile_addition);
     END_TESTS();

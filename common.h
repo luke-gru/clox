@@ -6,22 +6,40 @@
 #include <stdlib.h>
 #include <string.h>
 
+// NOTE: when adding/removing from here, add/remove from opName() function in debug.c!
 typedef enum {
     OP_CONSTANT,
+
     OP_ADD,
     OP_SUBTRACT,
     OP_MULTIPLY,
     OP_DIVIDE,
     OP_NEGATE,
     OP_NOT,
-    OP_RETURN,
-    OP_NIL,
+
     OP_GET_LOCAL, // get local var, next byte is frame slot index
     OP_SET_LOCAL, // set local var, next byte is frame slot index, value is stacktop
+    OP_GET_GLOBAL, // get global var, next byte is frame slot index
+    OP_SET_GLOBAL, // set global var, next byte is frame slot index, value is stacktop
+    OP_DEFINE_GLOBAL, // define global var for first time
+    OP_GET_UPVALUE,
+    OP_SET_UPVALUE,
+
     OP_CALL,
+    OP_RETURN,
     OP_PRINT,
+
     OP_TRUE,
     OP_FALSE,
+    OP_NIL,
+
+    OP_EQUAL,
+    OP_GREATER,
+    OP_LESS,
+
+    OP_JUMP,
+    OP_JUMP_IF_FALSE,
+    OP_LOOP,
 } OpCode;
 
 #endif

@@ -35,6 +35,16 @@ char *opName(OpCode code) {
         return "OP_GET_LOCAL";
     case OP_SET_LOCAL:
         return "OP_SET_LOCAL";
+    case OP_GET_GLOBAL:
+        return "OP_GET_GLOBAL";
+    case OP_SET_GLOBAL:
+        return "OP_SET_GLOBAL";
+    case OP_DEFINE_GLOBAL:
+        return "OP_DEFINE_GLOBAL";
+    case OP_GET_UPVALUE:
+        return "OP_GET_UPVALUE";
+    case OP_SET_UPVALUE:
+        return "OP_SET_UPVALUE";
     case OP_CALL:
         return "OP_CALL";
     case OP_PRINT:
@@ -102,6 +112,9 @@ int printDisassembledInstruction(Chunk *chunk, int i) {
     uint8_t byte = chunk->code[i];
     switch (byte) {
         case OP_CONSTANT:
+        case OP_DEFINE_GLOBAL:
+        case OP_GET_GLOBAL:
+        case OP_SET_GLOBAL:
             return printConstantInstruction(opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
@@ -109,9 +122,11 @@ int printDisassembledInstruction(Chunk *chunk, int i) {
         case OP_SUBTRACT:
         case OP_MULTIPLY:
         case OP_DIVIDE:
+        case OP_PRINT:
+        case OP_NIL:
             return printSimpleInstruction(opName(byte), i);
         default:
-            printf("Unknown opcode %d\n", byte);
+            printf("Unknown opcode %d (%s)\n", byte, opName(byte));
             return -1;
     }
 }
