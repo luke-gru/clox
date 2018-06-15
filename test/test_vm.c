@@ -6,6 +6,7 @@
 static InterpretResult interp(char *src, bool expectSuccess) {
     CompileErr cerr = COMPILE_ERR_NONE;
     InterpretResult ires = INTERPRET_OK;
+    initVM();
 
     Chunk chunk;
     initChunk(&chunk);
@@ -14,7 +15,6 @@ static InterpretResult interp(char *src, bool expectSuccess) {
         T_ASSERT_EQ(0, result);
         T_ASSERT_EQ(COMPILE_ERR_NONE, cerr);
     }
-    initVM();
     ires = interpret(&chunk);
     if (expectSuccess) {
         T_ASSERT_EQ(INTERPRET_OK, ires);

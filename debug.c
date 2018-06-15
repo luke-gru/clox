@@ -113,6 +113,7 @@ void printDisassembledChunk(Chunk *chunk, const char *name) {
       printf("----\n");
   }
   vec_deinit(&funcs);
+  printf("== /%s ==\n", name);
 }
 
 static int printConstantInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
