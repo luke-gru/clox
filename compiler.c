@@ -39,6 +39,8 @@ struct Compiler; // fwd decl
 typedef struct Compiler {
   // The currently in scope local variables.
   struct Compiler *enclosing;
+  ObjFunction *function; // function or top-level code object
+  FunctionType type;
   Local locals[256];
 
   // The number of local variables currently in scope.
@@ -66,12 +68,11 @@ typedef enum {
 
 Compiler *current = NULL;
 Token *curTok = NULL;
-Chunk *compilingChunk = NULL;
 /*ClassCompiler *currentClass = NULL;*/
 
 
 static Chunk *currentChunk() {
-  return compilingChunk;
+  return current->function->chunk;
 }
 
 static void emitByte(uint8_t byte) {
@@ -82,7 +83,7 @@ static void pushScope(CompileScopeType stype) {
     if (stype == COMPILE_SCOPE_BLOCK) {
         current->scopeDepth++;
     } else {
-        ASSERT(0); // TODO;
+        ASSERT(0); // TODO
     }
 }
 
@@ -121,20 +122,15 @@ static void emitNil() {
     emitByte(OP_NIL);
 }
 
-static void initCompiler(Compiler *compiler) {
-    compiler->localCount = 0;
-    compiler->scopeDepth = 0;
-    compiler->enclosing = NULL;
-    current = compiler;
-    curTok = NULL;
-}
-
-static void endCompiler() {
+static ObjFunction *endCompiler() {
     if (current->scopeDepth == 0) {
         emitLeave();
     } else {
         emitReturn();
     }
+    ObjFunction *func = current->function;
+    current = current->enclosing;
+    return func;
 }
 
 static void error(const char *msg) {
@@ -246,7 +242,60 @@ static int declareVariable(Token *name) {
     }
 }
 
+// initializes a new compiler,
+static void initCompiler(
+    Compiler *compiler,
+    int scopeDepth,
+    FunctionType ftype,
+    Token *fTok, /* if NULL, ftype must be TYPE_TOP_LEVEL */
+    Chunk *chunk /* if NULL, creates new chunk */
+) {
+    compiler->enclosing = current;
+    compiler->localCount = 0;
+    compiler->scopeDepth = scopeDepth;
+    compiler->function = newFunction(chunk);
+    compiler->type = ftype;
+    compiler->hadError = false;
+
+    current = compiler;
+
+    switch (ftype) {
+    case TYPE_FUNCTION:
+        current->function->name = copyString(
+            tokStr(fTok), strlen(tokStr(fTok))
+        );
+        break;
+
+    case TYPE_INITIALIZER:
+    case TYPE_METHOD: {
+        // TODO
+        /*int length = currentClass->name.length + parser.previous.length + 1;*/
+
+        /*char* chars = ALLOCATE(char, length + 1);*/
+        /*memcpy(chars, currentClass->name.start, currentClass->name.length);*/
+        /*chars[currentClass->name.length] = '.';*/
+        /*memcpy(chars + currentClass->name.length + 1, parser.previous.start,*/
+                /*parser.previous.length);*/
+        /*chars[length] = '\0';*/
+
+        /*current->function->name = takeString(chars, length);*/
+        break;
+    }
+    case TYPE_TOP_LEVEL:
+        current->function->name = NULL;
+        break;
+    }
+}
+
+static void declareFunction(Node *n, FunctionType ftype) {
+    Compiler fCompiler;
+    initCompiler(&fCompiler, current->scopeDepth,
+        ftype, &n->tok, NULL);
+    endCompiler();
+}
+
 static void emitNode(Node *n) {
+    if (current->hadError) return;
     curTok = &n->tok;
     switch (nodeKind(n)) {
     case STMTLIST_STMT:
@@ -423,6 +472,9 @@ static void emitNode(Node *n) {
         popScope(COMPILE_SCOPE_BLOCK);
         break;
     }
+    case FUNCTION_STMT: {
+        declareFunction(n, TYPE_FUNCTION);
+    }
     default:
         fprintf(stderr, "node kind %d not implemented (tok=%s)\n",
             nodeKind(n), tokStr(&n->tok));
@@ -433,18 +485,28 @@ static void emitNode(Node *n) {
 int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     initScanner(src);
     Compiler mainCompiler;
-    initCompiler(&mainCompiler);
+    initCompiler(&mainCompiler, 0, TYPE_TOP_LEVEL, NULL, chunk);
     Node *program = parse();
     if (CLOX_OPTION_T(parseOnly)) {
+        *err = parser.hadError ? COMPILE_ERR_SYNTAX :
+            COMPILE_ERR_NONE;
         return parser.hadError ? -1 : 0;
+    } else if (parser.hadError) {
+        *err = COMPILE_ERR_SYNTAX;
+        return -1;
     }
-    compilingChunk = chunk;
     emitNode(program);
-    endCompiler();
+    ObjFunction *prog = endCompiler();
     if (CLOX_OPTION_T(debugBytecode)) {
-        printDisassembledChunk(chunk, "Bytecode:");
+        printDisassembledChunk(prog->chunk, "Bytecode:");
     }
-    return parser.hadError ? -1 : 0;
+    if (mainCompiler.hadError) {
+        *err = COMPILE_ERR_SEMANTICS;
+        return -1;
+    } else {
+        *err = COMPILE_ERR_NONE;
+        return 0;
+    }
 }
 
 int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
@@ -459,7 +521,8 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
         *err = COMPILE_ERR_ERRNO;
         return res;
     }
-    char *buf = malloc(st.st_size+1);
+    char *buf = calloc(st.st_size+1, 1);
+    ASSERT_MEM(buf);
     if (buf == NULL) {
         *err = COMPILE_ERR_ERRNO;
         return -1;

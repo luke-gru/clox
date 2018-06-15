@@ -137,6 +137,17 @@ cleanup:
     return 0;
 }
 
+static int test_simple_function(void) {
+    char *src = "fun f() { return \"FUN\"; } var ret = f(); ret;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_STRING(*val));
+    T_ASSERT(strcmp(AS_CSTRING(*val), "FUN") == 0);
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
@@ -151,5 +162,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_simple_if);
     RUN_TEST(test_vardecls_in_block_not_global);
     RUN_TEST(test_simple_while_loop);
+    RUN_TEST(test_simple_function);
     END_TESTS();
 }

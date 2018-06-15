@@ -10,7 +10,7 @@
 extern VM vm;
 
 static Obj *allocateObject(size_t size, ObjType type) {
-    Obj* object = (Obj*)reallocate(NULL, 0, size);
+    Obj *object = (Obj*)reallocate(NULL, 0, size);
     object->type = type;
 
     object->next = vm.objects;
@@ -51,7 +51,7 @@ static uint32_t hashString(char *key, int length) {
 // NOTE: length here is strlen(chars)
 ObjString *takeString(char *chars, int length) {
     uint32_t hash = hashString(chars, length);
-    ObjString* interned = tableFindString(&vm.strings, chars, length, hash);
+    ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (interned != NULL) return interned;
     return allocateString(chars, length, hash);
 }
@@ -86,4 +86,27 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     string->length += lenToAdd;
     // TODO: avoid rehash, hash should be calculated when needed!
     string->hash = hashString(string->chars, strlen(string->chars));
+}
+
+ObjFunction *newFunction(Chunk *chunk) {
+    ObjFunction* function = ALLOCATE_OBJ(
+        ObjFunction, OBJ_FUNCTION
+    );
+
+    function->arity = 0;
+    /*function->upvalueCount = 0;*/
+    function->name = NULL;
+    if (chunk == NULL) {
+        function->chunk = ALLOCATE(Chunk, 1);
+        initChunk(function->chunk);
+    } else {
+        function->chunk = chunk;
+    }
+    return function;
+}
+
+void freeFunction(ObjFunction *func) {
+    // TODO: free objstring if not null
+    freeChunk(func->chunk);
+    free(func);
 }

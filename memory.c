@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "memory.h"
+#include "debug.h"
 
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
   if (newSize == 0) {
@@ -9,5 +10,7 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     return NULL;
   }
 
-  return realloc(previous, newSize);
+  void *ret = realloc(previous, newSize);
+  ASSERT_MEM(ret);
+  return ret;
 }

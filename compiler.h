@@ -8,6 +8,7 @@
 typedef enum {
     COMPILE_ERR_NONE,
     COMPILE_ERR_SYNTAX,
+    COMPILE_ERR_SEMANTICS,
     COMPILE_ERR_ERRNO,
 } CompileErr;
 

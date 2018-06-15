@@ -12,6 +12,7 @@ static int test_compile_addition(void) {
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
+    /*fprintf(stderr, "\n'%s'\n", cstring);*/
     char *expected = "0000\t" "OP_CONSTANT\t" "0000\n"
                      "0002\t" "OP_CONSTANT\t" "0001\n"
                      "0004\t" "OP_ADD\n"
