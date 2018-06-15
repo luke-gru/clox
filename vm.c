@@ -5,7 +5,6 @@
 #include "options.h"
 
 VM vm;
-CallFrame *frame; // current frame
 
 void initVM() {
     vm.stackTop = vm.stack;
@@ -68,7 +67,10 @@ static bool isTruthy(Value val) {
     switch (val.type) {
     case VAL_NIL: return false;
     case VAL_BOOL: return AS_BOOL(val);
-    default: return true;
+    default:
+        // all other values are truthy
+        return true;
+
     }
 }
 
@@ -88,9 +90,95 @@ static int cmpValues(Value lhs, Value rhs) {
     return -2;
 }
 
-static inline CallFrame *getFrame() {
-    return frame;
+static void resetStack() {
+    vm.stackTop = vm.stack;
+    vm.frameCount = 0;
 }
+
+static inline CallFrame *getFrame() {
+    return &vm.frames[vm.frameCount-1];
+}
+
+static Chunk *currentChunk() {
+    ASSERT(getFrame());
+    ASSERT(getFrame()->function);
+    return &getFrame()->function->chunk;
+}
+
+// TODO: throw lox error using setjmp/jmpbuf to allow catches
+static void runtimeError(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputs("\n", stderr);
+
+    for (int i = vm.frameCount - 1; i >= 0; i--) {
+        CallFrame *frame = &vm.frames[i];
+        ObjFunction *function = frame->function;
+        // -1 because the IP is sitting on the next instruction to be executed.
+        size_t instruction = frame->ip - function->chunk.code - 1;
+        fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
+        if (function->name == NULL) {
+            fprintf(stderr, "script\n");
+        } else {
+            fprintf(stderr, "%s()\n", function->name->chars);
+        }
+    }
+
+    resetStack();
+}
+
+static bool isCallable(Value val) {
+    return IS_FUNCTION(val);
+}
+
+static const char *typeOfObj(Obj *obj) {
+    switch (obj->type) {
+    case OBJ_STRING:
+        return "string";
+    case OBJ_FUNCTION:
+        return "function";
+    default:
+        ASSERT(0);
+        return "unknown";
+    }
+}
+
+static const char *typeOf(Value val) {
+    if (IS_BOOL(val)) return "bool";
+    if (IS_NIL(val)) return "nil";
+    if (IS_NUMBER(val)) return "number";
+    if (IS_OBJ(val)) {
+        return typeOfObj(AS_OBJ(val));
+    } else {
+        ASSERT(0);
+        return "unknown!";
+    }
+}
+
+static bool callCallable(ObjFunction *function, int argCount) {
+    if (argCount != function->arity) {
+        runtimeError("Expected %d arguments but got %d.",
+            function->arity, argCount);
+        return false;
+    }
+
+    if (vm.frameCount == FRAMES_MAX) {
+        runtimeError("Stack overflow.");
+        return false;
+    }
+
+    // add frame
+    CallFrame *frame = &vm.frames[vm.frameCount++];
+    frame->function = function;
+    frame->ip = function->chunk.code;
+
+    // +1 to include either the called function or the receiver.
+    frame->slots = vm.stackTop - (argCount + 1);
+    return true;
+}
+
 
 /**
  * Run the VM's instructions.
@@ -100,7 +188,7 @@ static InterpretResult run(void) {
         return INTERPRET_OK;
     }
 #define READ_BYTE() (*getFrame()->ip++)
-#define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+#define READ_CONSTANT() (currentChunk()->constants.values[READ_BYTE()])
 #define BINARY_OP(op) \
     do { \
       Value b = pop(); \
@@ -119,7 +207,7 @@ static InterpretResult run(void) {
             printf(" ]");
         }
         printf("\n");
-        printDisassembledInstruction(vm.chunk, (int)(getFrame()->ip - vm.chunk->code));
+        printDisassembledInstruction(currentChunk(), (int)(getFrame()->ip - currentChunk()->code), NULL);
     }
 
     uint8_t instruction = READ_BYTE();
@@ -252,11 +340,32 @@ static InterpretResult run(void) {
           getFrame()->ip -= (ipOffset+2);
           break;
       }
-      case OP_RETURN:
+      case OP_CALL: {
+          uint8_t numArgs = READ_BYTE();
+          Value callableVal = peek(numArgs);
+          if (!isCallable(callableVal)) {
+              runtimeError("Tried to call uncallable object (type=%s)", typeOf(callableVal));
+              return INTERPRET_RUNTIME_ERROR;
+          }
+          ObjFunction *func = AS_FUNCTION(callableVal);
+          ASSERT(func);
+          /*fprintf(stderr, "Calling function\n");*/
+          callCallable(func, numArgs);
+          break;
+      }
+      // return from function/method
+      case OP_RETURN: {
+        Value result = pop();
+        vm.stackTop = getFrame()->slots;
+        vm.frameCount--;
+        push(result);
+        break;
+      }
+      // exit interpreter
       case OP_LEAVE:
         return INTERPRET_OK;
       default:
-        printf("Unknown opcode instruction: %s (%d)\n", opName(instruction), instruction);
+        runtimeError("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
         return INTERPRET_RUNTIME_ERROR;
     }
   }
@@ -268,10 +377,13 @@ static InterpretResult run(void) {
 }
 
 InterpretResult interpret(Chunk *chunk) {
+    ASSERT(chunk);
     vm.frameCount = 0;
-    vm.chunk = chunk;
-    frame = &vm.frames[vm.frameCount];
-    frame->ip = vm.chunk->code;
+    // initialize top-level callframe
+    CallFrame *frame = &vm.frames[vm.frameCount++];
+    frame->ip = chunk->code;
+    frame->slots = vm.stack;
+    frame->function = newFunction(chunk);
 
     InterpretResult result = run();
     return result;

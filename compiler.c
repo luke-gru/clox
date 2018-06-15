@@ -72,35 +72,28 @@ Token *curTok = NULL;
 
 
 static Chunk *currentChunk() {
-  return current->function->chunk;
+  return &current->function->chunk;
 }
 
 static void emitByte(uint8_t byte) {
     writeChunk(currentChunk(), byte, curTok ? curTok->line : 0);
 }
 
+// blocks (`{}`) push new scopes
 static void pushScope(CompileScopeType stype) {
-    if (stype == COMPILE_SCOPE_BLOCK) {
-        current->scopeDepth++;
-    } else {
-        ASSERT(0); // TODO
-    }
+    current->scopeDepth++;
 }
 
 static void popScope(CompileScopeType stype) {
-    if (stype == COMPILE_SCOPE_BLOCK) {
-        current->scopeDepth--;
-        while (current->localCount > 0 &&
-                current->locals[current->localCount - 1].depth > current->scopeDepth) {
-            /*if (current->locals[current->localCount - 1].isUpvalue) {*/
-                /*emitByte(OP_CLOSE_UPVALUE);*/
-            /*} else {*/
-                emitByte(OP_POP);
-            /*}*/
-            current->localCount--;
-        }
-    } else {
-        ASSERT(0);
+    current->scopeDepth--;
+    while (current->localCount > 0 &&
+            current->locals[current->localCount - 1].depth > current->scopeDepth) {
+        /*if (current->locals[current->localCount - 1].isUpvalue) {*/
+        /*emitByte(OP_CLOSE_UPVALUE);*/
+        /*} else {*/
+        emitByte(OP_POP);
+        /*}*/
+        current->localCount--;
     }
 }
 
@@ -109,24 +102,27 @@ static void emitBytes(uint8_t byte1, uint8_t byte2) {
   emitByte(byte2);
 }
 
-static void emitReturn() {
-    //emitByte(OP_NIL);
-    emitByte(OP_RETURN);
-}
-
-static void emitLeave() {
-    emitByte(OP_LEAVE);
-}
-
 static void emitNil() {
     emitByte(OP_NIL);
 }
 
+// returns nil, this is in case OP_RETURN wasn't emitted from an explicit
+// `return` statement in a function.
+static void emitReturn() {
+    emitByte(OP_NIL);
+    emitByte(OP_RETURN);
+}
+
+// exit from script
+static void emitLeave() {
+    emitByte(OP_LEAVE);
+}
+
 static ObjFunction *endCompiler() {
-    if (current->scopeDepth == 0) {
+    if (current->type == TYPE_TOP_LEVEL) {
         emitLeave();
     } else {
-        emitReturn();
+        emitReturn(); // just in case return wasn't emitted already
     }
     ObjFunction *func = current->function;
     current = current->enclosing;
@@ -225,6 +221,8 @@ static int resolveLocal(Token* name) {
   return -1;
 }
 
+// Returns argument to SET_LOCAL or SET_GLOBAL, an identifier index or
+// a local slot index.
 static int declareVariable(Token *name) {
     if (current->scopeDepth == 0) {
         return identifierConstant(name);
@@ -287,11 +285,42 @@ static void initCompiler(
     }
 }
 
-static void declareFunction(Node *n, FunctionType ftype) {
+
+// define the latest variable declared
+static void defineVariable(uint8_t global) {
+  if (current->scopeDepth == 0) {
+    emitBytes(OP_DEFINE_GLOBAL, global);
+  } else {
+    // Mark the latest local as defined now (-1 is undefined, but declared)
+    current->locals[current->localCount - 1].depth = current->scopeDepth;
+  }
+}
+
+static void emitFunction(Node *n, FunctionType ftype) {
     Compiler fCompiler;
     initCompiler(&fCompiler, current->scopeDepth,
         ftype, &n->tok, NULL);
+    pushScope(TYPE_FUNCTION); // this scope holds the local variable parameters
+
+    ObjFunction *func = fCompiler.function;
+    char *nameStr = tokStr(&n->tok);
+    func->name = takeString(nameStr, strlen(nameStr));
+
+    vec_nodep_t *params = (vec_nodep_t*)nodeGetData(n);
+    ASSERT(params);
+    Node *param = NULL; int i = 0;
+    vec_foreach(params, param, i) {
+        uint8_t localSlot = declareVariable(&param->tok);
+        defineVariable(localSlot);
+        func->arity++;
+    }
+    emitChildren(n); // the blockNode
+    popScope(TYPE_FUNCTION);
     endCompiler();
+    // save the chunk as a constant in the parent (now current) chunk
+    emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(func)));
+    uint8_t nameArg = identifierConstant(&n->tok);
+    defineVariable(nameArg); // define function as global
 }
 
 static void emitNode(Node *n) {
@@ -473,7 +502,30 @@ static void emitNode(Node *n) {
         break;
     }
     case FUNCTION_STMT: {
-        declareFunction(n, TYPE_FUNCTION);
+        emitFunction(n, TYPE_FUNCTION);
+        break;
+    }
+    case RETURN_STMT: {
+        if (n->children->length > 0) {
+            emitChildren(n);
+            emitByte(OP_RETURN);
+        } else {
+            emitReturn();
+        }
+        break;
+    }
+    case CALL_EXPR: {
+        int nArgs = n->children->length-1;
+        // arbitrary, but we don't want the VM op stack to blow by pushing a whole
+        // bunch of arguments
+        if (nArgs > 8) {
+            error("too many arguments given to function");
+            return;
+        }
+        emitChildren(n); // expression, arguments
+        emitByte(OP_CALL);
+        emitByte((uint8_t)nArgs);
+        break;
     }
     default:
         fprintf(stderr, "node kind %d not implemented (tok=%s)\n",
@@ -497,8 +549,9 @@ int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     }
     emitNode(program);
     ObjFunction *prog = endCompiler();
+    *chunk = prog->chunk; // copy
     if (CLOX_OPTION_T(debugBytecode)) {
-        printDisassembledChunk(prog->chunk, "Bytecode:");
+        printDisassembledChunk(&prog->chunk, "Bytecode:");
     }
     if (mainCompiler.hadError) {
         *err = COMPILE_ERR_SEMANTICS;

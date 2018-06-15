@@ -76,24 +76,53 @@ char *opName(OpCode code) {
     }
 }
 
+static void addFunc(vec_funcp_t *funcs, ObjFunction *func) {
+    if (funcs == NULL) return;
+    bool contained = false;
+    ObjFunction *fn = NULL; int i = 0;
+    vec_foreach(funcs, fn, i) {
+        if (fn == func) {
+            contained = true;
+            break;
+        }
+    }
+    if (!contained) {
+        vec_push(funcs, func);
+    }
+}
+
 /**
  * Print all operations and operands to the console.
  */
 void printDisassembledChunk(Chunk *chunk, const char *name) {
   printf("== %s ==\n", name);
+  vec_funcp_t funcs;
+  vec_init(&funcs);
 
   for (int i = 0; i < chunk->count;) {
-    i = printDisassembledInstruction(chunk, i);
+    i = printDisassembledInstruction(chunk, i, &funcs);
     if (i <= 0) {
         break;
     }
   }
+  ObjFunction *func = NULL; int i = 0;
+  vec_foreach(&funcs, func, i) {
+      char *name = func->name ? func->name->chars : "(anon)";
+      printf("-- Function %s --\n", name);
+      printDisassembledChunk(&func->chunk, name);
+      printf("----\n");
+  }
+  vec_deinit(&funcs);
 }
 
-static int printConstantInstruction(char *op, Chunk *chunk, int i) {
+static int printConstantInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t constantIdx = chunk->code[i + 1];
     printf("%-16s %4d '", op, constantIdx);
-    printValue(getConstant(chunk, constantIdx));
+    Value constant = getConstant(chunk, constantIdx);
+    if (IS_FUNCTION(constant)) {
+        addFunc(funcs, AS_FUNCTION(constant));
+    }
+    printValue(constant);
     printf("'\n");
     return i+2;
 }
@@ -110,9 +139,42 @@ static int printJumpInstruction(char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
+static int jumpInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    char *cbuf = calloc(strlen(op)+1+18, 1);
+    ASSERT_MEM(cbuf);
+    uint8_t jumpOffset = chunk->code[i + 1];
+    sprintf(cbuf, "%s\t%4d\t(addr=%04d)\n", op, jumpOffset+1, (i+1+jumpOffset+1));
+    pushCString(buf, cbuf, strlen(cbuf));
+    return i+2;
+}
+
 static int printLoopInstruction(char *op, Chunk *chunk, int i) {
     uint8_t loopOffset = chunk->code[i + 1];
     printf("%-16s %4d (addr=%04d)\n", op, loopOffset, (i-loopOffset));
+    return i+2;
+}
+
+static int loopInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    char *cbuf = calloc(strlen(op)+1+18, 1);
+    ASSERT_MEM(cbuf);
+    uint8_t loopOffset = chunk->code[i + 1];
+    sprintf(cbuf, "%s\t%4d\t(addr=%04d)\n", op, loopOffset, (i-loopOffset));
+    pushCString(buf, cbuf, strlen(cbuf));
+    return i+2;
+}
+
+static int printCallInstruction(char *op, Chunk *chunk, int i) {
+    uint8_t numArgs = chunk->code[i + 1];
+    printf("%-16s    (argc=%04d)\n", op, numArgs);
+    return i+2;
+}
+
+static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    char *cbuf = calloc(strlen(op)+1+13, 1);
+    ASSERT_MEM(cbuf);
+    uint8_t numArgs = chunk->code[i + 1];
+    sprintf(cbuf, "%s\t(argc=%04d)\n", op, numArgs);
+    pushCString(buf, cbuf, strlen(cbuf));
     return i+2;
 }
 
@@ -149,7 +211,7 @@ static int simpleInstruction(ObjString *buf, char *op, int i) {
     return i+1;
 }
 
-int printDisassembledInstruction(Chunk *chunk, int i) {
+int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
     printf("%04d ", i);
     // same line as prev instruction
     if (i > 0 && chunk->lines[i] == chunk->lines[i - 1]) {
@@ -163,7 +225,7 @@ int printDisassembledInstruction(Chunk *chunk, int i) {
         case OP_DEFINE_GLOBAL:
         case OP_GET_GLOBAL:
         case OP_SET_GLOBAL:
-            return printConstantInstruction(opName(byte), chunk, i);
+            return printConstantInstruction(opName(byte), chunk, i, funcs);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
             return printLocalVarInstruction(opName(byte), chunk, i);
@@ -172,6 +234,8 @@ int printDisassembledInstruction(Chunk *chunk, int i) {
             return printJumpInstruction(opName(byte), chunk, i);
         case OP_LOOP:
             return printLoopInstruction(opName(byte), chunk, i);
+        case OP_CALL:
+            return printCallInstruction(opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
         case OP_ADD:
@@ -210,6 +274,13 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i) {
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
             return localVarInstruction(buf, opName(byte), chunk, i);
+        case OP_JUMP:
+        case OP_JUMP_IF_FALSE:
+            return jumpInstruction(buf, opName(byte), chunk, i);
+        case OP_LOOP:
+            return loopInstruction(buf, opName(byte), chunk, i);
+        case OP_CALL:
+            return callInstruction(buf, opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
         case OP_ADD:

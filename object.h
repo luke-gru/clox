@@ -26,7 +26,9 @@ typedef struct sObjFunction {
   Obj object;
   int arity;
   //int upvalueCount;
-  Chunk *chunk;
+  // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant
+  // and needs to be read by the VM, or serialized/loaded to/from disk.
+  Chunk chunk;
   ObjString *name;
 } ObjFunction;
 

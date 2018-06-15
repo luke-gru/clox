@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include <stdbool.h>
 #include "options.h"
+#include "debug.h"
 
 #include "vec.h"
 
@@ -139,13 +140,28 @@ static inline void _SKIP_TEST(const char *fnname) {
 static inline void parseTestOptions(int argc, char *argv[]) {
     int i = 0;
     int incrOpt = 0;
+    vec_str_t *onlies = calloc(sizeof(vec_str_t), 1);
+    ASSERT_MEM(onlies);
+    vec_init(onlies);
+    vec_str_t *skips = calloc(sizeof(vec_str_t), 1);
+    ASSERT_MEM(skips);
+    vec_init(skips);
     while (argv[i] != NULL) {
+        if (i == 0) { i+= 1; continue; }
         if ((incrOpt = parseOption(argv, i)) > 0) {
             i+=incrOpt;
+        } else if (strcmp(argv[i], "--only") == 0) {
+            vec_push(onlies, argv[i+1]);
+            i += 2;
+        } else if (strcmp(argv[i], "--skip") == 0) {
+            vec_push(skips, argv[i+1]);
+            i += 2;
         } else {
-            i+=1;
+            die("Invalid option\n");
         }
     }
+    vtests_only = onlies;
+    vtests_skip = skips;
 }
 
 #define T_ASSERT(expr) ((expr) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))

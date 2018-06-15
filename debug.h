@@ -5,9 +5,12 @@
 #include "common.h"
 #include "chunk.h"
 #include "object.h"
+#include "vec.h"
+
+typedef vec_t(ObjFunction*) vec_funcp_t;
 
 void printDisassembledChunk(Chunk *chunk, const char *name);
-int  printDisassembledInstruction(Chunk *chunk, int i);
+int  printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs);
 
 ObjString *disassembleChunk(Chunk *chunk);
 

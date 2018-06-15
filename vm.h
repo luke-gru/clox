@@ -9,21 +9,15 @@
 #define FRAMES_MAX 64
 
 typedef struct {
-/* Calls and Functions not-yet < Closures not-yet
-  ObjFunction* function;
-*/
-//> Closures not-yet
-  //ObjClosure* closure;
-//< Closures not-yet
+  ObjFunction *function;
   uint8_t *ip;
-  Value slots[256];
+  Value *slots;
 } CallFrame; // represents a local scope (block, function, etc)
 
 typedef struct {
-  Chunk *chunk; // bytecode instructions
   Value stack[STACK_MAX]; // stack VM, this is the stack of operands
   Value *stackTop;
-  CallFrame frames[FRAMES_MAX];
+  CallFrame frames[FRAMES_MAX]; // NOTE: callframe contains chunk!
   unsigned frameCount;
   struct sObj *objects;
   Value *lastValue;

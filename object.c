@@ -97,16 +97,15 @@ ObjFunction *newFunction(Chunk *chunk) {
     /*function->upvalueCount = 0;*/
     function->name = NULL;
     if (chunk == NULL) {
-        function->chunk = ALLOCATE(Chunk, 1);
-        initChunk(function->chunk);
+        initChunk(&function->chunk);
     } else {
-        function->chunk = chunk;
+        function->chunk = *chunk; // copy
     }
     return function;
 }
 
 void freeFunction(ObjFunction *func) {
     // TODO: free objstring if not null
-    freeChunk(func->chunk);
+    freeChunk(&func->chunk);
     free(func);
 }

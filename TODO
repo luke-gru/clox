@@ -1,0 +1,6 @@
+* More language features to be close to my version of jlox []
+* GC []
+* Saving/loading bytecode to disk []
+* Debugger support []
+* bytecode optimization pass []
+* simple JIT, maybe? []

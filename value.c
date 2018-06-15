@@ -52,6 +52,14 @@ void printValue(Value value) {
             char *cstring = AS_CSTRING(value);
             printf("%s", cstring);
             return;
+        } else if (OBJ_TYPE(value) == OBJ_FUNCTION) {
+            ObjFunction *func = AS_FUNCTION(value);
+            if (func->name == NULL) {
+                printf("%s", "<fun (Anon)>");
+            } else {
+                printf("<fun %s>", func->name->chars);
+            }
+            return;
         }
     }
     printf("Unknown value type: %d. Cannot print!", value.type);
