@@ -1,6 +1,7 @@
 #ifndef clox_value_h
 #define clox_value_h
 
+#include <stdio.h>
 #include "common.h"
 
 typedef struct sObj Obj;
@@ -32,7 +33,6 @@ typedef struct {
 #define IS_NUMBER(value)  ((value).type == VAL_NUMBER)
 #define IS_OBJ(value)     ((value).type == VAL_OBJ)
 
-
 #define AS_OBJ(value)     ((value).as.object)
 #define AS_BOOL(value)    ((value).as.boolean)
 #define AS_NUMBER(value)  ((value).as.number)
@@ -48,5 +48,7 @@ void initValueArray(ValueArray *array);
 void writeValueArray(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);
 void printValue(Value value);
+int serializeValue(Value *value, FILE *file, int *errcode);
+int loadValue(Value *value, FILE *file, int *errcode);
 
 #endif
