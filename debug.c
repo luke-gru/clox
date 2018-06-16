@@ -2,6 +2,7 @@
 
 #include "debug.h"
 #include "object.h"
+#include "value.h"
 
 void die(const char *fmt, ...) {
     va_list ap;
@@ -63,14 +64,18 @@ char *opName(OpCode code) {
         return "OP_OR";
     case OP_POP:
         return "OP_POP";
-    case OP_LEAVE:
-        return "OP_LEAVE";
     case OP_JUMP_IF_FALSE:
         return "OP_JUMP_IF_FALSE";
     case OP_JUMP:
         return "OP_JUMP";
     case OP_LOOP:
         return "OP_LOOP";
+    case OP_CLASS:
+        return "OP_CLASS";
+    case OP_SUBCLASS:
+        return "OP_SUBCLASS";
+    case OP_LEAVE:
+        return "OP_LEAVE";
     default:
         return "!Unknown instruction!";
     }
@@ -127,6 +132,24 @@ static int printConstantInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *
     printf("'\n");
     return i+2;
 }
+// instruction has 1 operand, a constant slot index
+static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+    uint8_t constantIdx = chunk->code[i + 1];
+
+    Value constant = getConstant(chunk, constantIdx);
+    if (IS_FUNCTION(constant)) {
+        addFunc(funcs, AS_FUNCTION(constant));
+    }
+    ObjString *constantStr = valueToString(constant);
+    char *constantCStr = constantStr->chars;
+
+    char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+9, 1);
+    ASSERT_MEM(cbuf);
+    sprintf(cbuf, "%s\t%04d\t'%s'\n", op, constantIdx, constantCStr);
+
+    pushCString(buf, cbuf, strlen(cbuf));
+    return i+2;
+}
 
 static int printLocalVarInstruction(char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
@@ -179,16 +202,6 @@ static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-// instruction has 1 operand, a constant slot index
-static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
-    uint8_t constantIdx = chunk->code[i + 1];
-
-    char *cbuf = calloc(strlen(op)+1+6, 1);
-    ASSERT_MEM(cbuf);
-    sprintf(cbuf, "%s\t%04d\n", op, constantIdx);
-    pushCString(buf, cbuf, strlen(cbuf));
-    return i+2;
-}
 
 static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
@@ -252,6 +265,8 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_AND:
         case OP_OR:
         case OP_POP:
+        case OP_CLASS:
+        case OP_SUBCLASS:
         case OP_LEAVE:
             return printSimpleInstruction(opName(byte), i);
         default:
@@ -260,7 +275,7 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
     }
 }
 
-static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i) {
+static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_funcp_t *funcs) {
     char *numBuf = calloc(5+1, 1);
     ASSERT_MEM(numBuf);
     sprintf(numBuf, "%04d\t", i);
@@ -271,7 +286,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i) {
         case OP_DEFINE_GLOBAL:
         case OP_GET_GLOBAL:
         case OP_SET_GLOBAL:
-            return constantInstruction(buf, opName(byte), chunk, i);
+            return constantInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
             return localVarInstruction(buf, opName(byte), chunk, i);
@@ -310,12 +325,29 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i) {
 }
 
 ObjString *disassembleChunk(Chunk *chunk) {
+    vec_funcp_t funcs;
+    vec_init(&funcs);
+
     ObjString *buf = copyString("", 0);
+
     for (int i = 0; i < chunk->count;) {
-        i = disassembledInstruction(buf, chunk, i);
+        i = disassembledInstruction(buf, chunk, i, &funcs);
         if (i <= 0) {
             break;
         }
     }
+
+    ObjFunction *func = NULL; int i = 0;
+    vec_foreach(&funcs, func, i) {
+        char *name = func->name ? func->name->chars : "(anon)";
+        char *cbuf = calloc(strlen(name)+1+16, 1);
+        ASSERT_MEM(cbuf);
+        sprintf(cbuf, "-- Function %s --\n", name);
+        pushCString(buf, cbuf, strlen(cbuf));
+        ObjString *funcStr = disassembleChunk(&func->chunk);
+        pushCString(buf, funcStr->chars, strlen(funcStr->chars));
+        pushCString(buf, "----\n", strlen("----\n"));
+    }
+    vec_deinit(&funcs);
     return buf;
 }

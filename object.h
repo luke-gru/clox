@@ -10,19 +10,19 @@ typedef enum {
   OBJ_FUNCTION,
 } ObjType;
 
-typedef struct sObj {
+typedef struct Obj {
   ObjType type;
-  struct sObj *next;
+  Obj *next;
 } Obj;
 
-typedef struct sObjString {
-  struct sObj object;
+typedef struct ObjString {
+  Obj object;
   int length;
   char *chars;
   uint32_t hash;
 } ObjString;
 
-typedef struct sObjFunction {
+typedef struct ObjFunction {
   Obj object;
   int arity;
   //int upvalueCount;

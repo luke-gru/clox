@@ -3,7 +3,9 @@
 
 #include "common.h"
 
-typedef struct sObj Obj;
+// fwd decls
+typedef struct Obj Obj;
+typedef struct ObjString ObjString;
 
 typedef enum {
   VAL_BOOL,
@@ -17,7 +19,7 @@ typedef struct {
   union {
     bool boolean;
     double number;
-    Obj *object;
+    struct Obj *object;
   } as;
 } Value;
 
@@ -48,5 +50,6 @@ void initValueArray(ValueArray *array);
 void writeValueArray(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);
 void printValue(Value value);
+ObjString *valueToString(Value value);
 
 #endif

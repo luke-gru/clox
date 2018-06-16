@@ -3,6 +3,7 @@
 #include "memory.h"
 #include "value.h"
 #include "object.h"
+#include "debug.h"
 
 void initValueArray(ValueArray *array) {
     array->values = NULL;
@@ -63,4 +64,42 @@ void printValue(Value value) {
         }
     }
     printf("Unknown value type: %d. Cannot print!", value.type);
+}
+
+ObjString *valueToString(Value value) {
+    if (IS_BOOL(value)) {
+        if (AS_BOOL(value)) {
+            return copyString("true", 4);
+        } else {
+            return copyString("false", 5);
+        }
+    } else if (IS_NIL(value)) {
+        return copyString("nil", 3);
+    } else if (IS_NUMBER(value)) {
+        char buftemp[50] = { '\0' };
+        double d = AS_NUMBER(value);
+        snprintf(buftemp, 50, "%.2f", d); // ex: "1.20"
+        char *buf = calloc(strlen(buftemp)+1, 1);
+        strcpy(buf, buftemp);
+        ASSERT_MEM(buf);
+        return takeString(buf, strlen(buf));
+    } else if (IS_OBJ(value)) {
+        if (OBJ_TYPE(value) == OBJ_STRING) {
+            char *cstring = AS_CSTRING(value);
+            return copyString(cstring, strlen(cstring));
+        } else if (OBJ_TYPE(value) == OBJ_FUNCTION) {
+            ObjFunction *func = AS_FUNCTION(value);
+            if (func->name == NULL) {
+                const char *anon = "<fun (Anon)>";
+                return copyString(anon, strlen(anon));
+            } else {
+                char *buf = calloc(strlen(func->name->chars)+1+6, 1);
+                ASSERT_MEM(buf);
+                sprintf(buf, "<fun %s>", func->name->chars);
+                return takeString(buf, strlen(buf));
+            }
+        }
+    }
+    ASSERT(0);
+    return NULL;
 }

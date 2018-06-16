@@ -52,6 +52,14 @@ typedef struct Compiler {
   bool hadError;
 } Compiler;
 
+
+typedef struct ClassCompiler {
+  struct ClassCompiler *enclosing;
+
+  Token name;
+  bool hasSuperclass;
+} ClassCompiler;
+
 typedef enum {
     COMPILE_SCOPE_BLOCK = 1,
     COMPILE_SCOPE_FUNCTION,
@@ -59,17 +67,9 @@ typedef enum {
     COMPILE_SCOPE_MODULE,
 } CompileScopeType;
 
-
-/*typedef struct ClassCompiler {*/
-  /*struct ClassCompiler *enclosing;*/
-
-  /*Token name;*/
-/*} ClassCompiler;*/
-
 Compiler *current = NULL;
+ClassCompiler *currentClass = NULL;
 Token *curTok = NULL;
-/*ClassCompiler *currentClass = NULL;*/
-
 
 static Chunk *currentChunk() {
   return &current->function->chunk;
@@ -189,13 +189,13 @@ static void emitLoop(int loopStart) {
 }
 
 // adds local variable, returns slot
-static int addLocal(Token *name) {
+static int addLocal(Token name) {
     if (current->localCount >= UINT8_MAX) {
         error("Too many local variables");
         return -1;
     }
     Local local = {
-        .name = *name,
+        .name = name,
         .depth = current->scopeDepth,
     };
     current->locals[current->localCount] = local;
@@ -236,7 +236,7 @@ static int declareVariable(Token *name) {
                 return -1;
             }
         }
-        return addLocal(name);
+        return addLocal(*name);
     }
 }
 
@@ -294,6 +294,36 @@ static void defineVariable(uint8_t global) {
     // Mark the latest local as defined now (-1 is undefined, but declared)
     current->locals[current->localCount - 1].depth = current->scopeDepth;
   }
+}
+
+static Token syntheticToken(const char *lexeme) {
+    Token tok;
+    tok.start = lexeme;
+    tok.length = strlen(lexeme);
+    return tok;
+}
+
+static void emitClass(Node *n) {
+    uint8_t nameConstant = identifierConstant(&n->tok);
+    ClassCompiler cComp;
+    cComp.name = n->tok;
+    Token *superClassTok = (Token*)nodeGetData(n);
+    cComp.hasSuperclass = superClassTok != NULL;
+    cComp.enclosing = currentClass;
+    currentClass = &cComp;
+
+    pushScope(COMPILE_SCOPE_CLASS);
+    if (cComp.hasSuperclass) {
+        declareVariable(superClassTok);
+        // Store the superclass in a local variable named "super".
+        /*variable(false);*/
+        addLocal(syntheticToken("super"));
+
+        emitBytes(OP_SUBCLASS, nameConstant);
+    } else {
+        emitBytes(OP_CLASS, nameConstant);
+    }
+    popScope(COMPILE_SCOPE_CLASS);
 }
 
 static void emitFunction(Node *n, FunctionType ftype) {
@@ -504,6 +534,9 @@ static void emitNode(Node *n) {
     case FUNCTION_STMT: {
         emitFunction(n, TYPE_FUNCTION);
         break;
+    }
+    case CLASS_STMT: {
+        emitClass(n);
     }
     case RETURN_STMT: {
         if (n->children->length > 0) {

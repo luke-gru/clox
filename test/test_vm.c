@@ -77,7 +77,7 @@ static int test_global_vars1(void) {
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
     T_ASSERT(IS_STRING(*val));
-    T_ASSERT(strcmp(AS_CSTRING(*val), "howdy") == 0);
+    T_ASSERT_STREQ("howdy", AS_CSTRING(*val));
 cleanup:
     return 0;
 }
@@ -110,7 +110,7 @@ static int test_simple_if(void) {
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
     T_ASSERT(IS_STRING(*val));
-    T_ASSERT(strcmp(AS_CSTRING(*val), "jumped") == 0);
+    T_ASSERT_STREQ("jumped", AS_CSTRING(*val));
 cleanup:
     return 0;
 }
@@ -121,7 +121,7 @@ static int test_vardecls_in_block_not_global(void) {
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
     T_ASSERT(IS_STRING(*val));
-    T_ASSERT(strcmp(AS_CSTRING(*val), "in block") == 0);
+    T_ASSERT_STREQ("in block", AS_CSTRING(*val));
 cleanup:
     return 0;
 }
@@ -143,7 +143,7 @@ static int test_simple_function(void) {
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
     T_ASSERT(IS_STRING(*val));
-    T_ASSERT(strcmp(AS_CSTRING(*val), "FUN") == 0);
+    T_ASSERT_STREQ("FUN", AS_CSTRING(*val));
 cleanup:
     return 0;
 }

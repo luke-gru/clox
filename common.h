@@ -49,6 +49,9 @@ typedef enum {
     OP_JUMP_IF_FALSE,
     OP_LOOP,
 
+    OP_CLASS, // top of stack is variable representing class
+    OP_SUBCLASS, // top of stack is variable representing subclass
+
     OP_LEAVE,
 } OpCode;
 

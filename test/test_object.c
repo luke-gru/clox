@@ -7,7 +7,7 @@ static int test_string_object(void) {
     T_ASSERT(string);
     pushCString(string, "hi\n", strlen("hi\n"));
     char *cStr = string->chars;
-    T_ASSERT(strcmp(cStr, "hi\n") == 0);
+    T_ASSERT_STREQ("hi\n", cStr);
 cleanup:
     return 0;
 }

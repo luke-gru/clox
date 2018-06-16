@@ -19,7 +19,7 @@ typedef struct {
   Value *stackTop;
   CallFrame frames[FRAMES_MAX]; // NOTE: callframe contains chunk!
   unsigned frameCount;
-  struct sObj *objects;
+  Obj *objects;
   Value *lastValue;
   Table globals; // global variables
   Table strings; // interned strings

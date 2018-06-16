@@ -54,7 +54,7 @@ static int test_output_node_literal_string(void) {
     };
     n = createNode(nType, strTok, NULL);
     output = outputASTString(n, 0);
-    T_ASSERT(strcmp(output, "\"testing\n\"") == 0);
+    T_ASSERT_STREQ("\"testing\n\"", output);
 cleanup:
     if (n != NULL) freeNode(n, true);
     if (output != NULL) free(output);
@@ -77,7 +77,7 @@ static int test_output_node_literal_number(void) {
     };
     n = createNode(nType, numTok, NULL);
     output = outputASTString(n, 0);
-    T_ASSERT(strcmp(output, "1.0") == 0);
+    T_ASSERT_STREQ("1.0", output);
 cleanup:
     if (n != NULL) freeNode(n, true);
     if (output != NULL) free(output);
@@ -92,7 +92,7 @@ static int test_output_nodes_from_parser_vardecl(void) {
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    T_ASSERT(strcmp("(varDecl a 1)\n", output) == 0);
+    T_ASSERT_STREQ("(varDecl a 1)\n", output);
 cleanup:
     return 0;
 }
@@ -105,9 +105,9 @@ static int test_output_nodes_from_parser_funcdecl(void) {
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    T_ASSERT(strcmp("(fnDecl f (a b)\n"
+    T_ASSERT_STREQ("(fnDecl f (a b)\n"
                     "  (block)\n"
-                    ")\n", output) == 0);
+                    ")\n", output);
 cleanup:
     return 0;
 }
@@ -119,7 +119,7 @@ static int test_output_nodes_from_parser_print(void) {
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
-    T_ASSERT(strcmp("(print \"hi\")\n", output) == 0);
+    T_ASSERT_STREQ("(print \"hi\")\n", output);
 cleanup:
     return 0;
 }
@@ -132,9 +132,9 @@ static int test_output_nodes_from_parser_classdecl1(void) {
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    T_ASSERT(strcmp("(classDecl A\n"
+    T_ASSERT_STREQ("(classDecl A\n"
                     "  (block)\n\n"
-                    ")\n", output) == 0);
+                    ")\n", output);
 
     src = "class A < B { }";
     initScanner(src);
@@ -143,9 +143,9 @@ static int test_output_nodes_from_parser_classdecl1(void) {
     T_ASSERT(!parser.panicMode);
     output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    T_ASSERT(strcmp("(classDecl A B\n"
+    T_ASSERT_STREQ("(classDecl A B\n"
                     "  (block)\n\n"
-                    ")\n", output) == 0);
+                    ")\n", output);
 cleanup:
     return 0;
 }
@@ -160,7 +160,7 @@ static int test_output_nodes_from_parser_if1(void) {
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    T_ASSERT(strcmp("(if nil\n"
+    T_ASSERT_STREQ("(if nil\n"
                     "  (block\n"
                     "    (print \"got nil\")\n"
                     "  )\n"
@@ -168,7 +168,7 @@ static int test_output_nodes_from_parser_if1(void) {
                     "  (block\n"
                     "    (print \"not nil\")\n"
                     "  )\n"
-                    ")\n", output) == 0);
+                    ")\n", output);
 
 cleanup:
     return 0;
@@ -184,11 +184,11 @@ static int test_output_nodes_from_parser_while1(void) {
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    T_ASSERT(strcmp("(while true\n"
+    T_ASSERT_STREQ("(while true\n"
                     "  (block\n"
                     "    (print \"again...\")\n"
                     "  )\n"
-                    ")\n", output) == 0);
+                    ")\n", output);
 
 cleanup:
     return 0;
@@ -204,11 +204,11 @@ static int test_output_nodes_from_parser_for1(void) {
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    T_ASSERT(strcmp("(for nil true nil\n"
+    T_ASSERT_STREQ("(for nil true nil\n"
                     "  (block\n"
                     "    (print \"again...\")\n"
                     "  )\n"
-                    ")\n", output) == 0);
+                    ")\n", output);
 
 cleanup:
     return 0;
@@ -224,14 +224,14 @@ static int test_output_nodes_from_parser_try1(void) {
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    T_ASSERT(strcmp("(try\n"
+    T_ASSERT_STREQ("(try\n"
                     "  (block\n"
                     "    (print \"again...\")\n"
                     "  )\n"
                     "(catch \"uh oh\"\n"
                     "  (block)\n"
                     ")\n"
-                    ")\n" , output) == 0);
+                    ")\n" , output);
 
 cleanup:
     return 0;
@@ -245,7 +245,7 @@ static int test_output_nodes_from_parser_throw1(void) {
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    T_ASSERT(strcmp("(throw \"UH OH\")\n", output) == 0);
+    T_ASSERT_STREQ("(throw \"UH OH\")\n", output);
 
 cleanup:
     return 0;
@@ -264,7 +264,7 @@ static int test_output_nodes_from_parser_return1(void) {
                      "    (return)\n"
                      "  )\n"
                      ")\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -279,7 +279,7 @@ static int test_output_nodes_from_parser_assign1(void) {
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(varDecl a)\n"
                      "(assign (var a) 1)\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -293,7 +293,7 @@ static int test_output_nodes_from_parser_array1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(varDecl a (array 1 2 \"three\"))\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 
     src = "[1,2,3,4,[5],];";
     initScanner(src);
@@ -303,7 +303,7 @@ static int test_output_nodes_from_parser_array1(void) {
     output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     expected = "(array 1 2 3 4 (array 5))\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -317,7 +317,7 @@ static int test_output_nodes_from_parser_binaryop1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(+ 1 101)\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -331,7 +331,7 @@ static int test_output_nodes_from_parser_logicalop1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(<= 1 101)\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -345,7 +345,7 @@ static int test_output_nodes_from_parser_grouping1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(group \"in parens\")\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -363,7 +363,7 @@ static int test_output_nodes_from_parser_superexpr(void) {
                      "    (return (call (propGet super a) ((var n) ))\n"
                      "  )\n"
                      ")\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -381,7 +381,7 @@ static int test_output_nodes_from_parser_thisexpr(void) {
                      "    (return (var this))\n"
                      "  )\n"
                      ")\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -400,7 +400,7 @@ static int test_output_nodes_from_parser_anonfn(void) {
                      "  )\n"
                      ")\n"
                      ")\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -414,7 +414,7 @@ static int test_output_nodes_from_parser_indexget(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(varDecl two (idxGet (array 1 2 3) 1))\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -428,7 +428,7 @@ static int test_output_nodes_from_parser_indexset(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(idxSet (array 1 2 3) 1 1)\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -442,7 +442,7 @@ static int test_output_nodes_from_parser_propget(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(propGet (var expr) propname)\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -456,7 +456,7 @@ static int test_output_nodes_from_parser_propset(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(propSet (var expr) propname (var propval))\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }
@@ -470,7 +470,7 @@ static int test_output_nodes_from_parser_precedence1(void) {
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
     char *expected = "(+ 1 (* (* 2 3) 4))\n";
-    T_ASSERT(strcmp(expected, output) == 0);
+    T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;
 }

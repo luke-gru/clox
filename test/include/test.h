@@ -164,7 +164,23 @@ static inline void parseTestOptions(int argc, char *argv[]) {
     vtests_skip = skips;
 }
 
+static inline bool t_assert_streq(char *str1, char *str2) {
+    ASSERT(str1);
+    ASSERT(str2);
+    if (strcmp(str1, str2) == 0) {
+        return true;
+    } else {
+        fprintf(stderr, "---------\n");
+        fprintf(stderr, "Expected: \n'%s'\n", str1);
+        fprintf(stderr, "---------\n");
+        fprintf(stderr, "Actual:   \n'%s'\n", str2);
+        fprintf(stderr, "---------\n");
+        return false;
+    }
+}
+
 #define T_ASSERT(expr) ((expr) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 #define T_ASSERT_EQ(expr1,expr2) ((expr1==expr2) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
+#define T_ASSERT_STREQ(str1,str2) (t_assert_streq(str1, str2) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 
 #endif
