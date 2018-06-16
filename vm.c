@@ -146,15 +146,15 @@ static const char *typeOfObj(Obj *obj) {
 }
 
 static const char *typeOf(Value val) {
-    if (IS_BOOL(val)) return "bool";
-    if (IS_NIL(val)) return "nil";
-    if (IS_NUMBER(val)) return "number";
     if (IS_OBJ(val)) {
         return typeOfObj(AS_OBJ(val));
     } else {
-        ASSERT(0);
-        return "unknown!";
+        if (IS_BOOL(val)) return "bool";
+        if (IS_NIL(val)) return "nil";
+        if (IS_NUMBER(val)) return "number";
     }
+    ASSERT(0);
+    return "unknown!";
 }
 
 static bool callCallable(ObjFunction *function, int argCount) {
@@ -265,7 +265,8 @@ static InterpretResult run(void) {
         if (tableGet(&vm.globals, AS_STRING(varName), &val)) {
             push(val);
         } else {
-            push(nilValue()); // TODO: error out
+            runtimeError("Undefined variable '%s'.", AS_STRING(varName)->chars);
+            return INTERPRET_RUNTIME_ERROR;
         }
         break;
       }

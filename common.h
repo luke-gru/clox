@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 // NOTE: when adding/removing from here, add/remove from opName() function in debug.c!
 typedef enum {
@@ -49,8 +50,8 @@ typedef enum {
     OP_JUMP_IF_FALSE,
     OP_LOOP,
 
-    OP_CLASS, // top of stack is variable representing class
-    OP_SUBCLASS, // top of stack is variable representing subclass
+    OP_CLASS, // class name is given as operand
+    OP_SUBCLASS, // top of stack is superclass, operand is class name
 
     OP_LEAVE,
 } OpCode;

@@ -88,11 +88,7 @@ static void popScope(CompileScopeType stype) {
     current->scopeDepth--;
     while (current->localCount > 0 &&
             current->locals[current->localCount - 1].depth > current->scopeDepth) {
-        /*if (current->locals[current->localCount - 1].isUpvalue) {*/
-        /*emitByte(OP_CLOSE_UPVALUE);*/
-        /*} else {*/
         emitByte(OP_POP);
-        /*}*/
         current->localCount--;
     }
 }
@@ -129,8 +125,18 @@ static ObjFunction *endCompiler() {
     return func;
 }
 
-static void error(const char *msg) {
-    fprintf(stderr, "[Compile Error]: %s\n", msg);
+static void error(const char *format, ...) {
+    va_list args;
+    int line = curTok ? curTok->line : 0;
+    va_start(args, format);
+    fprintf(stderr, "[Compile Error]: ");
+    if (line > 0) {
+        fprintf(stderr, "(line: %d) ", line);
+    }
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputs("\n", stderr);
+
     current->hadError = true;
 }
 
@@ -146,11 +152,12 @@ static uint8_t makeConstant(Value value) {
   return (uint8_t)constant;
 }
 
-// Add constant to constant pool, return index to it
+// Add constant to constant pool from the token's lexeme, return index to it
 static uint8_t identifierConstant(Token* name) {
   return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
 }
 
+// emits a constant instruction with the given operand
 static void emitConstant(Value constant) {
     emitBytes(OP_CONSTANT, makeConstant(constant));
 }
@@ -188,7 +195,7 @@ static void emitLoop(int loopStart) {
   emitByte(offset);
 }
 
-// adds local variable, returns slot
+// adds local variable to current compiler's table, returns var slot
 static int addLocal(Token name) {
     if (current->localCount >= UINT8_MAX) {
         error("Too many local variables");
@@ -208,6 +215,8 @@ static bool identifiersEqual(Token *a, Token *b) {
   return memcmp(a->start, b->start, a->length) == 0;
 }
 
+// returns -1 if local variable not found, otherwise returns slot index for
+// current compiler.
 static int resolveLocal(Token* name) {
   // Look it up in the local scopes. Look in reverse order so that the most
   // nested variable is found first and shadows outer ones.
@@ -221,18 +230,18 @@ static int resolveLocal(Token* name) {
   return -1;
 }
 
-// Returns argument to SET_LOCAL or SET_GLOBAL, an identifier index or
+// Returns argument to give to SET_LOCAL/SET_GLOBAL, an identifier index or
 // a local slot index.
 static int declareVariable(Token *name) {
     if (current->scopeDepth == 0) {
-        return identifierConstant(name);
+        return identifierConstant(name); // global variables are implicity declared
     } else {
         // See if a local variable with this name is already declared in this scope.
         for (int i = current->localCount - 1; i >= 0; i--) {
             Local* local = &current->locals[i];
             if (local->depth != -1 && local->depth < current->scopeDepth) break;
             if (identifiersEqual(name, &local->name)) {
-                error("Variable with this name already declared in this scope.");
+                error("Variable with name '%s' already defined in this scope.", tokStr(name));
                 return -1;
             }
         }
@@ -240,7 +249,31 @@ static int declareVariable(Token *name) {
     }
 }
 
-// initializes a new compiler,
+typedef enum {
+    VAR_GET,
+    VAR_SET,
+} VarOp;
+
+static void namedVariable(Token name, VarOp getSet) {
+  uint8_t getOp, setOp;
+  int arg = resolveLocal(&name);
+  if (arg != -1) {
+    getOp = OP_GET_LOCAL;
+    setOp = OP_SET_LOCAL;
+  } else {
+    arg = identifierConstant(&name);
+    getOp = OP_GET_GLOBAL;
+    setOp = OP_SET_GLOBAL;
+  }
+  if (getSet == VAR_SET) {
+    emitBytes(setOp, (uint8_t)arg);
+  } else {
+    emitBytes(getOp, (uint8_t)arg);
+  }
+}
+
+// Initializes a new compiler for a function, and sets it as the `current`
+// function compiler.
 static void initCompiler(
     Compiler *compiler,
     int scopeDepth,
@@ -266,33 +299,51 @@ static void initCompiler(
 
     case TYPE_INITIALIZER:
     case TYPE_METHOD: {
-        // TODO
-        /*int length = currentClass->name.length + parser.previous.length + 1;*/
-
-        /*char* chars = ALLOCATE(char, length + 1);*/
-        /*memcpy(chars, currentClass->name.start, currentClass->name.length);*/
-        /*chars[currentClass->name.length] = '.';*/
-        /*memcpy(chars + currentClass->name.length + 1, parser.previous.start,*/
-                /*parser.previous.length);*/
-        /*chars[length] = '\0';*/
-
-        /*current->function->name = takeString(chars, length);*/
+        ASSERT(currentClass);
+        char *className = tokStr(&currentClass->name);
+        char *funcName = tokStr(fTok);
+        size_t methodNameBuflen = strlen(className)+1+strlen(funcName)+1; // +1 for '.' in between
+        char *methodNameBuf = calloc(methodNameBuflen, 1);
+        ASSERT_MEM(methodNameBuf);
+        strcpy(methodNameBuf, className);
+        strncat(methodNameBuf, ".", 1);
+        strcat(methodNameBuf, funcName);
+        ObjString *methodName = copyString(methodNameBuf, strlen(methodNameBuf));
+        current->function->name = methodName;
         break;
     }
     case TYPE_TOP_LEVEL:
         current->function->name = NULL;
         break;
+    default:
+        error("invalid function type %d", ftype);
+    }
+
+    // The first slot is always implicitly declared.
+    Local* local = &current->locals[current->localCount++];
+    local->depth = current->scopeDepth;
+    if (ftype != TYPE_FUNCTION && ftype != TYPE_TOP_LEVEL) {
+        // In a method, it holds the receiver, "this".
+        local->name.start = "this";
+        local->name.length = 4;
+    } else {
+        // In a function, it holds the function, but cannot be referenced, so has
+        // no name.
+        local->name.start = "";
+        local->name.length = 0;
     }
 }
 
-
-// define the latest variable declared
-static void defineVariable(uint8_t global) {
+// Define a declared variable
+static void defineVariable(uint8_t arg, bool checkDecl) {
   if (current->scopeDepth == 0) {
-    emitBytes(OP_DEFINE_GLOBAL, global);
+    emitBytes(OP_DEFINE_GLOBAL, arg);
   } else {
-    // Mark the latest local as defined now (-1 is undefined, but declared)
-    current->locals[current->localCount - 1].depth = current->scopeDepth;
+    // Mark the given local as defined now (-1 is undefined, but declared)
+    if (current->locals[arg].depth != -1 && checkDecl) {
+        error("undeclared local variable [slot %d], scope depth: %d", arg, current->scopeDepth);
+    }
+    current->locals[arg].depth = current->scopeDepth;
   }
 }
 
@@ -312,20 +363,29 @@ static void emitClass(Node *n) {
     cComp.enclosing = currentClass;
     currentClass = &cComp;
 
-    pushScope(COMPILE_SCOPE_CLASS);
     if (cComp.hasSuperclass) {
-        declareVariable(superClassTok);
+        pushScope(COMPILE_SCOPE_CLASS);
+        // get the superclass
+        namedVariable(*superClassTok, VAR_GET);
         // Store the superclass in a local variable named "super".
-        /*variable(false);*/
         addLocal(syntheticToken("super"));
 
-        emitBytes(OP_SUBCLASS, nameConstant);
+        emitBytes(OP_SUBCLASS, nameConstant); // VM pops the superclass and gets the class name
     } else {
-        emitBytes(OP_CLASS, nameConstant);
+        emitBytes(OP_CLASS, nameConstant); // VM gets the class name
     }
-    popScope(COMPILE_SCOPE_CLASS);
+
+    emitChildren(n); // block node with methods
+
+    if (cComp.hasSuperclass) {
+        popScope(COMPILE_SCOPE_CLASS);
+    }
+
+    defineVariable(nameConstant, false);
+    currentClass = cComp.enclosing;
 }
 
+// emit function or method
 static void emitFunction(Node *n, FunctionType ftype) {
     Compiler fCompiler;
     initCompiler(&fCompiler, current->scopeDepth,
@@ -333,24 +393,26 @@ static void emitFunction(Node *n, FunctionType ftype) {
     pushScope(TYPE_FUNCTION); // this scope holds the local variable parameters
 
     ObjFunction *func = fCompiler.function;
-    char *nameStr = tokStr(&n->tok);
-    func->name = takeString(nameStr, strlen(nameStr));
 
     vec_nodep_t *params = (vec_nodep_t*)nodeGetData(n);
     ASSERT(params);
     Node *param = NULL; int i = 0;
     vec_foreach(params, param, i) {
         uint8_t localSlot = declareVariable(&param->tok);
-        defineVariable(localSlot);
+        defineVariable(localSlot, true);
         func->arity++;
     }
     emitChildren(n); // the blockNode
     popScope(TYPE_FUNCTION);
-    endCompiler();
+    func = endCompiler();
+
     // save the chunk as a constant in the parent (now current) chunk
-    emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(func)));
-    uint8_t nameArg = identifierConstant(&n->tok);
-    defineVariable(nameArg); // define function as global
+    uint8_t nameArg = makeConstant(OBJ_VAL(func));
+    emitBytes(OP_CONSTANT, nameArg);
+
+    if (currentClass == NULL) {
+        defineVariable(identifierConstant(&n->tok), false); // define function as global or local var
+    }
 }
 
 static void emitNode(Node *n) {
@@ -378,8 +440,7 @@ static void emitNode(Node *n) {
         } else if (n->tok.type == TOKEN_GREATER) {
             emitByte(OP_GREATER);
         } else {
-            fprintf(stderr, "binary expr token: %s\n", tokStr(&n->tok));
-            error("invalid binary expr node");
+            error("invalid binary expr node (token: %s)", tokStr(&n->tok));
         }
         return;
     }
@@ -400,7 +461,7 @@ static void emitNode(Node *n) {
         } else if (n->tok.type == TOKEN_BANG) {
             emitByte(OP_NOT);
         } else {
-            error("invalid unary expr node");
+            error("invalid unary expr node (token: %s)", tokStr(&n->tok));
         }
         return;
     }
@@ -417,7 +478,7 @@ static void emitNode(Node *n) {
         } else if (n->tok.type == TOKEN_FALSE) {
             emitByte(OP_FALSE);
         } else {
-            error("invalid literal expr node");
+            error("invalid literal expr node (token: %s)", tokStr(&n->tok));
         }
         return;
     }
@@ -532,11 +593,20 @@ static void emitNode(Node *n) {
         break;
     }
     case FUNCTION_STMT: {
-        emitFunction(n, TYPE_FUNCTION);
+        if (currentClass == NULL) {
+            emitFunction(n, TYPE_FUNCTION);
+        } else {
+            FunctionType ftype = TYPE_METHOD;
+            if (strcmp(tokStr(&n->tok), "init") == 0) {
+                ftype = TYPE_INITIALIZER;
+            }
+            emitFunction(n, ftype);
+        }
         break;
     }
     case CLASS_STMT: {
         emitClass(n);
+        break;
     }
     case RETURN_STMT: {
         if (n->children->length > 0) {
@@ -552,7 +622,7 @@ static void emitNode(Node *n) {
         // arbitrary, but we don't want the VM op stack to blow by pushing a whole
         // bunch of arguments
         if (nArgs > 8) {
-            error("too many arguments given to function");
+            error("too many arguments given to function (%d), maximum 8", nArgs);
             return;
         }
         emitChildren(n); // expression, arguments
@@ -561,9 +631,9 @@ static void emitNode(Node *n) {
         break;
     }
     default:
-        fprintf(stderr, "node kind %d not implemented (tok=%s)\n",
-            nodeKind(n), tokStr(&n->tok));
-        error("invalid (unknown) node");
+        error("invalid (unknown) node. kind (%d) not implemented (tok=%s)",
+              nodeKind(n), tokStr(&n->tok)
+        );
     }
 }
 

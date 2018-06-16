@@ -239,6 +239,8 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_DEFINE_GLOBAL:
         case OP_GET_GLOBAL:
         case OP_SET_GLOBAL:
+        case OP_CLASS:
+        case OP_SUBCLASS:
             return printConstantInstruction(opName(byte), chunk, i, funcs);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
@@ -265,8 +267,6 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_AND:
         case OP_OR:
         case OP_POP:
-        case OP_CLASS:
-        case OP_SUBCLASS:
         case OP_LEAVE:
             return printSimpleInstruction(opName(byte), i);
         default:
@@ -286,6 +286,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_DEFINE_GLOBAL:
         case OP_GET_GLOBAL:
         case OP_SET_GLOBAL:
+        case OP_CLASS:
+        case OP_SUBCLASS:
             return constantInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
