@@ -83,12 +83,14 @@ typedef struct ObjBoundMethod {
 ObjString *takeString(char *chars, int length);
 ObjString *copyString(const char *chars, int length);
 void pushCString(ObjString *string, char *chars, int lenToAdd);
+void freeString(ObjString *str);
 
 ObjFunction *newFunction();
 void freeFunction(ObjFunction *func);
 ObjClass *newClass(ObjString *name, ObjClass *superclass);
 ObjInstance *newInstance(ObjClass *klass);
 ObjNative *newNative(ObjString *name, NativeFn function);
+ObjBoundMethod *newBoundMethod(ObjInstance *receiver, ObjFunction *method);
 
 // Returns true if [value] is an object of type [type]. Do not call this
 // directly, instead use the [IS___] macro for the type in question.

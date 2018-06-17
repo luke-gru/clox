@@ -24,6 +24,7 @@ typedef struct {
   Table globals; // global variables
   Table strings; // interned strings
   ObjString *initString;
+  bool hadError;
 } VM; // singleton
 
 typedef enum {
@@ -37,5 +38,6 @@ InterpretResult interpret(Chunk *chunk);
 Value *getLastValue();
 void push(Value value);
 Value pop();
+void runtimeError(const char *format, ...);
 
 #endif

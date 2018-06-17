@@ -3,17 +3,26 @@
 #include "vm.h"
 #include "debug.h"
 #include "options.h"
+#include "runtime.h"
 
 VM vm;
+
+void defineNativeFunctions() {
+    ObjString *clockName = copyString("clock", 5);
+    ObjNative *clockFn = newNative(clockName, runtimeNativeClock);
+    tableSet(&vm.globals, clockName, OBJ_VAL(clockFn));
+}
 
 void initVM() {
     vm.stackTop = vm.stack;
     vm.objects = NULL;
     vm.lastValue = NULL;
+    vm.hadError = false;
     vm.frameCount = 0;
     initTable(&vm.globals);
     initTable(&vm.strings);
     vm.initString = copyString("init", 4);
+    defineNativeFunctions();
 }
 
 void freeVM() {
@@ -21,6 +30,8 @@ void freeVM() {
     freeTable(&vm.strings);
     // TODO: free object list and initString
     vm.objects = NULL;
+    freeString(vm.initString);
+    vm.hadError = false;
 }
 
 static bool isOpStackEmpty() {
@@ -106,7 +117,7 @@ static Chunk *currentChunk() {
 }
 
 // TODO: throw lox error using setjmp/jmpbuf to allow catches
-static void runtimeError(const char* format, ...) {
+void runtimeError(const char* format, ...) {
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
@@ -126,6 +137,7 @@ static void runtimeError(const char* format, ...) {
         }
     }
 
+    vm.hadError = true;
     resetStack();
 }
 
@@ -170,6 +182,10 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
     if (tableGet(&obj->fields, propName, &ret)) {
         return ret;
+    } else if (tableGet(&obj->klass->methods, propName, &ret)) {
+        ASSERT(IS_FUNCTION(ret));
+        ObjBoundMethod *bmethod = newBoundMethod(obj, AS_FUNCTION(ret));
+        return OBJ_VAL(bmethod);
     } else {
         return NIL_VAL;
     }
@@ -190,7 +206,7 @@ static void defineMethod(ObjString *name) {
 
 static bool callCallable(Value callable, int argCount) {
     ObjFunction *function = NULL;
-    Value newinstance;
+    Value instanceVal;
     if (IS_FUNCTION(callable)) {
         function = AS_FUNCTION(callable);
         if (argCount != function->arity) {
@@ -198,29 +214,41 @@ static bool callCallable(Value callable, int argCount) {
                     function->arity, argCount);
             return false;
         }
-
-        if (vm.frameCount == FRAMES_MAX) {
-            runtimeError("Stack overflow.");
-            return false;
-        }
     } else if (IS_CLASS(callable)) {
         ObjClass *klass = AS_CLASS(callable);
         ObjInstance *instance = newInstance(klass);
-        newinstance = OBJ_VAL(instance);
-        vm.stackTop[-argCount - 1] = newinstance;
+        instanceVal = OBJ_VAL(instance);
+        vm.stackTop[-argCount - 1] = instanceVal;
         // Call the initializer, if there is one.
         Value initializer;
         if (tableGet(&klass->methods, vm.initString, &initializer)) {
             ASSERT(IS_FUNCTION(initializer));
             function = AS_FUNCTION(initializer);
+            // TODO: check arity
         } else if (argCount != 0) {
           runtimeError("Expected 0 arguments but got %d.", argCount);
           return false;
         } else {
             return true; // new instance is on the top of the stack
         }
+    } else if (IS_BOUND_METHOD(callable)) {
+        ObjBoundMethod *bmethod = AS_BOUND_METHOD(callable);
+        function = bmethod->method;
+        instanceVal = bmethod->receiver;
+        vm.stackTop[-argCount - 1] = instanceVal;
+    } else if (IS_NATIVE_FUNCTION(callable)) {
+        ObjNative *native = AS_NATIVE_FUNCTION(callable);
+        Value val = native->function(argCount, vm.stackTop-argCount-1);
+        push(val);
+        return true;
+    } else {
+        ASSERT(0);
     }
 
+    if (vm.frameCount == FRAMES_MAX) {
+        runtimeError("Stack overflow.");
+        return false;
+    }
     // add frame
     CallFrame *frame = &vm.frames[vm.frameCount++];
     ASSERT(getFrame() == frame);
@@ -250,6 +278,9 @@ static InterpretResult run(void) {
     } while (0)
 
   for (;;) {
+      if (vm.hadError) {
+          return INTERPRET_RUNTIME_ERROR;
+      }
 
     if (CLOX_OPTION_T(traceVMExecution)) {
         printf("          ");

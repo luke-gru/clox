@@ -50,6 +50,7 @@ static uint32_t hashString(char *key, int length) {
 
 // use `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
+// XXX: Do not pass a static string here, it'll break when we try to free it.
 ObjString *takeString(char *chars, int length) {
     uint32_t hash = hashString(chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
@@ -71,6 +72,12 @@ ObjString *copyString(const char *chars, int length) {
     heapChars[length] = '\0';
 
     return allocateString(heapChars, length, hash);
+}
+
+void freeString(ObjString *string) {
+    ASSERT(string);
+    free(string->chars);
+    free(string);
 }
 
 // TODO: add a capacity field to string, so we don't always reallocate when
@@ -140,4 +147,15 @@ ObjNative *newNative(ObjString *name, NativeFn function) {
     native->function = function;
     native->name = name;
     return native;
+}
+
+ObjBoundMethod *newBoundMethod(ObjInstance *receiver, ObjFunction *method) {
+    ASSERT(receiver);
+    ASSERT(method);
+    ObjBoundMethod *bmethod = ALLOCATE_OBJ(
+        ObjBoundMethod, OBJ_BOUND_METHOD
+    );
+    bmethod->receiver = OBJ_VAL(receiver);
+    bmethod->method = method;
+    return bmethod;
 }

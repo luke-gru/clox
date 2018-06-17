@@ -180,7 +180,7 @@ cleanup:
 static int test_simple_class_initializer2(void) {
     char *src = "class Train {\n"
                 "  fun init(color) {\n"
-                "    return \"non-instance!\"\n"
+                "    return \"non-instance!\";\n"
                 "  }\n"
                 "}\n"
                 "var t = Train(\"Red\");\n"
@@ -189,6 +189,38 @@ static int test_simple_class_initializer2(void) {
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
     T_ASSERT(IS_INSTANCE(*val));
+cleanup:
+    return 0;
+}
+
+static int test_simple_method1(void) {
+    char *src = "class Train {\n"
+                "  fun choo() { print \"choo\"; return this; }\n"
+                "}\n"
+                "var t = Train();\n"
+                "t.choo().choo();\n";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_INSTANCE(*val));
+cleanup:
+    return 0;
+}
+
+static int test_native_clock(void) {
+    char *src = "print clock(); clock();";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_NUMBER(*val));
+cleanup:
+    return 0;
+}
+
+static int test_native_clock_bad_args(void) {
+    char *src = "print clock(\"uh oh\");";
+    InterpretResult ires = interp(src, false);
+    T_ASSERT_EQ(INTERPRET_RUNTIME_ERROR, ires);
 cleanup:
     return 0;
 }
@@ -210,5 +242,9 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_simple_function);
     RUN_TEST(test_simple_class);
     RUN_TEST(test_simple_class_initializer);
+    RUN_TEST(test_simple_class_initializer2);
+    RUN_TEST(test_simple_method1);
+    RUN_TEST(test_native_clock);
+    RUN_TEST(test_native_clock_bad_args);
     END_TESTS();
 }
