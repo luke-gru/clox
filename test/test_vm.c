@@ -225,7 +225,7 @@ cleanup:
     return 0;
 }
 
-static int test_throw_catch(void) {
+static int test_throw_catch1(void) {
     char *src = "class MyError { }\n"
                 "try {\n"
                 "print \"throwing\";\n"
@@ -234,6 +234,24 @@ static int test_throw_catch(void) {
                 "} catch (MyError e) {\n"
                 "  print e;\n"
                 "}";
+    InterpretResult ires = interp(src, true);
+cleanup:
+    return 0;
+}
+
+static int test_throw_catch2(void) {
+    char *src = "class MyError { }\n"
+                "class MyError2 { }\n"
+                "try {\n"
+                "  print \"throwing\";\n"
+                "  throw MyError();\n"
+                "  print \"shouldn't get here!!\";\n"
+                "} catch (MyError2 e) {\n"
+                "  print e;\n"
+                "} catch (MyError e) {\n"
+                "  print e;\n"
+                "}\n";
+
     InterpretResult ires = interp(src, true);
 cleanup:
     return 0;
@@ -260,6 +278,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_simple_method1);
     RUN_TEST(test_native_clock);
     RUN_TEST(test_native_clock_bad_args);
-    RUN_TEST(test_throw_catch);
+    RUN_TEST(test_throw_catch1);
+    RUN_TEST(test_throw_catch2);
     END_TESTS();
 }

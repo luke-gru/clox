@@ -39,7 +39,7 @@ static void errorAt(Token *token, const char *message) {
   if (parser.panicMode) return;
   parser.panicMode = true;
 
-  fprintf(stderr, "[line %d] Error", token->line);
+  fprintf(stderr, "[Parse Error], (line %d) Error", token->line);
 
   if (token->type == TOKEN_EOF) {
     fprintf(stderr, " at end");
@@ -329,13 +329,14 @@ static Node *statement() {
         return forNode;
     }
 
-    // try { } catch (Error e) { }
+    // try { } [catch (Error e) { }]+
     if (match(TOKEN_TRY)) {
         Token tryTok = parser.previous;
         node_type_t nType = {
             .type = NODE_STMT,
             .kind = TRY_STMT,
         };
+        TRACE_START("tryStatement");
         Node *try = createNode(nType, tryTok, NULL);
         consume(TOKEN_LEFT_BRACE, "Expected '{' after keyword 'try'");
         Token lbraceTok = parser.previous;
@@ -374,6 +375,7 @@ static Node *statement() {
             nodeAddChild(catchStmt, catchBlock);
             nodeAddChild(try, catchStmt);
         }
+        TRACE_END("tryStatement");
         TRACE_END("statement");
         return try;
     }
@@ -616,6 +618,7 @@ static Node *assignment() {
         Node *rval = assignment(); // assignment goes right to left in precedence (a = (b = c))
         Node *ret = NULL;
         if (nodeKind(lval) == VARIABLE_EXPR) {
+            TRACE_START("assignExpr");
             node_type_t assignT = {
                 .type = NODE_EXPR,
                 .kind = ASSIGN_EXPR,
@@ -623,7 +626,9 @@ static Node *assignment() {
             ret = createNode(assignT, eqTok, NULL);
             nodeAddChild(ret, lval);
             nodeAddChild(ret, rval);
+            TRACE_END("assignExpr");
         } else if (nodeKind(lval) == PROP_ACCESS_EXPR) {
+            TRACE_START("propAccessExpr");
             node_type_t propsetT = {
                 .type = NODE_EXPR,
                 .kind = PROP_SET_EXPR,
@@ -631,7 +636,9 @@ static Node *assignment() {
             ret = createNode(propsetT, lval->tok, NULL);
             nodeAddChild(ret, vec_first(lval->children));
             nodeAddChild(ret, rval);
+            TRACE_END("propAccessExpr");
         } else if (nodeKind(lval) == INDEX_GET_EXPR) {
+            TRACE_START("indexGetExpr");
             node_type_t indexsetT = {
                 .type = NODE_EXPR,
                 .kind = INDEX_SET_EXPR,
@@ -640,6 +647,7 @@ static Node *assignment() {
             nodeAddChild(ret, vec_first(lval->children));
             nodeAddChild(ret, lval->children->data[1]);
             nodeAddChild(ret, rval);
+            TRACE_END("indexGetExpr");
         } else if (nodeKind(lval) == SUPER_EXPR) {
             // TODO turn into propset
         } else {
@@ -657,6 +665,7 @@ static Node *logicOr() {
     Node *left = logicAnd();
     // precedence left to right ((this or that) or other)
     while (match(TOKEN_OR)) {
+        TRACE_START("logicalExpr");
         Token orTok = parser.previous;
         node_type_t orT = {
             .type = NODE_EXPR,
@@ -667,6 +676,7 @@ static Node *logicOr() {
         nodeAddChild(orNode, left);
         nodeAddChild(orNode, right);
         left = orNode;
+        TRACE_END("logicalExpr");
     }
     TRACE_END("logicOr");
     return left;
@@ -676,6 +686,7 @@ static Node *logicAnd() {
     TRACE_START("logicAnd");
     Node *left = equality();
     while (match(TOKEN_AND)) {
+        TRACE_START("logicalExpr");
         Token andTok = parser.previous;
         node_type_t andT = {
             .type = NODE_EXPR,
@@ -686,6 +697,7 @@ static Node *logicAnd() {
         nodeAddChild(andNode, left);
         nodeAddChild(andNode, right);
         left = andNode;
+        TRACE_END("logicalExpr");
     }
     TRACE_END("logicAnd");
     return left;
@@ -695,6 +707,7 @@ static Node *equality() {
     TRACE_START("equality");
     Node *left = comparison();
     while (match(TOKEN_EQUAL_EQUAL) || match(TOKEN_BANG_EQUAL)) {
+        TRACE_START("binaryExpr");
         Token eqTok = parser.previous;
         node_type_t eqT = {
             .type = NODE_EXPR,
@@ -705,6 +718,7 @@ static Node *equality() {
         Node *right = comparison();
         nodeAddChild(eqNode, right);
         left = eqNode;
+        TRACE_END("binaryExpr");
     }
     TRACE_END("equality");
     return left;
@@ -715,6 +729,7 @@ static Node *comparison() {
     Node *left = addition();
     while (match(TOKEN_LESS) || match(TOKEN_LESS_EQUAL) ||
            match(TOKEN_GREATER) || match(TOKEN_GREATER_EQUAL)) {
+        TRACE_START("binaryExpr");
         Token cmpTok = parser.previous;
         node_type_t cmpT = {
             .type = NODE_EXPR,
@@ -725,6 +740,7 @@ static Node *comparison() {
         nodeAddChild(cmpNode, left);
         nodeAddChild(cmpNode, right);
         left = cmpNode;
+        TRACE_END("binaryExpr");
     }
     TRACE_END("comparison");
     return left;
@@ -734,6 +750,7 @@ static Node *addition() {
     TRACE_START("addition");
     Node *left = multiplication();
     while (match(TOKEN_PLUS) || match(TOKEN_MINUS)) {
+        TRACE_START("binaryExpr");
         Token addTok = parser.previous;
         node_type_t addT = {
             .type = NODE_EXPR,
@@ -744,6 +761,7 @@ static Node *addition() {
         nodeAddChild(addNode, left);
         nodeAddChild(addNode, right);
         left = addNode;
+        TRACE_END("binaryExpr");
     }
     TRACE_END("addition");
     return left;
@@ -753,6 +771,7 @@ static Node *multiplication() {
     TRACE_START("multiplication");
     Node *left = unary();
     while (match(TOKEN_STAR) || match(TOKEN_SLASH)) {
+        TRACE_START("binaryExpr");
         Token mulTok = parser.previous;
         node_type_t mulT = {
             .type = NODE_EXPR,
@@ -763,6 +782,7 @@ static Node *multiplication() {
         nodeAddChild(mulNode, left);
         nodeAddChild(mulNode, right);
         left = mulNode;
+        TRACE_END("binaryExpr");
     }
     TRACE_END("multiplication");
     return left;
@@ -792,6 +812,7 @@ static Node *call() {
     Node *expr = primary();
     while (true) {
         if (match(TOKEN_LEFT_PAREN)) {
+            TRACE_START("callActual");
             node_type_t callT = {
                 .type = NODE_EXPR,
                 .kind = CALL_EXPR,
@@ -812,7 +833,9 @@ static Node *call() {
                 }
                 consume(TOKEN_RIGHT_PAREN, "Expected ')' to end call expression");
             }
+            TRACE_END("callActual");
         } else if (match(TOKEN_DOT)) {
+            TRACE_START("propAccessExpr");
             consume(TOKEN_IDENTIFIER, "Expected identifier (property name) after '.' in property access");
             Token propName = parser.previous;
             node_type_t propT = {
@@ -822,7 +845,9 @@ static Node *call() {
             Node *propAccess = createNode(propT, propName, NULL);
             nodeAddChild(propAccess, expr);
             expr = propAccess;
+            TRACE_END("propAccessExpr");
         } else if (match(TOKEN_LEFT_BRACKET)) {
+            TRACE_START("indexGetExpr");
             Token lBracket = parser.previous;
             Node *indexExpr = expression();
             node_type_t idxGetT = {
@@ -834,6 +859,7 @@ static Node *call() {
             nodeAddChild(idxGet, indexExpr);
             consume(TOKEN_RIGHT_BRACKET, "Expected ']' to end index expression");
             expr = idxGet;
+            TRACE_END("indexGetExpr");
         } else {
             break;
         }
@@ -845,6 +871,7 @@ static Node *call() {
 static Node *primary() {
     TRACE_START("primary");
     if (match(TOKEN_STRING)) {
+        TRACE_START("string");
         Token strTok = parser.previous;
         node_type_t nType = {
             .type = NODE_EXPR,
@@ -852,10 +879,12 @@ static Node *primary() {
             .litKind = STRING_TYPE,
         };
         Node *ret = createNode(nType, strTok, NULL);
+        TRACE_END("string");
         TRACE_END("primary");
         return ret;
     }
     if (match(TOKEN_NUMBER)) {
+        TRACE_START("number");
         Token numTok = parser.previous;
         node_type_t nType = {
             .type = NODE_EXPR,
@@ -863,10 +892,12 @@ static Node *primary() {
             .litKind = NUMBER_TYPE,
         };
         Node *ret = createNode(nType, numTok, NULL);
+        TRACE_END("number");
         TRACE_END("primary");
         return ret;
     }
     if (match(TOKEN_NIL)) {
+        TRACE_START("nil");
         Token nilTok = parser.previous;
         node_type_t nType = {
             .type = NODE_EXPR,
@@ -874,10 +905,12 @@ static Node *primary() {
             .litKind = NIL_TYPE,
         };
         Node *ret = createNode(nType, nilTok, NULL);
+        TRACE_END("nil");
         TRACE_END("primary");
         return ret;
     }
     if (match(TOKEN_TRUE) || match(TOKEN_FALSE)) {
+        TRACE_START("bool");
         Token boolTok = parser.previous;
         node_type_t nType = {
             .type = NODE_EXPR,
@@ -885,20 +918,24 @@ static Node *primary() {
             .litKind = BOOL_TYPE,
         };
         Node *ret = createNode(nType, boolTok, NULL);
+        TRACE_END("bool");
         TRACE_END("primary");
         return ret;
     }
     if (match(TOKEN_IDENTIFIER)) {
+        TRACE_START("varExpr");
         Token varName = parser.previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = VARIABLE_EXPR,
         };
         Node *ret = createNode(nType, varName, NULL);
+        TRACE_END("varExpr");
         TRACE_END("primary");
         return ret;
     }
     if (match(TOKEN_LEFT_BRACKET)) {
+        TRACE_START("arrayExpr");
         Token lbrackTok = parser.previous;
         node_type_t arrType = {
             .type = NODE_EXPR,
@@ -913,10 +950,12 @@ static Node *primary() {
                 nodeAddChild(arr, el);
             }
         }
+        TRACE_END("arrayExpr");
         TRACE_END("primary");
         return arr;
     }
     if (match(TOKEN_LEFT_PAREN)) {
+        TRACE_END("groupExpr");
         Token lparenTok = parser.previous;
         node_type_t gType = {
             .type = NODE_EXPR,
@@ -926,10 +965,12 @@ static Node *primary() {
         Node *groupExpr = expression();
         nodeAddChild(grouping, groupExpr);
         consume(TOKEN_RIGHT_PAREN, "Expected ')' to end group expression");
+        TRACE_END("groupExpr");
         TRACE_END("primary");
         return grouping;
     }
     if (match(TOKEN_SUPER)) {
+        TRACE_START("superExpr");
         Token superTok = parser.previous;
         consume(TOKEN_DOT, "Expected '.' after keyword 'super'");
         consume(TOKEN_IDENTIFIER, "Expected identifier after 'super.'");
@@ -945,22 +986,27 @@ static Node *primary() {
         Node *superExpr = createNode(sType, superTok, NULL);
         Node *propNode = createNode(pType, identTok, NULL);
         nodeAddChild(superExpr, propNode);
+        TRACE_END("superExpr");
         TRACE_END("primary");
         return superExpr;
     }
     if (match(TOKEN_THIS)) {
+        TRACE_START("thisExpr");
         Token thisTok = parser.previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = THIS_EXPR,
         };
         Node *thisExpr = createNode(nType, thisTok, NULL);
+        TRACE_END("thisExpr");
         TRACE_END("primary");
         return thisExpr;
     }
     // anonymous function
     if (match(TOKEN_FUN)) {
+        TRACE_START("anonFnDecl");
         Node *anonFn = funDeclaration(FUNCTION_TYPE_ANON);
+        TRACE_END("anonFnDecl");
         TRACE_END("primary");
         return anonFn;
     }
