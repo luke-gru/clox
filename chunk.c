@@ -7,6 +7,7 @@ void initChunk(Chunk *chunk) {
     chunk->capacity = 0;
     chunk->code = NULL; // parallel arrays
     chunk->lines = NULL; // parallel arrays
+    chunk->catchTbl = NULL;
     initValueArray(&chunk->constants);
 }
 
@@ -52,4 +53,34 @@ int addConstant(Chunk* chunk, Value value) {
  */
 Value getConstant(Chunk *chunk, int idx) {
     return chunk->constants.values[idx];
+}
+
+// returns index to newly added catch table
+int addCatchRow(
+    Chunk *chunk,
+    int ifrom,
+    int ito,
+    int itarget,
+    Value catchVal
+) {
+    CatchTable *tblRow = ALLOCATE(CatchTable, 1);
+    tblRow->ifrom = ifrom;
+    tblRow->ito = ito;
+    tblRow->itarget = itarget;
+    tblRow->catchVal = catchVal;
+    memset(&tblRow->lastThrownValue, 0, sizeof(Value));
+    tblRow->next = NULL;
+
+    CatchTable *row = chunk->catchTbl;
+    int idx = 0;
+    if (row == NULL) {
+        chunk->catchTbl = tblRow;
+        return idx;
+    }
+    while (row->next) {
+        row = row->next;
+        idx++;
+    }
+    row->next = tblRow;
+    return idx;
 }

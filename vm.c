@@ -86,6 +86,10 @@ static bool isTruthy(Value val) {
     }
 }
 
+static bool canCmpValues(Value lhs, Value rhs) {
+    return IS_NUMBER(lhs) && IS_NUMBER(rhs);
+}
+
 static int cmpValues(Value lhs, Value rhs) {
     if (lhs.type == VAL_NUMBER && rhs.type == VAL_NUMBER) {
         double numA = AS_NUMBER(lhs);
@@ -145,6 +149,10 @@ static bool isCallable(Value val) {
     return IS_FUNCTION(val) ||
         IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
         IS_BOUND_METHOD(val);
+}
+
+static bool isThrowable(Value val) {
+    return IS_INSTANCE(val) && !IS_STRING(val);
 }
 
 static const char *typeOfObj(Obj *obj) {
@@ -260,6 +268,38 @@ static bool callCallable(Value callable, int argCount) {
     return true;
 }
 
+static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowFound) {
+    CatchTable *tbl = currentChunk()->catchTbl;
+    CatchTable *row = tbl;
+    char *klassName = klass->name->chars;
+    int currentIpOff = (int)(getFrame()->ip - currentChunk()->code);
+    while (row) {
+        if (strcmp(AS_CSTRING(row->catchVal), klassName) == 0) {
+            if (currentIpOff > row->ifrom && currentIpOff <= row->ito) {
+                // found target catch
+                *ipOut = currentChunk()->code + row->itarget;
+                *rowFound = row;
+                currentIpOff = (int)(*ipOut - currentChunk()->code);
+                /*fprintf(stderr, "new ip offset: %d\n", currentIpOff);*/
+                return true;
+            }
+        }
+        row = row->next;
+    }
+    return false;
+}
+
+static CatchTable *getCatchTableRow(int idx) {
+    CatchTable *tbl = currentChunk()->catchTbl;
+    CatchTable *row = tbl;
+    int i = 0;
+    while (i < idx) {
+        row = row->next;
+    }
+    ASSERT(row);
+    return row;
+}
+
 
 /**
  * Run the VM's instructions.
@@ -274,6 +314,9 @@ static InterpretResult run(void) {
     do { \
       Value b = pop(); \
       Value a = pop(); \
+      if (!IS_NUMBER(a) || !IS_NUMBER(b)) {\
+        return INTERPRET_RUNTIME_ERROR;\
+      }\
       push(NUMBER_VAL(AS_NUMBER(a) op AS_NUMBER(b))); \
     } while (0)
 
@@ -301,18 +344,27 @@ static InterpretResult run(void) {
         push(constant);
         break;
       }
+      // TODO: allow addition of strings
       case OP_ADD:      BINARY_OP(+); break;
       case OP_SUBTRACT: BINARY_OP(-); break;
       case OP_MULTIPLY: BINARY_OP(*); break;
       case OP_DIVIDE:   BINARY_OP(/); break;
       case OP_NEGATE: {
         Value val = pop();
+        if (!IS_NUMBER(val)) {
+            runtimeError("Can only negate numbers");
+            return INTERPRET_RUNTIME_ERROR;
+        }
         push(NUMBER_VAL(-AS_NUMBER(val)));
         break;
       }
       case OP_LESS: {
         Value rhs = pop(); // rhs
         Value lhs = pop(); // lhs
+        if (!canCmpValues(lhs, rhs)) {
+            runtimeError("Can only compare numbers");
+            return INTERPRET_RUNTIME_ERROR;
+        }
         if (cmpValues(lhs, rhs) == -1) {
             push(trueValue());
         } else {
@@ -323,6 +375,10 @@ static InterpretResult run(void) {
       case OP_GREATER: {
         Value rhs = pop(); // rhs
         Value lhs = pop(); // lhs
+        if (!canCmpValues(lhs, rhs)) {
+            runtimeError("Can only compare numbers");
+            return INTERPRET_RUNTIME_ERROR;
+        }
         if (cmpValues(lhs, rhs) == 1) {
             push(trueValue());
         } else {
@@ -500,6 +556,35 @@ static InterpretResult run(void) {
           pop(); // leave rval on stack
           pop();
           push(rval);
+          break;
+      }
+      case OP_THROW: {
+          Value throwable = pop();
+          if (!isThrowable(throwable)) {
+              runtimeError("Tried to throw unthrowable value, must throw an instance");
+              return INTERPRET_RUNTIME_ERROR;
+          }
+          ObjInstance *obj = AS_INSTANCE(throwable);
+          ObjClass *klass = obj->klass;
+          uint8_t *ipNew = NULL;
+          CatchTable *catchRow = NULL;
+          if (findThrowJumpLoc(klass, &ipNew, &catchRow)) {
+              ASSERT(ipNew);
+              ASSERT(catchRow);
+              catchRow->lastThrownValue = throwable;
+              getFrame()->ip = ipNew;
+          } else { // TODO: pop frames to try
+              runtimeError("Uncaught exception: %s", klass->name->chars);
+              return INTERPRET_RUNTIME_ERROR;
+          }
+          break;
+      }
+      case OP_GET_THROWN: {
+          Value catchTblIdx = READ_CONSTANT();
+          ASSERT(IS_NUMBER(catchTblIdx));
+          double idx = AS_NUMBER(catchTblIdx);
+          CatchTable *tblRow = getCatchTableRow((int)idx);
+          push(tblRow->lastThrownValue);
           break;
       }
       // exit interpreter

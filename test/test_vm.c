@@ -225,6 +225,20 @@ cleanup:
     return 0;
 }
 
+static int test_throw_catch(void) {
+    char *src = "class MyError { }\n"
+                "try {\n"
+                "print \"throwing\";\n"
+                "throw MyError();\n"
+                "print \"shouldn't get here!!\";\n"
+                "} catch (MyError e) {\n"
+                "  print e;\n"
+                "}";
+    InterpretResult ires = interp(src, true);
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
@@ -246,5 +260,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_simple_method1);
     RUN_TEST(test_native_clock);
     RUN_TEST(test_native_clock_bad_args);
+    RUN_TEST(test_throw_catch);
     END_TESTS();
 }

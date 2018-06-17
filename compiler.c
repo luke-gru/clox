@@ -667,6 +667,44 @@ static void emitNode(Node *n) {
         emitByte((uint8_t)nArgs);
         break;
     }
+    case TRY_STMT: {
+        int ifrom = current->function->chunk.count;
+        emitNode(n->children->data[0]); // try block
+        int ito = current->function->chunk.count;
+        Node *catchStmt = NULL; int i = 0;
+        if (n->children->length > 1) {
+            vec_foreach(n->children, catchStmt, i) {
+                if (i == 0) continue; // already emitted
+                int itarget = current->function->chunk.count;
+                Token classTok = vec_first(catchStmt->children)->tok;
+                ObjString *className = copyString(tokStr(&classTok), strlen(tokStr(&classTok)));
+                double catchTblIdx = (double)addCatchRow(
+                    currentChunk(), ifrom, ito,
+                    itarget, OBJ_VAL(className)
+                );
+                emitNode(vec_first(catchStmt->children)); // catch block stmt
+                // given variable expression to bind to
+                pushScope(COMPILE_SCOPE_BLOCK);
+                if (catchStmt->children->length > 2) {
+                    emitByte(OP_POP); // pop the GET_GLOBAL of the error class, TODO: remove this so it isn't emitted
+                    uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblIdx));
+                    emitBytes(OP_GET_THROWN, getThrownArg);
+                    Token varTok = catchStmt->children->data[1]->tok;
+                    declareVariable(&varTok);
+                    namedVariable(varTok, VAR_SET);
+                }
+                emitNode(vec_last(catchStmt->children));
+                popScope(COMPILE_SCOPE_BLOCK);
+                // TODO: emit jump if multiple catches
+            }
+        }
+        break;
+    }
+    case THROW_STMT: {
+        emitChildren(n);
+        emitByte(OP_THROW);
+        break;
+    }
     default:
         error("invalid (unknown) node. kind (%d) not implemented (tok=%s)",
               nodeKind(n), tokStr(&n->tok)

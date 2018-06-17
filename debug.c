@@ -80,6 +80,10 @@ char *opName(OpCode code) {
         return "OP_CLASS";
     case OP_SUBCLASS:
         return "OP_SUBCLASS";
+    case OP_THROW:
+        return "OP_THROW";
+    case OP_GET_THROWN:
+        return "OP_GET_THROWN";
     case OP_LEAVE:
         return "OP_LEAVE";
     default:
@@ -102,29 +106,66 @@ static void addFunc(vec_funcp_t *funcs, ObjFunction *func) {
     }
 }
 
+void printCatchTbl(CatchTable *tbl) {
+    CatchTable *row = tbl;
+    printf("-- catch table --\n");
+    int idx = 0;
+    while (row) {
+        ASSERT(IS_STRING(row->catchVal));
+        char *valstr = AS_CSTRING(row->catchVal);
+        printf("%d) from: %d, to: %d, target: %d, value: %s\n",
+                idx, row->ifrom, row->ito, row->itarget, valstr);
+        row = row->next;
+        idx++;
+    }
+    printf("-- /catch table --\n");
+}
+
+void disassembleCatchTbl(ObjString *buf, CatchTable *tbl) {
+    CatchTable *row = tbl;
+    pushCString(buf, "-- catch table --\n", 18);
+    int idx = 0;
+    while (row) {
+        ASSERT(IS_STRING(row->catchVal));
+        char *valstr = AS_CSTRING(row->catchVal);
+        char *cbuf = calloc(strlen(valstr)+1+50, 1);
+        ASSERT_MEM(cbuf);
+        sprintf(cbuf, "%04d) from: %04d, to: %04d, target: %04d, value: %s\n",
+                idx, row->ifrom, row->ito, row->itarget, valstr);
+        pushCString(buf, cbuf, strlen(cbuf));
+        row = row->next;
+        idx++;
+    }
+    pushCString(buf, "-- /catch table --\n", 19);
+}
+
 /**
  * Print all operations and operands to the console.
  */
 void printDisassembledChunk(Chunk *chunk, const char *name) {
-  printf("== %s ==\n", name);
-  vec_funcp_t funcs;
-  vec_init(&funcs);
+    printf("== %s ==\n", name);
+    vec_funcp_t funcs;
+    vec_init(&funcs);
 
-  for (int i = 0; i < chunk->count;) {
-    i = printDisassembledInstruction(chunk, i, &funcs);
-    if (i <= 0) {
-        break;
+    if (chunk->catchTbl) {
+        printCatchTbl(chunk->catchTbl);
     }
-  }
-  ObjFunction *func = NULL; int i = 0;
-  vec_foreach(&funcs, func, i) {
-      char *name = func->name ? func->name->chars : "(anon)";
-      printf("-- Function %s --\n", name);
-      printDisassembledChunk(&func->chunk, name);
-      printf("----\n");
-  }
-  vec_deinit(&funcs);
-  printf("== /%s ==\n", name);
+
+    for (int i = 0; i < chunk->count;) {
+        i = printDisassembledInstruction(chunk, i, &funcs);
+        if (i <= 0) {
+            break;
+        }
+    }
+    ObjFunction *func = NULL; int i = 0;
+    vec_foreach(&funcs, func, i) {
+        char *name = func->name ? func->name->chars : "(anon)";
+        printf("-- Function %s --\n", name);
+        printDisassembledChunk(&func->chunk, name);
+        printf("----\n");
+    }
+    vec_deinit(&funcs);
+    printf("== /%s ==\n", name);
 }
 
 static int printConstantInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
@@ -213,7 +254,7 @@ static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
     char *cbuf = calloc(strlen(op)+1+12, 1);
     ASSERT_MEM(cbuf);
-    sprintf(cbuf, "%s\t[slot %3d]\n", op, slotIdx);
+    sprintf(cbuf, "%s\t[slot %03d]\n", op, slotIdx);
     pushCString(buf, cbuf, strlen(cbuf));
     return i+2;
 }
@@ -250,6 +291,7 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_METHOD:
         case OP_PROP_GET:
         case OP_PROP_SET:
+        case OP_GET_THROWN:
             return printConstantInstruction(opName(byte), chunk, i, funcs);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
@@ -277,6 +319,7 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_OR:
         case OP_POP:
         case OP_LEAVE:
+        case OP_THROW:
             return printSimpleInstruction(opName(byte), i);
         default:
             printf("Unknown opcode %d (%s)\n", byte, opName(byte));
@@ -300,6 +343,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_METHOD:
         case OP_PROP_GET:
         case OP_PROP_SET:
+        case OP_GET_THROWN:
             return constantInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
@@ -327,6 +371,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_OR:
         case OP_POP:
         case OP_LEAVE:
+        case OP_THROW:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             char *cBuf = calloc(19+1, 1);
@@ -344,6 +389,11 @@ ObjString *disassembleChunk(Chunk *chunk) {
 
     ObjString *buf = copyString("", 0);
 
+    // catch table
+    if (chunk->catchTbl) {
+        disassembleCatchTbl(buf, chunk->catchTbl);
+    }
+
     for (int i = 0; i < chunk->count;) {
         i = disassembledInstruction(buf, chunk, i, &funcs);
         if (i <= 0) {
@@ -351,6 +401,7 @@ ObjString *disassembleChunk(Chunk *chunk) {
         }
     }
 
+    // inner functions
     ObjFunction *func = NULL; int i = 0;
     vec_foreach(&funcs, func, i) {
         char *name = func->name ? func->name->chars : "(anon)";

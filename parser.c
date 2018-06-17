@@ -346,9 +346,11 @@ static Node *statement() {
             Token catchTok = parser.previous;
             consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'catch'");
             Node *catchExpr = expression();
-            Token *identToken = NULL;
+            Token identToken;
+            bool foundIdentToken = false;
             if (match(TOKEN_IDENTIFIER)) {
-                identToken = &parser.previous;
+                identToken = parser.previous;
+                foundIdentToken = true;
             }
             consume(TOKEN_RIGHT_PAREN, "Expected ')' to end 'catch' expression");
             consume(TOKEN_LEFT_BRACE, "Expected '{' after 'catch' expression");
@@ -361,12 +363,12 @@ static Node *statement() {
             };
             Node *catchStmt = createNode(catchT, catchTok, NULL);
             nodeAddChild(catchStmt, catchExpr); // class or string or instance, etc.
-            if (identToken != NULL) {
+            if (foundIdentToken) {
                 node_type_t varT = {
                     .type = NODE_EXPR,
                     .kind = VARIABLE_EXPR,
                 };
-                Node *varExpr = createNode(varT, *identToken, NULL);
+                Node *varExpr = createNode(varT, identToken, NULL);
                 nodeAddChild(catchStmt, varExpr); // variable to be bound to in block
             }
             nodeAddChild(catchStmt, catchBlock);

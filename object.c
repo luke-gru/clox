@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 #include "memory.h"
 #include "object.h"
 #include "value.h"

@@ -53,8 +53,8 @@ static int test_compile_local_variable(void) {
     char *cstring = string->chars;
     /*fprintf(stderr, "\n'%s'\n", cstring);*/
     char *expected = "0000\t" "OP_CONSTANT\t"  "0000\t"      "'1.00'\n"
-                     "0002\t" "OP_SET_LOCAL\t" "[slot   1]\n"
-                     "0004\t" "OP_GET_LOCAL\t" "[slot   1]\n"
+                     "0002\t" "OP_SET_LOCAL\t" "[slot 001]\n"
+                     "0004\t" "OP_GET_LOCAL\t" "[slot 001]\n"
                      "0006\t" "OP_POP\n"
                      "0007\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
@@ -87,6 +87,48 @@ cleanup:
     return 0;
 }
 
+static int test_compile_try_stmt_with_catch1(void) {
+    char *src = "class MyError { }\n"
+                "try {\n"
+                "print \"throwing\";\n"
+                "throw MyError();\n"
+                "print \"shouldn't get here!!\";\n"
+                "} catch (MyError e) {\n"
+                "  print e;\n"
+                "}";
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int result = compile_src(src, &chunk, &err);
+    T_ASSERT_EQ(0, result);
+    ObjString *string = disassembleChunk(&chunk);
+    char *cstring = string->chars;
+    /*fprintf(stderr, "\n'%s'\n", cstring);*/
+    char *expected = "-- catch table --\n"
+                     "0000) from: 0004, to: 0015, target: 0015, value: MyError\n"
+                     "-- /catch table --\n"
+                     "0000\t" "OP_CLASS\t"          "0000\t"    "'MyError'\n"
+                     "0002\t" "OP_DEFINE_GLOBAL\t"  "0000\t"    "'MyError'\n"
+                     "0004\t" "OP_CONSTANT\t"       "0001\t"    "'throwing'\n"
+                     "0006\t" "OP_PRINT\n"
+                     "0007\t" "OP_GET_GLOBAL\t"     "0002\t"    "'MyError'\n"
+                     "0009\t" "OP_CALL\t"           "(argc=0000)\n"
+                     "0011\t" "OP_THROW\n"
+                     "0012\t" "OP_CONSTANT\t"       "0003\t"    "'shouldn't get here!!'\n"
+                     "0014\t" "OP_PRINT\n"
+                     "0015\t" "OP_GET_GLOBAL\t"     "0004\t"    "'MyError'\n"
+                     "0017\t" "OP_POP\n"
+                     "0018\t" "OP_GET_THROWN\t"     "0005\t"    "'0.00'\n"
+                     "0020\t" "OP_SET_LOCAL\t"      "[slot 001]\n"
+                     "0022\t" "OP_GET_LOCAL\t"      "[slot 001]\n"
+                     "0024\t" "OP_PRINT\n"
+                     "0025\t" "OP_POP\n"
+                     "0026\t" "OP_LEAVE\n";
+    T_ASSERT_STREQ(expected, cstring);
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initVM();
@@ -95,5 +137,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_compile_global_variable);
     RUN_TEST(test_compile_local_variable);
     RUN_TEST(test_compile_classdecl);
+    RUN_TEST(test_compile_try_stmt_with_catch1);
     END_TESTS();
 }
