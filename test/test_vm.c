@@ -148,6 +148,51 @@ cleanup:
     return 0;
 }
 
+static int test_simple_class(void) {
+    char *src = "class Train {} var t = Train(); print t; t;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_INSTANCE(*val));
+    T_ASSERT_VALPRINTEQ("<instance Train>", *val);
+cleanup:
+    return 0;
+}
+
+static int test_simple_class_initializer(void) {
+    char *src = "class Train {\n"
+                "  fun init(color) {\n"
+                "    this.color = color;\n"
+                "  }\n"
+                "}\n"
+                "var t = Train(\"Red\");\n"
+                "print t.color;\n"
+                "t.color;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_STRING(*val));
+    T_ASSERT_VALPRINTEQ("Red", *val);
+cleanup:
+    return 0;
+}
+
+static int test_simple_class_initializer2(void) {
+    char *src = "class Train {\n"
+                "  fun init(color) {\n"
+                "    return \"non-instance!\"\n"
+                "  }\n"
+                "}\n"
+                "var t = Train(\"Red\");\n"
+                "t;\n";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_INSTANCE(*val));
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
@@ -163,5 +208,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_vardecls_in_block_not_global);
     RUN_TEST(test_simple_while_loop);
     RUN_TEST(test_simple_function);
+    RUN_TEST(test_simple_class);
+    RUN_TEST(test_simple_class_initializer);
     END_TESTS();
 }

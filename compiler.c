@@ -50,6 +50,7 @@ typedef struct Compiler {
   // scope (global scope)
   int scopeDepth;
   bool hadError;
+  bool emittedReturn;
 } Compiler;
 
 
@@ -71,6 +72,18 @@ Compiler *current = NULL;
 ClassCompiler *currentClass = NULL;
 Token *curTok = NULL;
 
+typedef enum {
+    VAR_GET,
+    VAR_SET,
+} VarOp;
+
+static Token syntheticToken(const char *lexeme) {
+    Token tok;
+    tok.start = lexeme;
+    tok.length = strlen(lexeme);
+    return tok;
+}
+
 static Chunk *currentChunk() {
   return &current->function->chunk;
 }
@@ -84,12 +97,32 @@ static void pushScope(CompileScopeType stype) {
     current->scopeDepth++;
 }
 
+static void namedVariable(Token name, VarOp getSet);
+
+// returns nil, this is in case OP_RETURN wasn't emitted from an explicit
+// `return` statement in a function.
+static void emitReturn(Compiler *compiler) {
+    ASSERT(compiler->type != TYPE_TOP_LEVEL);
+    if (compiler->emittedReturn) return;
+    if (compiler->type == TYPE_INITIALIZER) {
+        namedVariable(syntheticToken("this"), VAR_GET);
+        emitByte(OP_RETURN);
+    } else {
+        emitByte(OP_NIL);
+        emitByte(OP_RETURN);
+    }
+    compiler->emittedReturn = true;
+}
+
 static void popScope(CompileScopeType stype) {
     current->scopeDepth--;
     while (current->localCount > 0 &&
             current->locals[current->localCount - 1].depth > current->scopeDepth) {
         emitByte(OP_POP);
         current->localCount--;
+    }
+    if (stype == COMPILE_SCOPE_FUNCTION) {
+        emitReturn(current);
     }
 }
 
@@ -102,13 +135,6 @@ static void emitNil() {
     emitByte(OP_NIL);
 }
 
-// returns nil, this is in case OP_RETURN wasn't emitted from an explicit
-// `return` statement in a function.
-static void emitReturn() {
-    emitByte(OP_NIL);
-    emitByte(OP_RETURN);
-}
-
 // exit from script
 static void emitLeave() {
     emitByte(OP_LEAVE);
@@ -117,8 +143,6 @@ static void emitLeave() {
 static ObjFunction *endCompiler() {
     if (current->type == TYPE_TOP_LEVEL) {
         emitLeave();
-    } else {
-        emitReturn(); // just in case return wasn't emitted already
     }
     ObjFunction *func = current->function;
     current = current->enclosing;
@@ -249,10 +273,6 @@ static int declareVariable(Token *name) {
     }
 }
 
-typedef enum {
-    VAR_GET,
-    VAR_SET,
-} VarOp;
 
 static void namedVariable(Token name, VarOp getSet) {
   uint8_t getOp, setOp;
@@ -275,18 +295,20 @@ static void namedVariable(Token name, VarOp getSet) {
 // Initializes a new compiler for a function, and sets it as the `current`
 // function compiler.
 static void initCompiler(
-    Compiler *compiler,
+    Compiler *compiler, // new compiler
     int scopeDepth,
     FunctionType ftype,
     Token *fTok, /* if NULL, ftype must be TYPE_TOP_LEVEL */
     Chunk *chunk /* if NULL, creates new chunk */
 ) {
+    memset(compiler, 0, sizeof(*compiler));
     compiler->enclosing = current;
     compiler->localCount = 0;
     compiler->scopeDepth = scopeDepth;
     compiler->function = newFunction(chunk);
     compiler->type = ftype;
     compiler->hadError = false;
+    compiler->emittedReturn = false;
 
     current = compiler;
 
@@ -340,19 +362,13 @@ static void defineVariable(uint8_t arg, bool checkDecl) {
     emitBytes(OP_DEFINE_GLOBAL, arg);
   } else {
     // Mark the given local as defined now (-1 is undefined, but declared)
-    if (current->locals[arg].depth != -1 && checkDecl) {
-        error("undeclared local variable [slot %d], scope depth: %d", arg, current->scopeDepth);
-    }
+    /*if (current->locals[arg].depth != -1 && checkDecl) {*/
+        /*error("undeclared local variable [slot %d], scope depth: %d", arg, current->scopeDepth);*/
+    /*}*/
     current->locals[arg].depth = current->scopeDepth;
   }
 }
 
-static Token syntheticToken(const char *lexeme) {
-    Token tok;
-    tok.start = lexeme;
-    tok.length = strlen(lexeme);
-    return tok;
-}
 
 static void emitClass(Node *n) {
     uint8_t nameConstant = identifierConstant(&n->tok);
@@ -390,7 +406,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
     Compiler fCompiler;
     initCompiler(&fCompiler, current->scopeDepth,
         ftype, &n->tok, NULL);
-    pushScope(TYPE_FUNCTION); // this scope holds the local variable parameters
+    pushScope(COMPILE_SCOPE_FUNCTION); // this scope holds the local variable parameters
 
     ObjFunction *func = fCompiler.function;
 
@@ -403,7 +419,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
         func->arity++;
     }
     emitChildren(n); // the blockNode
-    popScope(TYPE_FUNCTION);
+    popScope(COMPILE_SCOPE_FUNCTION);
     func = endCompiler();
 
     // save the chunk as a constant in the parent (now current) chunk
@@ -412,6 +428,8 @@ static void emitFunction(Node *n, FunctionType ftype) {
 
     if (currentClass == NULL) {
         defineVariable(identifierConstant(&n->tok), false); // define function as global or local var
+    } else {
+        emitBytes(OP_METHOD, identifierConstant(&n->tok));
     }
 }
 
@@ -608,13 +626,32 @@ static void emitNode(Node *n) {
         emitClass(n);
         break;
     }
+    case PROP_ACCESS_EXPR: {
+        emitChildren(n);
+        emitBytes(OP_PROP_GET, identifierConstant(&n->tok));
+        break;
+    }
+    case PROP_SET_EXPR: {
+        emitChildren(n);
+        emitBytes(OP_PROP_SET, identifierConstant(&n->tok));
+        break;
+    }
     case RETURN_STMT: {
         if (n->children->length > 0) {
-            emitChildren(n);
+            if (current->type == TYPE_INITIALIZER) {
+                namedVariable(syntheticToken("this"), VAR_GET);
+            } else {
+                emitChildren(n);
+            }
             emitByte(OP_RETURN);
+            current->emittedReturn = true;
         } else {
-            emitReturn();
+            emitReturn(current);
         }
+        break;
+    }
+    case THIS_EXPR: {
+        namedVariable(syntheticToken("this"), VAR_GET);
         break;
     }
     case CALL_EXPR: {

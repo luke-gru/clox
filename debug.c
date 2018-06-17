@@ -46,12 +46,18 @@ char *opName(OpCode code) {
         return "OP_SET_GLOBAL";
     case OP_DEFINE_GLOBAL:
         return "OP_DEFINE_GLOBAL";
+    case OP_PROP_GET:
+        return "OP_PROP_GET";
+    case OP_PROP_SET:
+        return "OP_PROP_SET";
     case OP_GET_UPVALUE:
         return "OP_GET_UPVALUE";
     case OP_SET_UPVALUE:
         return "OP_SET_UPVALUE";
     case OP_CALL:
         return "OP_CALL";
+    case OP_METHOD:
+        return "OP_METHOD";
     case OP_PRINT:
         return "OP_PRINT";
     case OP_TRUE:
@@ -241,6 +247,9 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_SET_GLOBAL:
         case OP_CLASS:
         case OP_SUBCLASS:
+        case OP_METHOD:
+        case OP_PROP_GET:
+        case OP_PROP_SET:
             return printConstantInstruction(opName(byte), chunk, i, funcs);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
@@ -288,6 +297,9 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_SET_GLOBAL:
         case OP_CLASS:
         case OP_SUBCLASS:
+        case OP_METHOD:
+        case OP_PROP_GET:
+        case OP_PROP_SET:
             return constantInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:

@@ -74,13 +74,12 @@ static int test_compile_classdecl(void) {
     /*fprintf(stderr, "\n'%s'\n", cstring);*/
     char *expected = "0000\t" "OP_CLASS\t"          "0000\t"    "'Train'\n"
                      "0002\t" "OP_CONSTANT\t"       "0001\t"    "'<fun Train.choo>'\n"
-                     "0004\t" "OP_DEFINE_GLOBAL\t"  "0000\t"    "'Train'\n"
-                     "0006\t" "OP_LEAVE\n"
+                     "0004\t" "OP_METHOD\t"         "0002\t"    "'choo'\n"
+                     "0006\t" "OP_DEFINE_GLOBAL\t"  "0000\t"    "'Train'\n"
+                     "0008\t" "OP_LEAVE\n"
                      "-- Function Train.choo --\n"
                      "0000\t" "OP_CONSTANT\t"       "0000\t"    "'1.00'\n"
                      "0002\t" "OP_RETURN\n"
-                     "0003\t" "OP_NIL\n"
-                     "0004\t" "OP_RETURN\n"
                      "----\n";
 
     T_ASSERT_STREQ(expected, cstring);

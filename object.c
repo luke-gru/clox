@@ -3,6 +3,7 @@
 #include "object.h"
 #include "value.h"
 #include "vm.h"
+#include "debug.h"
 
 #define ALLOCATE_OBJ(type, objectType) \
     (type*)allocateObject(sizeof(type), objectType)
@@ -89,7 +90,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
 }
 
 ObjFunction *newFunction(Chunk *chunk) {
-    ObjFunction* function = ALLOCATE_OBJ(
+    ObjFunction *function = ALLOCATE_OBJ(
         ObjFunction, OBJ_FUNCTION
     );
 
@@ -108,4 +109,35 @@ void freeFunction(ObjFunction *func) {
     // TODO: free objstring if not null
     freeChunk(&func->chunk);
     free(func);
+}
+
+ObjClass *newClass(ObjString *name, ObjClass *superclass) {
+    ASSERT(name);
+    ObjClass *klass = ALLOCATE_OBJ(
+        ObjClass, OBJ_CLASS
+    );
+    initTable(&klass->methods);
+    klass->name = name;
+    klass->superclass = superclass;
+    return klass;
+}
+
+ObjInstance *newInstance(ObjClass *klass) {
+    ASSERT(klass);
+    ObjInstance *obj = ALLOCATE_OBJ(
+        ObjInstance, OBJ_INSTANCE
+    );
+    obj->klass = klass;
+    initTable(&obj->fields);
+    return obj;
+}
+
+ObjNative *newNative(ObjString *name, NativeFn function) {
+    ASSERT(function);
+    ObjNative *native = ALLOCATE_OBJ(
+        ObjNative, OBJ_NATIVE_FUNCTION
+    );
+    native->function = function;
+    native->name = name;
+    return native;
 }

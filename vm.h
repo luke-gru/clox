@@ -23,6 +23,7 @@ typedef struct {
   Value *lastValue;
   Table globals; // global variables
   Table strings; // interned strings
+  ObjString *initString;
 } VM; // singleton
 
 typedef enum {

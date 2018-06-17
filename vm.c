@@ -13,12 +13,13 @@ void initVM() {
     vm.frameCount = 0;
     initTable(&vm.globals);
     initTable(&vm.strings);
+    vm.initString = copyString("init", 4);
 }
 
 void freeVM() {
     freeTable(&vm.globals);
     freeTable(&vm.strings);
-    // TODO: free object list
+    // TODO: free object list and initString
     vm.objects = NULL;
 }
 
@@ -96,12 +97,11 @@ static void resetStack() {
 }
 
 static inline CallFrame *getFrame() {
+    ASSERT(vm.frameCount >= 1);
     return &vm.frames[vm.frameCount-1];
 }
 
 static Chunk *currentChunk() {
-    ASSERT(getFrame());
-    ASSERT(getFrame()->function);
     return &getFrame()->function->chunk;
 }
 
@@ -130,7 +130,9 @@ static void runtimeError(const char* format, ...) {
 }
 
 static bool isCallable(Value val) {
-    return IS_FUNCTION(val);
+    return IS_FUNCTION(val) ||
+        IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
+        IS_BOUND_METHOD(val);
 }
 
 static const char *typeOfObj(Obj *obj) {
@@ -138,7 +140,14 @@ static const char *typeOfObj(Obj *obj) {
     case OBJ_STRING:
         return "string";
     case OBJ_FUNCTION:
+    case OBJ_NATIVE_FUNCTION:
         return "function";
+    case OBJ_CLASS:
+        return "class";
+    case OBJ_BOUND_METHOD:
+        return "method";
+    case OBJ_INSTANCE:
+        return "instance";
     default:
         ASSERT(0);
         return "unknown";
@@ -157,20 +166,64 @@ static const char *typeOf(Value val) {
     return "unknown!";
 }
 
-static bool callCallable(ObjFunction *function, int argCount) {
-    if (argCount != function->arity) {
-        runtimeError("Expected %d arguments but got %d.",
-            function->arity, argCount);
-        return false;
+static Value propertyGet(ObjInstance *obj, ObjString *propName) {
+    Value ret;
+    if (tableGet(&obj->fields, propName, &ret)) {
+        return ret;
+    } else {
+        return NIL_VAL;
     }
+}
 
-    if (vm.frameCount == FRAMES_MAX) {
-        runtimeError("Stack overflow.");
-        return false;
+static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
+    tableSet(&obj->fields, propName, rval);
+}
+
+static void defineMethod(ObjString *name) {
+    Value method = peek(0); // function
+    ASSERT(IS_FUNCTION(method));
+    ASSERT(IS_CLASS(peek(1)));
+    ObjClass *klass = AS_CLASS(peek(1));
+    tableSet(&klass->methods, name, method);
+    pop();
+}
+
+static bool callCallable(Value callable, int argCount) {
+    ObjFunction *function = NULL;
+    Value newinstance;
+    if (IS_FUNCTION(callable)) {
+        function = AS_FUNCTION(callable);
+        if (argCount != function->arity) {
+            runtimeError("Expected %d arguments but got %d.",
+                    function->arity, argCount);
+            return false;
+        }
+
+        if (vm.frameCount == FRAMES_MAX) {
+            runtimeError("Stack overflow.");
+            return false;
+        }
+    } else if (IS_CLASS(callable)) {
+        ObjClass *klass = AS_CLASS(callable);
+        ObjInstance *instance = newInstance(klass);
+        newinstance = OBJ_VAL(instance);
+        vm.stackTop[-argCount - 1] = newinstance;
+        // Call the initializer, if there is one.
+        Value initializer;
+        if (tableGet(&klass->methods, vm.initString, &initializer)) {
+            ASSERT(IS_FUNCTION(initializer));
+            function = AS_FUNCTION(initializer);
+        } else if (argCount != 0) {
+          runtimeError("Expected 0 arguments but got %d.", argCount);
+          return false;
+        } else {
+            return true; // new instance is on the top of the stack
+        }
     }
 
     // add frame
     CallFrame *frame = &vm.frames[vm.frameCount++];
+    ASSERT(getFrame() == frame);
     frame->function = function;
     frame->ip = function->chunk.code;
 
@@ -348,26 +401,82 @@ static InterpretResult run(void) {
               runtimeError("Tried to call uncallable object (type=%s)", typeOf(callableVal));
               return INTERPRET_RUNTIME_ERROR;
           }
-          ObjFunction *func = AS_FUNCTION(callableVal);
-          ASSERT(func);
-          /*fprintf(stderr, "Calling function\n");*/
-          callCallable(func, numArgs);
+          callCallable(callableVal, numArgs);
           break;
       }
       // return from function/method
       case OP_RETURN: {
-        Value result = pop();
-        vm.stackTop = getFrame()->slots;
-        vm.frameCount--;
-        push(result);
-        break;
+          /*fprintf(stderr, "opcall in return\n");*/
+          Value result = pop();
+          vm.stackTop = getFrame()->slots;
+          ASSERT(vm.frameCount > 0);
+          vm.frameCount--;
+          push(result);
+          break;
+      }
+      case OP_CLASS: {
+          Value className = READ_CONSTANT();
+          ObjClass *klass = newClass(AS_STRING(className), NULL);
+          push(OBJ_VAL(klass));
+          break;
+      }
+      case OP_SUBCLASS: {
+          Value className = READ_CONSTANT();
+          Value superclass =  pop();
+          if (!IS_CLASS(superclass)) {
+              runtimeError(
+                  "Class %s tried to inherit from non-class",
+                  AS_CSTRING(className)
+              );
+              return INTERPRET_RUNTIME_ERROR;
+          }
+          ObjClass *klass = newClass(
+              AS_STRING(className),
+              AS_CLASS(superclass)
+          );
+          push(OBJ_VAL(klass));
+          break;
+      }
+      case OP_METHOD: {
+          Value methodName = READ_CONSTANT();
+          ObjString *methStr = AS_STRING(methodName);
+          defineMethod(methStr);
+          break;
+      }
+      case OP_PROP_GET: {
+          Value propName = READ_CONSTANT();
+          ObjString *propStr = AS_STRING(propName);
+          ASSERT(propStr && propStr->chars);
+          Value instance = peek(0);
+          if (!IS_INSTANCE(instance)) {
+              runtimeError("Tried to access property '%s' on non-instance (type: %s)", propStr->chars, typeOf(instance));
+              return INTERPRET_RUNTIME_ERROR;
+          }
+          pop();
+          push(propertyGet(AS_INSTANCE(instance), propStr));
+          break;
+      }
+      case OP_PROP_SET: {
+          Value propName = READ_CONSTANT();
+          ObjString *propStr = AS_STRING(propName);
+          Value rval = peek(0);
+          Value instance = peek(1);
+          if (!IS_INSTANCE(instance)) {
+              runtimeError("Tried to set property '%s' on non-instance", propStr->chars);
+              return INTERPRET_RUNTIME_ERROR;
+          }
+          propertySet(AS_INSTANCE(instance), propStr, rval);
+          pop(); // leave rval on stack
+          pop();
+          push(rval);
+          break;
       }
       // exit interpreter
       case OP_LEAVE:
-        return INTERPRET_OK;
+          return INTERPRET_OK;
       default:
-        runtimeError("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
-        return INTERPRET_RUNTIME_ERROR;
+          runtimeError("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
+          return INTERPRET_RUNTIME_ERROR;
     }
   }
 

@@ -61,9 +61,30 @@ void printValue(Value value) {
                 printf("<fun %s>", func->name->chars);
             }
             return;
+        } else if (OBJ_TYPE(value) == OBJ_INSTANCE) {
+            ObjClass *klass = AS_INSTANCE(value)->klass;
+            char *klassName = klass->name->chars;
+            printf("<instance %s>", klassName);
+            return;
+        } else if (OBJ_TYPE(value) == OBJ_CLASS) {
+            ObjClass *klass = AS_CLASS(value);
+            char *klassName = klass->name->chars;
+            printf("<class %s>", klassName);
+            return;
+        } else if (OBJ_TYPE(value) == OBJ_NATIVE_FUNCTION) {
+            ObjNative *native = AS_NATIVE_FUNCTION(value);
+            ObjString *name = native->name;
+            printf("<fn %s (native)>", name->chars);
+            return;
+        } else if (OBJ_TYPE(value) == OBJ_BOUND_METHOD) {
+            ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
+            ObjString *name = bmethod->method->name;
+            printf("<method %s>", name->chars);
+            return;
         }
     }
-    printf("Unknown value type: %d. Cannot print!", value.type);
+    fprintf(stderr, "Unknown value type: %d. Cannot print!\n", value.type);
+    ASSERT(0);
 }
 
 ObjString *valueToString(Value value) {
@@ -98,6 +119,36 @@ ObjString *valueToString(Value value) {
                 sprintf(buf, "<fun %s>", func->name->chars);
                 return takeString(buf, strlen(buf));
             }
+        } else if (OBJ_TYPE(value) == OBJ_INSTANCE) {
+            ObjClass *klass = AS_INSTANCE(value)->klass;
+            char *klassName = klass->name->chars;
+            char *cbuf = calloc(strlen(klassName)+1+11, 1);
+            ASSERT_MEM(cbuf);
+            sprintf(cbuf, "<instance %s>", klassName);
+            return takeString(cbuf, strlen(cbuf));
+        } else if (OBJ_TYPE(value) == OBJ_CLASS) {
+            ObjClass *klass = AS_CLASS(value);
+            char *klassName = klass->name->chars;
+            char *cbuf = calloc(strlen(klassName)+1+8, 1);
+            ASSERT_MEM(cbuf);
+            sprintf(cbuf, "<class %s>", klassName);
+            return takeString(cbuf, strlen(cbuf));
+        } else if (OBJ_TYPE(value) == OBJ_NATIVE_FUNCTION) {
+            ObjNative *native = AS_NATIVE_FUNCTION(value);
+            ObjString *name = native->name;
+            char *nameStr = name->chars;
+            char *cbuf = calloc(strlen(nameStr)+1+14, 1);
+            ASSERT_MEM(cbuf);
+            sprintf(cbuf, "<fn %s (native)>", nameStr);
+            return takeString(cbuf, strlen(cbuf));
+        } else if (OBJ_TYPE(value) == OBJ_BOUND_METHOD) {
+            ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
+            ObjString *name = bmethod->method->name;
+            char *nameStr = name->chars;
+            char *cbuf = calloc(strlen(nameStr)+1+9, 1);
+            ASSERT_MEM(cbuf);
+            sprintf(cbuf, "<method %s>", nameStr);
+            return takeString(cbuf, strlen(cbuf));
         }
     }
     ASSERT(0);

@@ -179,8 +179,16 @@ static inline bool t_assert_streq(char *str1, char *str2) {
     }
 }
 
+static inline bool t_assert_valprinteq(char *expected, Value val) {
+    ASSERT(expected);
+    ObjString *valOut = valueToString(val);
+    ASSERT(valOut);
+    return t_assert_streq(expected, valOut->chars);
+}
+
 #define T_ASSERT(expr) ((expr) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 #define T_ASSERT_EQ(expr1,expr2) ((expr1==expr2) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 #define T_ASSERT_STREQ(str1,str2) (t_assert_streq(str1, str2) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
+#define T_ASSERT_VALPRINTEQ(str,value) (t_assert_valprinteq(str, value) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 
 #endif
