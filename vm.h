@@ -11,6 +11,7 @@
 typedef struct {
   ObjFunction *function;
   uint8_t *ip;
+  int start; // starting instruction offset in parent (for throw/catch)
   Value *slots;
 } CallFrame; // represents a local scope (block, function, etc)
 

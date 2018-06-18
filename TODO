@@ -5,5 +5,5 @@
 * bytecode optimization pass []
 * simple JIT, maybe? []
 
-* AND/OR short-circuit eval [IN PROGRESS]
-* catch across function boundaries
+* AND/OR short-circuit eval [DONE]
+* catch across function boundaries [DONE]

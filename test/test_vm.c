@@ -31,6 +31,7 @@ static int test_addition(void) {
     T_ASSERT(IS_NUMBER(*val));
     T_ASSERT_EQ(2.0, AS_NUMBER(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -42,6 +43,7 @@ static int test_subtraction(void) {
     T_ASSERT(IS_NUMBER(*val));
     T_ASSERT_EQ(-2.0, AS_NUMBER(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -53,6 +55,7 @@ static int test_negation(void) {
     T_ASSERT(IS_NUMBER(*val));
     T_ASSERT_EQ(-2.0, AS_NUMBER(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -60,6 +63,7 @@ static int test_print_number(void) {
     char *src = "print 2.0;";
     interp(src, true);
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -67,6 +71,7 @@ static int test_print_string(void) {
     char *src = "print \"howdy\";";
     interp(src, true);
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -79,6 +84,7 @@ static int test_global_vars1(void) {
     T_ASSERT(IS_STRING(*val));
     T_ASSERT_STREQ("howdy", AS_CSTRING(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -90,6 +96,7 @@ static int test_simple_and(void) {
     T_ASSERT(IS_BOOL(*val));
     T_ASSERT_EQ(false, AS_BOOL(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -101,6 +108,7 @@ static int test_simple_or(void) {
     T_ASSERT(IS_BOOL(*val));
     T_ASSERT_EQ(true, AS_BOOL(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -112,6 +120,7 @@ static int test_simple_if(void) {
     T_ASSERT(IS_STRING(*val));
     T_ASSERT_STREQ("jumped", AS_CSTRING(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -123,6 +132,7 @@ static int test_vardecls_in_block_not_global(void) {
     T_ASSERT(IS_STRING(*val));
     T_ASSERT_STREQ("in block", AS_CSTRING(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -134,6 +144,7 @@ static int test_simple_while_loop(void) {
     T_ASSERT(IS_NUMBER(*val));
     T_ASSERT_EQ(10.0, AS_NUMBER(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -145,6 +156,7 @@ static int test_simple_function(void) {
     T_ASSERT(IS_STRING(*val));
     T_ASSERT_STREQ("FUN", AS_CSTRING(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -156,6 +168,7 @@ static int test_simple_class(void) {
     T_ASSERT(IS_INSTANCE(*val));
     T_ASSERT_VALPRINTEQ("<instance Train>", *val);
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -174,6 +187,7 @@ static int test_simple_class_initializer(void) {
     T_ASSERT(IS_STRING(*val));
     T_ASSERT_VALPRINTEQ("Red", *val);
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -190,6 +204,7 @@ static int test_simple_class_initializer2(void) {
     T_ASSERT(val != NULL);
     T_ASSERT(IS_INSTANCE(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -204,6 +219,7 @@ static int test_simple_method1(void) {
     T_ASSERT(val != NULL);
     T_ASSERT(IS_INSTANCE(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -214,6 +230,7 @@ static int test_native_clock(void) {
     T_ASSERT(val != NULL);
     T_ASSERT(IS_NUMBER(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -222,6 +239,7 @@ static int test_native_clock_bad_args(void) {
     InterpretResult ires = interp(src, false);
     T_ASSERT_EQ(INTERPRET_RUNTIME_ERROR, ires);
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -239,6 +257,7 @@ static int test_throw_catch1(void) {
     Value *val = getLastValue();
     T_ASSERT_VALPRINTEQ("<instance MyError>", *val);
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -261,6 +280,66 @@ static int test_throw_catch2(void) {
     Value *val = getLastValue();
     T_ASSERT_VALPRINTEQ("<instance MyError>", *val);
 cleanup:
+    freeVM();
+    return 0;
+}
+
+static int test_throw_catch_across_function_boundaries(void) {
+    char *src = "class MyError { }\n"
+                "fun doThrow() {\n"
+                "  throw MyError();\n"
+                "}\n"
+                "try {\n"
+                "  doThrow();"
+                "} catch (MyError e) {\n"
+                "  print e;\n"
+                "  e;\n"
+                "}\n";
+
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT_VALPRINTEQ("<instance MyError>", *val);
+cleanup:
+    freeVM();
+    return 0;
+}
+
+static int test_throw_catch_across_function_boundaries2(void) {
+    char *src = "class MyError { }\n"
+                "fun doThrow() {\n"
+                "  throw MyError();\n"
+                "}\n"
+                "doThrow();"
+                "try {\n"
+                "} catch (MyError e) {\n"
+                "  print e;\n"
+                "  e;\n"
+                "}\n";
+
+    InterpretResult ires = interp(src, false);
+    T_ASSERT_EQ(INTERPRET_RUNTIME_ERROR, ires);
+cleanup:
+    freeVM();
+    return 0;
+}
+
+static int test_throw_catch_across_function_boundaries3(void) {
+    char *src = "class MyError { }\n"
+                "fun doThrow() {\n"
+                "  throw MyError();\n"
+                "}\n"
+                "try {\n"
+                "print nil;\n"
+                "} catch (MyError e) {\n"
+                "  print e;\n"
+                "  e;\n"
+                "}\n"
+                "doThrow();";
+
+    InterpretResult ires = interp(src, false);
+    T_ASSERT_EQ(INTERPRET_RUNTIME_ERROR, ires);
+cleanup:
+    freeVM();
     return 0;
 }
 
@@ -274,6 +353,7 @@ static int test_get_set_arbitrary_property() {
     T_ASSERT(IS_STRING(*val));
     T_ASSERT_STREQ("Gracie", AS_CSTRING(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -299,6 +379,7 @@ static int test_short_circuit_and() {
     T_ASSERT(IS_BOOL(*val));
     T_ASSERT_EQ(false, AS_BOOL(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -322,6 +403,7 @@ static int test_short_circuit_or() {
     T_ASSERT(IS_BOOL(*val));
     T_ASSERT_EQ(false, AS_BOOL(*val));
 cleanup:
+    freeVM();
     return 0;
 }
 
@@ -352,6 +434,7 @@ static int test_native_typeof() {
                      "class\n";
     T_ASSERT_STREQ(expected, output);
 cleanup:
+    freeVM();
     unsetPrintBuf();
     freeString(buf);
     return 0;
@@ -380,9 +463,12 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_native_clock_bad_args);
     RUN_TEST(test_throw_catch1);
     RUN_TEST(test_throw_catch2);
+    RUN_TEST(test_throw_catch_across_function_boundaries);
+    RUN_TEST(test_throw_catch_across_function_boundaries2);
+    RUN_TEST(test_throw_catch_across_function_boundaries3);
     RUN_TEST(test_get_set_arbitrary_property);
-    RUN_TEST(test_native_typeof);
     RUN_TEST(test_short_circuit_and);
     RUN_TEST(test_short_circuit_or);
+    RUN_TEST(test_native_typeof);
     END_TESTS();
 }

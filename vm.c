@@ -231,23 +231,37 @@ static bool callCallable(Value callable, int argCount) {
         runtimeError("Stack overflow.");
         return false;
     }
+    int parentStart = getFrame()->ip - getFrame()->function->chunk.code - 2;
+    ASSERT(parentStart >= 0);
+    fprintf(stderr, "setting new call frame to start=%d\n", parentStart);
     // add frame
     CallFrame *frame = &vm.frames[vm.frameCount++];
-    ASSERT(getFrame() == frame);
     frame->function = function;
     frame->ip = function->chunk.code;
+    frame->start = parentStart;
 
     // +1 to include either the called function or the receiver.
     frame->slots = vm.stackTop - (argCount + 1);
     return true;
 }
 
+/**
+ * When thrown (OP_THROW), find any surrounding try { } catch { } block with
+ * the proper class
+ */
 static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowFound) {
     CatchTable *tbl = currentChunk()->catchTbl;
     CatchTable *row = tbl;
     char *klassName = klass->name->chars;
     int currentIpOff = (int)(getFrame()->ip - currentChunk()->code);
-    while (row) {
+    while (row || vm.frameCount > 1) {
+        if (row == NULL) {
+            ASSERT(vm.frameCount > 1);
+            currentIpOff = getFrame()->start;
+            vm.frameCount--;
+            row = currentChunk()->catchTbl;
+            continue;
+        }
         if (strcmp(AS_CSTRING(row->catchVal), klassName) == 0) {
             if (currentIpOff > row->ifrom && currentIpOff <= row->ito) {
                 // found target catch
@@ -255,11 +269,13 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
                 *rowFound = row;
                 /*currentIpOff = (int)(*ipOut - currentChunk()->code);*/
                 /*fprintf(stderr, "new ip offset: %d\n", currentIpOff);*/
+                fprintf(stderr, "found catch row\n");
                 return true;
             }
         }
         row = row->next;
     }
+
     return false;
 }
 
@@ -573,7 +589,7 @@ static InterpretResult run(void) {
               ASSERT(catchRow);
               catchRow->lastThrownValue = throwable;
               getFrame()->ip = ipNew;
-          } else { // TODO: pop frames to try
+          } else {
               runtimeError("Uncaught exception: %s", klass->name->chars);
               return INTERPRET_RUNTIME_ERROR;
           }
@@ -611,6 +627,7 @@ InterpretResult interpret(Chunk *chunk) {
     vm.frameCount = 0;
     // initialize top-level callframe
     CallFrame *frame = &vm.frames[vm.frameCount++];
+    frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = vm.stack;
     frame->function = newFunction(chunk);

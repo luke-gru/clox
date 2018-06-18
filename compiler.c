@@ -672,12 +672,14 @@ static void emitNode(Node *n) {
     }
     case TRY_STMT: {
         Chunk *chunk = currentChunk();
-        int ifrom = chunk->count;
-        emitNode(n->children->data[0]); // try block
-        int ito = chunk->count;
-        Node *catchStmt = NULL; int i = 0;
         vec_int_t vjumps;
         vec_init(&vjumps);
+        int ifrom = chunk->count;
+        emitNode(n->children->data[0]); // try block
+        int jumpToEnd = emitJump(OP_JUMP);
+        vec_push(&vjumps, jumpToEnd);
+        int ito = chunk->count;
+        Node *catchStmt = NULL; int i = 0;
         if (n->children->length > 1) {
             vec_foreach(n->children, catchStmt, i) {
                 if (i == 0) continue; // already emitted
