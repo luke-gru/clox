@@ -325,6 +325,7 @@ static InterpretResult run(void) {
           return INTERPRET_RUNTIME_ERROR;
       }
 
+#ifndef NDEBUG
     if (CLOX_OPTION_T(traceVMExecution)) {
         printf("          ");
         // print VM stack values from bottom of stack to top
@@ -336,6 +337,7 @@ static InterpretResult run(void) {
         printf("\n");
         printDisassembledInstruction(currentChunk(), (int)(getFrame()->ip - currentChunk()->code), NULL);
     }
+#endif
 
     uint8_t instruction = READ_BYTE();
     switch (instruction) {

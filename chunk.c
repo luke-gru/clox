@@ -1,6 +1,7 @@
 #include "common.h"
 #include "chunk.h"
 #include "memory.h"
+#include "debug.h"
 
 void initChunk(Chunk *chunk) {
     chunk->count = 0;
@@ -29,6 +30,17 @@ void writeChunk(Chunk *chunk, uint8_t byte, int line) {
     chunk->count++;
 }
 
+static void freeCatchTable(CatchTable *catchTbl) {
+    ASSERT(catchTbl);
+    CatchTable *row = catchTbl;
+    CatchTable *nextRow = NULL;
+    while (row) {
+        nextRow = row->next;
+        free(row);
+        row = nextRow;
+    }
+}
+
 /**
  * Free all internal chunk structures, and reset it to a usable state.
  * Does NOT free the provided pointer.
@@ -37,6 +49,7 @@ void freeChunk(Chunk *chunk) {
     FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
     FREE_ARRAY(int, chunk->lines, chunk->capacity);
     freeValueArray(&chunk->constants);
+    if (chunk->catchTbl) freeCatchTable(chunk->catchTbl);
     initChunk(chunk);
 }
 

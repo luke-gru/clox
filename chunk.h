@@ -2,6 +2,7 @@
 #define clox_chunk_h
 
 #include "value.h"
+#include "vec.h"
 
 typedef struct CatchTable CatchTable;
 typedef struct CatchTable {

@@ -5,8 +5,13 @@
 #include "memory.h"
 #include "debug.h"
 
+#ifdef NDEBUG
+#define TRACE_START(name)
+#define TRACE_END(name)
+#else
 #define TRACE_START(name) _trace_start(name)
 #define TRACE_END(name) _trace_end(name)
+#endif
 
 static void _trace_start(const char *name) {
     if (CLOX_OPTION_T(traceParserCalls)) {

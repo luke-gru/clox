@@ -252,7 +252,7 @@ static int test_throw_catch2(void) {
                 "  print e;\n"
                 "}\n";
 
-    InterpretResult ires = interp(src, true);
+    interp(src, true);
 cleanup:
     return 0;
 }
