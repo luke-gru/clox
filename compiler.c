@@ -470,13 +470,23 @@ static void emitNode(Node *n) {
         }
         return;
     }
-    // TODO: implement short-circuit semantics using jump
     case LOGICAL_EXPR: {
-        emitChildren(n);
         if (n->tok.type == TOKEN_AND) {
+            emitNode(vec_first(n->children)); // lhs
+            // false and "hi"
+            int skipRhsJump = emitJump(OP_JUMP_IF_FALSE_PEEK);
+            emitNode(vec_last(n->children)); // rhs
             emitByte(OP_AND);
+            patchJump(skipRhsJump, -1);
         } else if (n->tok.type == TOKEN_OR) {
+            emitNode(vec_first(n->children)); // lhs
+            int skipRhsJump = emitJump(OP_JUMP_IF_TRUE_PEEK);
+            emitNode(vec_last(n->children)); // rhs
             emitByte(OP_OR);
+            patchJump(skipRhsJump, -1);
+        } else {
+            error("invalid logical expression node (token: %s)", tokStr(&n->tok));
+            ASSERT(0);
         }
         return;
     }

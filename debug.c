@@ -73,6 +73,10 @@ char *opName(OpCode code) {
         return "OP_POP";
     case OP_JUMP_IF_FALSE:
         return "OP_JUMP_IF_FALSE";
+    case OP_JUMP_IF_FALSE_PEEK:
+        return "OP_JUMP_IF_FALSE_P";
+    case OP_JUMP_IF_TRUE_PEEK:
+        return "OP_JUMP_IF_TRUE_P";
     case OP_JUMP:
         return "OP_JUMP";
     case OP_LOOP:
@@ -303,6 +307,8 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
             return printLocalVarInstruction(opName(byte), chunk, i);
         case OP_JUMP:
         case OP_JUMP_IF_FALSE:
+        case OP_JUMP_IF_FALSE_PEEK:
+        case OP_JUMP_IF_TRUE_PEEK:
             return printJumpInstruction(opName(byte), chunk, i);
         case OP_LOOP:
             return printLoopInstruction(opName(byte), chunk, i);
@@ -355,6 +361,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             return localVarInstruction(buf, opName(byte), chunk, i);
         case OP_JUMP:
         case OP_JUMP_IF_FALSE:
+        case OP_JUMP_IF_FALSE_PEEK:
+        case OP_JUMP_IF_TRUE_PEEK:
             return jumpInstruction(buf, opName(byte), chunk, i);
         case OP_LOOP:
             return loopInstruction(buf, opName(byte), chunk, i);

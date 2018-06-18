@@ -48,7 +48,9 @@ typedef enum {
     OP_LESS,
 
     OP_JUMP,
-    OP_JUMP_IF_FALSE,
+    OP_JUMP_IF_FALSE, // pops value off top of stack, checks truthiness
+    OP_JUMP_IF_FALSE_PEEK, // peeks value off top of stack, checks truthiness
+    OP_JUMP_IF_TRUE_PEEK, // peeks value off top of stack, checks truthiness
     OP_LOOP,
 
     OP_CLASS, // class name is given as operand

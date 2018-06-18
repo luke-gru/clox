@@ -395,10 +395,9 @@ static InterpretResult run(void) {
         break;
       }
       case OP_SET_GLOBAL: {
-        Value val = pop();
+        Value val = peek(0);
         Value varName = READ_CONSTANT();
         tableSet(&vm.globals, AS_STRING(varName), val);
-        push(val);
         break;
       }
       case OP_NIL: {
@@ -445,6 +444,24 @@ static InterpretResult run(void) {
           Value cond = pop();
           uint8_t ipOffset = READ_BYTE();
           if (!isTruthy(cond)) {
+              ASSERT(ipOffset > 0);
+              getFrame()->ip += ipOffset;
+          }
+          break;
+      }
+      case OP_JUMP_IF_FALSE_PEEK: {
+          Value cond = peek(0);
+          uint8_t ipOffset = READ_BYTE();
+          if (!isTruthy(cond)) {
+              ASSERT(ipOffset > 0);
+              getFrame()->ip += ipOffset;
+          }
+          break;
+      }
+      case OP_JUMP_IF_TRUE_PEEK: {
+          Value cond = peek(0);
+          uint8_t ipOffset = READ_BYTE();
+          if (isTruthy(cond)) {
               ASSERT(ipOffset > 0);
               getFrame()->ip += ipOffset;
           }

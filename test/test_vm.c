@@ -277,6 +277,54 @@ cleanup:
     return 0;
 }
 
+static int test_short_circuit_and() {
+    char *src = "var b = nil;\n"
+                "fun test() { b = false; return true; }\n"
+                "var f = false and test();"
+                "print f;\n"
+                "b;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(IS_NIL(*val));
+    char *src2 = "var b = nil;\n"
+                 "fun test() { b = false; return true; }\n"
+                 "test();\n"
+                 "var f = true and test();\n"
+                 "print f;\n"
+                 "b;";
+
+    freeVM();
+    interp(src2, true);
+    val = getLastValue();
+    T_ASSERT(IS_BOOL(*val));
+    T_ASSERT_EQ(false, AS_BOOL(*val));
+cleanup:
+    return 0;
+}
+
+static int test_short_circuit_or() {
+    char *src = "var b = nil;\n"
+                "fun test() { b = false; return true; }\n"
+                "var f = true or test();\n" // skips RHS
+                "print f;\n"
+                "b;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(IS_NIL(*val));
+    char *src2 = "var b = nil;\n"
+                 "fun test() { b = false; return true; }\n"
+                 "var f = false or test();\n" // eval RHS
+                 "print f;\n"
+                 "b;";
+    freeVM();
+    interp(src2, true);
+    val = getLastValue();
+    T_ASSERT(IS_BOOL(*val));
+    T_ASSERT_EQ(false, AS_BOOL(*val));
+cleanup:
+    return 0;
+}
+
 static int test_native_typeof() {
     char *src = "class MyPet { }\n"
                 "var p = MyPet();\n"
@@ -334,5 +382,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_throw_catch2);
     RUN_TEST(test_get_set_arbitrary_property);
     RUN_TEST(test_native_typeof);
+    RUN_TEST(test_short_circuit_and);
+    RUN_TEST(test_short_circuit_or);
     END_TESTS();
 }
