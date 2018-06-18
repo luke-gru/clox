@@ -52,4 +52,6 @@ void freeValueArray(ValueArray *array);
 void printValue(Value value);
 ObjString *valueToString(Value value);
 
+const char *typeOfVal(Value val);
+
 #endif

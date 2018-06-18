@@ -154,3 +154,15 @@ ObjString *valueToString(Value value) {
     ASSERT(0);
     return NULL;
 }
+
+const char *typeOfVal(Value val) {
+    if (IS_OBJ(val)) {
+        return typeOfObj(AS_OBJ(val));
+    } else {
+        if (IS_BOOL(val)) return "bool";
+        if (IS_NIL(val)) return "nil";
+        if (IS_NUMBER(val)) return "number";
+    }
+    ASSERT(0);
+    return "unknown!";
+}

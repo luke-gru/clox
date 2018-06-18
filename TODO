@@ -4,3 +4,5 @@
 * Debugger support []
 * bytecode optimization pass []
 * simple JIT, maybe? []
+
+* AND/OR short-circuit eval [IN PROGRESS]

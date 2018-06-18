@@ -25,6 +25,7 @@ typedef struct {
   Table strings; // interned strings
   ObjString *initString;
   bool hadError;
+  ObjString *printBuf;
 } VM; // singleton
 
 typedef enum {
@@ -39,5 +40,8 @@ Value *getLastValue();
 void push(Value value);
 Value pop();
 void runtimeError(const char *format, ...);
+
+void setPrintBuf(ObjString *buf);
+void unsetPrintBuf(void);
 
 #endif

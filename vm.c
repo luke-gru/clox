@@ -11,6 +11,10 @@ void defineNativeFunctions() {
     ObjString *clockName = copyString("clock", 5);
     ObjNative *clockFn = newNative(clockName, runtimeNativeClock);
     tableSet(&vm.globals, clockName, OBJ_VAL(clockFn));
+
+    ObjString *typeofName = copyString("typeof", 6);
+    ObjNative *typeofFn = newNative(typeofName, runtimeNativeTypeof);
+    tableSet(&vm.globals, typeofName, OBJ_VAL(typeofFn));
 }
 
 void initVM() {
@@ -32,6 +36,7 @@ void freeVM() {
     vm.objects = NULL;
     freeString(vm.initString);
     vm.hadError = false;
+    vm.printBuf = NULL;
 }
 
 static bool isOpStackEmpty() {
@@ -155,37 +160,6 @@ static bool isThrowable(Value val) {
     return IS_INSTANCE(val) && !IS_STRING(val);
 }
 
-static const char *typeOfObj(Obj *obj) {
-    switch (obj->type) {
-    case OBJ_STRING:
-        return "string";
-    case OBJ_FUNCTION:
-    case OBJ_NATIVE_FUNCTION:
-        return "function";
-    case OBJ_CLASS:
-        return "class";
-    case OBJ_BOUND_METHOD:
-        return "method";
-    case OBJ_INSTANCE:
-        return "instance";
-    default:
-        ASSERT(0);
-        return "unknown";
-    }
-}
-
-static const char *typeOf(Value val) {
-    if (IS_OBJ(val)) {
-        return typeOfObj(AS_OBJ(val));
-    } else {
-        if (IS_BOOL(val)) return "bool";
-        if (IS_NIL(val)) return "nil";
-        if (IS_NUMBER(val)) return "number";
-    }
-    ASSERT(0);
-    return "unknown!";
-}
-
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
     if (tableGet(&obj->fields, propName, &ret)) {
@@ -246,7 +220,7 @@ static bool callCallable(Value callable, int argCount) {
         vm.stackTop[-argCount - 1] = instanceVal;
     } else if (IS_NATIVE_FUNCTION(callable)) {
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
-        Value val = native->function(argCount, vm.stackTop-argCount-1);
+        Value val = native->function(argCount, vm.stackTop-argCount);
         push(val);
         return true;
     } else {
@@ -279,8 +253,8 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
                 // found target catch
                 *ipOut = currentChunk()->code + row->itarget;
                 *rowFound = row;
-                currentIpOff = (int)(*ipOut - currentChunk()->code);
-                fprintf(stderr, "new ip offset: %d\n", currentIpOff);
+                /*currentIpOff = (int)(*ipOut - currentChunk()->code);*/
+                /*fprintf(stderr, "new ip offset: %d\n", currentIpOff);*/
                 return true;
             }
         }
@@ -302,7 +276,6 @@ static CatchTable *getCatchTableRow(int idx) {
     ASSERT(row);
     return row;
 }
-
 
 /**
  * Run the VM's instructions.
@@ -393,8 +366,14 @@ static InterpretResult run(void) {
       }
       case OP_PRINT: {
         Value val = pop();
-        printValue(val);
-        printf("\n");
+        if (vm.printBuf) {
+            ObjString *out = valueToString(val);
+            pushCString(vm.printBuf, out->chars, strlen(out->chars));
+            pushCString(vm.printBuf, "\n", 1);
+        } else {
+            printValue(val);
+            printf("\n");
+        }
         break;
       }
       case OP_DEFINE_GLOBAL: {
@@ -480,7 +459,6 @@ static InterpretResult run(void) {
       case OP_LOOP: {
           uint8_t ipOffset = READ_BYTE();
           ASSERT(ipOffset > 0);
-          /*fprintf(stderr, "loop offset: %d\n", ipOffset+1);*/
           // add 1 for the instruction we just read, and 1 to go 1 before the
           // instruction we want to execute next.
           getFrame()->ip -= (ipOffset+2);
@@ -490,7 +468,7 @@ static InterpretResult run(void) {
           uint8_t numArgs = READ_BYTE();
           Value callableVal = peek(numArgs);
           if (!isCallable(callableVal)) {
-              runtimeError("Tried to call uncallable object (type=%s)", typeOf(callableVal));
+              runtimeError("Tried to call uncallable object (type=%s)", typeOfVal(callableVal));
               return INTERPRET_RUNTIME_ERROR;
           }
           callCallable(callableVal, numArgs);
@@ -541,7 +519,7 @@ static InterpretResult run(void) {
           ASSERT(propStr && propStr->chars);
           Value instance = peek(0);
           if (!IS_INSTANCE(instance)) {
-              runtimeError("Tried to access property '%s' on non-instance (type: %s)", propStr->chars, typeOf(instance));
+              runtimeError("Tried to access property '%s' on non-instance (type: %s)", propStr->chars, typeOfVal(instance));
               return INTERPRET_RUNTIME_ERROR;
           }
           pop();
@@ -589,8 +567,8 @@ static InterpretResult run(void) {
           ASSERT(IS_NUMBER(catchTblIdx));
           double idx = AS_NUMBER(catchTblIdx);
           CatchTable *tblRow = getCatchTableRow((int)idx);
-          if (!isThrowable(tblRow->lastThrownValue)) {
-              fprintf(stderr, "Non-throwable found: %s\n", typeOf(tblRow->lastThrownValue));
+          if (!isThrowable(tblRow->lastThrownValue)) { // bug
+              fprintf(stderr, "Non-throwable found (BUG): %s\n", typeOfVal(tblRow->lastThrownValue));
           }
           ASSERT(isThrowable(tblRow->lastThrownValue));
           push(tblRow->lastThrownValue);
@@ -622,4 +600,12 @@ InterpretResult interpret(Chunk *chunk) {
 
     InterpretResult result = run();
     return result;
+}
+
+void setPrintBuf(ObjString *buf) {
+    vm.printBuf = buf;
+}
+
+void unsetPrintBuf(void) {
+    vm.printBuf = NULL;
 }

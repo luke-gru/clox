@@ -281,6 +281,7 @@ static int declareVariable(Token *name) {
 }
 
 
+// emit GET/SET global or local for named variable
 static void namedVariable(Token name, VarOp getSet) {
   uint8_t getOp, setOp;
   int arg = resolveLocal(&name);
@@ -502,6 +503,8 @@ static void emitNode(Node *n) {
             emitByte(OP_TRUE);
         } else if (n->tok.type == TOKEN_FALSE) {
             emitByte(OP_FALSE);
+        } else if (n->tok.type == TOKEN_NIL) {
+            emitByte(OP_NIL);
         } else {
             error("invalid literal expr node (token: %s)", tokStr(&n->tok));
         }
@@ -668,7 +671,6 @@ static void emitNode(Node *n) {
         if (n->children->length > 1) {
             vec_foreach(n->children, catchStmt, i) {
                 if (i == 0) continue; // already emitted
-                /*fprintf(stderr, "compiling catchStmt: %d\n", i);*/
                 int itarget = chunk->count;
                 Token classTok = vec_first(catchStmt->children)->tok;
                 ObjString *className = copyString(tokStr(&classTok), strlen(tokStr(&classTok)));
@@ -690,7 +692,6 @@ static void emitNode(Node *n) {
                 int jumpStart = emitJump(OP_JUMP); // jump to end of try statement
                 vec_push(&vjumps, jumpStart);
                 popScope(COMPILE_SCOPE_BLOCK);
-                /*fprintf(stderr, "/compiling catchStmt: %d\n", i);*/
             }
 
             int jump = -1; int j = 0;

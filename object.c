@@ -160,3 +160,21 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, ObjFunction *method) {
     bmethod->method = method;
     return bmethod;
 }
+
+const char *typeOfObj(Obj *obj) {
+    switch (obj->type) {
+    case OBJ_STRING:
+        return "string";
+    case OBJ_CLASS:
+        return "class";
+    case OBJ_INSTANCE:
+        return "instance";
+    case OBJ_FUNCTION:
+    case OBJ_NATIVE_FUNCTION:
+    case OBJ_BOUND_METHOD:
+        return "function";
+    default:
+        ASSERT(0);
+        return "unknown";
+    }
+}

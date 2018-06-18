@@ -7,6 +7,12 @@ Value runtimeNativeClock(int argCount, Value *args) {
 
 }
 
+Value runtimeNativeTypeof(int argCount, Value *args) {
+    CHECK_ARGS("typeof", 1, 1, argCount);
+    const char *strType = typeOfVal(*args);
+    return OBJ_VAL(copyString(strType, strlen(strType)));
+}
+
 bool runtimeCheckArgs(int min, int max, int actual) {
     return min >= actual && max <= actual;
 }

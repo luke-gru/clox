@@ -233,8 +233,11 @@ static int test_throw_catch1(void) {
                 "print \"shouldn't get here!!\";\n"
                 "} catch (MyError e) {\n"
                 "  print e;\n"
+                "  e;\n"
                 "}";
-    InterpretResult ires = interp(src, true);
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT_VALPRINTEQ("<instance MyError>", *val);
 cleanup:
     return 0;
 }
@@ -248,12 +251,61 @@ static int test_throw_catch2(void) {
                 "  print \"shouldn't get here!!\";\n"
                 "} catch (MyError2 e) {\n"
                 "  print e;\n"
+                "  e;\n"
                 "} catch (MyError e) {\n"
                 "  print e;\n"
+                "  e;\n"
                 "}\n";
 
     interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT_VALPRINTEQ("<instance MyError>", *val);
 cleanup:
+    return 0;
+}
+
+static int test_get_set_arbitrary_property() {
+    char *src = "class MyPet { }\n"
+                "var p = MyPet();\n"
+                "p.name = \"Gracie\";\n"
+                "p.name;";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(IS_STRING(*val));
+    T_ASSERT_STREQ("Gracie", AS_CSTRING(*val));
+cleanup:
+    return 0;
+}
+
+static int test_native_typeof() {
+    char *src = "class MyPet { }\n"
+                "var p = MyPet();\n"
+                "print typeof(p);\n"
+                "print typeof(nil);\n"
+                "print typeof(true);\n"
+                "print typeof(false);\n"
+                "print typeof(1);\n"
+                "print typeof(1.0);\n"
+                "print typeof(\"str\");\n"
+                "print typeof(MyPet);\n";
+                /*"print typeof([])\n""*/
+    ObjString *buf = copyString("", 0);
+    setPrintBuf(buf);
+    interp(src, true);
+    char *output = buf->chars;
+    ASSERT(buf->chars);
+    char *expected = "instance\n"
+                     "nil\n"
+                     "bool\n"
+                     "bool\n"
+                     "number\n"
+                     "number\n"
+                     "string\n"
+                     "class\n";
+    T_ASSERT_STREQ(expected, output);
+cleanup:
+    unsetPrintBuf();
+    freeString(buf);
     return 0;
 }
 
@@ -280,5 +332,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_native_clock_bad_args);
     RUN_TEST(test_throw_catch1);
     RUN_TEST(test_throw_catch2);
+    RUN_TEST(test_get_set_arbitrary_property);
+    RUN_TEST(test_native_typeof);
     END_TESTS();
 }
