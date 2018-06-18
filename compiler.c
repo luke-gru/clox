@@ -198,29 +198,21 @@ static void emitChildren(Node *n) {
 }
 
 // emit a jump (forwards) instruction, returns a pointer to the byte that needs patching
-static uint8_t *emitJump(OpCode jumpOp) {
+static int emitJump(OpCode jumpOp) {
     emitByte(jumpOp);
     // TODO: make the offset bigger than 1 byte!
-    emitByte(122); // patched later (see patchJump)
-    return currentChunk()->code + (currentChunk()->count-1);
+    emitByte(0); // patched later (see patchJump)
+    return currentChunk()->count-1; // index for later patch
 }
 
 // patch jump forwards instruction by given offset
 // TODO: make the offset bigger than 1 byte!
-static void patchJump(Chunk *chunk, uint8_t *byteToPatch, uint8_t offset) {
-    ASSERT(*byteToPatch == 122);
-    ASSERT(offset > 0);
-    fprintf(stderr, "Patching jump %p with offset %d\n", byteToPatch, (int)offset);
-    ptrdiff_t ptrOffset = byteToPatch - chunk->code;
-    /*if (ptrOffset < 0) {*/
-        /*fprintf(stderr, "negative pointer offset? %d\n", (int)ptrOffset);*/
-    /*}*/
-    /*ASSERT(ptrOffset >= 0);*/
-    ASSERT(chunk->code + ptrOffset == byteToPatch);
-    ASSERT(chunk->code[ptrOffset] == 122);
-    chunk->code[ptrOffset] = offset;
-    ASSERT(chunk->code[ptrOffset] != 122);
-    ASSERT(*byteToPatch != 122);
+static void patchJump(int topatch, int jumpoffset) {
+    ASSERT(currentChunk()->code[topatch] == 0);
+    if (jumpoffset == -1) {
+        jumpoffset = currentChunk()->count - topatch - 1;
+    }
+    currentChunk()->code[topatch] = jumpoffset;
 }
 
 // Emit a jump backwards (loop) instruction from the current code count to offset `loopStart`
@@ -517,44 +509,27 @@ static void emitNode(Node *n) {
     }
     case IF_STMT: {
         emitNode(n->children->data[0]); // condition
-        uint8_t *afterThenOffPtr = emitJump(OP_JUMP_IF_FALSE);
-        int startOffset = currentChunk()->count-1;
+        int ifJumpStart = emitJump(OP_JUMP_IF_FALSE);
         emitNode(n->children->data[1]); // then branch
         Node *elseNode = NULL;
         if (n->children->length > 2) {
             elseNode = n->children->data[2];
         }
-        uint8_t *jumpEndIfPtr = NULL;
-        int jumpEndIfOffset = 0;
-        if (elseNode != NULL) {
-            jumpEndIfPtr = emitJump(OP_JUMP);
-            jumpEndIfOffset = currentChunk()->count-1;
-            int endOffset = currentChunk()->count-1;
-            uint8_t offset = (uint8_t)(endOffset - startOffset);
-            patchJump(currentChunk(), afterThenOffPtr, offset);
-            emitNode(elseNode);
-        }
-        int endOffset = currentChunk()->count-1;
-        // TODO: allow bigger jumps (uint16_t (short) offsets)
         if (elseNode == NULL) {
-            uint8_t offset = (uint8_t)(endOffset - startOffset);
-            patchJump(currentChunk(), afterThenOffPtr, offset);
-        }
-        if (jumpEndIfPtr != NULL) {
-            uint8_t offset = (uint8_t)(endOffset - jumpEndIfOffset);
-            patchJump(currentChunk(), jumpEndIfPtr, offset);
+            patchJump(ifJumpStart, -1);
+        } else {
+            patchJump(ifJumpStart, -1);
+            emitNode(elseNode);
         }
         break;
     }
     case WHILE_STMT: {
         int loopStart = currentChunk()->count + 2;
         emitNode(vec_first(n->children)); // cond
-        uint8_t *afterLoopPtr = emitJump(OP_JUMP_IF_FALSE);
+        int whileJumpStart = emitJump(OP_JUMP_IF_FALSE);
         emitNode(n->children->data[1]); // while block
         emitLoop(loopStart);
-        int loopEnd = currentChunk()->count;
-        int offset = (loopEnd-loopStart-2);
-        patchJump(currentChunk(), afterLoopPtr, offset);
+        patchJump(whileJumpStart, -1);
         emitByte(OP_POP); // pop condition off stack
         break;
     }
@@ -688,14 +663,12 @@ static void emitNode(Node *n) {
         emitNode(n->children->data[0]); // try block
         int ito = chunk->count;
         Node *catchStmt = NULL; int i = 0;
-        vec_void_t vjumpArgs;
-        vec_int_t vjumpOffsets;
-        vec_init(&vjumpArgs);
-        vec_init(&vjumpOffsets);
+        vec_int_t vjumps;
+        vec_init(&vjumps);
         if (n->children->length > 1) {
             vec_foreach(n->children, catchStmt, i) {
                 if (i == 0) continue; // already emitted
-                fprintf(stderr, "compiling catchStmt: %d\n", i);
+                /*fprintf(stderr, "compiling catchStmt: %d\n", i);*/
                 int itarget = chunk->count;
                 Token classTok = vec_first(catchStmt->children)->tok;
                 ObjString *className = copyString(tokStr(&classTok), strlen(tokStr(&classTok)));
@@ -703,8 +676,6 @@ static void emitNode(Node *n) {
                     chunk, ifrom, ito,
                     itarget, OBJ_VAL(className)
                 );
-                /*emitNode(vec_first(catchStmt->children)); // catch expr (TODO: remove this, we don't need it)*/
-                /*emitByte(OP_POP); // pop the GET_GLOBAL of the error class, TODO: remove this so it isn't emitted*/
                 pushScope(COMPILE_SCOPE_BLOCK);
                 // given variable expression to bind to (Ex: (catch Error `err`))
                 if (catchStmt->children->length > 2) {
@@ -716,31 +687,18 @@ static void emitNode(Node *n) {
                 }
                 emitNode(vec_last(catchStmt->children)); // catch block
                 ASSERT(chunk == currentChunk());
-                uint8_t *jumpArg = emitJump(OP_JUMP); // jump to end of try statement
-                ASSERT(*jumpArg == 122);
-                vec_push(&vjumpArgs, jumpArg);
-                ASSERT(vjumpArgs.data[i-1] == (void*)jumpArg);
-                int startoffset = chunk->count-1;
-                vec_push(&vjumpOffsets, startoffset);
+                int jumpStart = emitJump(OP_JUMP); // jump to end of try statement
+                vec_push(&vjumps, jumpStart);
                 popScope(COMPILE_SCOPE_BLOCK);
-                fprintf(stderr, "/compiling catchStmt: %d\n", i);
+                /*fprintf(stderr, "/compiling catchStmt: %d\n", i);*/
             }
 
-            int endOffset = chunk->count-1;
-            fprintf(stderr, "end offset: %d\n", endOffset);
-
-            uint8_t *jumpArgPtr = NULL; int j = 0;
-            vec_foreach(&vjumpArgs, jumpArgPtr, j) {
-                int startOffset = vjumpOffsets.data[j];
-                fprintf(stderr, "start offset (%d): %d\n", j, startOffset);
-                uint8_t myoffset = (uint8_t)(endOffset - startOffset);
-                fprintf(stderr, "myoffset (%d): %" PRId8 "\n", j, myoffset);
-                ASSERT(chunk == currentChunk());
-                patchJump(chunk, jumpArgPtr, myoffset);
+            int jump = -1; int j = 0;
+            vec_foreach(&vjumps, jump, j) {
+                patchJump(jump, -1);
             }
         }
-        vec_deinit(&vjumpArgs);
-        vec_deinit(&vjumpOffsets);
+        vec_deinit(&vjumps);
         break;
     }
     case THROW_STMT: {

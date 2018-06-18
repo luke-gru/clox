@@ -88,8 +88,9 @@ int addCatchRow(
     int idx = 0;
     if (row == NULL) {
         chunk->catchTbl = tblRow;
-        return idx;
+        return 0;
     }
+    idx++;
     while (row->next) {
         row = row->next;
         idx++;

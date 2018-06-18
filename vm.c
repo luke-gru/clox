@@ -280,7 +280,7 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
                 *ipOut = currentChunk()->code + row->itarget;
                 *rowFound = row;
                 currentIpOff = (int)(*ipOut - currentChunk()->code);
-                /*fprintf(stderr, "new ip offset: %d\n", currentIpOff);*/
+                fprintf(stderr, "new ip offset: %d\n", currentIpOff);
                 return true;
             }
         }
@@ -294,7 +294,10 @@ static CatchTable *getCatchTableRow(int idx) {
     CatchTable *row = tbl;
     int i = 0;
     while (i < idx) {
+        ASSERT(row);
+        ASSERT(row->next);
         row = row->next;
+        i++;
     }
     ASSERT(row);
     return row;
@@ -586,6 +589,10 @@ static InterpretResult run(void) {
           ASSERT(IS_NUMBER(catchTblIdx));
           double idx = AS_NUMBER(catchTblIdx);
           CatchTable *tblRow = getCatchTableRow((int)idx);
+          if (!isThrowable(tblRow->lastThrownValue)) {
+              fprintf(stderr, "Non-throwable found: %s\n", typeOf(tblRow->lastThrownValue));
+          }
+          ASSERT(isThrowable(tblRow->lastThrownValue));
           push(tblRow->lastThrownValue);
           break;
       }
