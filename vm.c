@@ -10,21 +10,22 @@ VM vm;
 
 void defineNativeFunctions() {
     ObjString *clockName = copyString("clock", 5);
-    push(OBJ_VAL(clockName));
     ObjNative *clockFn = newNative(clockName, runtimeNativeClock);
-    push(OBJ_VAL(clockFn));
     tableSet(&vm.globals, clockName, OBJ_VAL(clockFn));
 
     ObjString *typeofName = copyString("typeof", 6);
-    push(OBJ_VAL(typeofName));
     ObjNative *typeofFn = newNative(typeofName, runtimeNativeTypeof);
-    push(OBJ_VAL(typeofFn));
     tableSet(&vm.globals, typeofName, OBJ_VAL(typeofFn));
+}
+
+static void resetStack() {
+    vm.stackTop = vm.stack;
+    vm.frameCount = 0;
 }
 
 void initVM() {
     turnGCOff();
-    vm.stackTop = vm.stack;
+    resetStack();
     vm.objects = NULL;
 
     vm.bytesAllocated = 0;
@@ -35,7 +36,6 @@ void initVM() {
 
     vm.lastValue = NULL;
     vm.hadError = false;
-    vm.frameCount = 0;
     initTable(&vm.globals);
     initTable(&vm.strings);
     vm.initString = copyString("init", 4);
@@ -47,14 +47,13 @@ void freeVM() {
     turnGCOff();
     freeTable(&vm.globals);
     freeTable(&vm.strings);
-    // TODO: free object list and initString
     vm.initString = NULL;
-    /*freeObjects();*/
     vm.hadError = false;
     vm.printBuf = NULL;
     vm.lastValue = NULL;
     vm.objects = NULL;
     vm.grayStack = NULL;
+    freeObjects();
     turnGCOn();
 }
 
@@ -130,11 +129,6 @@ static int cmpValues(Value lhs, Value rhs) {
     return -2;
 }
 
-static void resetStack() {
-    vm.stackTop = vm.stack;
-    vm.frameCount = 0;
-}
-
 static inline CallFrame *getFrame() {
     ASSERT(vm.frameCount >= 1);
     return &vm.frames[vm.frameCount-1];
@@ -201,7 +195,8 @@ static void defineMethod(ObjString *name) {
     ASSERT(IS_FUNCTION(method));
     ASSERT(IS_CLASS(peek(1)));
     ObjClass *klass = AS_CLASS(peek(1));
-    tableSet(&klass->methods, name, method);
+    fprintf(stderr, "defining method '%s' (%d)\n", name->chars, (int)strlen(name->chars));
+    ASSERT(tableSet(&klass->methods, name, method));
     pop();
 }
 
@@ -227,7 +222,7 @@ static bool callCallable(Value callable, int argCount) {
             function = AS_FUNCTION(initializer);
             // TODO: check arity
         } else if (argCount != 0) {
-          runtimeError("Expected 0 arguments but got %d.", argCount);
+          runtimeError("Expected 0 arguments (default init) but got %d.", argCount);
           return false;
         } else {
             return true; // new instance is on the top of the stack
@@ -250,6 +245,7 @@ static bool callCallable(Value callable, int argCount) {
         runtimeError("Stack overflow.");
         return false;
     }
+
     int parentStart = getFrame()->ip - getFrame()->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
     /*fprintf(stderr, "setting new call frame to start=%d\n", parentStart);*/
@@ -539,7 +535,6 @@ static InterpretResult run(void) {
       case OP_CLASS: {
           Value className = READ_CONSTANT();
           ObjClass *klass = newClass(AS_STRING(className), NULL);
-          tableSet(&vm.globals, AS_STRING(className), OBJ_VAL(klass));
           push(OBJ_VAL(klass));
           break;
       }

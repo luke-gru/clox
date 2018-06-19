@@ -314,6 +314,7 @@ static void initCompiler(
     compiler->localCount = 0;
     compiler->scopeDepth = scopeDepth;
     compiler->function = newFunction(chunk);
+    hideFromGC((Obj*)compiler->function); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = ftype;
     compiler->hadError = false;
     compiler->emittedReturn = false;
