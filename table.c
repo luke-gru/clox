@@ -152,7 +152,13 @@ ObjString* tableFindString(Table* table, const char* chars, int length,
 }
 
 void tableRemoveWhite(Table* table) {
+    // FIXME
 }
 
-void grayTable(Table* table) {
+void grayTable(Table *table) {
+    for (int i = 0; i <= table->capacityMask; i++) {
+        Entry *entry = &table->entries[i];
+        grayObject((Obj*)entry->key);
+        grayValue(entry->value);
+    }
 }

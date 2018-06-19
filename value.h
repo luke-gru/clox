@@ -1,6 +1,7 @@
 #ifndef clox_value_h
 #define clox_value_h
 
+#include <stdio.h>
 #include "common.h"
 
 // fwd decls
@@ -49,7 +50,7 @@ typedef struct {
 void initValueArray(ValueArray *array);
 void writeValueArray(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);
-void printValue(Value value);
+void printValue(FILE *file, Value value);
 ObjString *valueToString(Value value);
 
 const char *typeOfVal(Value val);

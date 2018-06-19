@@ -18,6 +18,8 @@ typedef enum ObjType {
 typedef struct Obj {
   ObjType type;
   Obj *next;
+  bool isDark; // is this object marked?
+  bool noGC;
 } Obj;
 
 typedef struct ObjString {
@@ -31,7 +33,7 @@ typedef struct ObjFunction {
   Obj object;
   int arity;
   //int upvalueCount;
-  // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant
+  // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM, or serialized/loaded to/from disk.
   Chunk chunk;
   ObjString *name;

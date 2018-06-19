@@ -4,6 +4,7 @@
 #include "debug.h"
 #include "object.h"
 #include "value.h"
+#include "memory.h"
 
 void die(const char *fmt, ...) {
     va_list ap;
@@ -180,7 +181,7 @@ static int printConstantInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *
     if (IS_FUNCTION(constant)) {
         addFunc(funcs, AS_FUNCTION(constant));
     }
-    printValue(constant);
+    printValue(stdout, constant);
     printf("'\n");
     return i+2;
 }
@@ -400,7 +401,9 @@ ObjString *disassembleChunk(Chunk *chunk) {
     vec_funcp_t funcs;
     vec_init(&funcs);
 
+    turnGCOff();
     ObjString *buf = copyString("", 0);
+    hideFromGC((Obj*)buf);
 
     // catch table
     if (chunk->catchTbl) {
@@ -427,5 +430,6 @@ ObjString *disassembleChunk(Chunk *chunk) {
         pushCString(buf, "----\n", strlen("----\n"));
     }
     vec_deinit(&funcs);
+    turnGCOn();
     return buf;
 }

@@ -153,6 +153,7 @@ static int test_simple_function(void) {
     interp(src, true);
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
+    /*fprintf(stderr, "typeof: %s", typeOfVal(*val));*/
     T_ASSERT(IS_STRING(*val));
     T_ASSERT_STREQ("FUN", AS_CSTRING(*val));
 cleanup:
@@ -436,11 +437,11 @@ static int test_native_typeof() {
 cleanup:
     freeVM();
     unsetPrintBuf();
-    freeString(buf);
     return 0;
 }
 
 int main(int argc, char *argv[]) {
+    /*turnGCOff();*/
     parseTestOptions(argc, argv);
     INIT_TESTS();
     RUN_TEST(test_addition);

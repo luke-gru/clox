@@ -1,5 +1,5 @@
 * More language features to be close to my version of jlox []
-* GC []
+* Simple M&S GC []
 * Saving/loading bytecode to disk []
 * Debugger support []
 * bytecode optimization pass []
@@ -7,3 +7,5 @@
 
 * AND/OR short-circuit eval [DONE]
 * catch across function boundaries [DONE]
+* Get closures working []
+* Get arrays working []

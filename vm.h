@@ -27,7 +27,17 @@ typedef struct {
   ObjString *initString;
   bool hadError;
   ObjString *printBuf;
+
+  // GC fields
+  size_t bytesAllocated;
+  size_t nextGCThreshhold;
+  int grayCount;
+  int grayCapacity;
+  Obj **grayStack;
+
 } VM; // singleton
+
+extern VM vm;
 
 typedef enum {
   INTERPRET_OK,

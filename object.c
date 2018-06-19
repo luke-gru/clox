@@ -14,6 +14,7 @@ extern VM vm;
 static Obj *allocateObject(size_t size, ObjType type) {
     Obj *object = (Obj*)reallocate(NULL, 0, size);
     object->type = type;
+    object->isDark = true;
 
     object->next = vm.objects;
     vm.objects = object;
@@ -27,10 +28,12 @@ static Obj *allocateObject(size_t size, ObjType type) {
  */
 static ObjString *allocateString(char *chars, int length, uint32_t hash) {
     ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+    hideFromGC((Obj*)string);
     string->length = length;
     string->chars = chars;
     string->hash = hash;
     tableSet(&vm.strings, string, NIL_VAL);
+    unhideFromGC((Obj*)string);
     return string;
 }
 
@@ -63,12 +66,11 @@ ObjString *takeString(char *chars, int length) {
 // NOTE: length here is strlen(chars)
 ObjString *copyString(const char *chars, int length) {
     // Copy the characters to the heap so the object can own it.
-    char *heapChars = ALLOCATE(char, length + 1);
     uint32_t hash = hashString((char*)chars, length);
-
     ObjString* interned = tableFindString(&vm.strings, chars, length, hash);
     if (interned != NULL) return interned;
 
+    char *heapChars = ALLOCATE(char, length + 1);
     memcpy(heapChars, chars, length);
     heapChars[length] = '\0';
 
@@ -76,25 +78,27 @@ ObjString *copyString(const char *chars, int length) {
 }
 
 void freeString(ObjString *string) {
-    ASSERT(string);
-    free(string->chars);
-    free(string);
+    freeObject((Obj*)string);
 }
 
 // TODO: add a capacity field to string, so we don't always reallocate when
 // pushing new chars to the buffer.
 // NOTE: length here is strlen(chars)
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
+    /*fprintf(stderr, "pushCSTring\n");*/
     string->chars = GROW_ARRAY(string->chars, char, string->length,
-            string->length+lenToAdd);
-    for (int i = 0; i < lenToAdd; i++) {
+            string->length+lenToAdd+1);
+    int i = 0;
+    for (i = 0; i < lenToAdd; i++) {
         char *c = chars+i;
         if (c == NULL) break;
         string->chars[string->length + i] = *c;
     }
+    string->chars[string->length + i] = '\0';
     string->length += lenToAdd;
     // TODO: avoid rehash, hash should be calculated when needed!
     string->hash = hashString(string->chars, strlen(string->chars));
+    /*fprintf(stderr, "/pushCSTring\n");*/
 }
 
 ObjFunction *newFunction(Chunk *chunk) {
@@ -116,7 +120,7 @@ ObjFunction *newFunction(Chunk *chunk) {
 void freeFunction(ObjFunction *func) {
     // TODO: free objstring if not null
     freeChunk(&func->chunk);
-    free(func);
+    FREE(ObjFunction, func);
 }
 
 ObjClass *newClass(ObjString *name, ObjClass *superclass) {

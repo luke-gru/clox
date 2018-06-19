@@ -2,6 +2,7 @@
 #include "compiler.h"
 #include "debug.h"
 #include "vm.h"
+#include "memory.h"
 
 static int test_compile_addition(void) {
     char *src = "1+1;";
@@ -37,7 +38,6 @@ static int test_compile_global_variable(void) {
                      "0003\t" "OP_CONSTANT\t"      "0002\t" "'1.00'\n"
                      "0005\t" "OP_SET_GLOBAL\t"    "0001\t" "'a'\n"
                      "0007\t" "OP_LEAVE\n";
-    freeChunk(&chunk);
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     return 0;
@@ -58,7 +58,6 @@ static int test_compile_local_variable(void) {
                      "0004\t" "OP_GET_LOCAL\t" "[slot 001]\n"
                      "0006\t" "OP_POP\n"
                      "0007\t" "OP_LEAVE\n";
-    freeChunk(&chunk);
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     return 0;
@@ -84,7 +83,6 @@ static int test_compile_classdecl(void) {
                      "0002\t" "OP_RETURN\n"
                      "----\n";
 
-    freeChunk(&chunk);
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     return 0;
@@ -127,7 +125,6 @@ static int test_compile_try_stmt_with_catch1(void) {
                      "0024\t" "OP_JUMP\t"           "0002\t"       "(addr=0027)\n"
                      "0026\t" "OP_POP\n"
                      "0027\t" "OP_LEAVE\n";
-    freeChunk(&chunk);
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     return 0;
@@ -182,13 +179,13 @@ static int test_compile_try_stmt_with_catch2(void) {
                     "0038\t" "OP_JUMP\t"             "0002\t"	  "(addr=0041)\n"
                     "0040\t" "OP_POP\n"
                     "0041\t" "OP_LEAVE\n";
-    freeChunk(&chunk);
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     return 0;
 }
 
 int main(int argc, char *argv[]) {
+    turnGCOff(); // For now, there's a bug in there somewhere
     parseTestOptions(argc, argv);
     initVM();
     INIT_TESTS();

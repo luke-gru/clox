@@ -780,3 +780,11 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
     }
     return compile_src(buf, chunk, err);
 }
+
+void grayCompilerRoots(void) {
+    Compiler *compiler = current;
+    while (compiler != NULL) {
+        grayObject((Obj*)compiler->function);
+        compiler = compiler->enclosing;
+    }
+}

@@ -11,6 +11,7 @@ char *boolOptNames[] = {
     "compileOnly",
     "debugTokens",
     "debugBytecode",
+    "traceGC",
     NULL,
 };
 
@@ -61,6 +62,10 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "-DTRACE_VM_EXECUTION") == 0) {
         SET_OPTION(traceVMExecution, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "-DTRACE_GC") == 0) {
+        SET_OPTION(traceGC, true);
         return 1;
     }
     if (strcmp(argv[i], "--compile-only") == 0) {

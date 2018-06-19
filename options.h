@@ -11,6 +11,7 @@ typedef struct sCloxOptions {
     bool compileOnly;
     bool debugTokens;
     bool debugBytecode;
+    bool traceGC;
     bool _inited;
 } CloxOptions;
 

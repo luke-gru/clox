@@ -47,17 +47,28 @@ static void freeCatchTable(CatchTable *catchTbl) {
  */
 void freeChunk(Chunk *chunk) {
     FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
+    chunk->code = NULL;
     FREE_ARRAY(int, chunk->lines, chunk->capacity);
-    freeValueArray(&chunk->constants);
-    if (chunk->catchTbl) freeCatchTable(chunk->catchTbl);
+    chunk->lines = NULL;
+    /*freeValueArray(&chunk->constants);*/ // FIXME: put back
+    if (chunk->catchTbl) {
+        freeCatchTable(chunk->catchTbl);
+        chunk->catchTbl = NULL;
+    }
     initChunk(chunk);
 }
 
 /**
  * Add a constant to constant pool and return its index into the pool
  */
-int addConstant(Chunk* chunk, Value value) {
+int addConstant(Chunk *chunk, Value value) {
+    if (IS_OBJ(value)) {
+        hideFromGC(AS_OBJ(value));
+    }
     writeValueArray(&chunk->constants, value);
+    /*if (IS_OBJ(value)) {*/ // FIXME: put back
+        /*unhideFromGC(AS_OBJ(value));*/
+    /*}*/
     return chunk->constants.count - 1;
 }
 

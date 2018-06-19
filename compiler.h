@@ -22,4 +22,6 @@ typedef enum {
 int compile_src(char *src, Chunk *chunk, CompileErr *err);
 int compile_file(char *fname, Chunk *chunk, CompileErr *err);
 
+void grayCompilerRoots(void);
+
 #endif

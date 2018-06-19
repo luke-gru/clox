@@ -16,6 +16,15 @@
 #define LOG_ERR(...) (fprintf(stderr, __VA_ARGS__))
 #endif
 
+#define KNRM  "\x1B[0m"
+#define KRED  "\x1B[31m"
+#define KGRN  "\x1B[32m"
+#define KYEL  "\x1B[33m"
+#define KBLU  "\x1B[34m"
+#define KMAG  "\x1B[35m"
+#define KCYN  "\x1B[36m"
+#define KWHT  "\x1B[37m"
+
 static int assertions_passed;
 static int assertions_failed;
 static int tests_passed;
@@ -39,16 +48,17 @@ static inline void INIT_TESTS(void) {
 }
 
 static inline void END_TESTS(void) {
-    fprintf(stdout, "Assertions passed: %d\n", assertions_passed);
-    fprintf(stdout, "Assertions failed: %d\n", assertions_failed);
-    fprintf(stdout, "Tests passed:  %d\n", tests_passed);
-    fprintf(stdout, "Tests skipped: %d\n", tests_skipped);
-    fprintf(stdout, "Tests failed:  %d\n", tests_failed);
+    fprintf(stdout, "%sAssertions passed: %d\n", KGRN, assertions_passed);
+    fprintf(stdout, "%sAssertions failed: %d\n", KRED, assertions_failed);
+    fprintf(stdout, "%sTests passed:  %d\n", KGRN, tests_passed);
+    fprintf(stdout, "%sTests skipped: %d\n", KYEL, tests_skipped);
+    fprintf(stdout, "%sTests failed:  %d\n", KRED, tests_failed);
     char *failed_testfn;
     int i;
     vec_foreach(&vtests_failed, failed_testfn, i) {
-        fprintf(stdout, "  ** Failed: %s **\n", failed_testfn);
+        fprintf(stdout, "%s  ** Failed: %s **\n", KRED, failed_testfn);
     }
+    fprintf(stdout, "%s", KNRM);
     if (tests_failed > 0) {
         exit(1);
     } else {
@@ -65,7 +75,8 @@ static inline void TESTS_SET_SKIP(vec_str_t *test_fns) {
 }
 
 static inline void FAIL_ASSERT(const char *file, int line, const char *func) {
-    LOG_ERR("Assertion failed at %s:%d in %s\n", file, line, func);
+    LOG_ERR("%sAssertion failed at %s:%d in %s\n", KRED, file, line, func);
+    LOG_ERR("%s", KNRM);
     assertions_failed++;
     if (jmpset) {
         longjmp(jmploc, 1);

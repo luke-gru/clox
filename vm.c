@@ -4,22 +4,35 @@
 #include "debug.h"
 #include "options.h"
 #include "runtime.h"
+#include "memory.h"
 
 VM vm;
 
 void defineNativeFunctions() {
     ObjString *clockName = copyString("clock", 5);
+    push(OBJ_VAL(clockName));
     ObjNative *clockFn = newNative(clockName, runtimeNativeClock);
+    push(OBJ_VAL(clockFn));
     tableSet(&vm.globals, clockName, OBJ_VAL(clockFn));
 
     ObjString *typeofName = copyString("typeof", 6);
+    push(OBJ_VAL(typeofName));
     ObjNative *typeofFn = newNative(typeofName, runtimeNativeTypeof);
+    push(OBJ_VAL(typeofFn));
     tableSet(&vm.globals, typeofName, OBJ_VAL(typeofFn));
 }
 
 void initVM() {
+    turnGCOff();
     vm.stackTop = vm.stack;
     vm.objects = NULL;
+
+    vm.bytesAllocated = 0;
+    vm.nextGCThreshhold = 100;
+    vm.grayCount = 0;
+    vm.grayCapacity = 0;
+    vm.grayStack = NULL;
+
     vm.lastValue = NULL;
     vm.hadError = false;
     vm.frameCount = 0;
@@ -27,16 +40,22 @@ void initVM() {
     initTable(&vm.strings);
     vm.initString = copyString("init", 4);
     defineNativeFunctions();
+    turnGCOn();
 }
 
 void freeVM() {
+    turnGCOff();
     freeTable(&vm.globals);
     freeTable(&vm.strings);
     // TODO: free object list and initString
-    vm.objects = NULL;
-    freeString(vm.initString);
+    vm.initString = NULL;
+    /*freeObjects();*/
     vm.hadError = false;
     vm.printBuf = NULL;
+    vm.lastValue = NULL;
+    vm.objects = NULL;
+    vm.grayStack = NULL;
+    turnGCOn();
 }
 
 static bool isOpStackEmpty() {
@@ -233,7 +252,7 @@ static bool callCallable(Value callable, int argCount) {
     }
     int parentStart = getFrame()->ip - getFrame()->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
-    fprintf(stderr, "setting new call frame to start=%d\n", parentStart);
+    /*fprintf(stderr, "setting new call frame to start=%d\n", parentStart);*/
     // add frame
     CallFrame *frame = &vm.frames[vm.frameCount++];
     frame->function = function;
@@ -322,9 +341,9 @@ static InterpretResult run(void) {
         printf("          ");
         // print VM stack values from bottom of stack to top
         for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
-            printf("[ ");
-            printValue(*slot);
-            printf(" ]");
+            fprintf(stderr, "[ ");
+            printValue(stderr, *slot);
+            fprintf(stderr, " ]");
         }
         printf("\n");
         printDisassembledInstruction(currentChunk(), (int)(getFrame()->ip - currentChunk()->code), NULL);
@@ -387,21 +406,21 @@ static InterpretResult run(void) {
             pushCString(vm.printBuf, out->chars, strlen(out->chars));
             pushCString(vm.printBuf, "\n", 1);
         } else {
-            printValue(val);
+            printValue(stdout, val);
             printf("\n");
         }
         break;
       }
       case OP_DEFINE_GLOBAL: {
         Value varName = READ_CONSTANT();
-        Value val = pop();
+        Value val = peek(0);
         tableSet(&vm.globals, AS_STRING(varName), val);
+        pop();
         break;
       }
       case OP_GET_GLOBAL: {
         Value varName = READ_CONSTANT();
         Value val;
-        memset(&val, 0, sizeof(Value));
         if (tableGet(&vm.globals, AS_STRING(varName), &val)) {
             push(val);
         } else {
@@ -520,6 +539,7 @@ static InterpretResult run(void) {
       case OP_CLASS: {
           Value className = READ_CONSTANT();
           ObjClass *klass = newClass(AS_STRING(className), NULL);
+          tableSet(&vm.globals, AS_STRING(className), OBJ_VAL(klass));
           push(OBJ_VAL(klass));
           break;
       }
