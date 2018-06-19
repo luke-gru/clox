@@ -8,6 +8,25 @@
 
 VM vm;
 
+char *unredefinableGlobals[] = {
+    "Object",
+    "clock",
+    "typeof",
+    NULL
+};
+
+static bool isUnredefinableGlobal(char *name) {
+    ASSERT(name);
+    char **glbl = unredefinableGlobals;
+    while (*glbl != NULL) {
+        if (strcmp(name, *glbl) == 0) {
+            return true;
+        }
+        glbl++;
+    }
+    return false;
+}
+
 void defineNativeFunctions() {
     ObjString *clockName = copyString("clock", 5);
     ObjNative *clockFn = newNative(clockName, runtimeNativeClock);
@@ -18,7 +37,13 @@ void defineNativeFunctions() {
     tableSet(&vm.globals, typeofName, OBJ_VAL(typeofFn));
 }
 
-static void resetStack() {
+void defineNativeClasses() {
+    ObjString *objClassName = copyString("Object", 6);
+    ObjClass *objClass = newClass(objClassName, NULL);
+    tableSet(&vm.globals, objClassName, OBJ_VAL(objClass));
+}
+
+void resetStack() {
     vm.stackTop = vm.stack;
     vm.frameCount = 0;
 }
@@ -40,6 +65,7 @@ void initVM() {
     initTable(&vm.strings);
     vm.initString = copyString("init", 4);
     defineNativeFunctions();
+    defineNativeClasses();
     turnGCOn();
 }
 
@@ -409,6 +435,11 @@ static InterpretResult run(void) {
       }
       case OP_DEFINE_GLOBAL: {
         Value varName = READ_CONSTANT();
+        char *name = AS_CSTRING(varName);
+        if (isUnredefinableGlobal(name)) {
+            runtimeError("Can't redeclare global variable '%s'", name);
+            return INTERPRET_RUNTIME_ERROR;
+        }
         Value val = peek(0);
         tableSet(&vm.globals, AS_STRING(varName), val);
         pop();
@@ -428,6 +459,11 @@ static InterpretResult run(void) {
       case OP_SET_GLOBAL: {
         Value val = peek(0);
         Value varName = READ_CONSTANT();
+        char *name = AS_CSTRING(varName);
+        if (isUnredefinableGlobal(name)) {
+            runtimeError("Can't redefine global variable '%s'", name);
+            return INTERPRET_RUNTIME_ERROR;
+        }
         tableSet(&vm.globals, AS_STRING(varName), val);
         break;
       }
@@ -534,7 +570,10 @@ static InterpretResult run(void) {
       }
       case OP_CLASS: {
           Value className = READ_CONSTANT();
-          ObjClass *klass = newClass(AS_STRING(className), NULL);
+          Value objClassVal;
+          ASSERT(tableGet(&vm.globals, internedString("Object"), &objClassVal));
+          ASSERT(IS_CLASS(objClassVal));
+          ObjClass *klass = newClass(AS_STRING(className), AS_CLASS(objClassVal));
           push(OBJ_VAL(klass));
           break;
       }

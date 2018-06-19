@@ -76,6 +76,7 @@ typedef struct {
   const char *tokenStart;
   const char *current;
   int line;
+  int indent;
 } Scanner;
 
 extern Scanner scanner; // global

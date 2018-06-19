@@ -185,7 +185,6 @@ cleanup:
 }
 
 int main(int argc, char *argv[]) {
-    turnGCOff(); // For now, there's a bug in there somewhere
     parseTestOptions(argc, argv);
     initVM();
     INIT_TESTS();

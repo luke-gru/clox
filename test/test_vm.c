@@ -168,6 +168,9 @@ static int test_simple_class(void) {
     T_ASSERT(val != NULL);
     T_ASSERT(IS_INSTANCE(*val));
     T_ASSERT_VALPRINTEQ("<instance Train>", *val);
+    ObjInstance *inst = AS_INSTANCE(*val);
+    Value objClassVal = OBJ_VAL(inst->klass->superclass);
+    T_ASSERT_VALPRINTEQ("<class Object>", objClassVal);
 cleanup:
     freeVM();
     return 0;
@@ -440,8 +443,25 @@ cleanup:
     return 0;
 }
 
+static int test_unredefinable_global() {
+    char *src = "Object = nil;";
+    InterpretResult ires = interp(src, false);
+    T_ASSERT_EQ(INTERPRET_RUNTIME_ERROR, ires);
+cleanup:
+    freeVM();
+    return 0;
+}
+
+static int test_unredefinable_global2() {
+    char *src = "var Object;";
+    InterpretResult ires = interp(src, false);
+    T_ASSERT_EQ(INTERPRET_RUNTIME_ERROR, ires);
+cleanup:
+    freeVM();
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
-    /*turnGCOff();*/
     parseTestOptions(argc, argv);
     INIT_TESTS();
     RUN_TEST(test_addition);
@@ -471,5 +491,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_short_circuit_and);
     RUN_TEST(test_short_circuit_or);
     RUN_TEST(test_native_typeof);
+    RUN_TEST(test_unredefinable_global);
+    RUN_TEST(test_unredefinable_global2);
     END_TESTS();
 }

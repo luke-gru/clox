@@ -77,6 +77,14 @@ ObjString *copyString(const char *chars, int length) {
     return allocateString(heapChars, length, hash);
 }
 
+ObjString *internedString(const char *chars) {
+    int length = (int)strlen(chars);
+    uint32_t hash = hashString((char*)chars, length);
+    ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
+    ASSERT(interned);
+    return interned;
+}
+
 void freeString(ObjString *string) {
     freeObject((Obj*)string);
 }

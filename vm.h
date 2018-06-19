@@ -55,4 +55,7 @@ void runtimeError(const char *format, ...);
 void setPrintBuf(ObjString *buf);
 void unsetPrintBuf(void);
 
+void repl(void);
+void resetStack();
+
 #endif

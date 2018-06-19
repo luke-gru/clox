@@ -19,7 +19,7 @@ typedef struct Obj {
   ObjType type;
   Obj *next;
   bool isDark; // is this object marked?
-  bool noGC;
+  bool noGC; // don't collect this object
 } Obj;
 
 typedef struct ObjString {
@@ -59,6 +59,7 @@ typedef struct ObjInstance {
   Obj object;
   ObjClass *klass;
   Table fields;
+  Table hiddenFields;
 } ObjInstance;
 
 typedef struct ObjBoundMethod {
@@ -86,6 +87,7 @@ ObjString *takeString(char *chars, int length);
 ObjString *copyString(const char *chars, int length);
 void pushCString(ObjString *string, char *chars, int lenToAdd);
 void freeString(ObjString *str);
+ObjString *internedString(const char *chars);
 
 ObjFunction *newFunction();
 void freeFunction(ObjFunction *func);

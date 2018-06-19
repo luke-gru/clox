@@ -198,8 +198,14 @@ Token scanToken() {
   switch (c) {
     case '(': return makeToken(TOKEN_LEFT_PAREN);
     case ')': return makeToken(TOKEN_RIGHT_PAREN);
-    case '{': return makeToken(TOKEN_LEFT_BRACE);
-    case '}': return makeToken(TOKEN_RIGHT_BRACE);
+    case '{': {
+        scanner.indent++;
+        return makeToken(TOKEN_LEFT_BRACE);
+    }
+    case '}': {
+        scanner.indent--;
+        return makeToken(TOKEN_RIGHT_BRACE);
+    }
     case '[': return makeToken(TOKEN_LEFT_BRACKET);
     case ']': return makeToken(TOKEN_RIGHT_BRACKET);
     case ';': return makeToken(TOKEN_SEMICOLON);
@@ -236,6 +242,7 @@ void initScanner(const char *src) {
   scanner.tokenStart = src;
   scanner.current = src;
   scanner.line = 1;
+  scanner.indent = 0;
 }
 
 const char *tokTypeStr(TokenType ttype) {

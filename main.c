@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
     char **argvp = argv+1;
     int i = 0;
     int incrOpt = 0;
+    bool interactive = false;
     while (argvp[i] != NULL) {
         if ((incrOpt = parseOption(argvp, i) > 0)) {
             i+=incrOpt;
@@ -28,6 +29,9 @@ int main(int argc, char *argv[]) {
         if (strcmp(argvp[i], "-f") == 0 && argvp[i+1]) {
             fname = argvp[i+1];
             i+=2;
+        } else if (strcmp(argvp[i], "-i") == 0) {
+            interactive = true;
+            i+=1;
         } else {
             fprintf(stderr, "Invalid option: %s\n", argvp[i]);
             usage(1);
@@ -36,8 +40,9 @@ int main(int argc, char *argv[]) {
 
     CompileErr err = COMPILE_ERR_NONE;
     int compile_res = 0;
-    if (fname == NULL) { // TODO: take src from stdin a line at a time
-        usage(1);
+    if (fname == NULL || interactive) {
+        repl();
+        exit(0);
     }
 
     Chunk chunk;
