@@ -30,6 +30,7 @@ void grayObject(Obj *obj); // non-recursively mark object as live
 void grayValue(Value val); // non-recursively mark object in value as live
 void collectGarbage(void); // begin GC
 void freeObject(Obj *obj);
+void blackenObject(Obj *obj);
 void freeObjects(void); // free all objects, at end of VM lifecycle
 
 void turnGCOff(void);

@@ -60,6 +60,8 @@ char *opName(OpCode code) {
         return "OP_CALL";
     case OP_METHOD:
         return "OP_METHOD";
+    case OP_CREATE_ARRAY:
+        return "OP_CREATE_ARRAY";
     case OP_PRINT:
         return "OP_PRINT";
     case OP_TRUE:
@@ -332,6 +334,7 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_POP:
         case OP_LEAVE:
         case OP_THROW:
+        case OP_CREATE_ARRAY:
             return printSimpleInstruction(opName(byte), i);
         default:
             printf("Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
@@ -386,6 +389,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_POP:
         case OP_LEAVE:
         case OP_THROW:
+        case OP_CREATE_ARRAY:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             char *cBuf = calloc(19+1, 1);

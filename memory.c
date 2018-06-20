@@ -57,6 +57,7 @@ static inline void trace_gc_func_end(const char *funcName) {
     fprintf(stderr, "[GC]: </%s>\n", funcName);
 }
 
+// Main memory management function for malloc/free
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START("reallocate");
     vm.bytesAllocated += (newSize - oldSize);
@@ -102,6 +103,7 @@ void grayObject(Obj *obj) {
 }
 
 void grayValue(Value val) {
+    if (!IS_OBJ(val)) return;
     TRACE_GC_FUNC_START("grayValue");
     grayObject(AS_OBJ(val));
     TRACE_GC_FUNC_END("grayValue");
@@ -116,13 +118,13 @@ static void grayArray(ValueArray *ary) {
 }
 
 // recursively gray an object's references
-static void blackenObject(Obj *obj) {
+void blackenObject(Obj *obj) {
     TRACE_GC_FUNC_START("blackenObject");
     switch (obj->type) {
         case OBJ_BOUND_METHOD: {
             ObjBoundMethod *method = (ObjBoundMethod*)obj;
             grayValue(method->receiver);
-            grayObject((Obj*)method->method);
+            grayObject(method->callable);
             break;
         }
         case OBJ_CLASS: {
@@ -146,6 +148,14 @@ static void blackenObject(Obj *obj) {
             ObjInstance *instance = (ObjInstance*)obj;
             grayObject((Obj*)instance->klass);
             grayTable(&instance->fields);
+            grayTable(&instance->hiddenFields);
+            break;
+        }
+        case OBJ_INTERNAL: {
+            ObjInternal *internal = (ObjInternal*)obj;
+            if (internal->markFunc) {
+                internal->markFunc(obj);
+            }
             break;
         }
         case OBJ_STRING: { // no references
@@ -196,8 +206,20 @@ void freeObject(Obj *obj) {
             ObjInstance *instance = (ObjInstance*)obj;
             GC_TRACE_DEBUG("Freeing instance fields table: p=%p", &instance->fields);
             freeTable(&instance->fields);
+            GC_TRACE_DEBUG("Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
+            freeTable(&instance->hiddenFields);
             GC_TRACE_DEBUG("Freeing ObjInstance: p=%p", obj);
             FREE(ObjInstance, obj);
+            break;
+        }
+        case OBJ_INTERNAL: {
+            ObjInternal *internal = (ObjInternal*)obj;
+            if (internal->freeFunc) {
+                GC_TRACE_DEBUG("Freeing internal object's references: p=%p, datap=%p", internal, internal->data);
+                internal->freeFunc(obj);
+            }
+            GC_TRACE_DEBUG("Freeing internal object: p=%p, ", internal);
+            FREE(ObjInternal, internal);
             break;
         }
         case OBJ_STRING: {
@@ -218,29 +240,38 @@ void freeObject(Obj *obj) {
 
 static bool inGC = false;
 static bool GCOn = true;
+// GC stats
+static unsigned numHiddenRoots = 0;
+static unsigned numRootsLastGC = 0;
 
 void turnGCOff(void) {
+    GC_TRACE_DEBUG("GC turned OFF");
     GCOn = false;
 }
 void turnGCOn(void) {
+    GC_TRACE_DEBUG("GC turned ON");
     GCOn = true;
 }
 
 void hideFromGC(Obj *obj) {
-    obj->noGC = true;
+    if (!obj->noGC) {
+        numHiddenRoots++;
+        obj->noGC = true;
+    }
 }
 
 void unhideFromGC(Obj *obj) {
-    obj->noGC = false;
+    if (obj->noGC) {
+        numHiddenRoots--;
+        obj->noGC = false;
+    }
 }
 
 // single-phase mark and sweep
 // TODO: divide work up into mark and sweep phases to limit GC pauses
 void collectGarbage(void) {
     if (!GCOn) {
-        if (CLOX_OPTION_T(traceGC)) {
-            fprintf(stderr, "GC run skipped (GC OFF)\n");
-        }
+        GC_TRACE_DEBUG("GC run skipped (GC OFF)");
         return;
     }
     if (inGC) {
@@ -249,31 +280,63 @@ void collectGarbage(void) {
     }
     inGC = true;
     size_t before = vm.bytesAllocated;
-    if (CLOX_OPTION_T(traceGC)) {
-        fprintf(stderr, "[GC]: begin\n");
-    }
+    GC_TRACE_DEBUG("GC begin");
 
+    GC_TRACE_DEBUG("Marking VM stack roots");
+    if (CLOX_OPTION_T(traceGC)) printVMStack(stderr);
     // Mark stack roots up the stack
     for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
         grayValue(*slot);
     }
 
+    GC_TRACE_DEBUG("Marking VM frame functions");
     // gray active function objects
     for (int i = 0; i < vm.frameCount; i++) {
         grayObject((Obj*)vm.frames[i].function);
     }
 
+    GC_TRACE_DEBUG("Marking globals");
     // Mark the global roots.
     grayTable(&vm.globals);
+    GC_TRACE_DEBUG("Marking interned strings");
     grayTable(&vm.strings);
+    GC_TRACE_DEBUG("Marking compiler roots");
     grayCompilerRoots();
+    GC_TRACE_DEBUG("Marking VM init string");
     grayObject((Obj*)vm.initString);
-    grayObject((Obj*)vm.printBuf);
+    if (vm.printBuf) {
+        GC_TRACE_DEBUG("Marking VM print buf");
+        grayObject((Obj*)vm.printBuf);
+    }
 
     if (vm.lastValue != NULL) {
+        GC_TRACE_DEBUG("Marking VM last value");
         grayValue(*vm.lastValue);
     }
 
+    GC_TRACE_DEBUG("Marking VM hidden roots");
+    // gray hidden roots...
+    // FIXME: this is slow, we should have a hash or at least an array of hidden roots
+    Obj *root = vm.objects;
+    int numHiddenFound = 0;
+    while (root != NULL) {
+        Obj *next = root->next;
+        if (root->noGC) {
+            numHiddenFound++;
+            grayObject(root);
+        }
+        root = next;
+    }
+
+    if (numHiddenFound < numHiddenRoots) {
+        fprintf(stderr, "GC ERR: Hidden roots found: %d, hidden roots: %d\n",
+            numHiddenFound, numHiddenRoots);
+        ASSERT(0);
+    }
+
+    numRootsLastGC = vm.grayCount;
+
+    GC_TRACE_DEBUG("Traversing references...");
     // traverse the references, graying them all
     while (vm.grayCount > 0) {
         // Pop an item from the gray stack.
@@ -284,6 +347,7 @@ void collectGarbage(void) {
     // Delete unused interned strings.
     /*tableRemoveWhite(&vm.strings);*/
 
+    GC_TRACE_DEBUG("Begin FREE process");
     // Collect the white (unmarked) objects.
     Obj **object = &vm.objects;
     while (*object != NULL) {
@@ -299,25 +363,34 @@ void collectGarbage(void) {
             object = &(*object)->next;
         }
     }
+    GC_TRACE_DEBUG("done FREE process");
 
     // Adjust the heap size based on live memory.
     vm.nextGCThreshhold = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;
 
-    if (CLOX_OPTION_T(traceGC)) {
-        fprintf(stderr, "[GC]: collected %ld bytes (from %ld to %ld) next GC at %ld bytes\n",
+        GC_TRACE_DEBUG("collected %ld bytes (from %ld to %ld) next GC at %ld bytes\n",
             before - vm.bytesAllocated, before, vm.bytesAllocated, vm.nextGCThreshhold);
-    }
+        GC_TRACE_DEBUG("stats: roots found: %d, hidden roots found: %d\n",
+            numRootsLastGC, numHiddenRoots);
     inGC = false;
 }
 
 
+// Force free all objects, regardless of noGC field
 void freeObjects(void) {
-  Obj *object = vm.objects;
-  while (object != NULL) {
-    Obj *next = object->next;
-    if (!object->noGC) freeObject(object);
-    object = next;
-  }
+    GC_TRACE_DEBUG("freeObjects -> begin FREEing all objects");
+    Obj *object = vm.objects;
+    while (object != NULL) {
+        Obj *next = object->next;
+        if (object->noGC) {
+            unhideFromGC(object);
+        }
+        freeObject(object);
+        object = next;
+    }
 
-  if (vm.grayStack) free(vm.grayStack);
+    if (vm.grayStack) free(vm.grayStack);
+    GC_TRACE_DEBUG("/freeObjects");
+    numRootsLastGC = 0;
+    numHiddenRoots = 0;
 }

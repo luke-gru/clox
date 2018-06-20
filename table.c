@@ -5,6 +5,7 @@
 #include "object.h"
 #include "table.h"
 #include "value.h"
+#include "debug.h"
 
 #define TABLE_MAX_LOAD 0.75
 
@@ -157,7 +158,10 @@ void tableRemoveWhite(Table* table) {
 
 void grayTable(Table *table) {
     for (int i = 0; i <= table->capacityMask; i++) {
+        ASSERT(table->entries);
         Entry *entry = &table->entries[i];
+        if (!entry || !entry->key) continue;
+        ASSERT(entry);
         grayObject((Obj*)entry->key);
         grayValue(entry->value);
     }

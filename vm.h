@@ -1,6 +1,7 @@
 #ifndef clox_vm_h
 #define clox_vm_h
 
+#include <stdio.h>
 #include "chunk.h"
 #include "object.h"
 #include "table.h"
@@ -57,5 +58,6 @@ void unsetPrintBuf(void);
 
 void repl(void);
 void resetStack();
+void printVMStack(FILE *f);
 
 #endif

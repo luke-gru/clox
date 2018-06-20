@@ -2,6 +2,7 @@
 #include "compiler.h"
 #include "vm.h"
 #include "debug.h"
+#include "memory.h"
 
 static InterpretResult interp(char *src, bool expectSuccess) {
     CompileErr cerr = COMPILE_ERR_NONE;
@@ -423,7 +424,7 @@ static int test_native_typeof() {
                 "print typeof(\"str\");\n"
                 "print typeof(MyPet);\n";
                 /*"print typeof([])\n""*/
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = newString("", 0);
     setPrintBuf(buf);
     interp(src, true);
     char *output = buf->chars;
@@ -438,8 +439,8 @@ static int test_native_typeof() {
                      "class\n";
     T_ASSERT_STREQ(expected, output);
 cleanup:
-    freeVM();
     unsetPrintBuf();
+    freeVM();
     return 0;
 }
 
@@ -457,6 +458,24 @@ static int test_unredefinable_global2() {
     InterpretResult ires = interp(src, false);
     T_ASSERT_EQ(INTERPRET_RUNTIME_ERROR, ires);
 cleanup:
+    freeVM();
+    return 0;
+}
+
+static int test_array_literal() {
+    char *src = "var a = [1,2,3]; print a.toString(); a;";
+    ObjString *buf = newString("", 0);
+    setPrintBuf(buf);
+    interp(src, true);
+    Value *val = getLastValue();
+    ASSERT(val);
+    T_ASSERT(IS_ARRAY(*val));
+    char *output = buf->chars;
+    ASSERT(buf->chars);
+    char *expected = "[1.00,2.00,3.00]\n";
+    T_ASSERT_STREQ(expected, output);
+cleanup:
+    unsetPrintBuf();
     freeVM();
     return 0;
 }
@@ -493,5 +512,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_native_typeof);
     RUN_TEST(test_unredefinable_global);
     RUN_TEST(test_unredefinable_global2);
+    RUN_TEST(test_array_literal);
     END_TESTS();
 }

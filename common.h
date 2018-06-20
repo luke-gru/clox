@@ -53,6 +53,8 @@ typedef enum {
     OP_JUMP_IF_TRUE_PEEK, // peeks value off top of stack, checks truthiness
     OP_LOOP,
 
+    OP_CREATE_ARRAY, // number of elements is at top of stack, elements are below it
+
     OP_CLASS, // class name is given as operand
     OP_SUBCLASS, // top of stack is superclass, operand is class name
 

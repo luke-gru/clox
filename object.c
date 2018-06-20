@@ -77,20 +77,40 @@ ObjString *copyString(const char *chars, int length) {
     return allocateString(heapChars, length, hash);
 }
 
+// Always allocates a new string, does NOT intern it
+ObjString *newString(char *chars, int len) {
+    char *heapChars = ALLOCATE(char, len+1);
+    if (len > 0) memcpy(heapChars, chars, len);
+    heapChars[len] = '\0';
+    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+    hideFromGC((Obj*)string);
+    string->length = len;
+    string->chars = heapChars;
+    if (len > 0) {
+        string->hash = hashString(string->chars, len);
+    } else {
+        string->hash = 0;
+    }
+    unhideFromGC((Obj*)string);
+    return string;
+}
+
 ObjString *internedString(const char *chars) {
     int length = (int)strlen(chars);
     uint32_t hash = hashString((char*)chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
-    ASSERT(interned);
+    if (!interned) {
+        fprintf(stderr, "Expected string to be interned: '%s'\n", chars);
+        ASSERT(interned);
+    }
     return interned;
 }
 
-void freeString(ObjString *string) {
-    freeObject((Obj*)string);
-}
-
+// Copies `chars`, adds them to end of string.
+// NOTE: don't use this function on a ObjString that is already a key
+// for a table, it will fail.
 // TODO: add a capacity field to string, so we don't always reallocate when
-// pushing new chars to the buffer.
+// pushing new chars to the buffer. Also, treat strings as mutable externally.
 // NOTE: length here is strlen(chars)
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
     /*fprintf(stderr, "pushCSTring\n");*/
@@ -104,7 +124,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     }
     string->chars[string->length + i] = '\0';
     string->length += lenToAdd;
-    // TODO: avoid rehash, hash should be calculated when needed!
+    // TODO: avoid rehash, hash should be calculated when needed (lazily)
     string->hash = hashString(string->chars, strlen(string->chars));
     /*fprintf(stderr, "/pushCSTring\n");*/
 }
@@ -125,12 +145,6 @@ ObjFunction *newFunction(Chunk *chunk) {
     return function;
 }
 
-void freeFunction(ObjFunction *func) {
-    // TODO: free objstring if not null
-    freeChunk(&func->chunk);
-    FREE(ObjFunction, func);
-}
-
 ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     ASSERT(name);
     ObjClass *klass = ALLOCATE_OBJ(
@@ -149,6 +163,7 @@ ObjInstance *newInstance(ObjClass *klass) {
     );
     obj->klass = klass;
     initTable(&obj->fields);
+    initTable(&obj->hiddenFields);
     return obj;
 }
 
@@ -162,15 +177,29 @@ ObjNative *newNative(ObjString *name, NativeFn function) {
     return native;
 }
 
-ObjBoundMethod *newBoundMethod(ObjInstance *receiver, ObjFunction *method) {
+ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
     ASSERT(receiver);
-    ASSERT(method);
+    ASSERT(callable);
     ObjBoundMethod *bmethod = ALLOCATE_OBJ(
         ObjBoundMethod, OBJ_BOUND_METHOD
     );
     bmethod->receiver = OBJ_VAL(receiver);
-    bmethod->method = method;
+    bmethod->callable = callable;
     return bmethod;
+}
+
+ObjInternal *newInternalObject(void *data, GCMarkFunc markFunc, GCFreeFunc freeFunc) {
+    ObjInternal *obj = ALLOCATE_OBJ(
+        ObjInternal, OBJ_INTERNAL
+    );
+    obj->data = data;
+    obj->markFunc = markFunc;
+    obj->freeFunc = freeFunc;
+    return obj;
+}
+
+void *internalGetData(ObjInternal *obj) {
+    return obj->data;
 }
 
 const char *typeOfObj(Obj *obj) {

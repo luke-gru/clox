@@ -245,6 +245,13 @@ void initScanner(const char *src) {
   scanner.indent = 0;
 }
 
+void resetScanner(void) {
+  scanner.tokenStart = scanner.source;
+  scanner.current = scanner.source;
+  scanner.line = 1;
+  scanner.indent = 0;
+}
+
 const char *tokTypeStr(TokenType ttype) {
   switch (ttype) {
     case TOKEN_EMPTY:

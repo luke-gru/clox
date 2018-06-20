@@ -83,6 +83,7 @@ extern Scanner scanner; // global
 
 // init/reinit scanner
 void initScanner(const char *src);
+void resetScanner(void);
 const char *tokTypeStr(TokenType ttype);
 Token scanToken();
 void scanAllPrint(const char *src);

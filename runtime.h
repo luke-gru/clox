@@ -17,4 +17,7 @@ Value runtimeNativeClock(int argCount, Value *args);
 Value runtimeNativeTypeof(int argCount, Value *args);
 bool runtimeCheckArgs(int min, int max, int actual);
 
+Value lxArrayInit(int argCount, Value *args);
+Value lxArrayPush(int argCount, Value *args);
+Value lxArrayToString(int argCount, Value *args);
 #endif

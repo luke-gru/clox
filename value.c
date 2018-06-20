@@ -79,7 +79,16 @@ void printValue(FILE *file, Value value) {
             return;
         } else if (OBJ_TYPE(value) == OBJ_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
-            ObjString *name = bmethod->method->name;
+            ObjString *name;
+            if (bmethod->callable->type == OBJ_FUNCTION) {
+                ObjFunction *func = (ObjFunction*)bmethod->callable;
+                name = func->name;
+            } else if (bmethod->callable->type == OBJ_NATIVE_FUNCTION) {
+                ObjNative *func = (ObjNative*)bmethod->callable;
+                name = func->name;
+            } else {
+                ASSERT(0);
+            }
             fprintf(file, "<method %s>", name->chars);
             return;
         }
@@ -90,16 +99,15 @@ void printValue(FILE *file, Value value) {
 
 // returns a ObjString hidden from the GC
 ObjString *valueToString(Value value) {
-    turnGCOff();
     ObjString *ret = NULL;
     if (IS_BOOL(value)) {
         if (AS_BOOL(value)) {
-            ret = copyString("true", 4);
+            ret = newString("true", 4);
         } else {
-            ret = copyString("false", 5);
+            ret = newString("false", 5);
         }
     } else if (IS_NIL(value)) {
-        ret = copyString("nil", 3);
+        ret = newString("nil", 3);
     } else if (IS_NUMBER(value)) {
         char buftemp[50] = { '\0' };
         double d = AS_NUMBER(value);
@@ -107,21 +115,22 @@ ObjString *valueToString(Value value) {
         char *buf = calloc(strlen(buftemp)+1, 1);
         strcpy(buf, buftemp);
         ASSERT_MEM(buf);
-        ret = takeString(buf, strlen(buf));
+        ret = newString(buf, strlen(buf));
     } else if (IS_OBJ(value)) {
         if (OBJ_TYPE(value) == OBJ_STRING) {
             char *cstring = AS_CSTRING(value);
-            ret = copyString(cstring, strlen(cstring));
+            ret = newString(cstring, strlen(cstring));
         } else if (OBJ_TYPE(value) == OBJ_FUNCTION) {
             ObjFunction *func = AS_FUNCTION(value);
             if (func->name == NULL) {
                 const char *anon = "<fun (Anon)>";
-                ret = copyString(anon, strlen(anon));
+                ret = newString(anon, strlen(anon));
             } else {
                 char *buf = calloc(strlen(func->name->chars)+1+6, 1);
                 ASSERT_MEM(buf);
                 sprintf(buf, "<fun %s>", func->name->chars);
-                ret = takeString(buf, strlen(buf));
+                ret = newString(buf, strlen(buf));
+                /*free(buf);*/
             }
         } else if (OBJ_TYPE(value) == OBJ_INSTANCE) {
             ObjClass *klass = AS_INSTANCE(value)->klass;
@@ -129,14 +138,16 @@ ObjString *valueToString(Value value) {
             char *cbuf = calloc(strlen(klassName)+1+11, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<instance %s>", klassName);
-            ret = takeString(cbuf, strlen(cbuf));
+            ret = newString(cbuf, strlen(cbuf));
+            /*free(cbuf);*/
         } else if (OBJ_TYPE(value) == OBJ_CLASS) {
             ObjClass *klass = AS_CLASS(value);
             char *klassName = klass->name->chars;
             char *cbuf = calloc(strlen(klassName)+1+8, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<class %s>", klassName);
-            ret = takeString(cbuf, strlen(cbuf));
+            ret = newString(cbuf, strlen(cbuf));
+            /*free(cbuf);*/
         } else if (OBJ_TYPE(value) == OBJ_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
             ObjString *name = native->name;
@@ -144,20 +155,26 @@ ObjString *valueToString(Value value) {
             char *cbuf = calloc(strlen(nameStr)+1+14, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<fn %s (native)>", nameStr);
-            ret = takeString(cbuf, strlen(cbuf));
+            ret = newString(cbuf, strlen(cbuf));
+            /*free(cbuf);*/
         } else if (OBJ_TYPE(value) == OBJ_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
-            ObjString *name = bmethod->method->name;
+            ObjString *name;
+            if (bmethod->callable->type == OBJ_FUNCTION) {
+                name = ((ObjFunction*)(bmethod->callable))->name;
+            } else if (bmethod->callable->type == OBJ_NATIVE_FUNCTION) {
+                name = ((ObjNative*)(bmethod->callable))->name;
+            }
             char *nameStr = name->chars;
             char *cbuf = calloc(strlen(nameStr)+1+9, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<method %s>", nameStr);
-            ret = takeString(cbuf, strlen(cbuf));
+            ret = newString(cbuf, strlen(cbuf));
+            /*free(cbuf);*/
         }
     }
     if (ret) {
         hideFromGC((Obj*)ret);
-        turnGCOn();
         return ret;
     }
     ASSERT(0);

@@ -9,8 +9,8 @@
 
 Chunk rChunk;
 
-static void resetChunk() {
-    initChunk(&rChunk);
+static void resetChunk(void) {
+    initChunk(&rChunk); // NOTE: should call freeChunk to release the value array
 }
 
 static bool evalLines(char *lines[], int numLines) {
@@ -28,14 +28,15 @@ static bool evalLines(char *lines[], int numLines) {
     CompileErr cerr = COMPILE_ERR_NONE;
     /*fprintf(stderr, "compiling code: '%s'", code);*/
     int res = compile_src(code, &rChunk, &cerr);
+    unhideFromGC((Obj*)buf);
     if (res != 0) {
-        fprintf(stderr, "Compilation error\n");
+        fprintf(stderr, "%s", "Compilation error\n");
         return false;
     }
     /*fprintf(stderr, "interpreting code\n");*/
     InterpretResult ires = interpret(&rChunk);
     if (ires != INTERPRET_OK) {
-        fprintf(stderr, "Error evaluating code\n");
+        fprintf(stderr, "%s", "Error evaluating code\n");
         return false;
     }
     return true;
@@ -47,8 +48,9 @@ static void freeLines(char *lines[], int numLines) {
     }
 }
 
-static bool scanToEnd() {
+static bool scanToEnd(void) {
     Token tok;
+    resetScanner();
     while (true) {
         tok = scanToken();
         if (tok.type == TOKEN_EOF) {
@@ -72,50 +74,79 @@ void scannerAddSrc(char *src) {
     scanner.source = buf;
 }
 
-void repl(void) {
+static void _resetScanner(void) {
     initScanner("");
+}
+
+void repl(void) {
+    const char *prompt = ">  ";
+    _resetScanner();
     initChunk(&rChunk);
     initVM();
     turnGCOff();
+    /*turnGCOff(); support GC! Should work fine*/
 
     char *lines[50];
     int numLines = 0;
     char *line = NULL;
     size_t size;
     int getres = -1;
-    fprintf(stderr, ">  ");
+    fprintf(stderr, "%s", prompt);
     while ((getres = getline(&line, &size, stdin)) != -1) {
+        if (numLines == 0 && strcmp(line, "exit\n") == 0) {
+            break;
+        }
+        // resets the VM, re-inits the code chunk
+        if (numLines == 0 && strcmp(line, "reset\n") == 0) {
+            fprintf(stderr, "Resetting VM... ");
+            freeChunk(&rChunk); // re-initializes it too
+            freeVM();
+            initVM();
+            _resetScanner();
+            line = NULL;
+            fprintf(stderr, "done.\n");
+            fprintf(stderr, "%s", prompt);
+            continue;
+        }
         ASSERT(line);
         lines[numLines++] = line;
         scannerAddSrc(line);
         bool isOk = scanToEnd();
         if (!isOk) {
-            fprintf(stderr, "Lexical error\n");
+            fprintf(stderr, "%s", "Lexical error\n");
             freeLines(lines, numLines);
             numLines = 0;
-            initScanner("");
-            fprintf(stderr, ">  ");
+            _resetScanner();
+            fprintf(stderr, "%s", prompt);
+            line = NULL;
             continue;
         }
         if (scanner.indent == 0) { // evaluate the statement/expression
-            /*fprintf(stderr, "Evaluating lines\n");*/
-            evalLines(lines, numLines);
+            if (!evalLines(lines, numLines)) {
+                freeLines(lines, numLines);
+                numLines = 0;
+                _resetScanner();
+                fprintf(stderr, "%s", prompt);
+                line = NULL;
+                continue;
+            }
             Value *val = getLastValue();
-            fprintf(stderr, "  => ");
+            fprintf(stderr, "%s", "  => ");
             if (val) {
                 printValue(stderr, *val);
             } else {
                 printValue(stderr, NIL_VAL);
             }
-            fprintf(stderr, "\n");
+            fprintf(stderr, "%s", "\n");
             freeLines(lines, numLines);
             numLines = 0;
-            initScanner("");
+            _resetScanner();
         } else {
+            fprintf(stderr, "(waiting for more input\n");
             // wait until more input
         }
         line = NULL;
-        fprintf(stderr, ">  ");
+        fprintf(stderr, "%s", prompt);
     }
     exit(0);
 }

@@ -521,6 +521,12 @@ static void emitNode(Node *n) {
         }
         return;
     }
+    case ARRAY_EXPR: {
+        emitChildren(n);
+        emitConstant(NUMBER_VAL(n->children->length));
+        emitByte(OP_CREATE_ARRAY);
+        return;
+    }
     case IF_STMT: {
         emitNode(n->children->data[0]); // condition
         int ifJumpStart = emitJump(OP_JUMP_IF_FALSE);

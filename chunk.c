@@ -50,7 +50,7 @@ void freeChunk(Chunk *chunk) {
     chunk->code = NULL;
     FREE_ARRAY(int, chunk->lines, chunk->capacity);
     chunk->lines = NULL;
-    /*freeValueArray(&chunk->constants);*/ // FIXME: put back
+    freeValueArray(&chunk->constants);
     if (chunk->catchTbl) {
         freeCatchTable(chunk->catchTbl);
         chunk->catchTbl = NULL;
@@ -66,9 +66,9 @@ int addConstant(Chunk *chunk, Value value) {
         hideFromGC(AS_OBJ(value));
     }
     writeValueArray(&chunk->constants, value);
-    /*if (IS_OBJ(value)) {*/ // FIXME: put back
-        /*unhideFromGC(AS_OBJ(value));*/
-    /*}*/
+    if (IS_OBJ(value)) {
+        unhideFromGC(AS_OBJ(value));
+    }
     return chunk->constants.count - 1;
 }
 

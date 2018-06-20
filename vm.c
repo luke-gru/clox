@@ -10,6 +10,7 @@ VM vm;
 
 char *unredefinableGlobals[] = {
     "Object",
+    "Array",
     "clock",
     "typeof",
     NULL
@@ -37,10 +38,30 @@ void defineNativeFunctions() {
     tableSet(&vm.globals, typeofName, OBJ_VAL(typeofFn));
 }
 
+ObjClass *lxObjClass;
+ObjClass *lxAryClass;
+
 void defineNativeClasses() {
+    // class Object
     ObjString *objClassName = copyString("Object", 6);
     ObjClass *objClass = newClass(objClassName, NULL);
     tableSet(&vm.globals, objClassName, OBJ_VAL(objClass));
+    lxObjClass = objClass;
+
+    // class Array
+    ObjString *arrayClassName = copyString("Array", 5);
+    ObjClass *arrayClass = newClass(arrayClassName, objClass);
+    tableSet(&vm.globals, arrayClassName, OBJ_VAL(arrayClass));
+    lxAryClass = arrayClass;
+
+    ObjNative *aryInitNat = newNative(copyString("init", 4), lxArrayInit);
+    tableSet(&arrayClass->methods, copyString("init", 4), OBJ_VAL(aryInitNat));
+
+    ObjNative *aryPushNat = newNative(copyString("push", 4), lxArrayPush);
+    tableSet(&arrayClass->methods, copyString("push", 4), OBJ_VAL(aryPushNat));
+
+    ObjNative *aryToStringNat = newNative(copyString("toString", 8), lxArrayToString);
+    tableSet(&arrayClass->methods, copyString("toString", 8), OBJ_VAL(aryToStringNat));
 }
 
 void resetStack() {
@@ -126,8 +147,8 @@ static Value falseValue() {
 
 static bool isTruthy(Value val) {
     switch (val.type) {
-    case VAL_NIL: return false;
-    case VAL_BOOL: return AS_BOOL(val);
+    case VAL_T_NIL: return false;
+    case VAL_T_BOOL: return AS_BOOL(val);
     default:
         // all other values are truthy
         return true;
@@ -140,7 +161,7 @@ static bool canCmpValues(Value lhs, Value rhs) {
 }
 
 static int cmpValues(Value lhs, Value rhs) {
-    if (lhs.type == VAL_NUMBER && rhs.type == VAL_NUMBER) {
+    if (lhs.type == VAL_T_NUMBER && rhs.type == VAL_T_NUMBER) {
         double numA = AS_NUMBER(lhs);
         double numB = AS_NUMBER(rhs);
         if (numA == numB) {
@@ -203,9 +224,10 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
     if (tableGet(&obj->fields, propName, &ret)) {
         return ret;
+    // TODO: what if this is a native function?
     } else if (tableGet(&obj->klass->methods, propName, &ret)) {
-        ASSERT(IS_FUNCTION(ret));
-        ObjBoundMethod *bmethod = newBoundMethod(obj, AS_FUNCTION(ret));
+        ASSERT(isCallable(ret));
+        ObjBoundMethod *bmethod = newBoundMethod(obj, AS_OBJ(ret));
         return OBJ_VAL(bmethod);
     } else {
         return NIL_VAL;
@@ -221,45 +243,57 @@ static void defineMethod(ObjString *name) {
     ASSERT(IS_FUNCTION(method));
     ASSERT(IS_CLASS(peek(1)));
     ObjClass *klass = AS_CLASS(peek(1));
-    fprintf(stderr, "defining method '%s' (%d)\n", name->chars, (int)strlen(name->chars));
+    /*fprintf(stderr, "defining method '%s' (%d)\n", name->chars, (int)strlen(name->chars));*/
     ASSERT(tableSet(&klass->methods, name, method));
     pop();
 }
 
-static bool callCallable(Value callable, int argCount) {
+static bool callCallable(Value callable, int argCount, bool isMethod) {
     ObjFunction *function = NULL;
     Value instanceVal;
     if (IS_FUNCTION(callable)) {
         function = AS_FUNCTION(callable);
-        if (argCount != function->arity) {
+        int arity = function->arity;
+        if (argCount != arity) {
             runtimeError("Expected %d arguments but got %d.",
-                    function->arity, argCount);
+                arity, argCount);
             return false;
         }
     } else if (IS_CLASS(callable)) {
         ObjClass *klass = AS_CLASS(callable);
         ObjInstance *instance = newInstance(klass);
         instanceVal = OBJ_VAL(instance);
-        vm.stackTop[-argCount - 1] = instanceVal;
+        vm.stackTop[-argCount - 1] = instanceVal; // first argument is instance
         // Call the initializer, if there is one.
         Value initializer;
         if (tableGet(&klass->methods, vm.initString, &initializer)) {
+            if (IS_NATIVE_FUNCTION(initializer)) {
+                /*fprintf(stderr, "calling native initializer with %d args\n", argCount);*/
+                ObjNative *nativeInit = AS_NATIVE_FUNCTION(initializer);
+                ASSERT(nativeInit->function);
+                nativeInit->function(argCount+1, vm.stackTop-argCount-1);
+                push(OBJ_VAL(instance));
+                return true;
+            }
             ASSERT(IS_FUNCTION(initializer));
             function = AS_FUNCTION(initializer);
-            // TODO: check arity
-        } else if (argCount != 0) {
+        } else if (argCount > 0) {
           runtimeError("Expected 0 arguments (default init) but got %d.", argCount);
           return false;
         } else {
             return true; // new instance is on the top of the stack
         }
     } else if (IS_BOUND_METHOD(callable)) {
+        /*fprintf(stderr, "calling bound method with %d args\n", argCount);*/
         ObjBoundMethod *bmethod = AS_BOUND_METHOD(callable);
-        function = bmethod->method;
+        Obj *callable = bmethod->callable; // native function or user-defined function
         instanceVal = bmethod->receiver;
         vm.stackTop[-argCount - 1] = instanceVal;
+        return callCallable(OBJ_VAL(callable), argCount, true);
     } else if (IS_NATIVE_FUNCTION(callable)) {
+        /*fprintf(stderr, "Calling native function with %d args\n", argCount);*/
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
+        if (isMethod) argCount++;
         Value val = native->function(argCount, vm.stackTop-argCount);
         push(val);
         return true;
@@ -274,7 +308,7 @@ static bool callCallable(Value callable, int argCount) {
 
     int parentStart = getFrame()->ip - getFrame()->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
-    /*fprintf(stderr, "setting new call frame to start=%d\n", parentStart);*/
+    fprintf(stderr, "setting new call frame to start=%d\n", parentStart);
     // add frame
     CallFrame *frame = &vm.frames[vm.frameCount++];
     frame->function = function;
@@ -334,6 +368,17 @@ static CatchTable *getCatchTableRow(int idx) {
     return row;
 }
 
+void printVMStack(FILE *f) {
+    fprintf(f, "Stack:\n");
+    // print VM stack values from bottom of stack to top
+    for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
+        fprintf(f, "[ ");
+        printValue(f, *slot);
+        fprintf(f, " ]");
+    }
+    fprintf(f, "\n");
+}
+
 /**
  * Run the VM's instructions.
  */
@@ -360,14 +405,7 @@ static InterpretResult run(void) {
 
 #ifndef NDEBUG
     if (CLOX_OPTION_T(traceVMExecution)) {
-        printf("          ");
-        // print VM stack values from bottom of stack to top
-        for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
-            fprintf(stderr, "[ ");
-            printValue(stderr, *slot);
-            fprintf(stderr, " ]");
-        }
-        printf("\n");
+        printVMStack(stderr);
         printDisassembledInstruction(currentChunk(), (int)(getFrame()->ip - currentChunk()->code), NULL);
     }
 #endif
@@ -427,6 +465,8 @@ static InterpretResult run(void) {
             ObjString *out = valueToString(val);
             pushCString(vm.printBuf, out->chars, strlen(out->chars));
             pushCString(vm.printBuf, "\n", 1);
+            unhideFromGC((Obj*)out);
+            freeObject((Obj*)out);
         } else {
             printValue(stdout, val);
             printf("\n");
@@ -555,7 +595,7 @@ static InterpretResult run(void) {
               runtimeError("Tried to call uncallable object (type=%s)", typeOfVal(callableVal));
               return INTERPRET_RUNTIME_ERROR;
           }
-          callCallable(callableVal, numArgs);
+          callCallable(callableVal, numArgs, false);
           break;
       }
       // return from function/method
@@ -626,6 +666,22 @@ static InterpretResult run(void) {
           pop(); // leave rval on stack
           pop();
           push(rval);
+          break;
+      }
+      case OP_CREATE_ARRAY: {
+          Value numElsVal = pop();
+          int numEls = (int)AS_NUMBER(numElsVal);
+          ASSERT(numEls >= 0);
+          callCallable(OBJ_VAL((Obj*)lxAryClass), numEls, false); // array pushed to top of stack
+          Value ret = peek(0);
+          ASSERT(IS_ARRAY(ret));
+          hideFromGC(AS_OBJ(ret));
+          ret = pop();
+          for (int i = 0; i < numEls; i++) {
+              pop();
+          }
+          push(ret);
+          unhideFromGC(AS_OBJ(ret));
           break;
       }
       case OP_THROW: {

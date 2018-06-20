@@ -13,10 +13,12 @@ typedef enum ObjType {
   OBJ_INSTANCE,
   OBJ_NATIVE_FUNCTION,
   OBJ_BOUND_METHOD,
+  OBJ_INTERNAL,
 } ObjType;
 
 typedef struct Obj {
   ObjType type;
+  // GC fields
   Obj *next;
   bool isDark; // is this object marked?
   bool noGC; // don't collect this object
@@ -28,6 +30,17 @@ typedef struct ObjString {
   char *chars;
   uint32_t hash;
 } ObjString;
+
+
+typedef void (*GCMarkFunc)(Obj *obj);
+typedef void (*GCFreeFunc)(Obj *obj);
+
+typedef struct ObjInternal {
+  Obj object;
+  void *data; // internal data
+  GCMarkFunc markFunc;
+  GCMarkFunc freeFunc;
+} ObjInternal;
 
 typedef struct ObjFunction {
   Obj object;
@@ -55,6 +68,9 @@ typedef struct ObjClass {
   Table methods;
 } ObjClass;
 
+extern ObjClass *lxObjClass;
+extern ObjClass *lxAryClass;
+
 typedef struct ObjInstance {
   Obj object;
   ObjClass *klass;
@@ -65,7 +81,7 @@ typedef struct ObjInstance {
 typedef struct ObjBoundMethod {
   Obj object;
   Value receiver;
-  ObjFunction *method;
+  Obj *callable;
 } ObjBoundMethod;
 
 #define IS_STRING(value)        isObjType(value, OBJ_STRING)
@@ -74,6 +90,9 @@ typedef struct ObjBoundMethod {
 #define IS_CLASS(value)         isObjType(value, OBJ_CLASS)
 #define IS_INSTANCE(value)      isObjType(value, OBJ_INSTANCE)
 #define IS_BOUND_METHOD(value)  isObjType(value, OBJ_BOUND_METHOD)
+#define IS_INTERNAL(value)  isObjType(value, OBJ_INTERNAL)
+
+#define IS_ARRAY(value)         (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxAryClass)
 
 #define AS_STRING(value)        ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
@@ -82,19 +101,22 @@ typedef struct ObjBoundMethod {
 #define AS_BOUND_METHOD(value)  ((ObjBoundMethod*)AS_OBJ(value))
 #define AS_CLASS(value)         ((ObjClass*)AS_OBJ(value))
 #define AS_INSTANCE(value)      ((ObjInstance*)AS_OBJ(value))
+#define AS_INTERNAL(value)      ((ObjInternal*)AS_OBJ(value))
 
 ObjString *takeString(char *chars, int length);
 ObjString *copyString(const char *chars, int length);
-void pushCString(ObjString *string, char *chars, int lenToAdd);
-void freeString(ObjString *str);
+ObjString *newString(char *chars, int length);
 ObjString *internedString(const char *chars);
+void pushCString(ObjString *string, char *chars, int lenToAdd);
 
 ObjFunction *newFunction();
 void freeFunction(ObjFunction *func);
 ObjClass *newClass(ObjString *name, ObjClass *superclass);
 ObjInstance *newInstance(ObjClass *klass);
 ObjNative *newNative(ObjString *name, NativeFn function);
-ObjBoundMethod *newBoundMethod(ObjInstance *receiver, ObjFunction *method);
+ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
+ObjInternal *newInternalObject(void *data, GCMarkFunc markFn, GCFreeFunc freeFn);
+void *internalGetData(ObjInternal *obj);
 
 // Returns true if [value] is an object of type [type]. Do not call this
 // directly, instead use the [IS___] macro for the type in question.
