@@ -23,7 +23,7 @@ typedef struct CatchTable {
  * as chunks are unique per source code function context, including the
  * top-level (main) function.
  */
-typedef struct {
+typedef struct Chunk {
     int count;
     int capacity;
     uint8_t *code;
@@ -33,6 +33,27 @@ typedef struct {
     ValueArray constants;
     CatchTable *catchTbl;
 } Chunk;
+
+//#define MAX_INSN_SIZE 3
+//// single instruction
+//typedef struct Insn {
+    //uint8_t opcode;
+    //uint8_t operands[MAX_INSN_SIZE-1];
+    //int numOperands;
+    //int lineno;
+    //Insn *next;
+//} Insn;
+
+//// Instruction sequence for a single function (or top-level).
+//// This format is easier to manipulate for bytecode optimization than
+//// the chunk format (a linear array of bytes), so the compiler generates
+//// Iseqs, then at the end compiles them into Chunks.
+//typedef struct Iseq {
+    //int count; // # of Insns
+    //ValueArray constants;
+    //CatchTable *catchTbl;
+    //Insn *insns;
+//} Iseq;
 
 void initChunk(Chunk *chunk);
 void writeChunk(Chunk *chunk, uint8_t byte, int lineno);

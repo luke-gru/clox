@@ -22,4 +22,5 @@ Value lxArrayPush(int argCount, Value *args);
 Value lxArrayToString(int argCount, Value *args);
 Value lxArrayIndexGet(int argCount, Value *args);
 Value lxArrayIndexSet(int argCount, Value *args);
+Value lxMapInit(int argCount, Value *args);
 #endif

@@ -70,6 +70,8 @@ typedef struct ObjClass {
 
 extern ObjClass *lxObjClass;
 extern ObjClass *lxAryClass;
+extern ObjClass *lxMapClass;
+extern ObjClass *lxErrClass;
 
 typedef struct ObjInstance {
   Obj object;
@@ -93,6 +95,7 @@ typedef struct ObjBoundMethod {
 #define IS_INTERNAL(value)  isObjType(value, OBJ_T_INTERNAL)
 
 #define IS_ARRAY(value)         (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxAryClass)
+#define IS_MAP(value)           (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxMapClass)
 
 #define AS_STRING(value)        ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
@@ -103,11 +106,28 @@ typedef struct ObjBoundMethod {
 #define AS_INSTANCE(value)      ((ObjInstance*)AS_OBJ(value))
 #define AS_INTERNAL(value)      ((ObjInternal*)AS_OBJ(value))
 
+#define ARRAY_GET(value, idx)    (arrayGet(value, idx))
+#define ARRAY_SIZE(value)        (arraySize(value))
+#define ARRAY_GETHIDDEN(value)   (arrayGetHidden(value))
+
+#define MAP_GET(value, valkey)   (mapGet(value, valKey))
+#define MAP_SIZE(value)          (mapSize(value))
+#define MAP_GETHIDDEN(value)     (mapGetHidden(value))
+
 ObjString *takeString(char *chars, int length);
 ObjString *copyString(const char *chars, int length);
 ObjString *newString(char *chars, int length);
 ObjString *internedString(const char *chars);
 void pushCString(ObjString *string, char *chars, int lenToAdd);
+uint32_t hashString(char *key, int length);
+
+Value       arrayGet(Value aryVal, int idx);
+int         arraySize(Value aryVal);
+ValueArray *arrayGetHidden(Value aryVal);
+
+Value       mapGet(Value mapVal, Value key);
+Value       mapSize(Value mapVal);
+Table      *mapGetHidden(Value mapVal);
 
 ObjFunction *newFunction();
 void freeFunction(ObjFunction *func);

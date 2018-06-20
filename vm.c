@@ -31,43 +31,53 @@ static bool isUnredefinableGlobal(char *name) {
 void defineNativeFunctions() {
     ObjString *clockName = copyString("clock", 5);
     ObjNative *clockFn = newNative(clockName, runtimeNativeClock);
-    tableSet(&vm.globals, clockName, OBJ_VAL(clockFn));
+    tableSet(&vm.globals, OBJ_VAL(clockName), OBJ_VAL(clockFn));
 
     ObjString *typeofName = copyString("typeof", 6);
     ObjNative *typeofFn = newNative(typeofName, runtimeNativeTypeof);
-    tableSet(&vm.globals, typeofName, OBJ_VAL(typeofFn));
+    tableSet(&vm.globals, OBJ_VAL(typeofName), OBJ_VAL(typeofFn));
 }
 
 ObjClass *lxObjClass;
 ObjClass *lxAryClass;
+ObjClass *lxMapClass;
 
 void defineNativeClasses() {
     // class Object
     ObjString *objClassName = copyString("Object", 6);
     ObjClass *objClass = newClass(objClassName, NULL);
-    tableSet(&vm.globals, objClassName, OBJ_VAL(objClass));
+    tableSet(&vm.globals, OBJ_VAL(objClassName), OBJ_VAL(objClass));
     lxObjClass = objClass;
 
     // class Array
     ObjString *arrayClassName = copyString("Array", 5);
     ObjClass *arrayClass = newClass(arrayClassName, objClass);
-    tableSet(&vm.globals, arrayClassName, OBJ_VAL(arrayClass));
+    tableSet(&vm.globals, OBJ_VAL(arrayClassName), OBJ_VAL(arrayClass));
     lxAryClass = arrayClass;
 
     ObjNative *aryInitNat = newNative(copyString("init", 4), lxArrayInit);
-    tableSet(&arrayClass->methods, copyString("init", 4), OBJ_VAL(aryInitNat));
+    tableSet(&arrayClass->methods, OBJ_VAL(copyString("init", 4)), OBJ_VAL(aryInitNat));
 
     ObjNative *aryPushNat = newNative(copyString("push", 4), lxArrayPush);
-    tableSet(&arrayClass->methods, copyString("push", 4), OBJ_VAL(aryPushNat));
+    tableSet(&arrayClass->methods, OBJ_VAL(copyString("push", 4)), OBJ_VAL(aryPushNat));
 
     ObjNative *aryIdxGetNat = newNative(copyString("indexGet", 8), lxArrayIndexGet);
-    tableSet(&arrayClass->methods, copyString("indexGet", 8), OBJ_VAL(aryIdxGetNat));
+    tableSet(&arrayClass->methods, OBJ_VAL(copyString("indexGet", 8)), OBJ_VAL(aryIdxGetNat));
 
     ObjNative *aryIdxSetNat = newNative(copyString("indexSet", 8), lxArrayIndexSet);
-    tableSet(&arrayClass->methods, copyString("indexSet", 8), OBJ_VAL(aryIdxSetNat));
+    tableSet(&arrayClass->methods, OBJ_VAL(copyString("indexSet", 8)), OBJ_VAL(aryIdxSetNat));
 
     ObjNative *aryToStringNat = newNative(copyString("toString", 8), lxArrayToString);
-    tableSet(&arrayClass->methods, copyString("toString", 8), OBJ_VAL(aryToStringNat));
+    tableSet(&arrayClass->methods, OBJ_VAL(copyString("toString", 8)), OBJ_VAL(aryToStringNat));
+
+    // class Map
+    ObjString *mapClassName = copyString("Map", 3);
+    ObjClass *mapClass = newClass(mapClassName, objClass);
+    tableSet(&vm.globals, OBJ_VAL(mapClassName), OBJ_VAL(mapClass));
+    lxMapClass = mapClass;
+
+    ObjNative *mapInitNat = newNative(copyString("init", 4), lxMapInit);
+    tableSet(&mapClass->methods, OBJ_VAL(copyString("init", 4)), OBJ_VAL(mapInitNat));
 }
 
 void resetStack() {
@@ -237,10 +247,9 @@ static bool isThrowable(Value val) {
 
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
-    if (tableGet(&obj->fields, propName, &ret)) {
+    if (tableGet(&obj->fields, OBJ_VAL(propName), &ret)) {
         return ret;
-    // TODO: what if this is a native function?
-    } else if (tableGet(&obj->klass->methods, propName, &ret)) {
+    } else if (tableGet(&obj->klass->methods, OBJ_VAL(propName), &ret)) {
         ASSERT(isCallable(ret));
         ObjBoundMethod *bmethod = newBoundMethod(obj, AS_OBJ(ret));
         return OBJ_VAL(bmethod);
@@ -250,7 +259,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
 }
 
 static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
-    tableSet(&obj->fields, propName, rval);
+    tableSet(&obj->fields, OBJ_VAL(propName), rval);
 }
 
 static void defineMethod(ObjString *name) {
@@ -259,7 +268,7 @@ static void defineMethod(ObjString *name) {
     ASSERT(IS_CLASS(peek(1)));
     ObjClass *klass = AS_CLASS(peek(1));
     /*fprintf(stderr, "defining method '%s' (%d)\n", name->chars, (int)strlen(name->chars));*/
-    ASSERT(tableSet(&klass->methods, name, method));
+    ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
     pop();
 }
 
@@ -313,7 +322,7 @@ static bool callCallable(Value callable, int argCount, bool isMethod) {
         vm.stackTop[-argCount - 1] = instanceVal; // first argument is instance
         // Call the initializer, if there is one.
         Value initializer;
-        if (tableGet(&klass->methods, vm.initString, &initializer)) {
+        if (tableGet(&klass->methods, OBJ_VAL(vm.initString), &initializer)) {
             if (IS_NATIVE_FUNCTION(initializer)) {
                 /*fprintf(stderr, "calling native initializer with %d args\n", argCount);*/
                 ObjNative *nativeInit = AS_NATIVE_FUNCTION(initializer);
@@ -532,14 +541,14 @@ static InterpretResult run(void) {
             return INTERPRET_RUNTIME_ERROR;
         }
         Value val = peek(0);
-        tableSet(&vm.globals, AS_STRING(varName), val);
+        tableSet(&vm.globals, varName, val);
         pop();
         break;
       }
       case OP_GET_GLOBAL: {
         Value varName = READ_CONSTANT();
         Value val;
-        if (tableGet(&vm.globals, AS_STRING(varName), &val)) {
+        if (tableGet(&vm.globals, varName, &val)) {
             push(val);
         } else {
             runtimeError("Undefined variable '%s'.", AS_STRING(varName)->chars);
@@ -555,7 +564,7 @@ static InterpretResult run(void) {
             runtimeError("Can't redefine global variable '%s'", name);
             return INTERPRET_RUNTIME_ERROR;
         }
-        tableSet(&vm.globals, AS_STRING(varName), val);
+        tableSet(&vm.globals, varName, val);
         break;
       }
       case OP_NIL: {
@@ -662,7 +671,7 @@ static InterpretResult run(void) {
       case OP_CLASS: {
           Value className = READ_CONSTANT();
           Value objClassVal;
-          ASSERT(tableGet(&vm.globals, internedString("Object"), &objClassVal));
+          ASSERT(tableGet(&vm.globals, OBJ_VAL(internedString("Object")), &objClassVal));
           ASSERT(IS_CLASS(objClassVal));
           ObjClass *klass = newClass(AS_STRING(className), AS_CLASS(objClassVal));
           push(OBJ_VAL(klass));

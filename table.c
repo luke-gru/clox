@@ -9,53 +9,61 @@
 
 #define TABLE_MAX_LOAD 0.75
 
-void initTable(Table* table) {
+Value TBL_EMPTY_KEY = {
+    .type = VAL_T_SENTINEL,
+    .as = { .number = (double)0.00 }
+};
+
+void initTable(Table *table) {
     table->count = 0;
     table->capacityMask = -1;
     table->entries = NULL;
 }
 
-void freeTable(Table* table) {
+void freeTable(Table *table) {
     FREE_ARRAY(Value, table->entries, table->capacityMask + 1);
     initTable(table);
 }
 
-static uint32_t findEntry(Entry* entries, int capacityMask, ObjString* key) {
-    uint32_t index = key->hash & capacityMask;
+static uint32_t findEntry(Entry *entries, int capacityMask, Value key) {
+    uint32_t index = valHash(key) & capacityMask;
 
     // We don't worry about an infinite loop here because resize() ensures
     // there are empty slots in the array.
     for (;;) {
-        Entry* entry = &entries[index];
+        Entry *entry = &entries[index];
 
-        if (entry->key == NULL || entry->key == key) return index;
+        if ((entry->key.type == VAL_T_SENTINEL) || (valEqual(entry->key, key))) {
+            return index;
+        }
 
         index = (index + 1) & capacityMask;
     }
 }
 
-bool tableGet(Table* table, ObjString* key, Value* value) {
+bool tableGet(Table *table, Value key, Value *value) {
     // If the table is empty, we definitely won't find it.
     if (table->entries == NULL) return false;
 
     uint32_t index = findEntry(table->entries, table->capacityMask, key);
-    Entry* entry = &table->entries[index];
-    if (entry->key == NULL) return false;
+    Entry *entry = &table->entries[index];
+    if (entry->key.type == VAL_T_SENTINEL) return false;
     *value = entry->value;
     return true;
 }
 
-static void resize(Table* table, int capacityMask) {
-    Entry* entries = ALLOCATE(Entry, capacityMask + 1);
+static void resize(Table *table, int capacityMask) {
+    /*fprintf(stderr, "Resize\n");*/
+    Entry *entries = ALLOCATE(Entry, capacityMask + 1);
     for (int i = 0; i <= capacityMask; i++) {
-        entries[i].key = NULL;
+        entries[i].key = TBL_EMPTY_KEY;
         entries[i].value = NIL_VAL;
     }
 
     table->count = 0;
     for (int i = 0; i <= table->capacityMask; i++) {
-        Entry* entry = &table->entries[i];
-        if (entry->key == NULL) continue;
+        Entry *entry = &table->entries[i];
+        if (entry->key.type == VAL_T_SENTINEL) continue;
 
         uint32_t index = findEntry(entries, capacityMask, entry->key);
         Entry* dest = &entries[index];
@@ -64,37 +72,44 @@ static void resize(Table* table, int capacityMask) {
         table->count++;
     }
 
-    FREE_ARRAY(Value, table->entries, table->capacityMask + 1);
+    /*fprintf(stderr, "/Resize freearray\n");*/
+    FREE_ARRAY(Entry, table->entries, table->capacityMask + 1);
+    /*fprintf(stderr, "/Resize freearray\n");*/
     table->entries = entries;
     table->capacityMask = capacityMask;
+    /*fprintf(stderr, "/Resize\n");*/
 }
 
-bool tableSet(Table* table, ObjString* key, Value value) {
+bool tableSet(Table *table, Value key, Value value) {
+    /*fprintf(stderr, "tableSet\n");*/
     if (table->count + 1 > (table->capacityMask + 1) * TABLE_MAX_LOAD) {
         // Figure out the new table size.
         int capacityMask = GROW_CAPACITY(table->capacityMask + 1) - 1;
         resize(table, capacityMask);
     }
 
+    /*fprintf(stderr, "findEntry\n");*/
     uint32_t index = findEntry(table->entries, table->capacityMask, key);
-    Entry* entry = &table->entries[index];
-    bool isNewKey = entry->key == NULL;
+    /*fprintf(stderr, "/findEntry\n");*/
+    Entry *entry = &table->entries[index];
+    bool isNewKey = entry->key.type == VAL_T_SENTINEL;
     entry->key = key;
     entry->value = value;
 
     if (isNewKey) table->count++;
+    /*fprintf(stderr, "/tableSet\n");*/
     return isNewKey;
 }
 
-bool tableDelete(Table* table, ObjString* key) {
+bool tableDelete(Table* table, Value key) {
     if (table->count == 0) return false;
 
     uint32_t index = findEntry(table->entries, table->capacityMask, key);
-    Entry* entry = &table->entries[index];
-    if (entry->key == NULL) return false;
+    Entry *entry = &table->entries[index];
+    if (entry->key.type == VAL_T_SENTINEL) return false;
 
     // Remove the entry.
-    entry->key = NULL;
+    entry->key = TBL_EMPTY_KEY;
     entry->value = NIL_VAL;
     table->count--;
 
@@ -105,11 +120,11 @@ bool tableDelete(Table* table, ObjString* key) {
         index = (index + 1) & table->capacityMask;
         entry = &table->entries[index];
 
-        if (entry->key == NULL) break;
+        if (entry->key.type == VAL_T_SENTINEL) break;
 
-        ObjString* tempKey = entry->key;
+        Value tempKey = entry->key;
         Value tempValue = entry->value;
-        entry->key = NULL;
+        entry->key = TBL_EMPTY_KEY;
         entry->value = NIL_VAL;
         table->count--;
 
@@ -119,17 +134,17 @@ bool tableDelete(Table* table, ObjString* key) {
     return true;
 }
 
-void tableAddAll(Table* from, Table* to) {
+void tableAddAll(Table *from, Table *to) {
     if (from->entries == NULL) return;
     for (int i = 0; i <= from->capacityMask; i++) {
-        Entry* entry = &from->entries[i];
-        if (entry->key != NULL) {
+        Entry *entry = &from->entries[i];
+        if (entry->key.type != VAL_T_SENTINEL) {
             tableSet(to, entry->key, entry->value);
         }
     }
 }
 
-ObjString* tableFindString(Table* table, const char* chars, int length,
+ObjString *tableFindString(Table *table, const char* chars, int length,
         uint32_t hash) {
     // If the table is empty, we definitely won't find it.
     if (table->entries == NULL) return NULL;
@@ -137,13 +152,16 @@ ObjString* tableFindString(Table* table, const char* chars, int length,
     uint32_t index = hash & table->capacityMask;
 
     for (;;) {
-        Entry* entry = &table->entries[index];
+        Entry *entry = &table->entries[index];
 
-        if (entry->key == NULL) return NULL;
-        if (entry->key->length == length &&
-                memcmp(entry->key->chars, chars, length) == 0) {
-            // We found it.
-            return entry->key;
+        if (entry->key.type == VAL_T_SENTINEL) return NULL;
+        if (IS_STRING(entry->key)) {
+            ObjString *stringKey = AS_STRING(entry->key);
+            if (stringKey->length == length &&
+                    memcmp(stringKey->chars, chars, length) == 0) {
+                // We found it.
+                return (ObjString*)AS_OBJ(entry->key);
+            }
         }
 
         // Try the next slot.
@@ -153,11 +171,14 @@ ObjString* tableFindString(Table* table, const char* chars, int length,
     return NULL;
 }
 
-void tableRemoveWhite(Table* table) {
+void tableRemoveWhite(Table *table) {
     if (table->count == 0) return;
     for (int i = 0; i <= table->capacityMask; i++) {
-        Entry* entry = &table->entries[i];
-        if (entry->key != NULL && !entry->key->object.isDark) {
+        Entry *entry = &table->entries[i];
+        if (entry->key.type == VAL_T_SENTINEL) {
+            continue;
+        }
+        if (IS_OBJ(entry->key) && !AS_OBJ(entry->key)->isDark) {
             tableDelete(table, entry->key);
         }
     }
@@ -168,9 +189,9 @@ void grayTable(Table *table) {
     for (int i = 0; i <= table->capacityMask; i++) {
         ASSERT(table->entries);
         Entry *entry = &table->entries[i];
-        if (!entry || !entry->key) continue;
+        if (!entry || (entry->key.type == VAL_T_SENTINEL)) continue;
         ASSERT(entry);
-        grayObject((Obj*)entry->key);
+        grayValue(entry->key);
         grayValue(entry->value);
     }
 }

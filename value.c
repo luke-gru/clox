@@ -101,7 +101,7 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
                 ObjNative *func = (ObjNative*)bmethod->callable;
                 name = func->name;
             } else {
-                ASSERT(0);
+                UNREACHABLE("BUG");
             }
             fprintf(file, "<method %s>", name->chars);
             return;
@@ -111,7 +111,7 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
         }
     }
     fprintf(file, "Unknown value type: %d. Cannot print!\n", value.type);
-    ASSERT(0);
+    UNREACHABLE("BUG");
 }
 
 // returns an ObjString hidden from the GC
@@ -212,4 +212,53 @@ const char *typeOfVal(Value val) {
     fprintf(stderr, "Unknown value type! Pointer: %p\n", AS_OBJ(val));
     ASSERT(0);
     return "unknown!";
+}
+
+uint32_t valHash(Value val) {
+    if (IS_OBJ(val)) {
+        if (IS_STRING(val)) {
+            ObjString *string = AS_STRING(val);
+            return hashString(string->chars, string->length);
+        } else {
+            char buf[20] = {'\0'};
+            sprintf(buf, "%p", AS_OBJ(val));
+            return hashString(buf, strlen(buf));
+        }
+    } else if (IS_NUMBER(val)) {
+        return ((uint32_t)AS_NUMBER(val))+3;
+    } else if (IS_BOOL(val)) { // TODO: return pointer address string hash of singletons
+        if (AS_BOOL(val)) {
+            return 1;
+        } else {
+            return 0;
+        }
+    } else if (IS_NIL(val)) { // TODO: return pointer address string hash of singleton
+        return 2;
+    } else {
+        ASSERT(0);
+    }
+}
+
+bool valEqual(Value a, Value b) {
+    if (a.type != a.type) return false;
+    switch (a.type) {
+        case VAL_T_BOOL:
+            return AS_BOOL(a) == AS_BOOL(b);
+        case VAL_T_NIL:
+            return true;
+        case VAL_T_NUMBER:
+            return AS_NUMBER(a) == AS_NUMBER(b);
+        case VAL_T_OBJ: {
+            Obj *aObj = AS_OBJ(a);
+            Obj *bObj = AS_OBJ(b);
+            if (aObj->type != bObj->type) return false;
+            if (IS_STRING(a)) {
+                return strcmp(AS_STRING(a)->chars,
+                        AS_STRING(b)->chars) == 0;
+            }
+            return aObj == bObj; // pointer equality
+        }
+        case VAL_T_SENTINEL: return false;
+        default: UNREACHABLE("");
+    }
 }

@@ -12,7 +12,8 @@ typedef enum {
   VAL_T_BOOL,
   VAL_T_NIL,
   VAL_T_NUMBER,
-  VAL_T_OBJ // includes strings/arrays
+  VAL_T_OBJ, // includes strings/arrays
+  VAL_T_SENTINEL
 } ValueType;
 
 typedef struct {
@@ -53,5 +54,7 @@ void printValue(FILE *file, Value value, bool canCallMethods);
 ObjString *valueToString(Value value);
 
 const char *typeOfVal(Value val);
+uint32_t valHash(Value val);
+bool valEqual(Value a, Value b);
 
 #endif

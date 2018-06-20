@@ -32,12 +32,12 @@ static ObjString *allocateString(char *chars, int length, uint32_t hash) {
     string->length = length;
     string->chars = chars;
     string->hash = hash;
-    tableSet(&vm.strings, string, NIL_VAL);
+    tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
     unhideFromGC((Obj*)string);
     return string;
 }
 
-static uint32_t hashString(char *key, int length) {
+uint32_t hashString(char *key, int length) {
     // FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
     uint32_t hash = 2166136261u;
 
@@ -202,7 +202,7 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     ObjClass *klass = obj->klass;
     Value method;
     while (klass) {
-        if (tableGet(&klass->methods, name, &method)) {
+        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
         klass = klass->superclass;
@@ -229,8 +229,55 @@ const char *typeOfObj(Obj *obj) {
     case OBJ_T_INTERNAL:
         return "internal";
     default:
-        fprintf(stderr, "BUG: Unknown object type: (%d)\n", obj->type);
-        ASSERT(0);
-        return "unknown";
+        UNREACHABLE("BUG: Unknown object type: (%d)\n", obj->type);
     }
+}
+
+/**
+ * NOTE: assumes idx is appropriate and within given range. See
+ * ARRAY_SIZE(value)
+ */
+Value arrayGet(Value aryVal, int idx) {
+    ValueArray *ary = ARRAY_GETHIDDEN(aryVal);
+    return ary->values[idx];
+}
+
+int arraySize(Value aryVal) {
+    ValueArray *ary = ARRAY_GETHIDDEN(aryVal);
+    return ary->count;
+}
+
+ValueArray *arrayGetHidden(Value aryVal) {
+    ASSERT(IS_ARRAY(aryVal));
+    ObjInstance *inst = AS_INSTANCE(aryVal);
+    Value internalObjVal;
+    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(copyString("ary", 3)), &internalObjVal));
+    ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
+    ASSERT(ary);
+    return ary;
+}
+
+Value mapGet(Value mapVal, Value key) {
+    Table *map = MAP_GETHIDDEN(mapVal);
+    Value ret;
+    if (tableGet(map, key, &ret)) {
+        return ret;
+    } else {
+        return NIL_VAL;
+    }
+}
+
+Value mapSize(Value mapVal) {
+    Table *map = MAP_GETHIDDEN(mapVal);
+    return NUMBER_VAL(map->count);
+}
+
+Table *mapGetHidden(Value mapVal) {
+    ASSERT(IS_MAP(mapVal));
+    ObjInstance *inst = AS_INSTANCE(mapVal);
+    Value internalObjVal;
+    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(copyString("map", 3)), &internalObjVal));
+    Table *map = (Table*)internalGetData(AS_INTERNAL(internalObjVal));
+    ASSERT(map);
+    return map;
 }
