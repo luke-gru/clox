@@ -37,7 +37,8 @@ static int test_compile_global_variable(void) {
                      "0001\t" "OP_DEFINE_GLOBAL\t" "0000\t" "'a'\n"
                      "0003\t" "OP_CONSTANT\t"      "0002\t" "'1.00'\n"
                      "0005\t" "OP_SET_GLOBAL\t"    "0001\t" "'a'\n"
-                     "0007\t" "OP_LEAVE\n";
+                     "0007\t" "OP_POP\n"
+                     "0008\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     return 0;
@@ -184,6 +185,40 @@ cleanup:
     return 0;
 }
 
+int test_pop_assign_if_parent_stmt() {
+    char *src = "var i = 0;\n"
+                "while (i < 300) {\n"
+                "  print i;\n"
+                "  i = i+1;\n"
+                "}";
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int result = compile_src(src, &chunk, &err);
+    T_ASSERT_EQ(0, result);
+    ObjString *string = disassembleChunk(&chunk);
+    char *cstring = string->chars;
+    /*fprintf(stderr, "\n'%s'\n", cstring);*/
+    char *expected = "0000\t" "OP_CONSTANT\t"	"0001\t"	"'0.00'\n"
+"0002\t"	"OP_DEFINE_GLOBAL\t"	"0000\t"	"'i'\n"
+"0004\t"	"OP_GET_GLOBAL\t"	"0002\t"	"'i'\n"
+"0006\t"	"OP_CONSTANT\t"	"0003\t"	"'300.00'\n"
+"0008\t"	"OP_LESS\n"
+"0009\t"	"OP_JUMP_IF_FALSE\t"	"0014\t"	"(addr=0024)\n"
+"0011\t"	"OP_GET_GLOBAL\t"	"0004\t"	"'i'\n"
+"0013\t"	"OP_PRINT\n"
+"0014\t"	"OP_GET_GLOBAL\t"	"0006\t"	"'i'\n"
+"0016\t"	"OP_CONSTANT\t"	"0007\t"	"'1.00'\n"
+"0018\t"	"OP_ADD\n"
+"0019\t"	"OP_SET_GLOBAL\t"	"0005\t"	"'i'\n"
+"0021\t"	"OP_POP\n"
+"0022\t"	"OP_LOOP\t"	  "  18\t"	"(addr=0004)\n"
+"0024\t"	"OP_LEAVE\n";
+    T_ASSERT_STREQ(expected, cstring);
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initVM();
@@ -194,5 +229,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_compile_classdecl);
     RUN_TEST(test_compile_try_stmt_with_catch1);
     RUN_TEST(test_compile_try_stmt_with_catch2);
+    RUN_TEST(test_pop_assign_if_parent_stmt);
     END_TESTS();
 }

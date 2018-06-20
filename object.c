@@ -198,6 +198,18 @@ ObjInternal *newInternalObject(void *data, GCMarkFunc markFunc, GCFreeFunc freeF
     return obj;
 }
 
+Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
+    ObjClass *klass = obj->klass;
+    Value method;
+    while (klass) {
+        if (tableGet(&klass->methods, name, &method)) {
+            return AS_OBJ(method);
+        }
+        klass = klass->superclass;
+    }
+    return NULL;
+}
+
 void *internalGetData(ObjInternal *obj) {
     return obj->data;
 }
@@ -214,6 +226,8 @@ const char *typeOfObj(Obj *obj) {
     case OBJ_NATIVE_FUNCTION:
     case OBJ_BOUND_METHOD:
         return "function";
+    case OBJ_INTERNAL:
+        return "internal";
     default:
         ASSERT(0);
         return "unknown";

@@ -4,6 +4,7 @@
 #include "value.h"
 #include "object.h"
 #include "debug.h"
+#include "vm.h"
 
 void initValueArray(ValueArray *array) {
     array->values = NULL;
@@ -39,7 +40,7 @@ static void printNumber(FILE *file, double number) {
     fprintf(file, "%g", number);
 }
 
-void printValue(FILE *file, Value value) {
+void printValue(FILE *file, Value value, bool canCallMethods) {
     if (IS_BOOL(value)) {
         printBool(file, AS_BOOL(value));
         return;
@@ -52,7 +53,7 @@ void printValue(FILE *file, Value value) {
     } else if (IS_OBJ(value)) {
         if (OBJ_TYPE(value) == OBJ_STRING) {
             char *cstring = AS_CSTRING(value);
-            fprintf(file, "%s", cstring);
+            fprintf(file, "%s", cstring ? cstring : "(NULL)");
             return;
         } else if (OBJ_TYPE(value) == OBJ_FUNCTION) {
             ObjFunction *func = AS_FUNCTION(value);
@@ -63,9 +64,22 @@ void printValue(FILE *file, Value value) {
             }
             return;
         } else if (OBJ_TYPE(value) == OBJ_INSTANCE) {
-            ObjClass *klass = AS_INSTANCE(value)->klass;
-            char *klassName = klass->name->chars;
-            fprintf(file, "<instance %s>", klassName);
+            ObjInstance *inst = AS_INSTANCE(value);
+            Obj *callable = instanceFindMethod(inst, copyString("toString", 8));
+            if (callable && vm.inited && canCallMethods) {
+                Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL);
+                if (!IS_STRING(stringVal)) {
+                    runtimeError("TypeError, toString() returned non-string");
+                    return;
+                }
+                ObjString *out = AS_STRING(stringVal);
+                fprintf(file, "%s", out->chars);
+                ASSERT(AS_OBJ(pop()) == AS_OBJ(stringVal));;
+            } else {
+                ObjClass *klass = inst->klass;
+                char *klassName = klass->name->chars;
+                fprintf(file, "<instance %s>", klassName);
+            }
             return;
         } else if (OBJ_TYPE(value) == OBJ_CLASS) {
             ObjClass *klass = AS_CLASS(value);
@@ -91,13 +105,16 @@ void printValue(FILE *file, Value value) {
             }
             fprintf(file, "<method %s>", name->chars);
             return;
+        } else if (OBJ_TYPE(value) == OBJ_INTERNAL) {
+            fprintf(file, "<internal>");
+            return;
         }
     }
     fprintf(file, "Unknown value type: %d. Cannot print!\n", value.type);
     ASSERT(0);
 }
 
-// returns a ObjString hidden from the GC
+// returns an ObjString hidden from the GC
 ObjString *valueToString(Value value) {
     ObjString *ret = NULL;
     if (IS_BOOL(value)) {
@@ -113,13 +130,14 @@ ObjString *valueToString(Value value) {
         double d = AS_NUMBER(value);
         snprintf(buftemp, 50, "%.2f", d); // ex: "1.20"
         char *buf = calloc(strlen(buftemp)+1, 1);
-        strcpy(buf, buftemp);
         ASSERT_MEM(buf);
+        strcpy(buf, buftemp);
         ret = newString(buf, strlen(buf));
     } else if (IS_OBJ(value)) {
         if (OBJ_TYPE(value) == OBJ_STRING) {
             char *cstring = AS_CSTRING(value);
-            ret = newString(cstring, strlen(cstring));
+            ASSERT(cstring);
+            ret = newString(strdup(cstring), strlen(cstring));
         } else if (OBJ_TYPE(value) == OBJ_FUNCTION) {
             ObjFunction *func = AS_FUNCTION(value);
             if (func->name == NULL) {

@@ -20,9 +20,11 @@ Value runtimeNativeTypeof(int argCount, Value *args) {
 static void markInternalAry(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
+    ASSERT(internal);
     ValueArray *valAry = internal->data;
     ASSERT(valAry);
     for (int i = 0; i < valAry->count; i++) {
+        if (!IS_OBJ(valAry->values[i])) continue;
         blackenObject(AS_OBJ(valAry->values[i]));
     }
 }
@@ -31,6 +33,7 @@ static void freeInternalAry(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
     ValueArray *valAry = internal->data;
+    ASSERT(internal);
     ASSERT(valAry);
     freeValueArray(valAry);
     FREE(ValueArray, valAry); // release the actual memory

@@ -118,6 +118,8 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
 ObjInternal *newInternalObject(void *data, GCMarkFunc markFn, GCFreeFunc freeFn);
 void *internalGetData(ObjInternal *obj);
 
+Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
+
 // Returns true if [value] is an object of type [type]. Do not call this
 // directly, instead use the [IS___] macro for the type in question.
 static inline bool isObjType(Value value, ObjType type) {

@@ -29,6 +29,28 @@ typedef enum eExprType {
     KEYWORD_ARG_EXPR,
 } ExprType;
 
+static const char *exprTypeNames[] = {
+    "BINARY_EXPR",
+    "LOGICAL_EXPR",
+    "GROUPING_EXPR",
+    "LITERAL_EXPR",
+    "ARRAY_EXPR",
+    "INDEX_GET_EXPR",
+    "INDEX_SET_EXPR",
+    "UNARY_EXPR",
+    "VARIABLE_EXPR",
+    "ASSIGN_EXPR",
+    "CALL_EXPR",
+    "ANON_FN_EXPR",
+    "PROP_ACCESS_EXPR",
+    "PROP_SET_EXPR",
+    "THIS_EXPR",
+    "SUPER_EXPR",
+    "SPLAT_CALL_EXPR",
+    "KEYWORD_ARG_EXPR",
+    NULL
+};
+
 typedef enum eStmtType {
     EXPR_STMT = 20,
     PRINT_STMT,
@@ -50,6 +72,29 @@ typedef enum eStmtType {
     IN_STMT,
     STMTLIST_STMT,
 } StmtType;
+
+static const char *stmtTypeNames[] = {
+    "EXPR_STMT",
+    "PRINT_STMT",
+    "VAR_STMT",
+    "BLOCK_STMT",
+    "IF_STMT",
+    "WHILE_STMT",
+    "FOR_STMT",
+    "FOREACH_STMT",
+    "CONTINUE_STMT",
+    "BREAK_STMT",
+    "FUNCTION_STMT",
+    "RETURN_STMT",
+    "CLASS_STMT",
+    "MODULE_STMT",
+    "TRY_STMT",
+    "CATCH_STMT",
+    "THROW_STMT",
+    "IN_STMT",
+    "STMTLIST_STMT",
+    NULL
+};
 
 typedef enum eOtherType {
     PARAM_NODE = 1,
@@ -97,5 +142,13 @@ NodeType nodeType(Node *n); // expr or stmt or other
 int nodeKind(Node *n); // the actual node kind
 
 char *outputASTString(Node *node, int indentLevel);
+
+static inline const char *nodeKindStr(int nKind) {
+    if (nKind >= 20) {
+        return stmtTypeNames[nKind-20];
+    } else {
+        return exprTypeNames[nKind-1];
+    }
+}
 
 #endif

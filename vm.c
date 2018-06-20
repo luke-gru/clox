@@ -87,7 +87,9 @@ void initVM() {
     vm.initString = copyString("init", 4);
     defineNativeFunctions();
     defineNativeClasses();
+    vec_init(&vm.hiddenObjs);
     turnGCOn();
+    vm.inited = true;
 }
 
 void freeVM() {
@@ -102,6 +104,12 @@ void freeVM() {
     vm.grayStack = NULL;
     freeObjects();
     turnGCOn();
+    vec_deinit(&vm.hiddenObjs);
+    vm.inited = false;
+}
+
+int VMNumStackFrames() {
+    return vm.stackTop - vm.stack;
 }
 
 static bool isOpStackEmpty() {
@@ -248,6 +256,38 @@ static void defineMethod(ObjString *name) {
     pop();
 }
 
+// fwd decl
+static bool callCallable(Value callable, int argCount, bool isMethod);
+
+// Call method on instance, args are NOT expected to be pushed on to stack by
+// caller. `argCount` does not include the implicit instance argument.
+Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
+    for (int i = 0; i < argCount; i++) {
+        ASSERT(args);
+        push(args[i]);
+    }
+    push(OBJ_VAL(instance));
+    callCallable(callable, argCount, true); // pushes return value to stack
+    if (argCount > 0) {
+        Value ret = peek(0);
+        hideFromGC(AS_OBJ(ret));
+        pop();
+        for (int i = 0; i < argCount; i++) {
+            pop();
+        }
+        pop(); // pop instance
+        push(ret);
+        unhideFromGC(AS_OBJ(ret));
+        return ret;
+    } else {
+        Value ret = pop();
+        pop(); // pop instance
+        push(ret);
+        return ret;
+    }
+}
+
+// arguments are expected to be pushed on to stack by caller
 static bool callCallable(Value callable, int argCount, bool isMethod) {
     ObjFunction *function = NULL;
     Value instanceVal;
@@ -373,7 +413,7 @@ void printVMStack(FILE *f) {
     // print VM stack values from bottom of stack to top
     for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
         fprintf(f, "[ ");
-        printValue(f, *slot);
+        printValue(f, *slot, false);
         fprintf(f, " ]");
     }
     fprintf(f, "\n");
@@ -468,7 +508,7 @@ static InterpretResult run(void) {
             unhideFromGC((Obj*)out);
             freeObject((Obj*)out);
         } else {
-            printValue(stdout, val);
+            printValue(stdout, val, true);
             printf("\n");
         }
         break;

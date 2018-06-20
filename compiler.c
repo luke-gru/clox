@@ -550,7 +550,6 @@ static void emitNode(Node *n) {
         emitNode(n->children->data[1]); // while block
         emitLoop(loopStart);
         patchJump(whileJumpStart, -1);
-        emitByte(OP_POP); // pop condition off stack
         break;
     }
     case PRINT_STMT: {
@@ -612,6 +611,13 @@ static void emitNode(Node *n) {
         }
         emitNode(n->children->data[1]); // rval
         emitBytes(setOp, arg);
+        NodeType nType = varNode->parent->type.type;
+        int nKind = n->parent->type.kind;
+        if (nType == NODE_STMT || nKind == EXPR_STMT) {
+            emitByte(OP_POP); // we don't need this value, so pop it
+        } else {
+            /*fprintf(stderr, "parent of assign kind: %s\n", nodeKindStr(varNode->parent->type.kind));*/
+        }
         break;
     }
     case BLOCK_STMT: {

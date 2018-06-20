@@ -36,6 +36,8 @@ typedef struct {
   int grayCapacity;
   Obj **grayStack;
 
+  vec_void_t hiddenObjs;
+  bool inited;
 } VM; // singleton
 
 extern VM vm;
@@ -49,6 +51,10 @@ void initVM();
 void freeVM();
 InterpretResult interpret(Chunk *chunk);
 Value *getLastValue();
+Value callVMMethod(
+    ObjInstance *instance, Value callable,
+    int argCount, Value *args
+);
 void push(Value value);
 Value pop();
 void runtimeError(const char *format, ...);
@@ -58,6 +64,7 @@ void unsetPrintBuf(void);
 
 void repl(void);
 void resetStack();
+int VMNumStackFrames(void);
 void printVMStack(FILE *f);
 
 #endif

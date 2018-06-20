@@ -183,7 +183,7 @@ static int printConstantInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *
     if (IS_FUNCTION(constant)) {
         addFunc(funcs, AS_FUNCTION(constant));
     }
-    printValue(stdout, constant);
+    printValue(stdout, constant,  false);
     printf("'\n");
     return i+2;
 }

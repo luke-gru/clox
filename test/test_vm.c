@@ -480,6 +480,20 @@ cleanup:
     return 0;
 }
 
+static int test_while_loop_stack() {
+    char *src = "var i = 0;\n"
+                "while (i < 300) {\n"
+                "  print i;\n"
+                "  i = i+1;\n"
+                "}";
+    interp(src, true);
+    fprintf(stderr, "stackframes: %d\n", VMNumStackFrames());
+    T_ASSERT_EQ(0, VMNumStackFrames());
+cleanup:
+    freeVM();
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
@@ -513,5 +527,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_unredefinable_global);
     RUN_TEST(test_unredefinable_global2);
     RUN_TEST(test_array_literal);
+    RUN_TEST(test_while_loop_stack);
     END_TESTS();
 }

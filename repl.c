@@ -96,6 +96,12 @@ void repl(void) {
         if (numLines == 0 && strcmp(line, "exit\n") == 0) {
             break;
         }
+        if (numLines == 0 && strcmp(line, "pstack\n") == 0) {
+            printVMStack(stderr);
+            fprintf(stderr, "%s", prompt);
+            line = NULL;
+            continue;
+        }
         // resets the VM, re-inits the code chunk
         if (numLines == 0 && strcmp(line, "reset\n") == 0) {
             fprintf(stderr, "Resetting VM... ");
@@ -133,9 +139,9 @@ void repl(void) {
             Value *val = getLastValue();
             fprintf(stderr, "%s", "  => ");
             if (val) {
-                printValue(stderr, *val);
+                printValue(stderr, *val, true);
             } else {
-                printValue(stderr, NIL_VAL);
+                printValue(stderr, NIL_VAL, false);
             }
             fprintf(stderr, "%s", "\n");
             freeLines(lines, numLines);
