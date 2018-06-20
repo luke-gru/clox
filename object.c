@@ -27,7 +27,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
  * NOTE: length here is strlen(chars)
  */
 static ObjString *allocateString(char *chars, int length, uint32_t hash) {
-    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
     hideFromGC((Obj*)string);
     string->length = length;
     string->chars = chars;
@@ -82,7 +82,7 @@ ObjString *newString(char *chars, int len) {
     char *heapChars = ALLOCATE(char, len+1);
     if (len > 0) memcpy(heapChars, chars, len);
     heapChars[len] = '\0';
-    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
     hideFromGC((Obj*)string);
     string->length = len;
     string->chars = heapChars;
@@ -131,7 +131,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
 
 ObjFunction *newFunction(Chunk *chunk) {
     ObjFunction *function = ALLOCATE_OBJ(
-        ObjFunction, OBJ_FUNCTION
+        ObjFunction, OBJ_T_FUNCTION
     );
 
     function->arity = 0;
@@ -148,7 +148,7 @@ ObjFunction *newFunction(Chunk *chunk) {
 ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     ASSERT(name);
     ObjClass *klass = ALLOCATE_OBJ(
-        ObjClass, OBJ_CLASS
+        ObjClass, OBJ_T_CLASS
     );
     initTable(&klass->methods);
     klass->name = name;
@@ -159,7 +159,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
 ObjInstance *newInstance(ObjClass *klass) {
     ASSERT(klass);
     ObjInstance *obj = ALLOCATE_OBJ(
-        ObjInstance, OBJ_INSTANCE
+        ObjInstance, OBJ_T_INSTANCE
     );
     obj->klass = klass;
     initTable(&obj->fields);
@@ -170,7 +170,7 @@ ObjInstance *newInstance(ObjClass *klass) {
 ObjNative *newNative(ObjString *name, NativeFn function) {
     ASSERT(function);
     ObjNative *native = ALLOCATE_OBJ(
-        ObjNative, OBJ_NATIVE_FUNCTION
+        ObjNative, OBJ_T_NATIVE_FUNCTION
     );
     native->function = function;
     native->name = name;
@@ -181,7 +181,7 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
     ASSERT(receiver);
     ASSERT(callable);
     ObjBoundMethod *bmethod = ALLOCATE_OBJ(
-        ObjBoundMethod, OBJ_BOUND_METHOD
+        ObjBoundMethod, OBJ_T_BOUND_METHOD
     );
     bmethod->receiver = OBJ_VAL(receiver);
     bmethod->callable = callable;
@@ -190,7 +190,7 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
 
 ObjInternal *newInternalObject(void *data, GCMarkFunc markFunc, GCFreeFunc freeFunc) {
     ObjInternal *obj = ALLOCATE_OBJ(
-        ObjInternal, OBJ_INTERNAL
+        ObjInternal, OBJ_T_INTERNAL
     );
     obj->data = data;
     obj->markFunc = markFunc;
@@ -216,19 +216,20 @@ void *internalGetData(ObjInternal *obj) {
 
 const char *typeOfObj(Obj *obj) {
     switch (obj->type) {
-    case OBJ_STRING:
+    case OBJ_T_STRING:
         return "string";
-    case OBJ_CLASS:
+    case OBJ_T_CLASS:
         return "class";
-    case OBJ_INSTANCE:
+    case OBJ_T_INSTANCE:
         return "instance";
-    case OBJ_FUNCTION:
-    case OBJ_NATIVE_FUNCTION:
-    case OBJ_BOUND_METHOD:
+    case OBJ_T_FUNCTION:
+    case OBJ_T_NATIVE_FUNCTION:
+    case OBJ_T_BOUND_METHOD:
         return "function";
-    case OBJ_INTERNAL:
+    case OBJ_T_INTERNAL:
         return "internal";
     default:
+        fprintf(stderr, "BUG: Unknown object type: (%d)\n", obj->type);
         ASSERT(0);
         return "unknown";
     }

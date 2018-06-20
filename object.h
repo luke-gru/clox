@@ -7,15 +7,16 @@
 #include "table.h"
 
 typedef enum ObjType {
-  OBJ_STRING,
-  OBJ_FUNCTION,
-  OBJ_CLASS,
-  OBJ_INSTANCE,
-  OBJ_NATIVE_FUNCTION,
-  OBJ_BOUND_METHOD,
-  OBJ_INTERNAL,
+  OBJ_T_STRING,
+  OBJ_T_FUNCTION,
+  OBJ_T_CLASS,
+  OBJ_T_INSTANCE,
+  OBJ_T_NATIVE_FUNCTION,
+  OBJ_T_BOUND_METHOD,
+  OBJ_T_INTERNAL,
 } ObjType;
 
+// basic object structure that all objects (values of VAL_T_OBJ type)
 typedef struct Obj {
   ObjType type;
   // GC fields
@@ -30,7 +31,6 @@ typedef struct ObjString {
   char *chars;
   uint32_t hash;
 } ObjString;
-
 
 typedef void (*GCMarkFunc)(Obj *obj);
 typedef void (*GCFreeFunc)(Obj *obj);
@@ -84,13 +84,13 @@ typedef struct ObjBoundMethod {
   Obj *callable;
 } ObjBoundMethod;
 
-#define IS_STRING(value)        isObjType(value, OBJ_STRING)
-#define IS_FUNCTION(value)      isObjType(value, OBJ_FUNCTION)
-#define IS_NATIVE_FUNCTION(value) isObjType(value, OBJ_NATIVE_FUNCTION)
-#define IS_CLASS(value)         isObjType(value, OBJ_CLASS)
-#define IS_INSTANCE(value)      isObjType(value, OBJ_INSTANCE)
-#define IS_BOUND_METHOD(value)  isObjType(value, OBJ_BOUND_METHOD)
-#define IS_INTERNAL(value)  isObjType(value, OBJ_INTERNAL)
+#define IS_STRING(value)        isObjType(value, OBJ_T_STRING)
+#define IS_FUNCTION(value)      isObjType(value, OBJ_T_FUNCTION)
+#define IS_NATIVE_FUNCTION(value) isObjType(value, OBJ_T_NATIVE_FUNCTION)
+#define IS_CLASS(value)         isObjType(value, OBJ_T_CLASS)
+#define IS_INSTANCE(value)      isObjType(value, OBJ_T_INSTANCE)
+#define IS_BOUND_METHOD(value)  isObjType(value, OBJ_T_BOUND_METHOD)
+#define IS_INTERNAL(value)  isObjType(value, OBJ_T_INTERNAL)
 
 #define IS_ARRAY(value)         (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxAryClass)
 
@@ -121,7 +121,7 @@ void *internalGetData(ObjInternal *obj);
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
 
 // Returns true if [value] is an object of type [type]. Do not call this
-// directly, instead use the [IS___] macro for the type in question.
+// directly, instead use the [IS_XXX] macro for the type in question.
 static inline bool isObjType(Value value, ObjType type) {
   return IS_OBJ(value) && AS_OBJ(value)->type == type;
 }

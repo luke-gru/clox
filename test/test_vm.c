@@ -213,6 +213,23 @@ cleanup:
     return 0;
 }
 
+static int test_simple_subclass(void) {
+    char *src = "class Train < Object {\n"
+                "  fun init(color) {\n"
+                "    return \"non-instance!\";\n"
+                "  }\n"
+                "}\n"
+                "var t = Train(\"Red\");\n"
+                "t;\n";
+    interp(src, true);
+    Value *val = getLastValue();
+    T_ASSERT(val != NULL);
+    T_ASSERT(IS_INSTANCE(*val));
+cleanup:
+    freeVM();
+    return 0;
+}
+
 static int test_simple_method1(void) {
     char *src = "class Train {\n"
                 "  fun choo() { print \"choo\"; return this; }\n"
@@ -494,6 +511,23 @@ cleanup:
     return 0;
 }
 
+static int test_array_get_set() {
+    char *src = "var a = [1,2,3];\n"
+                "a[0] = 400;\n"
+                "print a[0]; print a.toString();";
+    ObjString *buf = newString("", 0);
+    setPrintBuf(buf);
+    interp(src, true);
+    ASSERT(buf->chars);
+    const char *expected = "400.00\n"
+                           "[400.00,2.00,3.00]\n";
+    T_ASSERT_STREQ(expected, buf->chars);
+cleanup:
+    unsetPrintBuf();
+    freeVM();
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
@@ -512,6 +546,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_simple_class);
     RUN_TEST(test_simple_class_initializer);
     RUN_TEST(test_simple_class_initializer2);
+    RUN_TEST(test_simple_subclass);
     RUN_TEST(test_simple_method1);
     RUN_TEST(test_native_clock);
     RUN_TEST(test_native_clock_bad_args);
@@ -528,5 +563,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_unredefinable_global2);
     RUN_TEST(test_array_literal);
     RUN_TEST(test_while_loop_stack);
+    RUN_TEST(test_array_get_set);
     END_TESTS();
 }

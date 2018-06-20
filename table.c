@@ -120,6 +120,7 @@ bool tableDelete(Table* table, ObjString* key) {
 }
 
 void tableAddAll(Table* from, Table* to) {
+    if (from->entries == NULL) return;
     for (int i = 0; i <= from->capacityMask; i++) {
         Entry* entry = &from->entries[i];
         if (entry->key != NULL) {
@@ -153,6 +154,7 @@ ObjString* tableFindString(Table* table, const char* chars, int length,
 }
 
 void tableRemoveWhite(Table* table) {
+    if (table->count == 0) return;
     for (int i = 0; i <= table->capacityMask; i++) {
         Entry* entry = &table->entries[i];
         if (entry->key != NULL && !entry->key->object.isDark) {
@@ -162,6 +164,7 @@ void tableRemoveWhite(Table* table) {
 }
 
 void grayTable(Table *table) {
+    if (table->count == 0) return;
     for (int i = 0; i <= table->capacityMask; i++) {
         ASSERT(table->entries);
         Entry *entry = &table->entries[i];

@@ -6,18 +6,29 @@
 
 typedef struct CatchTable CatchTable;
 typedef struct CatchTable {
+    // Row info
     int ifrom; // instruction try start
     int ito; // instruction try end
     int itarget; // instruction try catch start
     Value catchVal; // catch class or other value
     Value lastThrownValue; // runtime VM value of last thrown instance
-    CatchTable *next;
+
+    CatchTable *next; // next row in the catch table
 } CatchTable;
 
+/**
+ * Chunk of bytecode, along with lines that they originated from in
+ * the source code, and the string and number constants the bytecode
+ * uses. Also features a catch table. This is all per function information,
+ * as chunks are unique per source code function context, including the
+ * top-level (main) function.
+ */
 typedef struct {
     int count;
     int capacity;
     uint8_t *code;
+    // parallel array with `code`, ex: byte chunk->code[i] comes from line
+    // chunk->lines[i]
     int *lines;
     ValueArray constants;
     CatchTable *catchTbl;

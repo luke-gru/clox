@@ -78,13 +78,11 @@ static void _resetScanner(void) {
     initScanner("");
 }
 
-void repl(void) {
+NORETURN void repl(void) {
     const char *prompt = ">  ";
     _resetScanner();
     initChunk(&rChunk);
     initVM();
-    turnGCOff();
-    /*turnGCOff(); support GC! Should work fine*/
 
     char *lines[50];
     int numLines = 0;

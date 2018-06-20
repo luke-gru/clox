@@ -61,6 +61,9 @@ typedef enum {
     OP_THROW,
     OP_GET_THROWN,
 
+    OP_INDEX_GET,
+    OP_INDEX_SET,
+
     OP_LEAVE,
 } OpCode;
 

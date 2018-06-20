@@ -8,7 +8,6 @@
 Value runtimeNativeClock(int argCount, Value *args) {
     CHECK_ARGS("clock", 0, 0, argCount);
     return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
-
 }
 
 Value runtimeNativeTypeof(int argCount, Value *args) {
@@ -18,7 +17,7 @@ Value runtimeNativeTypeof(int argCount, Value *args) {
 }
 
 static void markInternalAry(Obj *internalObj) {
-    ASSERT(internalObj->type == OBJ_INTERNAL);
+    ASSERT(internalObj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
     ASSERT(internal);
     ValueArray *valAry = internal->data;
@@ -30,7 +29,7 @@ static void markInternalAry(Obj *internalObj) {
 }
 
 static void freeInternalAry(Obj *internalObj) {
-    ASSERT(internalObj->type == OBJ_INTERNAL);
+    ASSERT(internalObj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
     ValueArray *valAry = internal->data;
     ASSERT(internal);
@@ -65,13 +64,16 @@ Value lxArrayPush(int argCount, Value *args) {
     ASSERT(IS_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     Value internalObjVal;
-    ASSERT(tableGet(&selfObj->hiddenFields, internedString("ary"), &internalObjVal));
+    ASSERT(tableGet(&selfObj->hiddenFields, copyString("ary", 3), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     writeValueArray(ary, args[1]);
     return self;
 }
 
+// print a;
+// OR
+// a.toString();
 Value lxArrayToString(int argCount, Value *args) {
     CHECK_ARGS("Array#toString", 1, 1, argCount);
     Value self = *args;
@@ -80,7 +82,7 @@ Value lxArrayToString(int argCount, Value *args) {
     ObjString *ret = newString("[", 1);
     hideFromGC((Obj*)ret);
     Value internalObjVal;
-    ASSERT(tableGet(&selfObj->hiddenFields, internedString("ary"), &internalObjVal));
+    ASSERT(tableGet(&selfObj->hiddenFields, copyString("ary", 3), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     for (int i = 0; i < ary->count; i++) {
@@ -96,6 +98,60 @@ Value lxArrayToString(int argCount, Value *args) {
     pushCString(ret, "]", 1);
     unhideFromGC((Obj*)ret);
     return OBJ_VAL(ret);
+}
+
+// TODO
+#define CHECK_ARG_TYPE(...)
+
+Value lxArrayIndexGet(int argCount, Value *args) {
+    CHECK_ARGS("Array#[]", 2, 2, argCount);
+    Value self = args[0];
+    ASSERT(IS_ARRAY(self));
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    Value num = args[1];
+    CHECK_ARG_TYPE(num, VAL_T_NUMBER, 1);
+    Value internalObjVal;
+    ASSERT(tableGet(&selfObj->hiddenFields, copyString("ary", 3), &internalObjVal));
+    ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
+    ASSERT(ary);
+    int idx = (int)AS_NUMBER(num);
+    if (idx < 0) {
+        // FIXME: throw error
+        return NIL_VAL;
+    }
+
+    if (idx < ary->count) {
+        return ary->values[idx];
+    } else {
+        return NIL_VAL;
+    }
+}
+
+Value lxArrayIndexSet(int argCount, Value *args) {
+    CHECK_ARGS("Array#[]=", 3, 3, argCount);
+    Value self = args[0];
+    ASSERT(IS_ARRAY(self));
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    Value num = args[1];
+    Value rval = args[2];
+    CHECK_ARG_TYPE(num, VAL_T_NUMBER, 1);
+    Value internalObjVal;
+    ASSERT(tableGet(&selfObj->hiddenFields, copyString("ary", 3), &internalObjVal));
+    ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
+    ASSERT(ary);
+    int idx = (int)AS_NUMBER(num);
+    if (idx < 0) {
+        // FIXME: throw error
+        return NIL_VAL;
+    }
+
+    if (idx < ary->count) {
+        ary->values[idx] = rval;
+    } else {
+        // TODO: throw error or grow array?
+        return NIL_VAL;
+    }
+    return rval;
 }
 
 bool runtimeCheckArgs(int min, int max, int actual) {

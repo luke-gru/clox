@@ -117,8 +117,9 @@ static char *outputLiteralExpr(Node *n, int indentLevel) {
             sprintf(buf, "%s", tokStr(&n->tok));
             return buf;
         }
-        default:
-            return "unreachable";
+        default: {
+            UNREACHABLE("litkind=%d", n->type.litKind);
+        }
     }
 }
 
@@ -425,7 +426,7 @@ static char *outputFunctionStmt(Node *n, int indentLevel) {
     } else if (nodeKind(n) == ANON_FN_EXPR) {
         buf = "(fnAnon";
     } else {
-        exit(1); // unreachable
+        UNREACHABLE("node kind: %d", nodeKind(n));
     }
 
     // parameters
@@ -609,7 +610,7 @@ char *outputASTString(Node *node, int indentLevel) {
                 case KEYWORD_ARG_EXPR:
                     return outputKeywordArgExpr(node, indentLevel);
                 default:
-                    return "unreachable";
+                    UNREACHABLE("invalid expr node kind: %d", node->type.kind);
             }
         }
         case NODE_STMT: {
@@ -653,14 +654,14 @@ char *outputASTString(Node *node, int indentLevel) {
                 case STMTLIST_STMT:
                     return outputStmtlistStmt(node, indentLevel);
                 default:
-                    return "unreachable";
+                    UNREACHABLE("invalid stmt node kind: %d", node->type.kind);
             }
         }
         case NODE_OTHER: {
-            return "unreachable";
+            UNREACHABLE("%s", "node type: other");
         }
     }
-    return "unreachable";
+    UNREACHABLE("%s", "invalid node type");
 }
 
 NodeType nodeType(Node *n) {

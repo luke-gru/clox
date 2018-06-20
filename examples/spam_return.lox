@@ -1,0 +1,4 @@
+fun ret() {
+  return "HI";
+  return "OMG";
+}

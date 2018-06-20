@@ -5,6 +5,7 @@
 #include "chunk.h"
 #include "object.h"
 #include "table.h"
+#include "debug.h"
 
 #define STACK_MAX 256
 #define FRAMES_MAX 64
@@ -62,7 +63,7 @@ void runtimeError(const char *format, ...);
 void setPrintBuf(ObjString *buf);
 void unsetPrintBuf(void);
 
-void repl(void);
+NORETURN void repl(void);
 void resetStack();
 int VMNumStackFrames(void);
 void printVMStack(FILE *f);

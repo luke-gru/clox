@@ -33,8 +33,9 @@ void freeObject(Obj *obj);
 void blackenObject(Obj *obj);
 void freeObjects(void); // free all objects, at end of VM lifecycle
 
-void turnGCOff(void);
-void turnGCOn(void);
+bool turnGCOff(void);
+bool turnGCOn(void);
+void setGCOnOff(bool turnOn);
 void hideFromGC(Obj *obj);
 void unhideFromGC(Obj *obj);
 

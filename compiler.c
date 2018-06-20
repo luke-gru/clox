@@ -16,6 +16,12 @@
 #include "options.h"
 #include "memory.h"
 
+#ifdef NDEBUG
+#define COMP_TRACE(...)
+#else
+#define COMP_TRACE(...) compiler_trace_debug(__VA_ARGS__)
+#endif
+
 typedef struct {
   // The name of the local variable.
   Token name;
@@ -52,13 +58,13 @@ typedef struct Compiler {
   // scope (global scope)
   int scopeDepth;
   bool hadError;
-  bool emittedReturn;
+  bool emittedReturn; // has emitted at least 1 return for this function so far
+  vec_int_t emittedReturnDepths;
 } Compiler;
 
 
 typedef struct ClassCompiler {
   struct ClassCompiler *enclosing;
-
   Token name;
   bool hasSuperclass;
 } ClassCompiler;
@@ -67,8 +73,20 @@ typedef enum {
     COMPILE_SCOPE_BLOCK = 1,
     COMPILE_SCOPE_FUNCTION,
     COMPILE_SCOPE_CLASS,
-    COMPILE_SCOPE_MODULE,
+    COMPILE_SCOPE_MODULE, // TODO
 } CompileScopeType;
+
+static const char *compileScopeName(CompileScopeType stype) {
+    switch (stype) {
+    case COMPILE_SCOPE_BLOCK: return "SCOPE_BLOCK";
+    case COMPILE_SCOPE_FUNCTION: return "SCOPE_FUNCTION";
+    case COMPILE_SCOPE_CLASS: return "SCOPE_CLASS";
+    case COMPILE_SCOPE_MODULE: return "SCOPE_MODULE";
+    default: {
+        UNREACHABLE("invalid scope type: %d", stype);
+    }
+    }
+}
 
 Compiler *current = NULL;
 ClassCompiler *currentClass = NULL;
@@ -78,6 +96,19 @@ typedef enum {
     VAR_GET,
     VAR_SET,
 } VarOp;
+
+static void compiler_trace_debug(const char *fmt, ...) {
+    if (!CLOX_OPTION_T(traceCompiler)) return;
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[COMP]: ");
+    if (current) {
+        fprintf(stderr, "(comp=%p,depth=%d): ", current, current->scopeDepth);
+    }
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fprintf(stderr, "\n");
+}
 
 static Token syntheticToken(const char *lexeme) {
     Token tok;
@@ -97,6 +128,7 @@ static void emitByte(uint8_t byte) {
 // blocks (`{}`) push new scopes
 static void pushScope(CompileScopeType stype) {
     current->scopeDepth++;
+    COMP_TRACE("pushScope: %s", compileScopeName(stype));
 }
 
 static void namedVariable(Token name, VarOp getSet);
@@ -105,7 +137,17 @@ static void namedVariable(Token name, VarOp getSet);
 // `return` statement in a function.
 static void emitReturn(Compiler *compiler) {
     ASSERT(compiler->type != TYPE_TOP_LEVEL);
-    if (compiler->emittedReturn) return;
+    if (compiler->emittedReturn) {
+        int idx = 0;
+        // NOTE: add 1 here because the explicit return would be in the block scope
+        // of the function, so it added a scopeDepth
+        vec_find(&compiler->emittedReturnDepths, compiler->scopeDepth+1, idx);
+        if (idx != -1) {
+            COMP_TRACE("Skipping emitting return");
+            return; // already emitted return for this scope depth
+        }
+    }
+    COMP_TRACE("Emitting return");
     if (compiler->type == TYPE_INITIALIZER) {
         namedVariable(syntheticToken("this"), VAR_GET);
         emitByte(OP_RETURN);
@@ -114,18 +156,23 @@ static void emitReturn(Compiler *compiler) {
         emitByte(OP_RETURN);
     }
     compiler->emittedReturn = true;
+    vec_push(&compiler->emittedReturnDepths, compiler->scopeDepth);
 }
 
 static void popScope(CompileScopeType stype) {
-    current->scopeDepth--;
+    COMP_TRACE("popScope: %s", compileScopeName(stype));
     while (current->localCount > 0 &&
-            current->locals[current->localCount - 1].depth > current->scopeDepth) {
-        emitByte(OP_POP);
+            current->locals[current->localCount - 1].depth >= current->scopeDepth) {
+        if (stype != COMPILE_SCOPE_CLASS) {
+            COMP_TRACE("popScope emitting OP_POP");
+            emitByte(OP_POP); // don't pop the non-pushed implicit 'super'
+        }
         current->localCount--;
     }
     if (stype == COMPILE_SCOPE_FUNCTION) {
         emitReturn(current);
     }
+    current->scopeDepth--;
 }
 
 static void emitBytes(uint8_t byte1, uint8_t byte2) {
@@ -146,6 +193,7 @@ static ObjFunction *endCompiler() {
     if (current->type == TYPE_TOP_LEVEL) {
         emitLeave();
     }
+    vec_deinit(&current->emittedReturnDepths);
     ObjFunction *func = current->function;
     current = current->enclosing;
     return func;
@@ -318,6 +366,7 @@ static void initCompiler(
     compiler->type = ftype;
     compiler->hadError = false;
     compiler->emittedReturn = false;
+    vec_init(&compiler->emittedReturnDepths);
 
     current = compiler;
 
@@ -378,10 +427,27 @@ static void defineVariable(uint8_t arg, bool checkDecl) {
   }
 }
 
+static bool assignExprValueUnused(Node *assignNode) {
+    Node *parent = assignNode->parent;
+    NodeType nType = parent->type.type;
+    int nKind = parent->type.kind;
+    while (parent && nKind == GROUPING_EXPR) {
+        parent = parent->parent;
+        nType = parent->type.type;
+        nKind = parent->type.kind;
+    }
+    if (nType == NODE_STMT) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 
 static void emitClass(Node *n) {
     uint8_t nameConstant = identifierConstant(&n->tok);
     ClassCompiler cComp;
+    memset(&cComp, 0, sizeof(cComp));
     cComp.name = n->tok;
     Token *superClassTok = (Token*)nodeGetData(n);
     cComp.hasSuperclass = superClassTok != NULL;
@@ -611,12 +677,8 @@ static void emitNode(Node *n) {
         }
         emitNode(n->children->data[1]); // rval
         emitBytes(setOp, arg);
-        NodeType nType = varNode->parent->type.type;
-        int nKind = n->parent->type.kind;
-        if (nType == NODE_STMT || nKind == EXPR_STMT) {
+        if (assignExprValueUnused(n)) {
             emitByte(OP_POP); // we don't need this value, so pop it
-        } else {
-            /*fprintf(stderr, "parent of assign kind: %s\n", nodeKindStr(varNode->parent->type.kind));*/
         }
         break;
     }
@@ -653,6 +715,15 @@ static void emitNode(Node *n) {
         break;
     }
     case RETURN_STMT: {
+        if (current->emittedReturn) {
+            int idx = 0;
+            vec_find(&current->emittedReturnDepths, current->scopeDepth, idx);
+            if (idx != -1) {
+                COMP_TRACE("Skipping emitting explicit return");
+                break;
+            }
+        }
+
         if (n->children->length > 0) {
             if (current->type == TYPE_INITIALIZER) {
                 namedVariable(syntheticToken("this"), VAR_GET);
@@ -660,8 +731,11 @@ static void emitNode(Node *n) {
                 emitChildren(n);
             }
             emitByte(OP_RETURN);
+            COMP_TRACE("Emitting explicit return (children)");
             current->emittedReturn = true;
+            vec_push(&current->emittedReturnDepths, current->scopeDepth);
         } else {
+            COMP_TRACE("Emitting explicit return (void)");
             emitReturn(current);
         }
         break;
@@ -730,6 +804,19 @@ static void emitNode(Node *n) {
     case THROW_STMT: {
         emitChildren(n);
         emitByte(OP_THROW);
+        break;
+    }
+    case INDEX_GET_EXPR: {
+        emitChildren(n);
+        emitByte(OP_INDEX_GET);
+        break;
+    }
+    case INDEX_SET_EXPR: {
+        emitChildren(n);
+        emitByte(OP_INDEX_SET);
+        if (assignExprValueUnused(n)) {
+            emitByte(OP_POP); // we don't need this value, so pop it
+        }
         break;
     }
     default:

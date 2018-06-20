@@ -57,7 +57,8 @@ static inline void trace_gc_func_end(const char *funcName) {
     fprintf(stderr, "[GC]: </%s>\n", funcName);
 }
 
-// Main memory management function for malloc/free
+// Main memory management function used by both ALLOCATE/FREE (see memory.h)
+// NOTE: memory is NOT initialized (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START("reallocate");
     vm.bytesAllocated += (newSize - oldSize);
@@ -121,48 +122,48 @@ static void grayArray(ValueArray *ary) {
 void blackenObject(Obj *obj) {
     TRACE_GC_FUNC_START("blackenObject");
     switch (obj->type) {
-        case OBJ_BOUND_METHOD: {
+        case OBJ_T_BOUND_METHOD: {
             ObjBoundMethod *method = (ObjBoundMethod*)obj;
             grayValue(method->receiver);
             grayObject(method->callable);
             break;
         }
-        case OBJ_CLASS: {
+        case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
             grayObject((Obj*)klass->name);
             grayObject((Obj*)klass->superclass);
             grayTable(&klass->methods);
             break;
         }
-        case OBJ_FUNCTION: {
+        case OBJ_T_FUNCTION: {
             ObjFunction *func = (ObjFunction*)obj;
             grayObject((Obj*)func->name);
             break;
         }
-        case OBJ_NATIVE_FUNCTION: {
+        case OBJ_T_NATIVE_FUNCTION: {
             ObjNative *native = (ObjNative*)obj;
             grayObject((Obj*)native->name);
             break;
         }
-        case OBJ_INSTANCE: {
+        case OBJ_T_INSTANCE: {
             ObjInstance *instance = (ObjInstance*)obj;
             grayObject((Obj*)instance->klass);
             grayTable(&instance->fields);
             grayTable(&instance->hiddenFields);
             break;
         }
-        case OBJ_INTERNAL: {
+        case OBJ_T_INTERNAL: {
             ObjInternal *internal = (ObjInternal*)obj;
             if (internal->markFunc) {
                 internal->markFunc(obj);
             }
             break;
         }
-        case OBJ_STRING: { // no references
+        case OBJ_T_STRING: { // no references
             break;
         }
         default: {
-            ASSERT(0);
+            UNREACHABLE("Unknown object type: %d", obj->type);
         }
     }
     TRACE_GC_FUNC_END("blackenObject");
@@ -174,14 +175,14 @@ void freeObject(Obj *obj) {
     TRACE_GC_FUNC_START("freeObject");
     GC_TRACE_FREE(obj);
     switch (obj->type) {
-        case OBJ_BOUND_METHOD: {
+        case OBJ_T_BOUND_METHOD: {
             // NOTE: don't free the actual underlying function, we need this
             // to stick around if only the bound method needs freeing
             GC_TRACE_DEBUG("Freeing bound method: p=%p", obj);
             FREE(ObjBoundMethod, obj);
             break;
         }
-        case OBJ_CLASS: {
+        case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
             GC_TRACE_DEBUG("Freeing class method table");
             freeTable(&klass->methods);
@@ -189,7 +190,7 @@ void freeObject(Obj *obj) {
             FREE(ObjClass, obj);
             break;
         }
-        case OBJ_FUNCTION: {
+        case OBJ_T_FUNCTION: {
             ObjFunction *func = (ObjFunction*)obj;
             GC_TRACE_DEBUG("Freeing ObjFunction chunk: p=%p", &func->chunk);
             freeChunk(&func->chunk);
@@ -197,12 +198,12 @@ void freeObject(Obj *obj) {
             FREE(ObjFunction, obj);
             break;
         }
-        case OBJ_NATIVE_FUNCTION: {
+        case OBJ_T_NATIVE_FUNCTION: {
             GC_TRACE_DEBUG("Freeing ObjNative: p=%p", obj);
             FREE(ObjNative, obj);
             break;
         }
-        case OBJ_INSTANCE: {
+        case OBJ_T_INSTANCE: {
             ObjInstance *instance = (ObjInstance*)obj;
             GC_TRACE_DEBUG("Freeing instance fields table: p=%p", &instance->fields);
             freeTable(&instance->fields);
@@ -212,7 +213,7 @@ void freeObject(Obj *obj) {
             FREE(ObjInstance, obj);
             break;
         }
-        case OBJ_INTERNAL: {
+        case OBJ_T_INTERNAL: {
             ObjInternal *internal = (ObjInternal*)obj;
             if (internal->freeFunc) {
                 GC_TRACE_DEBUG("Freeing internal object's references: p=%p, datap=%p", internal, internal->data);
@@ -222,7 +223,7 @@ void freeObject(Obj *obj) {
             FREE(ObjInternal, internal);
             break;
         }
-        case OBJ_STRING: {
+        case OBJ_T_STRING: {
             ObjString *string = (ObjString*)obj;
             /*if (!string->chars) return;*/
             ASSERT(string->chars);
@@ -235,7 +236,7 @@ void freeObject(Obj *obj) {
             break;
         }
         default: {
-            ASSERT(0);
+            UNREACHABLE("Unknown object type: %d", obj->type);
         }
     }
     TRACE_GC_FUNC_END("freeObject");
@@ -246,13 +247,26 @@ static bool GCOn = true;
 // GC stats
 static unsigned numRootsLastGC = 0;
 
-void turnGCOff(void) {
+bool turnGCOff(void) {
     GC_TRACE_DEBUG("GC turned OFF");
+    bool prevVal = GCOn;
     GCOn = false;
+    return prevVal;
 }
-void turnGCOn(void) {
+bool turnGCOn(void) {
     GC_TRACE_DEBUG("GC turned ON");
+    bool prevVal = GCOn;
     GCOn = true;
+    return prevVal;
+}
+
+// Usage:
+// bool prevGC = turnGCOff();
+// ... do stuff ...
+// setGCOnOff(prevGC);
+void setGCOnOff(bool turnOn) {
+    GC_TRACE_DEBUG("GC turned back %s", turnOn ? "ON" : "OFF");
+    GCOn = turnOn;
 }
 
 void hideFromGC(Obj *obj) {
@@ -297,10 +311,10 @@ void collectGarbage(void) {
         grayObject((Obj*)vm.frames[i].function);
     }
 
-    GC_TRACE_DEBUG("Marking globals");
+    GC_TRACE_DEBUG("Marking globals (%d found)", vm.globals.count);
     // Mark the global roots.
     grayTable(&vm.globals);
-    GC_TRACE_DEBUG("Marking interned strings");
+    GC_TRACE_DEBUG("Marking interned strings (%d found)", vm.strings.count);
     grayTable(&vm.strings);
     GC_TRACE_DEBUG("Marking compiler roots");
     grayCompilerRoots();
@@ -316,7 +330,7 @@ void collectGarbage(void) {
         grayValue(*vm.lastValue);
     }
 
-    GC_TRACE_DEBUG("Marking VM hidden roots");
+    GC_TRACE_DEBUG("Marking VM hidden roots (%d)", vm.hiddenObjs.length);
     // gray hidden roots...
     void *objPtr = NULL; int j = 0;
     int numHiddenRoots = vm.hiddenObjs.length;

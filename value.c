@@ -51,11 +51,11 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
         printNumber(file, AS_NUMBER(value));
         return;
     } else if (IS_OBJ(value)) {
-        if (OBJ_TYPE(value) == OBJ_STRING) {
+        if (OBJ_TYPE(value) == OBJ_T_STRING) {
             char *cstring = AS_CSTRING(value);
             fprintf(file, "%s", cstring ? cstring : "(NULL)");
             return;
-        } else if (OBJ_TYPE(value) == OBJ_FUNCTION) {
+        } else if (OBJ_TYPE(value) == OBJ_T_FUNCTION) {
             ObjFunction *func = AS_FUNCTION(value);
             if (func->name == NULL) {
                 fprintf(file, "%s", "<fun (Anon)>");
@@ -63,7 +63,7 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
                 fprintf(file, "<fun %s>", func->name->chars);
             }
             return;
-        } else if (OBJ_TYPE(value) == OBJ_INSTANCE) {
+        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE) {
             ObjInstance *inst = AS_INSTANCE(value);
             Obj *callable = instanceFindMethod(inst, copyString("toString", 8));
             if (callable && vm.inited && canCallMethods) {
@@ -81,23 +81,23 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
                 fprintf(file, "<instance %s>", klassName);
             }
             return;
-        } else if (OBJ_TYPE(value) == OBJ_CLASS) {
+        } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
             char *klassName = klass->name->chars;
             fprintf(file, "<class %s>", klassName);
             return;
-        } else if (OBJ_TYPE(value) == OBJ_NATIVE_FUNCTION) {
+        } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
             ObjString *name = native->name;
             fprintf(file, "<fn %s (native)>", name->chars);
             return;
-        } else if (OBJ_TYPE(value) == OBJ_BOUND_METHOD) {
+        } else if (OBJ_TYPE(value) == OBJ_T_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
             ObjString *name;
-            if (bmethod->callable->type == OBJ_FUNCTION) {
+            if (bmethod->callable->type == OBJ_T_FUNCTION) {
                 ObjFunction *func = (ObjFunction*)bmethod->callable;
                 name = func->name;
-            } else if (bmethod->callable->type == OBJ_NATIVE_FUNCTION) {
+            } else if (bmethod->callable->type == OBJ_T_NATIVE_FUNCTION) {
                 ObjNative *func = (ObjNative*)bmethod->callable;
                 name = func->name;
             } else {
@@ -105,7 +105,7 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
             }
             fprintf(file, "<method %s>", name->chars);
             return;
-        } else if (OBJ_TYPE(value) == OBJ_INTERNAL) {
+        } else if (OBJ_TYPE(value) == OBJ_T_INTERNAL) {
             fprintf(file, "<internal>");
             return;
         }
@@ -134,11 +134,11 @@ ObjString *valueToString(Value value) {
         strcpy(buf, buftemp);
         ret = newString(buf, strlen(buf));
     } else if (IS_OBJ(value)) {
-        if (OBJ_TYPE(value) == OBJ_STRING) {
+        if (OBJ_TYPE(value) == OBJ_T_STRING) {
             char *cstring = AS_CSTRING(value);
             ASSERT(cstring);
             ret = newString(strdup(cstring), strlen(cstring));
-        } else if (OBJ_TYPE(value) == OBJ_FUNCTION) {
+        } else if (OBJ_TYPE(value) == OBJ_T_FUNCTION) {
             ObjFunction *func = AS_FUNCTION(value);
             if (func->name == NULL) {
                 const char *anon = "<fun (Anon)>";
@@ -150,7 +150,7 @@ ObjString *valueToString(Value value) {
                 ret = newString(buf, strlen(buf));
                 /*free(buf);*/
             }
-        } else if (OBJ_TYPE(value) == OBJ_INSTANCE) {
+        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE) {
             ObjClass *klass = AS_INSTANCE(value)->klass;
             char *klassName = klass->name->chars;
             char *cbuf = calloc(strlen(klassName)+1+11, 1);
@@ -158,7 +158,7 @@ ObjString *valueToString(Value value) {
             sprintf(cbuf, "<instance %s>", klassName);
             ret = newString(cbuf, strlen(cbuf));
             /*free(cbuf);*/
-        } else if (OBJ_TYPE(value) == OBJ_CLASS) {
+        } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
             char *klassName = klass->name->chars;
             char *cbuf = calloc(strlen(klassName)+1+8, 1);
@@ -166,7 +166,7 @@ ObjString *valueToString(Value value) {
             sprintf(cbuf, "<class %s>", klassName);
             ret = newString(cbuf, strlen(cbuf));
             /*free(cbuf);*/
-        } else if (OBJ_TYPE(value) == OBJ_NATIVE_FUNCTION) {
+        } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
             ObjString *name = native->name;
             char *nameStr = name->chars;
@@ -175,13 +175,15 @@ ObjString *valueToString(Value value) {
             sprintf(cbuf, "<fn %s (native)>", nameStr);
             ret = newString(cbuf, strlen(cbuf));
             /*free(cbuf);*/
-        } else if (OBJ_TYPE(value) == OBJ_BOUND_METHOD) {
+        } else if (OBJ_TYPE(value) == OBJ_T_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
             ObjString *name;
-            if (bmethod->callable->type == OBJ_FUNCTION) {
+            if (bmethod->callable->type == OBJ_T_FUNCTION) {
                 name = ((ObjFunction*)(bmethod->callable))->name;
-            } else if (bmethod->callable->type == OBJ_NATIVE_FUNCTION) {
+            } else if (bmethod->callable->type == OBJ_T_NATIVE_FUNCTION) {
                 name = ((ObjNative*)(bmethod->callable))->name;
+            } else {
+                ASSERT(0);
             }
             char *nameStr = name->chars;
             char *cbuf = calloc(strlen(nameStr)+1+9, 1);

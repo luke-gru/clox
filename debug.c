@@ -6,7 +6,7 @@
 #include "value.h"
 #include "memory.h"
 
-void die(const char *fmt, ...) {
+NORETURN void die(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
@@ -14,7 +14,7 @@ void die(const char *fmt, ...) {
     exit(1);
 }
 
-char *opName(OpCode code) {
+const char *opName(OpCode code) {
     switch (code) {
     case OP_CONSTANT:
         return "OP_CONSTANT";
@@ -92,9 +92,14 @@ char *opName(OpCode code) {
         return "OP_THROW";
     case OP_GET_THROWN:
         return "OP_GET_THROWN";
+    case OP_INDEX_GET:
+        return "OP_INDEX_GET";
+    case OP_INDEX_SET:
+        return "OP_INDEX_SET";
     case OP_LEAVE:
         return "OP_LEAVE";
     default:
+        fprintf(stderr, "[BUG]: unknown (unprintable) opcode, maybe new? (%d)\n", code);
         return "!Unknown instruction!";
     }
 }
@@ -335,6 +340,8 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_LEAVE:
         case OP_THROW:
         case OP_CREATE_ARRAY:
+        case OP_INDEX_GET:
+        case OP_INDEX_SET:
             return printSimpleInstruction(opName(byte), i);
         default:
             printf("Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
@@ -390,6 +397,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_LEAVE:
         case OP_THROW:
         case OP_CREATE_ARRAY:
+        case OP_INDEX_GET:
+        case OP_INDEX_SET:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             char *cBuf = calloc(19+1, 1);

@@ -20,6 +20,7 @@ static int test_compile_addition(void) {
                      "0005\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
+    freeChunk(&chunk);
     return 0;
 }
 
@@ -41,6 +42,7 @@ static int test_compile_global_variable(void) {
                      "0008\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
+    freeChunk(&chunk);
     return 0;
 }
 
@@ -61,6 +63,7 @@ static int test_compile_local_variable(void) {
                      "0007\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
+    freeChunk(&chunk);
     return 0;
 }
 
@@ -86,6 +89,7 @@ static int test_compile_classdecl(void) {
 
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
+    freeChunk(&chunk);
     return 0;
 }
 
@@ -128,6 +132,7 @@ static int test_compile_try_stmt_with_catch1(void) {
                      "0027\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
+    freeChunk(&chunk);
     return 0;
 }
 
@@ -182,10 +187,11 @@ static int test_compile_try_stmt_with_catch2(void) {
                     "0041\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
+    freeChunk(&chunk);
     return 0;
 }
 
-int test_pop_assign_if_parent_stmt() {
+int test_pop_assign_if_parent_stmt(void) {
     char *src = "var i = 0;\n"
                 "while (i < 300) {\n"
                 "  print i;\n"
@@ -216,6 +222,30 @@ int test_pop_assign_if_parent_stmt() {
 "0024\t"	"OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
+    freeChunk(&chunk);
+    return 0;
+}
+
+// only 1 return emitted per scope level
+int test_spam_return(void) {
+    char *src = "fun ret() { return \"HI\"; return \"AGAIN\"; }";
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int result = compile_src(src, &chunk, &err);
+    T_ASSERT_EQ(0, result);
+    ObjString *string = disassembleChunk(&chunk);
+    char *cstring = string->chars;
+    fprintf(stderr, "\n'%s'\n", cstring);
+    char *expected = "0000\t"	"OP_CONSTANT\t"	"0000\t"	"'<fun ret>'\n"
+                     "0002\t"	"OP_DEFINE_GLOBAL\t"	"0001\t"	"'ret'\n"
+                     "0004\t"	"OP_LEAVE\n"
+                     "-- Function ret --\n"
+                     "0000\t"	"OP_CONSTANT\t"	"0000\t"	"'HI'\n"
+                     "0002\t"	"OP_RETURN\n"
+                     "----\n";
+    T_ASSERT_STREQ(expected, cstring);
+cleanup:
     return 0;
 }
 
@@ -230,5 +260,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_compile_try_stmt_with_catch1);
     RUN_TEST(test_compile_try_stmt_with_catch2);
     RUN_TEST(test_pop_assign_if_parent_stmt);
+    RUN_TEST(test_spam_return);
     END_TESTS();
 }

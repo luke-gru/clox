@@ -1,7 +1,8 @@
 #include <string.h>
 #include "options.h"
+#include "debug.h"
 
-CloxOptions options;
+static CloxOptions options;
 
 char *boolOptNames[] = {
     "debugParser",
@@ -12,6 +13,7 @@ char *boolOptNames[] = {
     "debugTokens",
     "debugBytecode",
     "traceGC",
+    "traceCompiler",
     NULL,
 };
 
@@ -26,6 +28,8 @@ void initOptions(void) {
     options.compileOnly = false;
     options.debugTokens = false;
     options.debugBytecode = false;
+    options.traceGC = false;
+    options.traceCompiler = false;
     options._inited = true;
 }
 
@@ -44,6 +48,8 @@ bool findOption(const char *optName, const char *typeName) {
             i++;
         }
         return false;
+    } else {
+        UNREACHABLE("%s", "invalid option type: '%s'", typeName);
     }
     return false;
 }
@@ -58,6 +64,10 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "-DTRACE_PARSER_CALLS") == 0) {
         SET_OPTION(traceParserCalls, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "-DTRACE_COMPILER") == 0) {
+        SET_OPTION(traceCompiler, true);
         return 1;
     }
     if (strcmp(argv[i], "-DTRACE_VM_EXECUTION") == 0) {

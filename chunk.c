@@ -6,8 +6,8 @@
 void initChunk(Chunk *chunk) {
     chunk->count = 0;
     chunk->capacity = 0;
-    chunk->code = NULL; // parallel arrays
-    chunk->lines = NULL; // parallel arrays
+    chunk->code = NULL;
+    chunk->lines = NULL;
     chunk->catchTbl = NULL;
     initValueArray(&chunk->constants);
 }

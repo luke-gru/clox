@@ -60,6 +60,12 @@ void defineNativeClasses() {
     ObjNative *aryPushNat = newNative(copyString("push", 4), lxArrayPush);
     tableSet(&arrayClass->methods, copyString("push", 4), OBJ_VAL(aryPushNat));
 
+    ObjNative *aryIdxGetNat = newNative(copyString("indexGet", 8), lxArrayIndexGet);
+    tableSet(&arrayClass->methods, copyString("indexGet", 8), OBJ_VAL(aryIdxGetNat));
+
+    ObjNative *aryIdxSetNat = newNative(copyString("indexSet", 8), lxArrayIndexSet);
+    tableSet(&arrayClass->methods, copyString("indexSet", 8), OBJ_VAL(aryIdxSetNat));
+
     ObjNative *aryToStringNat = newNative(copyString("toString", 8), lxArrayToString);
     tableSet(&arrayClass->methods, copyString("toString", 8), OBJ_VAL(aryToStringNat));
 }
@@ -125,7 +131,8 @@ void push(Value value) {
 Value pop() {
     ASSERT(vm.stackTop > vm.stack);
     vm.stackTop--;
-    return *vm.stackTop;
+    vm.lastValue = vm.stackTop;
+    return *vm.lastValue;
 }
 
 Value peek(unsigned n) {
@@ -135,7 +142,7 @@ Value peek(unsigned n) {
 
 Value *getLastValue() {
     if (isOpStackEmpty()) {
-        return NULL;
+        return vm.lastValue;
     } else {
         return vm.stackTop-1;
     }
@@ -409,14 +416,18 @@ static CatchTable *getCatchTableRow(int idx) {
 }
 
 void printVMStack(FILE *f) {
-    fprintf(f, "Stack:\n");
+    if (vm.stackTop == vm.stack) {
+        fprintf(f, "%s", "Stack: empty\n");
+        return;
+    }
+    fprintf(f, "%s", "Stack:\n");
     // print VM stack values from bottom of stack to top
     for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
-        fprintf(f, "[ ");
+        fprintf(f, "%s", "[ ");
         printValue(f, *slot, false);
-        fprintf(f, " ]");
+        fprintf(f, "%s", " ]");
     }
-    fprintf(f, "\n");
+    fprintf(f, "%s", "\n");
 }
 
 /**
@@ -722,6 +733,30 @@ static InterpretResult run(void) {
           }
           push(ret);
           unhideFromGC(AS_OBJ(ret));
+          break;
+      }
+      case OP_INDEX_GET: {
+          Value lval = peek(1);
+          ASSERT(IS_INSTANCE(lval)); // TODO: handle error
+          ObjInstance *instance = AS_INSTANCE(lval);
+          Obj *method = instanceFindMethod(instance, copyString("indexGet", 8));
+          ASSERT(method); // TODO: handle error
+          callCallable(OBJ_VAL(method), 1, true);
+          Value ret = pop();
+          pop(); pop();
+          push(ret);
+          break;
+      }
+      case OP_INDEX_SET: {
+          Value lval = peek(2);
+          ASSERT(IS_INSTANCE(lval)); // TODO: handle error
+          ObjInstance *instance = AS_INSTANCE(lval);
+          Obj *method = instanceFindMethod(instance, copyString("indexSet", 8));
+          ASSERT(method); // TODO: handle error
+          callCallable(OBJ_VAL(method), 2, true);
+          Value ret = pop();
+          pop(); pop(); pop();
+          push(ret);
           break;
       }
       case OP_THROW: {
