@@ -9,7 +9,7 @@ typedef struct Obj Obj;
 typedef struct ObjString ObjString;
 
 typedef enum {
-  VAL_T_BOOL,
+  VAL_T_BOOL = 1,
   VAL_T_NIL,
   VAL_T_NUMBER,
   VAL_T_OBJ, // includes strings/arrays
@@ -51,7 +51,9 @@ void initValueArray(ValueArray *array);
 void writeValueArray(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);
 void printValue(FILE *file, Value value, bool canCallMethods);
-ObjString *valueToString(Value value);
+
+typedef ObjString *(*newStringFunc)(char *chars, int length);
+ObjString *valueToString(Value value, newStringFunc fn);
 
 const char *typeOfVal(Value val);
 uint32_t valHash(Value val);

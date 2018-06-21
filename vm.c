@@ -78,6 +78,18 @@ void defineNativeClasses() {
 
     ObjNative *mapInitNat = newNative(copyString("init", 4), lxMapInit);
     tableSet(&mapClass->methods, OBJ_VAL(copyString("init", 4)), OBJ_VAL(mapInitNat));
+
+    ObjNative *mapIdxGetNat = newNative(copyString("indexGet", 8), lxMapIndexGet);
+    tableSet(&mapClass->methods, OBJ_VAL(copyString("indexGet", 8)), OBJ_VAL(mapIdxGetNat));
+
+    ObjNative *mapIdxSetNat = newNative(copyString("indexSet", 8), lxMapIndexSet);
+    tableSet(&mapClass->methods, OBJ_VAL(copyString("indexSet", 8)), OBJ_VAL(mapIdxSetNat));
+
+    ObjNative *mapKeysNat = newNative(copyString("keys", 4), lxMapKeys);
+    tableSet(&mapClass->methods, OBJ_VAL(copyString("keys", 4)), OBJ_VAL(mapKeysNat));
+
+    ObjNative *mapValuesNat = newNative(copyString("values", 6), lxMapValues);
+    tableSet(&mapClass->methods, OBJ_VAL(copyString("values", 6)), OBJ_VAL(mapValuesNat));
 }
 
 void resetStack() {
@@ -104,6 +116,7 @@ void initVM() {
     defineNativeFunctions();
     defineNativeClasses();
     vec_init(&vm.hiddenObjs);
+    vec_init(&vm.stackObjects);
     turnGCOn();
     vm.inited = true;
 }
@@ -118,9 +131,10 @@ void freeVM() {
     vm.lastValue = NULL;
     vm.objects = NULL;
     vm.grayStack = NULL;
+    vec_deinit(&vm.hiddenObjs);
+    vec_deinit(&vm.stackObjects);
     freeObjects();
     turnGCOn();
-    vec_deinit(&vm.hiddenObjs);
     vm.inited = false;
 }
 
@@ -134,6 +148,9 @@ static bool isOpStackEmpty() {
 
 void push(Value value) {
     ASSERT(vm.stackTop >= vm.stack);
+    if (IS_OBJ(value)) {
+        ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
+    }
     *vm.stackTop = value;
     vm.stackTop++;
 }
@@ -278,22 +295,20 @@ static bool callCallable(Value callable, int argCount, bool isMethod);
 // Call method on instance, args are NOT expected to be pushed on to stack by
 // caller. `argCount` does not include the implicit instance argument.
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
+    push(OBJ_VAL(instance));
     for (int i = 0; i < argCount; i++) {
         ASSERT(args);
         push(args[i]);
     }
-    push(OBJ_VAL(instance));
     callCallable(callable, argCount, true); // pushes return value to stack
     if (argCount > 0) {
         Value ret = peek(0);
-        hideFromGC(AS_OBJ(ret));
         pop();
         for (int i = 0; i < argCount; i++) {
             pop();
         }
         pop(); // pop instance
         push(ret);
-        unhideFromGC(AS_OBJ(ret));
         return ret;
     } else {
         Value ret = pop();
@@ -304,7 +319,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
 }
 
 // arguments are expected to be pushed on to stack by caller
-static bool callCallable(Value callable, int argCount, bool isMethod) {
+static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     ObjFunction *function = NULL;
     Value instanceVal;
     if (IS_FUNCTION(callable)) {
@@ -376,6 +391,21 @@ static bool callCallable(Value callable, int argCount, bool isMethod) {
     return true;
 }
 
+
+static bool callCallable(Value callable, int argCount, bool isMethod) {
+    int lenBefore = vm.stackObjects.length;
+    bool ret = doCallCallable(callable, argCount, isMethod);
+    int lenAfter = vm.stackObjects.length;
+
+    // allow collection of stack-created objects if they're not rooted now
+    for (int i = lenBefore; i < lenAfter; i++) {
+        (void)vec_pop(&vm.stackObjects);
+    }
+    ASSERT(lenBefore == vm.stackObjects.length);
+
+    return ret;
+}
+
 /**
  * When thrown (OP_THROW), find any surrounding try { } catch { } block with
  * the proper class
@@ -432,6 +462,10 @@ void printVMStack(FILE *f) {
     fprintf(f, "%s", "Stack:\n");
     // print VM stack values from bottom of stack to top
     for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
+        if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE)) {
+            fprintf(stderr, "Broken object pointer: %p\n", AS_OBJ(*slot));
+            ASSERT(0);
+        }
         fprintf(f, "%s", "[ ");
         printValue(f, *slot, false);
         fprintf(f, "%s", " ]");
@@ -522,11 +556,11 @@ static InterpretResult run(void) {
       case OP_PRINT: {
         Value val = pop();
         if (vm.printBuf) {
-            ObjString *out = valueToString(val);
+            ObjString *out = valueToString(val, hiddenString);
             pushCString(vm.printBuf, out->chars, strlen(out->chars));
             pushCString(vm.printBuf, "\n", 1);
             unhideFromGC((Obj*)out);
-            freeObject((Obj*)out);
+            freeObject((Obj*)out, true);
         } else {
             printValue(stdout, val, true);
             printf("\n");
@@ -651,11 +685,13 @@ static InterpretResult run(void) {
       case OP_CALL: {
           uint8_t numArgs = READ_BYTE();
           Value callableVal = peek(numArgs);
+          hideFromGC(AS_OBJ(callableVal));
           if (!isCallable(callableVal)) {
               runtimeError("Tried to call uncallable object (type=%s)", typeOfVal(callableVal));
               return INTERPRET_RUNTIME_ERROR;
           }
           callCallable(callableVal, numArgs, false);
+          unhideFromGC(AS_OBJ(callableVal));
           break;
       }
       // return from function/method
@@ -671,7 +707,7 @@ static InterpretResult run(void) {
       case OP_CLASS: {
           Value className = READ_CONSTANT();
           Value objClassVal;
-          ASSERT(tableGet(&vm.globals, OBJ_VAL(internedString("Object")), &objClassVal));
+          ASSERT(tableGet(&vm.globals, OBJ_VAL(copyString("Object", 6)), &objClassVal));
           ASSERT(IS_CLASS(objClassVal));
           ObjClass *klass = newClass(AS_STRING(className), AS_CLASS(objClassVal));
           push(OBJ_VAL(klass));
@@ -732,16 +768,14 @@ static InterpretResult run(void) {
           Value numElsVal = pop();
           int numEls = (int)AS_NUMBER(numElsVal);
           ASSERT(numEls >= 0);
-          callCallable(OBJ_VAL((Obj*)lxAryClass), numEls, false); // array pushed to top of stack
+          callCallable(OBJ_VAL((Obj*)lxAryClass), numEls, false); // new array pushed to top of stack
           Value ret = peek(0);
           ASSERT(IS_ARRAY(ret));
-          hideFromGC(AS_OBJ(ret));
           ret = pop();
           for (int i = 0; i < numEls; i++) {
               pop();
           }
           push(ret);
-          unhideFromGC(AS_OBJ(ret));
           break;
       }
       case OP_INDEX_GET: {

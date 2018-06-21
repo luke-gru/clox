@@ -17,7 +17,8 @@ static int test_compile_addition(void) {
     char *expected = "0000\t" "OP_CONSTANT\t" "0000\t" "'1.00'\n"
                      "0002\t" "OP_CONSTANT\t" "0001\t" "'1.00'\n"
                      "0004\t" "OP_ADD\n"
-                     "0005\t" "OP_LEAVE\n";
+                     "0005\t" "OP_POP\n"
+                     "0006\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     freeChunk(&chunk);
@@ -60,7 +61,8 @@ static int test_compile_local_variable(void) {
                      "0002\t" "OP_SET_LOCAL\t" "[slot 001]\n"
                      "0004\t" "OP_GET_LOCAL\t" "[slot 001]\n"
                      "0006\t" "OP_POP\n"
-                     "0007\t" "OP_LEAVE\n";
+                     "0007\t" "OP_POP\n"
+                     "0008\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     freeChunk(&chunk);
@@ -74,6 +76,7 @@ static int test_compile_classdecl(void) {
     initChunk(&chunk);
     int result = compile_src(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
+    printDisassembledChunk(&chunk, "TESTING");
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
     /*fprintf(stderr, "\n'%s'\n", cstring);*/

@@ -249,6 +249,7 @@ static int test_native_clock(void) {
     char *src = "print clock(); clock();";
     interp(src, true);
     Value *val = getLastValue();
+    printVMStack(stderr);
     T_ASSERT(val != NULL);
     T_ASSERT(IS_NUMBER(*val));
 cleanup:
@@ -528,6 +529,23 @@ cleanup:
     return 0;
 }
 
+static int test_print_nested_array(void) {
+    char *src = "var a = [[4],1,2,3];\n"
+                "print a; print a.toString();";
+    ObjString *buf = newString("", 0);
+    setPrintBuf(buf);
+    interp(src, true);
+    ASSERT(buf->chars);
+    const char *expected = "[[4.00],1.00,2.00,3.00]\n"
+                           "[[4.00],1.00,2.00,3.00]\n";
+
+    T_ASSERT_STREQ(expected, buf->chars);
+cleanup:
+    unsetPrintBuf();
+    freeVM();
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
@@ -564,5 +582,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_array_literal);
     RUN_TEST(test_while_loop_stack);
     RUN_TEST(test_array_get_set);
+    RUN_TEST(test_print_nested_array);
     END_TESTS();
 }

@@ -9,6 +9,7 @@
 
 #define TABLE_MAX_LOAD 0.75
 
+// sentinel value for NULL key
 Value TBL_EMPTY_KEY = {
     .type = VAL_T_SENTINEL,
     .as = { .number = (double)0.00 }
@@ -16,6 +17,7 @@ Value TBL_EMPTY_KEY = {
 
 void initTable(Table *table) {
     table->count = 0;
+    // There are, at most, capacityMask+1 existing entry pointers in the table
     table->capacityMask = -1;
     table->entries = NULL;
 }
@@ -66,7 +68,7 @@ static void resize(Table *table, int capacityMask) {
         if (entry->key.type == VAL_T_SENTINEL) continue;
 
         uint32_t index = findEntry(entries, capacityMask, entry->key);
-        Entry* dest = &entries[index];
+        Entry *dest = &entries[index];
         dest->key = entry->key;
         dest->value = entry->value;
         table->count++;
@@ -134,6 +136,17 @@ bool tableDelete(Table* table, Value key) {
     return true;
 }
 
+void tableEachEntry(Table *table, TableEntryCb cb) {
+    int numEntrySlots = table->capacityMask+1;
+    if (table->count == 0) return;
+    for (int i = 0; i < numEntrySlots; i++) {
+        Entry e = table->entries[i];
+        if (e.key.type != VAL_T_SENTINEL) {
+            cb(&e);
+        }
+    }
+}
+
 void tableAddAll(Table *from, Table *to) {
     if (from->entries == NULL) return;
     for (int i = 0; i <= from->capacityMask; i++) {
@@ -171,6 +184,7 @@ ObjString *tableFindString(Table *table, const char* chars, int length,
     return NULL;
 }
 
+// remove unmarked object keys from table
 void tableRemoveWhite(Table *table) {
     if (table->count == 0) return;
     for (int i = 0; i <= table->capacityMask; i++) {
@@ -193,5 +207,21 @@ void grayTable(Table *table) {
         ASSERT(entry);
         grayValue(entry->key);
         grayValue(entry->value);
+    }
+}
+
+void blackenTable(Table *table) {
+    if (table->count == 0) return;
+    for (int i = 0; i <= table->capacityMask; i++) {
+        ASSERT(table->entries);
+        Entry *entry = &table->entries[i];
+        if (!entry || (entry->key.type == VAL_T_SENTINEL)) continue;
+        ASSERT(entry);
+        if (IS_OBJ(entry->key)) {
+            blackenObject(AS_OBJ(entry->key));
+        }
+        if (IS_OBJ(entry->value)) {
+            blackenObject(AS_OBJ(entry->value));
+        }
     }
 }

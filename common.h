@@ -9,7 +9,7 @@
 
 // NOTE: when adding/removing from here, add/remove from opName() function in debug.c!
 typedef enum {
-    OP_CONSTANT,
+    OP_CONSTANT = 1,
 
     OP_ADD,
     OP_SUBTRACT,

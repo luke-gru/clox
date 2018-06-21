@@ -6,14 +6,14 @@
 #include "chunk.h"
 
 typedef enum {
-    COMPILE_ERR_NONE,
+    COMPILE_ERR_NONE = 1,
     COMPILE_ERR_SYNTAX,
     COMPILE_ERR_SEMANTICS,
     COMPILE_ERR_ERRNO,
 } CompileErr;
 
 typedef enum {
-  TYPE_FUNCTION,
+  TYPE_FUNCTION = 1,
   TYPE_INITIALIZER,
   TYPE_METHOD,
   TYPE_TOP_LEVEL

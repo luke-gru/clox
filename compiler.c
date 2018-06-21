@@ -15,6 +15,7 @@
 #include "debug.h"
 #include "options.h"
 #include "memory.h"
+#include "vm.h"
 
 #ifdef NDEBUG
 #define COMP_TRACE(...)
@@ -228,6 +229,7 @@ static uint8_t makeConstant(Value value) {
 
 // Add constant to constant pool from the token's lexeme, return index to it
 static uint8_t identifierConstant(Token* name) {
+  ASSERT(vm.inited);
   return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
 }
 
@@ -513,9 +515,13 @@ static void emitNode(Node *n) {
     curTok = &n->tok;
     switch (nodeKind(n)) {
     case STMTLIST_STMT:
-    case GROUPING_EXPR:
+    case GROUPING_EXPR: {
+        emitChildren(n);
+        return;
+    }
     case EXPR_STMT: {
         emitChildren(n);
+        emitByte(OP_POP);
         return;
     }
     case BINARY_EXPR: {
@@ -678,7 +684,7 @@ static void emitNode(Node *n) {
         emitNode(n->children->data[1]); // rval
         emitBytes(setOp, arg);
         if (assignExprValueUnused(n)) {
-            emitByte(OP_POP); // we don't need this value, so pop it
+            /*emitByte(OP_POP); // we don't need this value, so pop it*/
         }
         break;
     }
@@ -752,7 +758,13 @@ static void emitNode(Node *n) {
             error("too many arguments given to function (%d), maximum 8", nArgs);
             return;
         }
-        emitChildren(n); // expression, arguments
+        emitNode(vec_first(n->children));
+        Node *arg = NULL;
+        int i = 0;
+        vec_foreach(n->children, arg, i) {
+            if (i == 0) continue; // callable expr is pushed last
+            emitNode(arg);
+        }
         emitByte(OP_CALL);
         emitByte((uint8_t)nArgs);
         break;
@@ -815,7 +827,7 @@ static void emitNode(Node *n) {
         emitChildren(n);
         emitByte(OP_INDEX_SET);
         if (assignExprValueUnused(n)) {
-            emitByte(OP_POP); // we don't need this value, so pop it
+            /*emitByte(OP_POP); // we don't need this value, so pop it*/
         }
         break;
     }

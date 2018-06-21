@@ -103,11 +103,17 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
             } else {
                 UNREACHABLE("BUG");
             }
+            ASSERT(name->chars);
             fprintf(file, "<method %s>", name->chars);
             return;
         } else if (OBJ_TYPE(value) == OBJ_T_INTERNAL) {
             fprintf(file, "<internal>");
             return;
+        } else {
+            UNREACHABLE("Unknown object type: valtype=%s (objtype=%d)",
+                typeOfVal(value),
+                AS_OBJ(value)->type
+            );
         }
     }
     fprintf(file, "Unknown value type: %d. Cannot print!\n", value.type);
@@ -115,16 +121,17 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
 }
 
 // returns an ObjString hidden from the GC
-ObjString *valueToString(Value value) {
+ObjString *valueToString(Value value, newStringFunc stringConstructor) {
+    ASSERT(stringConstructor != takeString); // should copy the constructed c string
     ObjString *ret = NULL;
     if (IS_BOOL(value)) {
         if (AS_BOOL(value)) {
-            ret = newString("true", 4);
+            ret = stringConstructor("true", 4);
         } else {
-            ret = newString("false", 5);
+            ret = stringConstructor("false", 5);
         }
     } else if (IS_NIL(value)) {
-        ret = newString("nil", 3);
+        ret = stringConstructor("nil", 3);
     } else if (IS_NUMBER(value)) {
         char buftemp[50] = { '\0' };
         double d = AS_NUMBER(value);
@@ -132,40 +139,52 @@ ObjString *valueToString(Value value) {
         char *buf = calloc(strlen(buftemp)+1, 1);
         ASSERT_MEM(buf);
         strcpy(buf, buftemp);
-        ret = newString(buf, strlen(buf));
+        ret = stringConstructor(buf, strlen(buf));
+        free(buf);
     } else if (IS_OBJ(value)) {
         if (OBJ_TYPE(value) == OBJ_T_STRING) {
             char *cstring = AS_CSTRING(value);
             ASSERT(cstring);
-            ret = newString(strdup(cstring), strlen(cstring));
+            ret = stringConstructor(cstring, strlen(cstring));
         } else if (OBJ_TYPE(value) == OBJ_T_FUNCTION) {
             ObjFunction *func = AS_FUNCTION(value);
             if (func->name == NULL) {
                 const char *anon = "<fun (Anon)>";
-                ret = newString(anon, strlen(anon));
+                ret = stringConstructor(anon, strlen(anon));
             } else {
                 char *buf = calloc(strlen(func->name->chars)+1+6, 1);
                 ASSERT_MEM(buf);
                 sprintf(buf, "<fun %s>", func->name->chars);
-                ret = newString(buf, strlen(buf));
-                /*free(buf);*/
+                ret = stringConstructor(buf, strlen(buf));
+                free(buf);
             }
         } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE) {
-            ObjClass *klass = AS_INSTANCE(value)->klass;
-            char *klassName = klass->name->chars;
-            char *cbuf = calloc(strlen(klassName)+1+11, 1);
-            ASSERT_MEM(cbuf);
-            sprintf(cbuf, "<instance %s>", klassName);
-            ret = newString(cbuf, strlen(cbuf));
-            /*free(cbuf);*/
+            ObjInstance *inst = AS_INSTANCE(value);
+            Obj *toString = instanceFindMethod(inst, copyString("toString", 8));
+            if (toString && vm.inited) {
+                Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL);
+                if (!IS_STRING(stringVal)) {
+                    runtimeError("TypeError, toString() returned non-string");
+                    UNREACHABLE("error");
+                }
+                ret = AS_STRING(stringVal);
+            } else {
+                ObjClass *klass = inst->klass;
+                char *klassName = klass->name->chars;
+                char *cbuf = calloc(strlen(klassName)+1+11, 1);
+                ASSERT_MEM(cbuf);
+                sprintf(cbuf, "<instance %s>", klassName);
+                ret = stringConstructor(cbuf, strlen(cbuf));
+                free(cbuf);
+            }
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
             char *klassName = klass->name->chars;
             char *cbuf = calloc(strlen(klassName)+1+8, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<class %s>", klassName);
-            ret = newString(cbuf, strlen(cbuf));
-            /*free(cbuf);*/
+            ret = stringConstructor(cbuf, strlen(cbuf));
+            free(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
             ObjString *name = native->name;
@@ -173,8 +192,8 @@ ObjString *valueToString(Value value) {
             char *cbuf = calloc(strlen(nameStr)+1+14, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<fn %s (native)>", nameStr);
-            ret = newString(cbuf, strlen(cbuf));
-            /*free(cbuf);*/
+            ret = stringConstructor(cbuf, strlen(cbuf));
+            free(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
             ObjString *name;
@@ -183,22 +202,22 @@ ObjString *valueToString(Value value) {
             } else if (bmethod->callable->type == OBJ_T_NATIVE_FUNCTION) {
                 name = ((ObjNative*)(bmethod->callable))->name;
             } else {
-                ASSERT(0);
+                UNREACHABLE("error");
             }
             char *nameStr = name->chars;
             char *cbuf = calloc(strlen(nameStr)+1+9, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<method %s>", nameStr);
-            ret = newString(cbuf, strlen(cbuf));
-            /*free(cbuf);*/
+            ret = stringConstructor(cbuf, strlen(cbuf));
+            free(cbuf);
+        } else {
+            UNREACHABLE("Invalid object type (%d)", AS_OBJ(value)->type);
         }
     }
     if (ret) {
-        hideFromGC((Obj*)ret);
         return ret;
     }
-    ASSERT(0);
-    return NULL;
+    UNREACHABLE("error");
 }
 
 const char *typeOfVal(Value val) {
@@ -209,9 +228,7 @@ const char *typeOfVal(Value val) {
         if (IS_NIL(val)) return "nil";
         if (IS_NUMBER(val)) return "number";
     }
-    fprintf(stderr, "Unknown value type! Pointer: %p\n", AS_OBJ(val));
-    ASSERT(0);
-    return "unknown!";
+    UNREACHABLE("Unknown value type! Pointer: %p\n", AS_OBJ(val));
 }
 
 uint32_t valHash(Value val) {

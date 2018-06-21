@@ -15,19 +15,33 @@ typedef struct Table {
   Entry *entries;
 } Table;
 
+typedef void (*TableEntryCb)(Entry *e);
+
 void initTable(Table *table);
-void freeTable(Table *table);
+void freeTable(Table *table); // free internal table structures, not table itself
 
 // fills given Value with found value, if any
 bool tableGet(Table *table, Value key, Value *value);
 bool tableSet(Table *table, Value key, Value value);
 bool tableDelete(Table *table, Value key);
 void tableAddAll(Table *from, Table *to);
+void tableEachEntry(Table *table, TableEntryCb func);
+
+// NOTE: condition with value '555' uses this value just so that the rhs of
+// the expression results in a valid test expression, instead of just the
+// assignment itself. This test always returns true.
+#define TABLE_FOREACH(tbl, entry, idx)\
+  if ((tbl)->count > 0)\
+    for ((idx) = 0;\
+         (((idx) < (tbl)->capacityMask+1) &&\
+         (entry = tbl->entries[idx]).key.type != 555); (idx)++)\
+        if (entry.key.type == VAL_T_SENTINEL) { continue; } else
 
 ObjString *tableFindString(Table* table, const char* chars, int length,
                            uint32_t hash);
 
 void tableRemoveWhite(Table *table);
 void grayTable(Table *table);
+void blackenTable(Table *table);
 
 #endif

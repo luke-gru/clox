@@ -57,6 +57,9 @@ static inline void trace_gc_func_end(const char *funcName) {
     fprintf(stderr, "[GC]: </%s>\n", funcName);
 }
 
+static bool inGC = false;
+static bool GCOn = true;
+
 // Main memory management function used by both ALLOCATE/FREE (see memory.h)
 // NOTE: memory is NOT initialized (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
@@ -169,11 +172,48 @@ void blackenObject(Obj *obj) {
     TRACE_GC_FUNC_END("blackenObject");
 }
 
-void freeObject(Obj *obj) {
+// NOTE: Doesn't unlink the object from vm.objects!
+// TODO: make sure it unlinks, as manual calls to freeObject() should
+// be okay.
+void freeObject(Obj *obj, bool unlink) {
     if (obj == NULL) return;
     ASSERT(!obj->noGC);
     TRACE_GC_FUNC_START("freeObject");
+    if (vm.inited) {
+        int stackObjFoundIdx = -1;
+        vec_find(&vm.stackObjects, obj, stackObjFoundIdx);
+        if (stackObjFoundIdx != -1) {
+            if (inGC) {
+                GC_TRACE_DEBUG("Skipped freeing stack object: p=%p (in GC)", obj);
+                return; // Don't free stack objects in a GC
+            }
+            GC_TRACE_DEBUG("Freeing stack object: p=%p (must be manual call "
+                "to freeObject(), not in GC)", obj);
+            vec_splice(&vm.stackObjects, stackObjFoundIdx, 1);
+        }
+
+    }
     GC_TRACE_FREE(obj);
+
+    if (unlink) {
+        GC_TRACE_DEBUG("Unlinking object p=%p", obj);
+        Obj *next = obj->next;
+        Obj *prev = obj->prev;
+        if (next) {
+            obj->next->prev = prev;
+            obj->next = NULL;
+        }
+        if (obj->prev) {
+            obj->prev->next = next;
+            obj->prev = NULL;
+        }
+        if (next == NULL && prev == NULL) { // must be the only object
+            GC_TRACE_DEBUG("Unlinking last object p=%p", obj);
+            vm.objects = NULL;
+        }
+        obj->isLinked = false;
+    }
+
     switch (obj->type) {
         case OBJ_T_BOUND_METHOD: {
             // NOTE: don't free the actual underlying function, we need this
@@ -242,8 +282,6 @@ void freeObject(Obj *obj) {
     TRACE_GC_FUNC_END("freeObject");
 }
 
-static bool inGC = false;
-static bool GCOn = true;
 // GC stats
 static unsigned numRootsLastGC = 0;
 
@@ -305,6 +343,12 @@ void collectGarbage(void) {
         grayValue(*slot);
     }
 
+    GC_TRACE_DEBUG("Marking VM C stack objects (%d found)", vm.stackObjects.length);
+    Obj *stackObjPtr = NULL; int idx = 0;
+    vec_foreach(&vm.stackObjects, stackObjPtr, idx) {
+        grayObject(stackObjPtr);
+    }
+
     GC_TRACE_DEBUG("Marking VM frame functions");
     // gray active function objects
     for (int i = 0; i < vm.frameCount; i++) {
@@ -363,7 +407,7 @@ void collectGarbage(void) {
     }
 
     // Delete unused interned strings.
-    tableRemoveWhite(&vm.strings);
+    /*tableRemoveWhite(&vm.strings);*/
 
     GC_TRACE_DEBUG("Begin FREE process");
     // Collect the white (unmarked) objects.
@@ -384,7 +428,7 @@ void collectGarbage(void) {
             // This object wasn't reached, so remove it from the list and free it.
             Obj *unreached = *object;
             *object = unreached->next;
-            freeObject(unreached);
+            freeObject(unreached, true);
         } else {
             // This object was reached, so unmark it (for the next GC) and move on to
             // the next.
@@ -407,7 +451,8 @@ void collectGarbage(void) {
 }
 
 
-// Force free all objects, regardless of noGC field
+// Force free all objects, regardless of noGC field on the object,
+// or whether it was created by the a C stack space allocation function.
 void freeObjects(void) {
     GC_TRACE_DEBUG("freeObjects -> begin FREEing all objects");
     Obj *object = vm.objects;
@@ -416,7 +461,9 @@ void freeObjects(void) {
         if (object->noGC) {
             unhideFromGC(object);
         }
-        freeObject(object);
+        // don't unlink because this is done in freeVM() anyway,
+        // and this function should only be called from there.
+        freeObject(object, false);
         object = next;
     }
 

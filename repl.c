@@ -17,8 +17,7 @@ static bool evalLines(char *lines[], int numLines) {
     resetStack();
     resetChunk();
     vm.hadError = false;
-    ObjString *buf = copyString("", 0);
-    hideFromGC((Obj*)buf);
+    ObjString *buf = hiddenString("", 0);
     for (int i = 0; i < numLines; i++) {
         char *line = lines[i];
         ASSERT(line);
@@ -29,6 +28,7 @@ static bool evalLines(char *lines[], int numLines) {
     /*fprintf(stderr, "compiling code: '%s'", code);*/
     int res = compile_src(code, &rChunk, &cerr);
     unhideFromGC((Obj*)buf);
+    freeObject((Obj*)buf, true);
     if (res != 0) {
         fprintf(stderr, "%s", "Compilation error\n");
         return false;

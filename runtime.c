@@ -13,7 +13,7 @@ Value runtimeNativeClock(int argCount, Value *args) {
 Value runtimeNativeTypeof(int argCount, Value *args) {
     CHECK_ARGS("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
-    return OBJ_VAL(copyString(strType, strlen(strType)));
+    return OBJ_VAL(newStackString(strType, strlen(strType)));
 }
 
 static void markInternalAry(Obj *internalObj) {
@@ -45,7 +45,6 @@ Value lxArrayInit(int argCount, Value *args) {
     ASSERT(IS_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = newInternalObject(NULL, markInternalAry, freeInternalAry);
-    hideFromGC((Obj*)internalObj);
     ValueArray *ary = ALLOCATE(ValueArray, 1);
     initValueArray(ary);
     internalObj->data = ary;
@@ -53,21 +52,15 @@ Value lxArrayInit(int argCount, Value *args) {
     for (int i = 1; i < argCount; i++) {
         writeValueArray(ary, args[i]);
     }
-    unhideFromGC((Obj*)internalObj);
+    ASSERT(ary->count == argCount-1);
     return self;
 }
 
 // a.push(1);
 Value lxArrayPush(int argCount, Value *args) {
     CHECK_ARGS("Array#push", 2, 2, argCount);
-    Value self = *args;
-    ASSERT(IS_ARRAY(self));
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    Value internalObjVal;
-    ASSERT(tableGet(&selfObj->hiddenFields, OBJ_VAL(copyString("ary", 3)), &internalObjVal));
-    ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
-    ASSERT(ary);
-    writeValueArray(ary, args[1]);
+    Value self = args[0];
+    arrayPush(self, args[1]);
     return self;
 }
 
@@ -79,25 +72,24 @@ Value lxArrayToString(int argCount, Value *args) {
     Value self = *args;
     ASSERT(IS_ARRAY(self));
     Obj* selfObj = AS_OBJ(self);
-    ObjString *ret = newString("[", 1);
-    hideFromGC((Obj*)ret);
+    ObjString *ret = newStackString("[", 1);
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     for (int i = 0; i < ary->count; i++) {
         Value elVal = ary->values[i];
-        if (IS_OBJ(elVal) && (AS_OBJ(elVal) == (Obj*)selfObj)) {
+        if (IS_OBJ(elVal) && (AS_OBJ(elVal) == selfObj)) {
             pushCString(ret, "[...]", 5);
             continue;
         }
-        ObjString *buf = valueToString(elVal);
+        if (IS_OBJ(elVal)) {
+            ASSERT(AS_OBJ(elVal)->type > OBJ_T_NONE);
+        }
+        ObjString *buf = valueToString(elVal, newStackString);
         pushCString(ret, buf->chars, strlen(buf->chars));
-        unhideFromGC((Obj*)buf);
-        freeObject((Obj*)buf);
         if (i < (ary->count-1)) {
             pushCString(ret, ",", 1);
         }
     }
     pushCString(ret, "]", 1);
-    unhideFromGC((Obj*)ret);
     return OBJ_VAL(ret);
 }
 
@@ -108,13 +100,9 @@ Value lxArrayIndexGet(int argCount, Value *args) {
     CHECK_ARGS("Array#[]", 2, 2, argCount);
     Value self = args[0];
     ASSERT(IS_ARRAY(self));
-    ObjInstance *selfObj = AS_INSTANCE(self);
     Value num = args[1];
     CHECK_ARG_TYPE(num, VAL_T_NUMBER, 1);
-    Value internalObjVal;
-    ASSERT(tableGet(&selfObj->hiddenFields, OBJ_VAL(copyString("ary", 3)), &internalObjVal));
-    ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
-    ASSERT(ary);
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
     int idx = (int)AS_NUMBER(num);
     if (idx < 0) {
         // FIXME: throw error
@@ -159,11 +147,20 @@ Value lxArrayIndexSet(int argCount, Value *args) {
 #define CHECK_ARG_OBJ_TYPE(...)
 
 static void markInternalMap(Obj *internalObj) {
-    // TODO
+    ASSERT(internalObj->type == OBJ_T_INTERNAL);
+    ObjInternal *internal = (ObjInternal*)internalObj;
+    Table *map = (Table*)internal->data;
+    ASSERT(map);
+    blackenTable(map);
 }
 
 static void freeInternalMap(Obj *internalObj) {
-    // TODO
+    ASSERT(internalObj->type == OBJ_T_INTERNAL);
+    ObjInternal *internal = (ObjInternal*)internalObj;
+    Table *map = (Table*)internal->data;
+    ASSERT(map);
+    freeTable(map);
+    FREE(Table, map);
 }
 
 Value lxMapInit(int argCount, Value *args) {
@@ -174,13 +171,11 @@ Value lxMapInit(int argCount, Value *args) {
     ObjInternal *internalMap = newInternalObject(
         NULL, markInternalMap, freeInternalMap
     );
-    hideFromGC((Obj*)internalMap);
     Table *map = ALLOCATE(Table, 1);
     initTable(map);
     internalMap->data = map;
     tableSet(&selfObj->hiddenFields, OBJ_VAL(
         copyString("map", 3)), OBJ_VAL(internalMap));
-    unhideFromGC((Obj*)internalMap);
 
     if (argCount == 1) {
         return self;
@@ -211,6 +206,59 @@ Value lxMapInit(int argCount, Value *args) {
         ASSERT(0);
     }
     return self;
+}
+
+Value lxMapIndexGet(int argCount, Value *args) {
+    CHECK_ARGS("Map#indexGet", 2, 2, argCount);
+    Value self = args[0];
+    ASSERT(IS_MAP(self));
+    Table *map = MAP_GETHIDDEN(self);
+    Value key = args[1];
+    Value found;
+    if (tableGet(map, key, &found)) {
+        return found;
+    } else {
+        return NIL_VAL;
+    }
+}
+
+Value lxMapIndexSet(int argCount, Value *args) {
+    CHECK_ARGS("Map#indexGet", 3, 3, argCount);
+    Value self = args[0];
+    ASSERT(IS_MAP(self));
+    Table *map = MAP_GETHIDDEN(self);
+    Value key = args[1];
+    Value val = args[2];
+    tableSet(map, key, val);
+    return val;
+}
+
+Value lxMapKeys(int argCount, Value *args) {
+    CHECK_ARGS("Map#keys", 1, 1, argCount);
+    Value self = args[0];
+    ASSERT(IS_MAP(self));
+    Table *map = MAP_GETHIDDEN(self);
+    Entry entry; int i = 0;
+    fprintf(stderr, "entry count: %d\n", map->count);
+    Value ary = newArray();
+    TABLE_FOREACH(map, entry, i) {
+        arrayPush(ary, entry.key);
+    }
+    return ary;
+}
+
+Value lxMapValues(int argCount, Value *args) {
+    CHECK_ARGS("Map#values", 1, 1, argCount);
+    Value self = args[0];
+    ASSERT(IS_MAP(self));
+    Table *map = MAP_GETHIDDEN(self);
+    Entry entry; int i = 0;
+    fprintf(stderr, "entry count: %d\n", map->count);
+    Value ary = newArray();
+    TABLE_FOREACH(map, entry, i) {
+        arrayPush(ary, entry.value);
+    }
+    return ary;
 }
 
 bool runtimeCheckArgs(int min, int max, int actual) {

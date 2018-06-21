@@ -192,7 +192,7 @@ static inline bool t_assert_streq(char *str1, char *str2) {
 
 static inline bool t_assert_valprinteq(char *expected, Value val) {
     ASSERT(expected);
-    ObjString *valOut = valueToString(val);
+    ObjString *valOut = valueToString(val, newStackString);
     ASSERT(valOut);
     return t_assert_streq(expected, valOut->chars);
 }

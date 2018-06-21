@@ -5,26 +5,63 @@
 #include "value.h"
 #include "vm.h"
 #include "debug.h"
+#include "runtime.h"
+#include "vec.h"
 
+// allocate object on the VM heap
 #define ALLOCATE_OBJ(type, objectType) \
     (type*)allocateObject(sizeof(type), objectType)
+
+// allocate object on the VM stack arena (used in C function calls from the VM)
+#define ALLOCATE_CSTACK_OBJ(type, objectType) \
+    (type*)allocateCStackObject(sizeof(type), objectType)
 
 extern VM vm;
 
 static Obj *allocateObject(size_t size, ObjType type) {
     Obj *object = (Obj*)reallocate(NULL, 0, size);
+    ASSERT(type > OBJ_T_NONE);
     object->type = type;
     object->isDark = true;
+    object->isFrozen = false;
 
+    // prepend
     object->next = vm.objects;
+    if (vm.objects) {
+        vm.objects->prev = object;
+    }
+    object->prev = NULL;
     vm.objects = object;
+    object->isLinked = true;
+
+    return object;
+}
+
+static Obj *allocateCStackObject(size_t size, ObjType type) {
+    Obj *object = (Obj*)reallocate(NULL, 0, size);
+    ASSERT(type > OBJ_T_NONE);
+    object->type = type;
+    object->isDark = true;
+    object->isFrozen = false;
+
+    // prepend
+    object->next = vm.objects;
+    if (vm.objects) {
+        vm.objects->prev = object;
+    }
+    object->prev = NULL;
+    vm.objects = object;
+    object->isLinked = true;
+
+    ASSERT(vm.inited);
+    vec_push(&vm.stackObjects, object);
 
     return object;
 }
 
 /**
  * Allocate a new lox string object with given characters and length
- * NOTE: length here is strlen(chars)
+ * NOTE: length here is strlen(chars). Interns it right away.
  */
 static ObjString *allocateString(char *chars, int length, uint32_t hash) {
     ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
@@ -33,8 +70,14 @@ static ObjString *allocateString(char *chars, int length, uint32_t hash) {
     string->chars = chars;
     string->hash = hash;
     tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
+    objFreeze((Obj*)string);
     unhideFromGC((Obj*)string);
     return string;
+}
+
+void objFreeze(Obj *obj) {
+    ASSERT(obj);
+    obj->isFrozen = true;
 }
 
 uint32_t hashString(char *key, int length) {
@@ -64,7 +107,7 @@ ObjString *takeString(char *chars, int length) {
 
 // use copy of `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
-ObjString *copyString(const char *chars, int length) {
+ObjString *copyString(char *chars, int length) {
     // Copy the characters to the heap so the object can own it.
     uint32_t hash = hashString((char*)chars, length);
     ObjString* interned = tableFindString(&vm.strings, chars, length, hash);
@@ -77,31 +120,44 @@ ObjString *copyString(const char *chars, int length) {
     return allocateString(heapChars, length, hash);
 }
 
-// Always allocates a new string, does NOT intern it
-ObjString *newString(char *chars, int len) {
+// Always allocates a new string object that lives at least until return to
+// the VM loop. Used in C functions.
+ObjString *newStackString(char *chars, int len) {
     char *heapChars = ALLOCATE(char, len+1);
+    memset(heapChars, 0, len+1);
     if (len > 0) memcpy(heapChars, chars, len);
     heapChars[len] = '\0';
-    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
-    hideFromGC((Obj*)string);
+    ObjString *string = ALLOCATE_CSTACK_OBJ(ObjString, OBJ_T_STRING);
     string->length = len;
     string->chars = heapChars;
-    if (len > 0) {
-        string->hash = hashString(string->chars, len);
-    } else {
-        string->hash = 0;
-    }
-    unhideFromGC((Obj*)string);
+    string->hash = hashString(string->chars, len);
     return string;
 }
 
-ObjString *internedString(const char *chars) {
-    int length = (int)strlen(chars);
+ObjString *hiddenString(char *chars, int len) {
+    ObjString *string = newString(chars, len);
+    hideFromGC((Obj*)string);
+    return string;
+}
+
+ObjString *newString(char *chars, int len) {
+    char *heapChars = ALLOCATE(char, len+1);
+    memset(heapChars, 0, len+1);
+    if (len > 0) memcpy(heapChars, chars, len);
+    heapChars[len] = '\0';
+    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
+    string->length = len;
+    string->chars = heapChars;
+    string->hash = hashString(string->chars, len);
+    return string;
+}
+
+ObjString *internedString(char *chars, int length) {
     uint32_t hash = hashString((char*)chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (!interned) {
         fprintf(stderr, "Expected string to be interned: '%s'\n", chars);
-        ASSERT(interned);
+        UNREACHABLE("string not interned!");
     }
     return interned;
 }
@@ -113,6 +169,10 @@ ObjString *internedString(const char *chars) {
 // pushing new chars to the buffer. Also, treat strings as mutable externally.
 // NOTE: length here is strlen(chars)
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
+    if (((Obj*)string)->isFrozen) {
+        fprintf(stderr, "Tried to modify an interned string: '%s'\n", string->chars);
+        ASSERT(0);
+    }
     /*fprintf(stderr, "pushCSTring\n");*/
     string->chars = GROW_ARRAY(string->chars, char, string->length,
             string->length+lenToAdd+1);
@@ -158,7 +218,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
 
 ObjInstance *newInstance(ObjClass *klass) {
     ASSERT(klass);
-    ObjInstance *obj = ALLOCATE_OBJ(
+    ObjInstance *obj = ALLOCATE_CSTACK_OBJ(
         ObjInstance, OBJ_T_INSTANCE
     );
     obj->klass = klass;
@@ -189,7 +249,7 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
 }
 
 ObjInternal *newInternalObject(void *data, GCMarkFunc markFunc, GCFreeFunc freeFunc) {
-    ObjInternal *obj = ALLOCATE_OBJ(
+    ObjInternal *obj = ALLOCATE_CSTACK_OBJ(
         ObjInternal, OBJ_T_INTERNAL
     );
     obj->data = data;
@@ -228,8 +288,9 @@ const char *typeOfObj(Obj *obj) {
         return "function";
     case OBJ_T_INTERNAL:
         return "internal";
-    default:
-        UNREACHABLE("BUG: Unknown object type: (%d)\n", obj->type);
+    default: {
+        UNREACHABLE("Unknown object type: (%d)\n", obj->type);
+    }
     }
 }
 
@@ -255,6 +316,18 @@ ValueArray *arrayGetHidden(Value aryVal) {
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     return ary;
+}
+
+Value newArray(void) {
+    ObjInstance *instance = newInstance(lxAryClass);
+    Value ary = OBJ_VAL(instance);
+    lxArrayInit(1, &ary);
+    return ary;
+}
+
+void arrayPush(Value self, Value el) {
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    writeValueArray(ary, el);
 }
 
 Value mapGet(Value mapVal, Value key) {

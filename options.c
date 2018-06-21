@@ -8,12 +8,12 @@ char *boolOptNames[] = {
     "debugParser",
     "traceParserCalls",
     "traceVMExecution",
-    "parseOnly",
-    "compileOnly",
     "debugTokens",
     "debugBytecode",
     "traceGC",
     "traceCompiler",
+    "parseOnly",
+    "compileOnly",
     NULL,
 };
 
@@ -22,14 +22,16 @@ void initOptions(void) {
         return;
     }
     options.debugParser = false;
-    options.traceParserCalls = false;
-    options.traceVMExecution = false;
-    options.parseOnly = false;
-    options.compileOnly = false;
     options.debugTokens = false;
     options.debugBytecode = false;
+
+    options.traceParserCalls = false;
+    options.traceVMExecution = false;
     options.traceGC = false;
     options.traceCompiler = false;
+
+    options.parseOnly = false;
+    options.compileOnly = false;
     options._inited = true;
 }
 
@@ -54,6 +56,13 @@ bool findOption(const char *optName, const char *typeName) {
     return false;
 }
 
+static void enableAllTraceOptions(void) {
+    SET_OPTION(traceParserCalls, true);
+    SET_OPTION(traceVMExecution, true);
+    SET_OPTION(traceGC, true);
+    SET_OPTION(traceCompiler, true);
+}
+
 // Assumes *argv is not NULL. Returns the amount to increment
 // idx by in the caller's code.
 int parseOption(char **argv, int i) {
@@ -76,6 +85,10 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "-DTRACE_GC") == 0) {
         SET_OPTION(traceGC, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "-DTRACE_ALL") == 0) {
+        enableAllTraceOptions();
         return 1;
     }
     if (strcmp(argv[i], "--compile-only") == 0) {

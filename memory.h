@@ -28,10 +28,10 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize);
 
 void grayObject(Obj *obj); // non-recursively mark object as live
 void grayValue(Value val); // non-recursively mark object in value as live
-void collectGarbage(void); // begin GC
-void freeObject(Obj *obj);
-void blackenObject(Obj *obj);
-void freeObjects(void); // free all objects, at end of VM lifecycle
+void collectGarbage(void); // do 1 mark+sweep
+void freeObject(Obj *obj, bool doUnlink);
+void blackenObject(Obj *obj); // recursively mark object's references
+void freeObjects(void); // free all vm.objects. Used at end of VM lifecycle
 
 bool turnGCOff(void);
 bool turnGCOn(void);

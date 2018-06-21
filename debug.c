@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <inttypes.h>
+#include <stdlib.h>
 
 #include "debug.h"
 #include "object.h"
 #include "value.h"
 #include "memory.h"
+#include "vm.h"
 
 NORETURN void die(const char *fmt, ...) {
     va_list ap;
@@ -146,6 +148,7 @@ void disassembleCatchTbl(ObjString *buf, CatchTable *tbl) {
         sprintf(cbuf, "%04d) from: %04d, to: %04d, target: %04d, value: %s\n",
                 idx, row->ifrom, row->ito, row->itarget, valstr);
         pushCString(buf, cbuf, strlen(cbuf));
+        free(cbuf);
         row = row->next;
         idx++;
     }
@@ -198,9 +201,10 @@ static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i, ve
 
     Value constant = getConstant(chunk, constantIdx);
     if (IS_FUNCTION(constant)) {
+        fprintf(stderr, "Adding function '%s'\n", AS_FUNCTION(constant)->name->chars);
         addFunc(funcs, AS_FUNCTION(constant));
     }
-    ObjString *constantStr = valueToString(constant);
+    ObjString *constantStr = valueToString(constant, newStackString);
     char *constantCStr = constantStr->chars;
 
     char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+9, 1);
@@ -208,6 +212,7 @@ static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i, ve
     sprintf(cbuf, "%s\t%04" PRId8 "\t'%s'\n", op, constantIdx, constantCStr);
 
     pushCString(buf, cbuf, strlen(cbuf));
+    free(cbuf);
     return i+2;
 }
 
@@ -233,6 +238,7 @@ static int jumpInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     ASSERT(jumpOffset != 122); // should have been patched
     sprintf(cbuf, "%s\t%04" PRId8 "\t(addr=%04" PRId8 ")\n", op, jumpOffset+1, (i+1+jumpOffset+1));
     pushCString(buf, cbuf, strlen(cbuf));
+    free(cbuf);
     return i+2;
 }
 
@@ -248,6 +254,7 @@ static int loopInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t loopOffset = chunk->code[i + 1];
     sprintf(cbuf, "%s\t%4" PRId8 "\t(addr=%04" PRId8 ")\n", op, loopOffset, (i-loopOffset));
     pushCString(buf, cbuf, strlen(cbuf));
+    free(cbuf);
     return i+2;
 }
 
@@ -263,6 +270,7 @@ static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t numArgs = chunk->code[i + 1];
     sprintf(cbuf, "%s\t(argc=%04" PRId8 ")\n", op, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
+    free(cbuf);
     return i+2;
 }
 
@@ -273,6 +281,7 @@ static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     ASSERT_MEM(cbuf);
     sprintf(cbuf, "%s\t[slot %03" PRId8 "]\n", op, slotIdx);
     pushCString(buf, cbuf, strlen(cbuf));
+    free(cbuf);
     return i+2;
 }
 
@@ -354,6 +363,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
     ASSERT_MEM(numBuf);
     sprintf(numBuf, "%04d\t", i);
     pushCString(buf, numBuf, strlen(numBuf));
+    free(numBuf);
     uint8_t byte = chunk->code[i];
     switch (byte) {
         case OP_CONSTANT:
@@ -401,10 +411,12 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_INDEX_SET:
             return simpleInstruction(buf, opName(byte), i);
         default: {
+            ASSERT(0);
             char *cBuf = calloc(19+1, 1);
             ASSERT_MEM(cBuf);
             sprintf(cBuf, "Unknown opcode %03" PRId8 "\n", byte);
             pushCString(buf, cBuf, strlen(cBuf));
+            free(cBuf);
             return -1;
         }
     }
@@ -414,9 +426,7 @@ ObjString *disassembleChunk(Chunk *chunk) {
     vec_funcp_t funcs;
     vec_init(&funcs);
 
-    turnGCOff();
-    ObjString *buf = copyString("", 0);
-    hideFromGC((Obj*)buf);
+    ObjString *buf = newStackString("", 0);
 
     // catch table
     if (chunk->catchTbl) {
@@ -433,16 +443,23 @@ ObjString *disassembleChunk(Chunk *chunk) {
     // inner functions
     ObjFunction *func = NULL; int i = 0;
     vec_foreach(&funcs, func, i) {
-        char *name = func->name ? func->name->chars : "(anon)";
+        ASSERT(((Obj*)func)->type == OBJ_T_FUNCTION);
+        char *name;
+        if (func->name) {
+            name = func->name->chars;
+        } else {
+            name = "(anon)";
+        }
         char *cbuf = calloc(strlen(name)+1+16, 1);
         ASSERT_MEM(cbuf);
+        fprintf(stderr, "Function name: '%s'\n", name);
         sprintf(cbuf, "-- Function %s --\n", name);
         pushCString(buf, cbuf, strlen(cbuf));
         ObjString *funcStr = disassembleChunk(&func->chunk);
         pushCString(buf, funcStr->chars, strlen(funcStr->chars));
         pushCString(buf, "----\n", strlen("----\n"));
+        free(cbuf);
     }
     vec_deinit(&funcs);
-    turnGCOn();
     return buf;
 }

@@ -7,6 +7,7 @@
 #include "table.h"
 
 typedef enum ObjType {
+  OBJ_T_NONE = 0,
   OBJ_T_STRING,
   OBJ_T_FUNCTION,
   OBJ_T_CLASS,
@@ -21,8 +22,13 @@ typedef struct Obj {
   ObjType type;
   // GC fields
   Obj *next;
+  Obj *prev;
+  bool isLinked; // is this object linked into vm.objects?
   bool isDark; // is this object marked?
   bool noGC; // don't collect this object
+
+  // Other fields
+  bool isFrozen;
 } Obj;
 
 typedef struct ObjString {
@@ -92,7 +98,7 @@ typedef struct ObjBoundMethod {
 #define IS_CLASS(value)         isObjType(value, OBJ_T_CLASS)
 #define IS_INSTANCE(value)      isObjType(value, OBJ_T_INSTANCE)
 #define IS_BOUND_METHOD(value)  isObjType(value, OBJ_T_BOUND_METHOD)
-#define IS_INTERNAL(value)  isObjType(value, OBJ_T_INTERNAL)
+#define IS_INTERNAL(value)      isObjType(value, OBJ_T_INTERNAL)
 
 #define IS_ARRAY(value)         (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxAryClass)
 #define IS_MAP(value)           (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxMapClass)
@@ -114,16 +120,26 @@ typedef struct ObjBoundMethod {
 #define MAP_SIZE(value)          (mapSize(value))
 #define MAP_GETHIDDEN(value)     (mapGetHidden(value))
 
-ObjString *takeString(char *chars, int length);
-ObjString *copyString(const char *chars, int length);
-ObjString *newString(char *chars, int length);
-ObjString *internedString(const char *chars);
+typedef ObjString *(*newStringFunc)(char *chars, int length);
+ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
+ObjString *copyString(char *chars, int length); // copies provided memory. Object lives on lox heap.
+ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
+ObjString *newString(char *chars, int length); // always creates new string in vm.objects
+ObjString *newStackString(char *chars, int length); // Used in native C functions. Object first lives in VM arena, conceptually.
+ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
+
+void objFreeze(Obj*);
+
+// NOTE: don't call pushCString on a string value that's a key to a map! The
+// hash value changes and the map won't be able to index it anymore.
 void pushCString(ObjString *string, char *chars, int lenToAdd);
 uint32_t hashString(char *key, int length);
 
 Value       arrayGet(Value aryVal, int idx);
 int         arraySize(Value aryVal);
+void        arrayPush(Value aryVal, Value el);
 ValueArray *arrayGetHidden(Value aryVal);
+Value       newArray(void);
 
 Value       mapGet(Value mapVal, Value key);
 Value       mapSize(Value mapVal);

@@ -11,3 +11,9 @@
 * Get arrays working [PARTLY DONE]
 * interactive mode (repl) [DONE]
 * add builtin classes [IN PROGRESS]
+* Fix VM callable to always add stack frame, even for C functions. This will
+help with throwing from C functions as well. []
+
+
+BUGS:
+`print [[]].toString()` in REPL gets garbage in the stack when showing the lastValue.

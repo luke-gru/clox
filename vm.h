@@ -22,7 +22,8 @@ typedef struct {
   Value *stackTop;
   CallFrame frames[FRAMES_MAX]; // NOTE: callframe contains chunk!
   unsigned frameCount;
-  Obj *objects;
+  Obj *objects; // linked list of heap objects
+  vec_void_t stackObjects; // stack of object pointers created during C function calls.
   Value *lastValue;
   Table globals; // global variables
   Table strings; // interned strings
@@ -44,7 +45,7 @@ typedef struct {
 extern VM vm;
 
 typedef enum {
-  INTERPRET_OK,
+  INTERPRET_OK = 1,
   INTERPRET_RUNTIME_ERROR
 } InterpretResult;
 

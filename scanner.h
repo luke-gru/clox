@@ -4,7 +4,7 @@
 typedef enum {
   // all AST nodes need a token, so this is just a
   // placeholder token type for nodes that don't need one.
-  TOKEN_EMPTY,
+  TOKEN_EMPTY = 1,
   TOKEN_LEFT_PAREN,
   TOKEN_RIGHT_PAREN,
   TOKEN_LEFT_BRACE,

@@ -26,7 +26,7 @@ NORETURN extern void die(const char *fmt, ...);
 #define ASSERT(expr) ((expr) ? (void)0 : die("assertion failure (%s:%d) in %s\n", __FILE__, __LINE__, __func__))
 #define ASSERT_MEM(expr) ASSERT(expr)
 #define UNREACHABLE(...) do {\
-    fprintf(stderr, "%s", "BUG (unreachable): ");\
+    fprintf(stderr, "BUG [UNREACHABLE]: (%s:%d:%s)\n", __FILE__, __LINE__, __func__);\
     die(__VA_ARGS__);\
     } while (0)
 #endif
