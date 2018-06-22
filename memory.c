@@ -86,11 +86,11 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
 void grayObject(Obj *obj) {
     TRACE_GC_FUNC_START("grayObject");
     if (obj == NULL) {
-        TRACE_GC_FUNC_END("grayObject (null)");
+        TRACE_GC_FUNC_END("grayObject (null obj found)");
         return;
     }
     if (obj->isDark) {
-        TRACE_GC_FUNC_END("grayObject (dark)");
+        TRACE_GC_FUNC_END("grayObject (already dark)");
         return;
     }
     GC_TRACE_MARK(obj);
@@ -143,6 +143,14 @@ void blackenObject(Obj *obj) {
             grayObject((Obj*)func->name);
             break;
         }
+        case OBJ_T_CLOSURE: {
+            ObjClosure *closure = (ObjClosure*)obj;
+            grayObject((Obj*)closure->function);
+            for (int i = 0; i < closure->upvalueCount; i++) {
+                grayObject((Obj*)closure->upvalues[i]);
+            }
+            break;
+        }
         case OBJ_T_NATIVE_FUNCTION: {
             ObjNative *native = (ObjNative*)obj;
             grayObject((Obj*)native->name);
@@ -160,6 +168,10 @@ void blackenObject(Obj *obj) {
             if (internal->markFunc) {
                 internal->markFunc(obj);
             }
+            break;
+        }
+        case OBJ_T_UPVALUE: {
+            grayValue(((ObjUpvalue*)obj)->closed);
             break;
         }
         case OBJ_T_STRING: { // no references
@@ -238,6 +250,12 @@ void freeObject(Obj *obj, bool unlink) {
             FREE(ObjFunction, obj);
             break;
         }
+        case OBJ_T_CLOSURE: {
+            ObjClosure *closure = (ObjClosure*)obj;
+            FREE_ARRAY(Value, closure->upvalues, closure->upvalueCount);
+            FREE(ObjClosure, obj);
+            break;
+        }
         case OBJ_T_NATIVE_FUNCTION: {
             GC_TRACE_DEBUG("Freeing ObjNative: p=%p", obj);
             FREE(ObjNative, obj);
@@ -261,6 +279,10 @@ void freeObject(Obj *obj, bool unlink) {
             }
             GC_TRACE_DEBUG("Freeing internal object: p=%p, ", internal);
             FREE(ObjInternal, internal);
+            break;
+        }
+        case OBJ_T_UPVALUE: {
+            FREE(ObjUpvalue, obj);
             break;
         }
         case OBJ_T_STRING: {
@@ -350,10 +372,23 @@ void collectGarbage(void) {
     }
 
     GC_TRACE_DEBUG("Marking VM frame functions");
-    // gray active function objects
+    // gray active function closure objects
     for (int i = 0; i < vm.frameCount; i++) {
-        grayObject((Obj*)vm.frames[i].function);
+        grayObject((Obj*)vm.frames[i].closure);
     }
+
+    GC_TRACE_DEBUG("Marking open upvalues");
+    int numOpenUpsFound = 0;
+    if (vm.openUpvalues) {
+        ObjUpvalue *up = vm.openUpvalues;
+        while (up) {
+            ASSERT(up->value);
+            grayValue(*up->value);
+            up = up->next;
+            numOpenUpsFound++;
+        }
+    }
+    GC_TRACE_DEBUG("Open upvalues found: %d", numOpenUpsFound);
 
     GC_TRACE_DEBUG("Marking globals (%d found)", vm.globals.count);
     // Mark the global roots.
@@ -443,10 +478,10 @@ void collectGarbage(void) {
     // Adjust the heap size based on live memory.
     vm.nextGCThreshhold = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;
 
-        GC_TRACE_DEBUG("collected %ld bytes (from %ld to %ld) next GC at %ld bytes\n",
-            before - vm.bytesAllocated, before, vm.bytesAllocated, vm.nextGCThreshhold);
-        GC_TRACE_DEBUG("stats: roots found: %d, hidden roots found: %d\n",
-            numRootsLastGC, numHiddenRoots);
+    GC_TRACE_DEBUG("collected %ld bytes (from %ld to %ld) next GC at %ld bytes\n",
+        before - vm.bytesAllocated, before, vm.bytesAllocated, vm.nextGCThreshhold);
+    GC_TRACE_DEBUG("stats: roots found: %d, hidden roots found: %d\n",
+        numRootsLastGC, numHiddenRoots);
     inGC = false;
 }
 

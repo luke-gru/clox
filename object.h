@@ -14,6 +14,8 @@ typedef enum ObjType {
   OBJ_T_INSTANCE,
   OBJ_T_NATIVE_FUNCTION,
   OBJ_T_BOUND_METHOD,
+  OBJ_T_UPVALUE,
+  OBJ_T_CLOSURE,
   OBJ_T_INTERNAL,
 } ObjType;
 
@@ -51,12 +53,35 @@ typedef struct ObjInternal {
 typedef struct ObjFunction {
   Obj object;
   int arity;
-  //int upvalueCount;
+  int upvalueCount;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM, or serialized/loaded to/from disk.
   Chunk chunk;
   ObjString *name;
 } ObjFunction;
+
+typedef struct ObjUpvalue ObjUpvalue;
+typedef struct ObjUpvalue {
+  Obj object;
+
+  // Pointer to the variable this upvalue is referencing.
+  Value *value;
+
+  // If the upvalue is closed (i.e. the local variable it was pointing to has
+  // been popped off the stack) then the closed-over value is hoisted out of
+  // the stack into here. field [value] is then be changed to point to this.
+  Value closed;
+
+  // Open upvalues are stored in a linked list.
+  ObjUpvalue *next;
+} ObjUpvalue;
+
+typedef struct ObjClosure {
+  Obj object;
+  ObjFunction *function;
+  ObjUpvalue **upvalues;
+  int upvalueCount; // always same as function->upvalueCount
+} ObjClosure;
 
 typedef Value (*NativeFn)(int argCount, Value* args);
 
@@ -78,6 +103,7 @@ extern ObjClass *lxObjClass;
 extern ObjClass *lxAryClass;
 extern ObjClass *lxMapClass;
 extern ObjClass *lxErrClass;
+extern ObjClass *lxArgErrClass;
 
 typedef struct ObjInstance {
   Obj object;
@@ -89,23 +115,32 @@ typedef struct ObjInstance {
 typedef struct ObjBoundMethod {
   Obj object;
   Value receiver;
-  Obj *callable;
+  Obj *callable; // ObjClosure* or ObjNative*
 } ObjBoundMethod;
 
-#define IS_STRING(value)        isObjType(value, OBJ_T_STRING)
-#define IS_FUNCTION(value)      isObjType(value, OBJ_T_FUNCTION)
-#define IS_NATIVE_FUNCTION(value) isObjType(value, OBJ_T_NATIVE_FUNCTION)
-#define IS_CLASS(value)         isObjType(value, OBJ_T_CLASS)
-#define IS_INSTANCE(value)      isObjType(value, OBJ_T_INSTANCE)
-#define IS_BOUND_METHOD(value)  isObjType(value, OBJ_T_BOUND_METHOD)
-#define IS_INTERNAL(value)      isObjType(value, OBJ_T_INTERNAL)
+#define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))
+#define IS_FUNCTION(value)      (isObjType(value, OBJ_T_FUNCTION))
+#define IS_CLOSURE(value)       (isObjType(value, OBJ_T_CLOSURE))
+#define IS_NATIVE_FUNCTION(value) (isObjType(value, OBJ_T_NATIVE_FUNCTION))
+#define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
+#define IS_INSTANCE(value)      (isObjType(value, OBJ_T_INSTANCE))
+#define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
+#define IS_INTERNAL(value)      (isObjType(value, OBJ_T_INTERNAL))
 
-#define IS_ARRAY(value)         (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxAryClass)
-#define IS_MAP(value)           (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxMapClass)
+#define IS_A(value,klass)       (IS_INSTANCE(value) && instanceIsA(AS_INSTANCE(value), klass))
+
+#define IS_AN_ARRAY(value)      (IS_A(value, lxAryClass))
+#define IS_T_ARRAY(value)       (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxAryClass)
+#define IS_A_MAP(value)         (IS_A(value, lxMapClass))
+#define IS_T_MAP(value)         (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxMapClass)
+#define IS_AN_ERROR(value)      (IS_A(value, lxErrClass))
+
+#define IS_SUBCLASS(subklass,superklass) (isSubclass(subklass,superklass))
 
 #define AS_STRING(value)        ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
 #define AS_FUNCTION(value)      ((ObjFunction*)AS_OBJ(value))
+#define AS_CLOSURE(value)       ((ObjClosure*)AS_OBJ(value))
 #define AS_NATIVE_FUNCTION(value) ((ObjNative*)AS_OBJ(value))
 #define AS_BOUND_METHOD(value)  ((ObjBoundMethod*)AS_OBJ(value))
 #define AS_CLASS(value)         ((ObjClass*)AS_OBJ(value))
@@ -121,12 +156,15 @@ typedef struct ObjBoundMethod {
 #define MAP_GETHIDDEN(value)     (mapGetHidden(value))
 
 typedef ObjString *(*newStringFunc)(char *chars, int length);
+// String creation functions
 ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
 ObjString *copyString(char *chars, int length); // copies provided memory. Object lives on lox heap.
 ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
 ObjString *newString(char *chars, int length); // always creates new string in vm.objects
 ObjString *newStackString(char *chars, int length); // Used in native C functions. Object first lives in VM arena, conceptually.
 ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
+
+void clearObjString(ObjString *str);
 
 void objFreeze(Obj*);
 
@@ -141,20 +179,30 @@ void        arrayPush(Value aryVal, Value el);
 ValueArray *arrayGetHidden(Value aryVal);
 Value       newArray(void);
 
+Value       newError(ObjClass *errClass, ObjString *msg);
+
 Value       mapGet(Value mapVal, Value key);
 Value       mapSize(Value mapVal);
 Table      *mapGetHidden(Value mapVal);
 
+void  setProp(Value self, ObjString *propName, Value val);
+Value getProp(Value self, ObjString *propName);
+
+// Object creation functions
 ObjFunction *newFunction();
-void freeFunction(ObjFunction *func);
 ObjClass *newClass(ObjString *name, ObjClass *superclass);
 ObjInstance *newInstance(ObjClass *klass);
 ObjNative *newNative(ObjString *name, NativeFn function);
 ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
 ObjInternal *newInternalObject(void *data, GCMarkFunc markFn, GCFreeFunc freeFn);
+ObjClosure *newClosure(ObjFunction *function);
+ObjUpvalue *newUpvalue(Value *slot);
+
 void *internalGetData(ObjInternal *obj);
 
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
+bool instanceIsA(ObjInstance *inst, ObjClass *klass);
+bool isSubclass(ObjClass *subklass, ObjClass *superklass);
 
 // Returns true if [value] is an object of type [type]. Do not call this
 // directly, instead use the [IS_XXX] macro for the type in question.

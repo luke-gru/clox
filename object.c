@@ -170,7 +170,7 @@ ObjString *internedString(char *chars, int length) {
 // NOTE: length here is strlen(chars)
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
     if (((Obj*)string)->isFrozen) {
-        fprintf(stderr, "Tried to modify an interned string: '%s'\n", string->chars);
+        fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
         ASSERT(0);
     }
     /*fprintf(stderr, "pushCSTring\n");*/
@@ -189,13 +189,24 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     /*fprintf(stderr, "/pushCSTring\n");*/
 }
 
+void clearObjString(ObjString *string) {
+    if (((Obj*)string)->isFrozen) {
+        fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
+        ASSERT(0);
+    }
+    string->chars = GROW_ARRAY(string->chars, char, string->length, 1);
+    string->chars[0] = '\0';
+    string->length = 0;
+    string->hash = hashString(string->chars, 0);
+}
+
 ObjFunction *newFunction(Chunk *chunk) {
     ObjFunction *function = ALLOCATE_OBJ(
         ObjFunction, OBJ_T_FUNCTION
     );
 
     function->arity = 0;
-    /*function->upvalueCount = 0;*/
+    function->upvalueCount = 0;
     function->name = NULL;
     if (chunk == NULL) {
         initChunk(&function->chunk);
@@ -203,6 +214,32 @@ ObjFunction *newFunction(Chunk *chunk) {
         function->chunk = *chunk; // copy
     }
     return function;
+}
+
+ObjClosure *newClosure(ObjFunction *func) {
+    ASSERT(func);
+    // Allocate the upvalue array first so it doesn't cause the closure to get
+    // collected.
+    ObjUpvalue** upvalues = ALLOCATE(ObjUpvalue*, func->upvalueCount);
+    for (int i = 0; i < func->upvalueCount; i++) {
+        upvalues[i] = NULL;
+    }
+
+    ObjClosure *closure = ALLOCATE_OBJ(
+        ObjClosure, OBJ_T_CLOSURE
+    );
+    closure->function = func;
+    closure->upvalues = upvalues;
+    closure->upvalueCount = func->upvalueCount;
+    return closure;
+}
+
+ObjUpvalue *newUpvalue(Value *slot) {
+  ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_T_UPVALUE);
+  upvalue->closed = NIL_VAL;
+  upvalue->value = slot;
+  upvalue->next = NULL; // it's the caller's responsibility to link it
+  return upvalue;
 }
 
 ObjClass *newClass(ObjString *name, ObjClass *superclass) {
@@ -285,9 +322,10 @@ const char *typeOfObj(Obj *obj) {
     case OBJ_T_FUNCTION:
     case OBJ_T_NATIVE_FUNCTION:
     case OBJ_T_BOUND_METHOD:
-        return "function";
     case OBJ_T_INTERNAL:
         return "internal";
+    case OBJ_T_CLOSURE:
+        return "closure";
     default: {
         UNREACHABLE("Unknown object type: (%d)\n", obj->type);
     }
@@ -309,7 +347,7 @@ int arraySize(Value aryVal) {
 }
 
 ValueArray *arrayGetHidden(Value aryVal) {
-    ASSERT(IS_ARRAY(aryVal));
+    ASSERT(IS_AN_ARRAY(aryVal));
     ObjInstance *inst = AS_INSTANCE(aryVal);
     Value internalObjVal;
     ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(copyString("ary", 3)), &internalObjVal));
@@ -346,11 +384,54 @@ Value mapSize(Value mapVal) {
 }
 
 Table *mapGetHidden(Value mapVal) {
-    ASSERT(IS_MAP(mapVal));
+    ASSERT(IS_A_MAP(mapVal));
     ObjInstance *inst = AS_INSTANCE(mapVal);
     Value internalObjVal;
     ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(copyString("map", 3)), &internalObjVal));
     Table *map = (Table*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(map);
     return map;
+}
+
+Value getProp(Value self, ObjString *propName) {
+    ASSERT(IS_INSTANCE(self));
+    ObjInstance *inst = AS_INSTANCE(self);
+    Value ret;
+    if (tableGet(&inst->fields, OBJ_VAL(propName), &ret)) {
+        return ret;
+    } else {
+        return NIL_VAL;
+    }
+}
+
+void setProp(Value self, ObjString *propName, Value val) {
+    ASSERT(IS_INSTANCE(self));
+    ObjInstance *inst = AS_INSTANCE(self);
+    tableSet(&inst->fields, OBJ_VAL(propName), val);
+}
+
+bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
+    ObjClass *instKlass = inst->klass;
+    while (instKlass != NULL && instKlass != klass) {
+        instKlass = instKlass->superclass;
+    }
+    return instKlass != NULL;
+}
+
+Value newError(ObjClass *errClass, ObjString *msg) {
+    ASSERT(IS_SUBCLASS(errClass, lxErrClass));
+    push(OBJ_VAL(msg));
+    callCallable(OBJ_VAL(errClass), 1, false);
+    Value err = pop();
+    ASSERT(IS_AN_ERROR(err));
+    return err;
+}
+
+bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
+    ASSERT(subklass);
+    ASSERT(superklass);
+    while (subklass != NULL && subklass != superklass) {
+        subklass = subklass->superclass;
+    }
+    return subklass != NULL;
 }

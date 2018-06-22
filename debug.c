@@ -54,10 +54,14 @@ const char *opName(OpCode code) {
         return "OP_PROP_GET";
     case OP_PROP_SET:
         return "OP_PROP_SET";
+    case OP_CLOSURE:
+        return "OP_CLOSURE";
     case OP_GET_UPVALUE:
         return "OP_GET_UPVALUE";
     case OP_SET_UPVALUE:
         return "OP_SET_UPVALUE";
+    case OP_CLOSE_UPVALUE:
+        return "OP_CLOSE_UPVALUE";
     case OP_CALL:
         return "OP_CALL";
     case OP_METHOD:
@@ -184,26 +188,19 @@ void printDisassembledChunk(Chunk *chunk, const char *name) {
     printf("== /%s ==\n", name);
 }
 
-static int printConstantInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+static int printConstantInstruction(char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
     printf("%-16s %4" PRId8 " '", op, constantIdx);
     Value constant = getConstant(chunk, constantIdx);
-    if (IS_FUNCTION(constant)) {
-        addFunc(funcs, AS_FUNCTION(constant));
-    }
     printValue(stdout, constant,  false);
     printf("'\n");
     return i+2;
 }
 // instruction has 1 operand, a constant slot index
-static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
 
     Value constant = getConstant(chunk, constantIdx);
-    if (IS_FUNCTION(constant)) {
-        fprintf(stderr, "Adding function '%s'\n", AS_FUNCTION(constant)->name->chars);
-        addFunc(funcs, AS_FUNCTION(constant));
-    }
     ObjString *constantStr = valueToString(constant, newStackString);
     char *constantCStr = constantStr->chars;
 
@@ -220,6 +217,40 @@ static int printLocalVarInstruction(char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
     printf("%-16s    [slot %" PRId8 "]\n", op, slotIdx);
     return i+2;
+}
+
+static int printClosureInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+    uint8_t funcConstIdx = chunk->code[i + 1];
+    Value constant = getConstant(chunk, funcConstIdx);
+    ASSERT(IS_FUNCTION(constant));
+    int numUpvalues = AS_FUNCTION(constant)->upvalueCount;
+
+    addFunc(funcs, AS_FUNCTION(constant));
+
+    printf("%-16s %4" PRId8 " '", op, funcConstIdx);
+    printValue(stdout, constant, false);
+    printf("' (upvals: %d)\n", numUpvalues);
+    return i+2+(numUpvalues*2);
+}
+
+static int closureInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+    uint8_t funcConstIdx = chunk->code[i + 1];
+    Value constant = getConstant(chunk, funcConstIdx);
+    ASSERT(IS_FUNCTION(constant));
+    int numUpvalues = AS_FUNCTION(constant)->upvalueCount;
+
+    addFunc(funcs, AS_FUNCTION(constant));
+
+    ObjString *constantStr = valueToString(constant, newStackString);
+    char *constantCStr = constantStr->chars;
+    char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+23, 1);
+    ASSERT_MEM(cbuf);
+    sprintf(cbuf, "%s\t%04" PRId8 "\t'%s'\t(upvals: %03d)\n", op, funcConstIdx,
+        constantCStr, numUpvalues);
+
+    pushCString(buf, cbuf, strlen(cbuf));
+    free(cbuf);
+    return i+2+(numUpvalues*2);
 }
 
 static int printJumpInstruction(char *op, Chunk *chunk, int i) {
@@ -318,10 +349,14 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_PROP_GET:
         case OP_PROP_SET:
         case OP_GET_THROWN:
-            return printConstantInstruction(opName(byte), chunk, i, funcs);
+            return printConstantInstruction(opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
+        case OP_SET_UPVALUE:
+        case OP_GET_UPVALUE:
             return printLocalVarInstruction(opName(byte), chunk, i);
+        case OP_CLOSURE:
+            return printClosureInstruction(opName(byte), chunk, i, funcs);
         case OP_JUMP:
         case OP_JUMP_IF_FALSE:
         case OP_JUMP_IF_FALSE_PEEK:
@@ -351,6 +386,7 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_CREATE_ARRAY:
         case OP_INDEX_GET:
         case OP_INDEX_SET:
+        case OP_CLOSE_UPVALUE:
             return printSimpleInstruction(opName(byte), i);
         default:
             printf("Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
@@ -376,10 +412,14 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_PROP_GET:
         case OP_PROP_SET:
         case OP_GET_THROWN:
-            return constantInstruction(buf, opName(byte), chunk, i, funcs);
+            return constantInstruction(buf, opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
+        case OP_SET_UPVALUE:
+        case OP_GET_UPVALUE:
             return localVarInstruction(buf, opName(byte), chunk, i);
+        case OP_CLOSURE:
+            return closureInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_JUMP:
         case OP_JUMP_IF_FALSE:
         case OP_JUMP_IF_FALSE_PEEK:
@@ -409,6 +449,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_CREATE_ARRAY:
         case OP_INDEX_GET:
         case OP_INDEX_SET:
+        case OP_CLOSE_UPVALUE:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             ASSERT(0);

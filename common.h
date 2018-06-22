@@ -23,8 +23,11 @@ typedef enum {
     OP_GET_GLOBAL, // get global var, next byte is frame slot index
     OP_SET_GLOBAL, // set global var, next byte is frame slot index, value is stacktop
     OP_DEFINE_GLOBAL, // define global var for first time
+
+    OP_CLOSURE,
     OP_GET_UPVALUE,
     OP_SET_UPVALUE,
+    OP_CLOSE_UPVALUE,
 
     OP_PROP_GET,
     OP_PROP_SET,

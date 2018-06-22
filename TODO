@@ -2,13 +2,16 @@
 * Simple M&S GC [DONE]
 * Saving/loading bytecode to disk []
 * Debugger support []
-* bytecode optimization pass [IN PROGRESS]
+* bytecode optimization pass []
 * simple JIT, maybe? []
 
 * AND/OR short-circuit eval [DONE]
 * catch across function boundaries [DONE]
+* throw/catch from C native functions [DONE], just have to pop proper #
+arguments off the stack when an error is caught in native C func.
 * Get closures working []
 * Get arrays working [PARTLY DONE]
+* Get maps working [PARTLY DONE]
 * interactive mode (repl) [DONE]
 * add builtin classes [IN PROGRESS]
 * Fix VM callable to always add stack frame, even for C functions. This will
@@ -16,4 +19,5 @@ help with throwing from C functions as well. []
 
 
 BUGS:
-`print [[]].toString()` in REPL gets garbage in the stack when showing the lastValue.
+Calling native functions keeps the function object on the stack for some
+reason

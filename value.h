@@ -13,7 +13,7 @@ typedef enum {
   VAL_T_NIL,
   VAL_T_NUMBER,
   VAL_T_OBJ, // includes strings/arrays
-  VAL_T_SENTINEL
+  VAL_T_SENTINEL // used as an 'undefined' value type, for example as an undefined hash key
 } ValueType;
 
 typedef struct {

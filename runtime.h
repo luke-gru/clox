@@ -6,7 +6,7 @@
 
 #define CHECK_ARGS(func, min, max, actual) do {\
     if (!runtimeCheckArgs(min, max, actual)) {\
-        runtimeError("Error in %s, expected %d to %d args, got %d",\
+        throwArgErrorFmt("Error in %s, expected %d to %d args, got %d",\
             func, min, max, actual);\
         return NIL_VAL;\
     }\
@@ -28,4 +28,7 @@ Value lxMapIndexGet(int argCount, Value *args);
 Value lxMapIndexSet(int argCount, Value *args);
 Value lxMapKeys(int argCount, Value *args);
 Value lxMapValues(int argCount, Value *args);
+Value lxMapToString(int argCount, Value *args);
+
+Value lxErrInit(int argCount, Value *args);
 #endif

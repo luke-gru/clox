@@ -13,10 +13,12 @@ typedef enum {
 } CompileErr;
 
 typedef enum {
-  TYPE_FUNCTION = 1,
-  TYPE_INITIALIZER,
-  TYPE_METHOD,
-  TYPE_TOP_LEVEL
+    FUN_TYPE_NAMED = 1,
+    FUN_TYPE_ANON,
+    FUN_TYPE_INIT,
+    FUN_TYPE_METHOD,
+    // implementation detail, top-level is compiled as if it was a function
+    FUN_TYPE_TOP_LEVEL
 } FunctionType;
 
 int compile_src(char *src, Chunk *chunk, CompileErr *err);

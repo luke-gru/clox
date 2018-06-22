@@ -5,12 +5,15 @@
 #include "options.h"
 #include "runtime.h"
 #include "memory.h"
+#include <setjmp.h>
 
 VM vm;
 
 char *unredefinableGlobals[] = {
     "Object",
     "Array",
+    "Error",
+    "Map",
     "clock",
     "typeof",
     NULL
@@ -38,9 +41,12 @@ void defineNativeFunctions() {
     tableSet(&vm.globals, OBJ_VAL(typeofName), OBJ_VAL(typeofFn));
 }
 
+// Builtin classes:
 ObjClass *lxObjClass;
 ObjClass *lxAryClass;
 ObjClass *lxMapClass;
+ObjClass *lxErrClass;
+ObjClass *lxArgErrClass;
 
 void defineNativeClasses() {
     // class Object
@@ -90,6 +96,23 @@ void defineNativeClasses() {
 
     ObjNative *mapValuesNat = newNative(copyString("values", 6), lxMapValues);
     tableSet(&mapClass->methods, OBJ_VAL(copyString("values", 6)), OBJ_VAL(mapValuesNat));
+
+    ObjNative *mapToStringNat = newNative(copyString("toString", 8), lxMapToString);
+    tableSet(&mapClass->methods, OBJ_VAL(copyString("toString", 8)), OBJ_VAL(mapToStringNat));
+
+    // class Error
+    ObjString *errClassName = copyString("Error", 5);
+    ObjClass *errClass = newClass(errClassName, objClass);
+    tableSet(&vm.globals, OBJ_VAL(errClassName), OBJ_VAL(errClass));
+    lxErrClass = errClass;
+
+    ObjNative *errInitNat = newNative(copyString("init", 4), lxErrInit);
+    tableSet(&errClass->methods, OBJ_VAL(copyString("init", 4)), OBJ_VAL(errInitNat));
+
+    ObjString *argErrClassName = copyString("ArgumentError", 13);
+    ObjClass *argErrClass = newClass(argErrClassName, errClass);
+    tableSet(&vm.globals, OBJ_VAL(argErrClassName), OBJ_VAL(argErrClass));
+    lxArgErrClass = argErrClass;
 }
 
 void resetStack() {
@@ -107,8 +130,10 @@ void initVM() {
     vm.grayCount = 0;
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
+    vm.openUpvalues = NULL;
 
     vm.lastValue = NULL;
+    vm.lastErrorThrown = NIL_VAL;
     vm.hadError = false;
     initTable(&vm.globals);
     initTable(&vm.strings);
@@ -122,7 +147,6 @@ void initVM() {
 }
 
 void freeVM() {
-    turnGCOff();
     freeTable(&vm.globals);
     freeTable(&vm.strings);
     vm.initString = NULL;
@@ -131,10 +155,10 @@ void freeVM() {
     vm.lastValue = NULL;
     vm.objects = NULL;
     vm.grayStack = NULL;
+    vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
     vec_deinit(&vm.stackObjects);
     freeObjects();
-    turnGCOn();
     vm.inited = false;
 }
 
@@ -224,8 +248,12 @@ static inline CallFrame *getFrame() {
 }
 
 static Chunk *currentChunk() {
-    return &getFrame()->function->chunk;
+    return &getFrame()->closure->function->chunk;
 }
+
+static jmp_buf CCallJumpBuf;
+static bool inCCall = false;
+static bool cCallThrew = false;
 
 // TODO: throw lox error using setjmp/jmpbuf to allow catches
 void runtimeError(const char* format, ...) {
@@ -237,7 +265,7 @@ void runtimeError(const char* format, ...) {
 
     for (int i = vm.frameCount - 1; i >= 0; i--) {
         CallFrame *frame = &vm.frames[i];
-        ObjFunction *function = frame->function;
+        ObjFunction *function = frame->closure->function;
         // -1 because the IP is sitting on the next instruction to be executed.
         size_t instruction = frame->ip - function->chunk.code - 1;
         fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
@@ -253,9 +281,8 @@ void runtimeError(const char* format, ...) {
 }
 
 static bool isCallable(Value val) {
-    return IS_FUNCTION(val) ||
-        IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
-        IS_BOUND_METHOD(val);
+    return IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
+        IS_BOUND_METHOD(val) || IS_CLOSURE(val);
 }
 
 static bool isThrowable(Value val) {
@@ -281,16 +308,13 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
 
 static void defineMethod(ObjString *name) {
     Value method = peek(0); // function
-    ASSERT(IS_FUNCTION(method));
+    ASSERT(IS_CLOSURE(method));
     ASSERT(IS_CLASS(peek(1)));
     ObjClass *klass = AS_CLASS(peek(1));
     /*fprintf(stderr, "defining method '%s' (%d)\n", name->chars, (int)strlen(name->chars));*/
     ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
     pop();
 }
-
-// fwd decl
-static bool callCallable(Value callable, int argCount, bool isMethod);
 
 // Call method on instance, args are NOT expected to be pushed on to stack by
 // caller. `argCount` does not include the implicit instance argument.
@@ -318,13 +342,34 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     }
 }
 
+// sets up VM/C call jumpbuf
+static Value *captureNativeError() {
+    if (inCCall && cCallThrew) {
+        inCCall = false;
+        cCallThrew = false;
+        return &vm.lastErrorThrown;
+    } else if (!inCCall) {
+        int jumpRes = setjmp(CCallJumpBuf);
+        if (jumpRes == 0) { // jump was set
+            return NULL;
+        } else { // C call jumped here from throwError()
+            ASSERT(inCCall);
+            ASSERT(cCallThrew);
+            inCCall = false;
+            cCallThrew = false;
+            return &vm.lastErrorThrown;
+        }
+    }
+    return NULL;
+}
+
 // arguments are expected to be pushed on to stack by caller
 static bool doCallCallable(Value callable, int argCount, bool isMethod) {
-    ObjFunction *function = NULL;
+    ObjClosure *closure = NULL;
     Value instanceVal;
-    if (IS_FUNCTION(callable)) {
-        function = AS_FUNCTION(callable);
-        int arity = function->arity;
+    if (IS_CLOSURE(callable)) {
+        closure = AS_CLOSURE(callable);
+        int arity = closure->function->arity;
         if (argCount != arity) {
             runtimeError("Expected %d arguments but got %d.",
                 arity, argCount);
@@ -337,17 +382,26 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         vm.stackTop[-argCount - 1] = instanceVal; // first argument is instance
         // Call the initializer, if there is one.
         Value initializer;
-        if (tableGet(&klass->methods, OBJ_VAL(vm.initString), &initializer)) {
+        Obj *init = instanceFindMethod(instance, vm.initString);
+        if (init) {
+            initializer = OBJ_VAL(init);
             if (IS_NATIVE_FUNCTION(initializer)) {
-                /*fprintf(stderr, "calling native initializer with %d args\n", argCount);*/
-                ObjNative *nativeInit = AS_NATIVE_FUNCTION(initializer);
-                ASSERT(nativeInit->function);
-                nativeInit->function(argCount+1, vm.stackTop-argCount-1);
-                push(OBJ_VAL(instance));
-                return true;
+                Value *err;
+                if ((err = captureNativeError()) != NULL) {
+                    ASSERT(!inCCall);
+                    throwError(*err); // re-throw inside VM
+                    return false;
+                } else {
+                    /*fprintf(stderr, "calling native initializer with %d args\n", argCount);*/
+                    ObjNative *nativeInit = AS_NATIVE_FUNCTION(initializer);
+                    ASSERT(nativeInit->function);
+                    nativeInit->function(argCount+1, vm.stackTop-argCount-1);
+                    push(OBJ_VAL(instance));
+                    return true;
+                }
             }
-            ASSERT(IS_FUNCTION(initializer));
-            function = AS_FUNCTION(initializer);
+            ASSERT(IS_CLOSURE(initializer));
+            closure = AS_CLOSURE(initializer);
         } else if (argCount > 0) {
           runtimeError("Expected 0 arguments (default init) but got %d.", argCount);
           return false;
@@ -357,7 +411,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     } else if (IS_BOUND_METHOD(callable)) {
         /*fprintf(stderr, "calling bound method with %d args\n", argCount);*/
         ObjBoundMethod *bmethod = AS_BOUND_METHOD(callable);
-        Obj *callable = bmethod->callable; // native function or user-defined function
+        Obj *callable = bmethod->callable; // native function or user-defined function (ObjClosure)
         instanceVal = bmethod->receiver;
         vm.stackTop[-argCount - 1] = instanceVal;
         return callCallable(OBJ_VAL(callable), argCount, true);
@@ -365,9 +419,16 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         /*fprintf(stderr, "Calling native function with %d args\n", argCount);*/
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
         if (isMethod) argCount++;
-        Value val = native->function(argCount, vm.stackTop-argCount);
-        push(val);
-        return true;
+        Value *err;
+        if ((err = captureNativeError()) != NULL) {
+            ASSERT(!inCCall);
+            throwError(*err); // re-throw inside VM
+            return false;
+        } else {
+            Value val = native->function(argCount, vm.stackTop-argCount);
+            push(val);
+            return true;
+        }
     } else {
         ASSERT(0);
     }
@@ -377,13 +438,14 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         return false;
     }
 
-    int parentStart = getFrame()->ip - getFrame()->function->chunk.code - 2;
+    ASSERT(closure);
+    int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
-    fprintf(stderr, "setting new call frame to start=%d\n", parentStart);
+    /*fprintf(stderr, "setting new call frame to start=%d\n", parentStart);*/
     // add frame
     CallFrame *frame = &vm.frames[vm.frameCount++];
-    frame->function = function;
-    frame->ip = function->chunk.code;
+    frame->closure = closure;
+    frame->ip = closure->function->chunk.code;
     frame->start = parentStart;
 
     // +1 to include either the called function or the receiver.
@@ -392,7 +454,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
 }
 
 
-static bool callCallable(Value callable, int argCount, bool isMethod) {
+bool callCallable(Value callable, int argCount, bool isMethod) {
     int lenBefore = vm.stackObjects.length;
     bool ret = doCallCallable(callable, argCount, isMethod);
     int lenAfter = vm.stackObjects.length;
@@ -413,24 +475,29 @@ static bool callCallable(Value callable, int argCount, bool isMethod) {
 static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowFound) {
     CatchTable *tbl = currentChunk()->catchTbl;
     CatchTable *row = tbl;
-    char *klassName = klass->name->chars;
     int currentIpOff = (int)(getFrame()->ip - currentChunk()->code);
     while (row || vm.frameCount > 1) {
-        if (row == NULL) {
+        if (row == NULL) { // pop a call frame
             ASSERT(vm.frameCount > 1);
             currentIpOff = getFrame()->start;
+            ASSERT(vm.stackTop > getFrame()->slots);
+            vm.stackTop = getFrame()->slots;
             vm.frameCount--;
             row = currentChunk()->catchTbl;
             continue;
         }
-        if (strcmp(AS_CSTRING(row->catchVal), klassName) == 0) {
+        Value klassFound;
+        if (!tableGet(&vm.globals, row->catchVal, &klassFound)) {
+            row = row->next;
+            continue;
+        }
+        if (IS_SUBCLASS(klass, AS_CLASS(klassFound))) {
             if (currentIpOff > row->ifrom && currentIpOff <= row->ito) {
                 // found target catch
                 *ipOut = currentChunk()->code + row->itarget;
                 *rowFound = row;
-                /*currentIpOff = (int)(*ipOut - currentChunk()->code);*/
                 /*fprintf(stderr, "new ip offset: %d\n", currentIpOff);*/
-                fprintf(stderr, "found catch row\n");
+                /*fprintf(stderr, "found catch row\n");*/
                 return true;
             }
         }
@@ -454,6 +521,55 @@ static CatchTable *getCatchTableRow(int idx) {
     return row;
 }
 
+void throwError(Value self) {
+    ASSERT(vm.inited);
+    ASSERT(IS_AN_ERROR(self));
+    vm.lastErrorThrown = self;
+    if (inCCall) {
+        ASSERT(!cCallThrew);
+        cCallThrew = true;
+        longjmp(CCallJumpBuf, 1);
+        return;
+    }
+    // error from VM
+    ObjInstance *obj = AS_INSTANCE(self);
+    ObjClass *klass = obj->klass;
+    CatchTable *catchRow;
+    uint8_t *ipNew = NULL;
+    if (findThrowJumpLoc(klass, &ipNew, &catchRow)) {
+        ASSERT(ipNew);
+        ASSERT(catchRow);
+        catchRow->lastThrownValue = self;
+        getFrame()->ip = ipNew;
+        return; // frames were popped by `findThrowJumpLoc`
+    } else {
+        char *errMsg = "";
+        Value errVal = getProp(vm.lastErrorThrown, copyString("message", 7));
+        if (IS_STRING(errVal)) {
+            errMsg = AS_CSTRING(errVal);
+        }
+        runtimeError("Uncaught exception: %s, message: '%s'", klass->name->chars, errMsg);
+    }
+}
+
+void throwArgErrorFmt(const char *format, ...) {
+    char sbuf[250] = {'\0'};
+    va_list args;
+    va_start(args, format);
+    vsnprintf(sbuf, 250, format, args);
+    va_end(args);
+    size_t len = strlen(sbuf);
+    char *cbuf = ALLOCATE(char, len+1);
+    strncpy(cbuf, sbuf, len);
+    cbuf[len] = '\0';
+    ObjString *buf = newString(cbuf, len);
+    hideFromGC((Obj*)buf);
+    Value err = newError(lxArgErrClass, buf);
+    vm.lastErrorThrown = err;
+    unhideFromGC((Obj*)buf);
+    throwError(err);
+}
+
 void printVMStack(FILE *f) {
     if (vm.stackTop == vm.stack) {
         fprintf(f, "%s", "Stack: empty\n");
@@ -471,6 +587,55 @@ void printVMStack(FILE *f) {
         fprintf(f, "%s", " ]");
     }
     fprintf(f, "%s", "\n");
+}
+
+ObjUpvalue *captureUpvalue(Value *local) {
+    if (vm.openUpvalues == NULL) {
+        vm.openUpvalues = newUpvalue(local);
+        return vm.openUpvalues;
+    }
+
+    ObjUpvalue* prevUpvalue = NULL;
+    ObjUpvalue* upvalue = vm.openUpvalues;
+
+    // Walk towards the bottom of the stack until we find a previously existing
+    // upvalue or reach where it should be.
+    while (upvalue != NULL && upvalue->value > local) {
+        prevUpvalue = upvalue;
+        upvalue = upvalue->next;
+    }
+
+    // If we found it, reuse it.
+    if (upvalue != NULL && upvalue->value == local) return upvalue;
+
+    // We walked past the local on the stack, so there must not be an upvalue for
+    // it already. Make a new one and link it in in the right place to keep the
+    // list sorted.
+    ObjUpvalue* createdUpvalue = newUpvalue(local);
+    createdUpvalue->next = upvalue;
+
+    if (prevUpvalue == NULL) {
+        // The new one is the first one in the list.
+        vm.openUpvalues = createdUpvalue;
+    } else {
+        prevUpvalue->next = createdUpvalue;
+    }
+
+    return createdUpvalue;
+}
+
+static void closeUpvalues(Value *last) {
+  while (vm.openUpvalues != NULL &&
+         vm.openUpvalues->value >= last) {
+    ObjUpvalue *upvalue = vm.openUpvalues;
+
+    // Move the value into the upvalue itself and point the upvalue to it.
+    upvalue->closed = *upvalue->value;
+    upvalue->value = &upvalue->closed;
+
+    // Pop it off the open upvalue list.
+    vm.openUpvalues = upvalue->next;
+  }
 }
 
 /**
@@ -641,6 +806,42 @@ static InterpretResult run(void) {
           push(getFrame()->slots[slot]);
           break;
       }
+      case OP_GET_UPVALUE: {
+          uint8_t slot = READ_BYTE();
+          push(*getFrame()->closure->upvalues[slot]->value);
+          break;
+      }
+      case OP_SET_UPVALUE: {
+          uint8_t slot = READ_BYTE();
+          *getFrame()->closure->upvalues[slot]->value = peek(0);
+          break;
+      }
+      case OP_CLOSE_UPVALUE: {
+          closeUpvalues(vm.stackTop - 1);
+          pop(); // pop the variable from the stack frame
+          break;
+      }
+      case OP_CLOSURE: {
+          Value funcVal = READ_CONSTANT();
+          ASSERT(IS_FUNCTION(funcVal));
+          ObjFunction *func = AS_FUNCTION(funcVal);
+          ObjClosure *closure = newClosure(func);
+          push(OBJ_VAL(closure));
+
+          // capture upvalues
+          for (int i = 0; i < closure->upvalueCount; i++) {
+              uint8_t isLocal = READ_BYTE();
+              uint8_t index = READ_BYTE();
+              if (isLocal) {
+                  // Make an new upvalue to close over the parent's local variable.
+                  closure->upvalues[i] = captureUpvalue(getFrame()->slots + index);
+              } else {
+                  // Use the same upvalue as the current call frame.
+                  closure->upvalues[i] = getFrame()->closure->upvalues[index];
+              }
+          }
+          break;
+      }
       case OP_JUMP_IF_FALSE: {
           Value cond = pop();
           uint8_t ipOffset = READ_BYTE();
@@ -696,9 +897,9 @@ static InterpretResult run(void) {
       }
       // return from function/method
       case OP_RETURN: {
-          /*fprintf(stderr, "opcall in return\n");*/
           Value result = pop();
           vm.stackTop = getFrame()->slots;
+          closeUpvalues(getFrame()->slots);
           ASSERT(vm.frameCount > 0);
           vm.frameCount--;
           push(result);
@@ -770,7 +971,7 @@ static InterpretResult run(void) {
           ASSERT(numEls >= 0);
           callCallable(OBJ_VAL((Obj*)lxAryClass), numEls, false); // new array pushed to top of stack
           Value ret = peek(0);
-          ASSERT(IS_ARRAY(ret));
+          ASSERT(IS_T_ARRAY(ret));
           ret = pop();
           for (int i = 0; i < numEls; i++) {
               pop();
@@ -858,7 +1059,12 @@ InterpretResult interpret(Chunk *chunk) {
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = vm.stack;
-    frame->function = newFunction(chunk);
+    ObjFunction *func = newFunction(chunk);
+    hideFromGC((Obj*)func);
+    frame->closure = newClosure(func);
+    unhideFromGC((Obj*)func);
+    frame->isCCall = false;
+    frame->nativeFunc = NULL;
 
     InterpretResult result = run();
     return result;

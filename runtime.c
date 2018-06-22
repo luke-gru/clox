@@ -42,7 +42,7 @@ static void freeInternalAry(Obj *internalObj) {
 Value lxArrayInit(int argCount, Value *args) {
     CHECK_ARGS("Array#init", 1, -1, argCount);
     Value self = *args;
-    ASSERT(IS_ARRAY(self));
+    ASSERT(IS_AN_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = newInternalObject(NULL, markInternalAry, freeInternalAry);
     ValueArray *ary = ALLOCATE(ValueArray, 1);
@@ -70,7 +70,7 @@ Value lxArrayPush(int argCount, Value *args) {
 Value lxArrayToString(int argCount, Value *args) {
     CHECK_ARGS("Array#toString", 1, 1, argCount);
     Value self = *args;
-    ASSERT(IS_ARRAY(self));
+    ASSERT(IS_AN_ARRAY(self));
     Obj* selfObj = AS_OBJ(self);
     ObjString *ret = newStackString("[", 1);
     ValueArray *ary = ARRAY_GETHIDDEN(self);
@@ -99,7 +99,7 @@ Value lxArrayToString(int argCount, Value *args) {
 Value lxArrayIndexGet(int argCount, Value *args) {
     CHECK_ARGS("Array#[]", 2, 2, argCount);
     Value self = args[0];
-    ASSERT(IS_ARRAY(self));
+    ASSERT(IS_AN_ARRAY(self));
     Value num = args[1];
     CHECK_ARG_TYPE(num, VAL_T_NUMBER, 1);
     ValueArray *ary = ARRAY_GETHIDDEN(self);
@@ -119,7 +119,7 @@ Value lxArrayIndexGet(int argCount, Value *args) {
 Value lxArrayIndexSet(int argCount, Value *args) {
     CHECK_ARGS("Array#[]=", 3, 3, argCount);
     Value self = args[0];
-    ASSERT(IS_ARRAY(self));
+    ASSERT(IS_AN_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     Value num = args[1];
     Value rval = args[2];
@@ -166,7 +166,7 @@ static void freeInternalMap(Obj *internalObj) {
 Value lxMapInit(int argCount, Value *args) {
     CHECK_ARGS("Map#init", 1, -1, argCount);
     Value self = args[0];
-    ASSERT(IS_MAP(self));
+    ASSERT(IS_A_MAP(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalMap = newInternalObject(
         NULL, markInternalMap, freeInternalMap
@@ -184,18 +184,13 @@ Value lxMapInit(int argCount, Value *args) {
     if (argCount == 2) {
         Value ary = args[1];
         CHECK_ARG_OBJ_TYPE(ary, lxAryClass, 1);
-        ObjInstance *aryInst = AS_INSTANCE(ary);
-        Value internalAry;
-        ASSERT(tableGet(&aryInst->hiddenFields,
-            OBJ_VAL(copyString("ary", 3)),
-            &internalAry));
-        ValueArray *aryInt = (ValueArray*)internalGetData(AS_INTERNAL(internalAry));
+        ValueArray *aryInt = ARRAY_GETHIDDEN(ary);
         for (int i = 0; i < aryInt->count; i++) {
             Value el = aryInt->values[i];
-            ASSERT(IS_ARRAY(el));
+            // FIXME: throw error
+            ASSERT(IS_AN_ARRAY(el));
             if (ARRAY_SIZE(el) != 2) {
                 fprintf(stderr, "Wrong array size given, expected 2");
-                // TODO: throw error
                 ASSERT(0);
             }
             Value mapKey = ARRAY_GET(el, 0);
@@ -203,15 +198,50 @@ Value lxMapInit(int argCount, Value *args) {
             ASSERT(tableSet(map, mapKey, mapVal));
         }
     } else {
-        ASSERT(0);
+        throwArgErrorFmt("Expected 1 argument, got %d", argCount-1);
     }
     return self;
+}
+
+Value lxMapToString(int argCount, Value *args) {
+    CHECK_ARGS("Map#toString", 1, 1, argCount);
+    Value self = args[0];
+    Obj *selfObj = AS_OBJ(self);
+    ASSERT(IS_A_MAP(self));
+    ObjString *ret = newStackString("{", 1);
+    Table *map = MAP_GETHIDDEN(self);
+    Entry e; int idx = 0;
+    int sz = map->count; int i = 0;
+    TABLE_FOREACH(map, e, idx) {
+        if (IS_OBJ(e.key) && AS_OBJ(e.key) == selfObj) {
+            pushCString(ret, "{...}", 5);
+        } else {
+            ObjString *keyS = valueToString(e.key, newStackString);
+            pushCString(ret, keyS->chars, strlen(keyS->chars));
+        }
+        pushCString(ret, " => ", 4);
+        if (IS_OBJ(e.value) && AS_OBJ(e.value) == selfObj) {
+            pushCString(ret, "{...}", 5);
+        } else {
+            ObjString *valS = valueToString(e.value, newStackString);
+            pushCString(ret, valS->chars, strlen(valS->chars));
+        }
+
+        if (i < (sz-1)) {
+            pushCString(ret, ", ", 2);
+        }
+        i++;
+    }
+
+    pushCString(ret, "}", 1);
+
+    return OBJ_VAL(ret);
 }
 
 Value lxMapIndexGet(int argCount, Value *args) {
     CHECK_ARGS("Map#indexGet", 2, 2, argCount);
     Value self = args[0];
-    ASSERT(IS_MAP(self));
+    ASSERT(IS_A_MAP(self));
     Table *map = MAP_GETHIDDEN(self);
     Value key = args[1];
     Value found;
@@ -223,9 +253,9 @@ Value lxMapIndexGet(int argCount, Value *args) {
 }
 
 Value lxMapIndexSet(int argCount, Value *args) {
-    CHECK_ARGS("Map#indexGet", 3, 3, argCount);
+    CHECK_ARGS("Map#indexSet", 3, 3, argCount);
     Value self = args[0];
-    ASSERT(IS_MAP(self));
+    ASSERT(IS_A_MAP(self));
     Table *map = MAP_GETHIDDEN(self);
     Value key = args[1];
     Value val = args[2];
@@ -236,10 +266,9 @@ Value lxMapIndexSet(int argCount, Value *args) {
 Value lxMapKeys(int argCount, Value *args) {
     CHECK_ARGS("Map#keys", 1, 1, argCount);
     Value self = args[0];
-    ASSERT(IS_MAP(self));
+    ASSERT(IS_A_MAP(self));
     Table *map = MAP_GETHIDDEN(self);
     Entry entry; int i = 0;
-    fprintf(stderr, "entry count: %d\n", map->count);
     Value ary = newArray();
     TABLE_FOREACH(map, entry, i) {
         arrayPush(ary, entry.key);
@@ -250,15 +279,28 @@ Value lxMapKeys(int argCount, Value *args) {
 Value lxMapValues(int argCount, Value *args) {
     CHECK_ARGS("Map#values", 1, 1, argCount);
     Value self = args[0];
-    ASSERT(IS_MAP(self));
+    ASSERT(IS_A_MAP(self));
     Table *map = MAP_GETHIDDEN(self);
     Entry entry; int i = 0;
-    fprintf(stderr, "entry count: %d\n", map->count);
     Value ary = newArray();
     TABLE_FOREACH(map, entry, i) {
         arrayPush(ary, entry.value);
     }
     return ary;
+}
+
+Value lxErrInit(int argCount, Value *args) {
+    CHECK_ARGS("Error#init", 1, 2, argCount);
+    Value self = args[0];
+    ASSERT(IS_AN_ERROR(self));
+    Value msg;
+    if (argCount == 2) {
+        msg = args[1];
+    } else {
+        msg = NIL_VAL;
+    }
+    setProp(self, copyString("message", 7), msg);
+    return self;
 }
 
 bool runtimeCheckArgs(int min, int max, int actual) {

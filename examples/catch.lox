@@ -1,0 +1,7 @@
+try {
+  var e = Map(1, 2, 3, 4);
+} catch (Error e) {
+  print "==CAUGHT==";
+  print e.message;
+  print "==/CAUGHT==";
+}

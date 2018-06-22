@@ -3,6 +3,7 @@
 #include "vm.h"
 #include "debug.h"
 #include "memory.h"
+#include "object.h"
 
 static InterpretResult interp(char *src, bool expectSuccess) {
     CompileErr cerr = COMPILE_ERR_NONE;
@@ -487,7 +488,7 @@ static int test_array_literal() {
     interp(src, true);
     Value *val = getLastValue();
     ASSERT(val);
-    T_ASSERT(IS_ARRAY(*val));
+    T_ASSERT(IS_T_ARRAY(*val));
     char *output = buf->chars;
     ASSERT(buf->chars);
     char *expected = "[1.00,2.00,3.00]\n";
@@ -546,6 +547,84 @@ cleanup:
     return 0;
 }
 
+static int test_print_map(void) {
+    char *src = "var m = Map();\n"
+                "print m;";
+    ObjString *buf = newString("", 0);
+    setPrintBuf(buf);
+    interp(src, true);
+    ASSERT(buf->chars);
+    const char *expected = "{}\n";
+    T_ASSERT_STREQ(expected, buf->chars);
+
+    clearObjString(buf);
+
+    src =  "var m = Map(); m[1] = 2; m[2] = 4; print m;";
+    interp(src, true);
+    ASSERT(buf->chars);
+    expected = "{1.00 => 2.00, 2.00 => 4.00}\n";
+    T_ASSERT_STREQ(expected, buf->chars);
+cleanup:
+    unsetPrintBuf();
+    freeVM();
+    return 0;
+}
+
+static int test_closures_global_scope(void) {
+    char *src = "var i = 0;\n"
+                "fun incr() { i = i + 1; print i; }\n"
+                "print i;\n"
+                "incr(); incr();\n"
+                "print i + 1;";
+    ObjString *buf = newString("", 0);
+    setPrintBuf(buf);
+    interp(src, true);
+    const char *expected = "0.00\n1.00\n2.00\n3.00\n";
+    T_ASSERT_STREQ(expected, buf->chars);
+cleanup:
+    unsetPrintBuf();
+    freeVM();
+    return 0;
+}
+
+static int test_closures_env_saved(void) {
+    char *src = "var i = 10;\n"
+                "fun adder(a) { return fun(b) { return a+b; }; }\n"
+                "var add10 = adder(i);\n"
+                "print add10(20);\n"
+                "print add10(40);\n";
+    ObjString *buf = newString("", 0);
+    setPrintBuf(buf);
+    interp(src, true);
+    const char *expected = "30.00\n50.00\n";
+    T_ASSERT_STREQ(expected, buf->chars);
+    T_ASSERT_EQ(0, VMNumStackFrames());
+    T_ASSERT_EQ(NULL, vm.openUpvalues);
+cleanup:
+    unsetPrintBuf();
+    freeVM();
+    return 0;
+}
+
+static int test_throw_catch_errors_from_c_code(void) {
+    char *src = "try {\n"
+                "  var m = Map(1, 2, 3, 4, 5);\n" // invalid constructor call
+                "} catch (Error e) {\n"
+                "  print \"caught\";\n"
+                "}";
+    ObjString *buf = newString("", 0);
+    setPrintBuf(buf);
+    interp(src, true);
+    const char *expected = "caught\n";
+    T_ASSERT_STREQ(expected, buf->chars);
+    fprintf(stderr, "num stack frames: %d\n", VMNumStackFrames());
+    printVMStack(stderr);
+cleanup:
+    unsetPrintBuf();
+    freeVM();
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     INIT_TESTS();
@@ -583,5 +662,9 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_while_loop_stack);
     RUN_TEST(test_array_get_set);
     RUN_TEST(test_print_nested_array);
+    RUN_TEST(test_print_map);
+    RUN_TEST(test_closures_global_scope);
+    RUN_TEST(test_closures_env_saved);
+    RUN_TEST(test_throw_catch_errors_from_c_code);
     END_TESTS();
 }

@@ -37,8 +37,8 @@ static int test_compile_global_variable(void) {
     /*fprintf(stderr, "\n'%s'\n", cstring);*/
     char *expected = "0000\t" "OP_NIL\n"
                      "0001\t" "OP_DEFINE_GLOBAL\t" "0000\t" "'a'\n"
-                     "0003\t" "OP_CONSTANT\t"      "0002\t" "'1.00'\n"
-                     "0005\t" "OP_SET_GLOBAL\t"    "0001\t" "'a'\n"
+                     "0003\t" "OP_CONSTANT\t"      "0001\t" "'1.00'\n"
+                     "0005\t" "OP_SET_GLOBAL\t"    "0002\t" "'a'\n"
                      "0007\t" "OP_POP\n"
                      "0008\t" "OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
@@ -76,12 +76,11 @@ static int test_compile_classdecl(void) {
     initChunk(&chunk);
     int result = compile_src(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
-    printDisassembledChunk(&chunk, "TESTING");
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
     /*fprintf(stderr, "\n'%s'\n", cstring);*/
     char *expected = "0000\t" "OP_CLASS\t"          "0000\t"    "'Train'\n"
-                     "0002\t" "OP_CONSTANT\t"       "0001\t"    "'<fun Train.choo>'\n"
+                     "0002\t" "OP_CLOSURE\t"        "0001\t"    "'<fun Train.choo>'\t" "(upvals: 000)\n"
                      "0004\t" "OP_METHOD\t"         "0002\t"    "'choo'\n"
                      "0006\t" "OP_DEFINE_GLOBAL\t"  "0000\t"    "'Train'\n"
                      "0008\t" "OP_LEAVE\n"
@@ -181,7 +180,7 @@ static int test_compile_try_stmt_with_catch2(void) {
                     "0027\t" "OP_PRINT\n"
                     "0028\t" "OP_JUMP\t"	          "0012\t"	  "(addr=0041)\n"
                     "0030\t" "OP_POP\n"
-                    "0031\t" "OP_GET_THROWN\t"	    "0007\t"	"'1.00'\n"
+                    "0031\t" "OP_GET_THROWN\t"	    "0006\t"	"'1.00'\n"
                     "0033\t" "OP_SET_LOCAL\t"	      "[slot 001]\n"
                     "0035\t" "OP_GET_LOCAL\t"	      "[slot 001]\n"
                     "0037\t" "OP_PRINT\n"
@@ -216,10 +215,10 @@ int test_pop_assign_if_parent_stmt(void) {
 "0009\t"	"OP_JUMP_IF_FALSE\t"	"0014\t"	"(addr=0024)\n"
 "0011\t"	"OP_GET_GLOBAL\t"	"0004\t"	"'i'\n"
 "0013\t"	"OP_PRINT\n"
-"0014\t"	"OP_GET_GLOBAL\t"	"0006\t"	"'i'\n"
-"0016\t"	"OP_CONSTANT\t"	"0007\t"	"'1.00'\n"
+"0014\t"	"OP_GET_GLOBAL\t"	"0005\t"	"'i'\n"
+"0016\t"	"OP_CONSTANT\t"	"0006\t"	"'1.00'\n"
 "0018\t"	"OP_ADD\n"
-"0019\t"	"OP_SET_GLOBAL\t"	"0005\t"	"'i'\n"
+"0019\t"	"OP_SET_GLOBAL\t"	"0007\t"	"'i'\n"
 "0021\t"	"OP_POP\n"
 "0022\t"	"OP_LOOP\t"	  "  18\t"	"(addr=0004)\n"
 "0024\t"	"OP_LEAVE\n";
@@ -239,13 +238,46 @@ int test_spam_return(void) {
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
-    fprintf(stderr, "\n'%s'\n", cstring);
-    char *expected = "0000\t"	"OP_CONSTANT\t"	"0000\t"	"'<fun ret>'\n"
+    /*fprintf(stderr, "\n'%s'\n", cstring);*/
+    char *expected = "0000\t"	"OP_CLOSURE\t"	"0000\t"	"'<fun ret>'\t" "(upvals: 000)\n"
                      "0002\t"	"OP_DEFINE_GLOBAL\t"	"0001\t"	"'ret'\n"
                      "0004\t"	"OP_LEAVE\n"
                      "-- Function ret --\n"
                      "0000\t"	"OP_CONSTANT\t"	"0000\t"	"'HI'\n"
                      "0002\t"	"OP_RETURN\n"
+                     "----\n";
+    T_ASSERT_STREQ(expected, cstring);
+cleanup:
+    return 0;
+}
+
+int test_upvalues_in_functions(void) {
+    char *src = "var a = 1; fun add(b) { return fun(c) {  return a + b + c; }; }";
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int result = compile_src(src, &chunk, &err);
+    T_ASSERT_EQ(0, result);
+    ObjString *string = disassembleChunk(&chunk);
+    char *cstring = string->chars;
+    fprintf(stderr, "\n'%s'\n", cstring);
+    char *expected = "0000\t"	"OP_CONSTANT\t"       "0001\t"	"'1.00'\n"
+                     "0002\t"	"OP_DEFINE_GLOBAL\t"	"0000\t"	"'a'\n"
+                     "0004\t"	"OP_CLOSURE\t"	      "0002\t"	"'<fun add>'\t"	"(upvals: 000)\n"
+                     "0006\t"	"OP_DEFINE_GLOBAL\t"	"0003\t"	"'add'\n"
+                     "0008\t"	"OP_LEAVE\n"
+                     "-- Function add --\n"
+                     "0000\t"	"OP_CLOSURE\t"	      "0000\t"	  "'<fun (Anon)>'\t"	"(upvals: 001)\n"
+                     "0004\t"	"OP_RETURN\n"
+                     "-- Function (anon) --\n"
+                     "0000\t"	"OP_GET_GLOBAL\t"	    "0000\t"	"'a'\n"
+                     "0002\t"	"OP_GET_UPVALUE\t"	  "[slot 000]\n"
+                     "0004\t"	"OP_ADD\n"
+                     "0005\t"	"OP_GET_LOCAL\t"  	  "[slot 001]\n"
+                     "0007\t"	"OP_ADD\n"
+                     "0008\t"	"OP_RETURN\n"
+                     "0009\t"	"OP_POP\n"
+                     "----\n"
                      "----\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
@@ -264,5 +296,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_compile_try_stmt_with_catch2);
     RUN_TEST(test_pop_assign_if_parent_stmt);
     RUN_TEST(test_spam_return);
+    RUN_TEST(test_upvalues_in_functions);
     END_TESTS();
 }
