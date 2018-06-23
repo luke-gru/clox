@@ -64,7 +64,9 @@ typedef struct Compiler {
   bool hadError;
   bool emittedReturn; // has emitted at least 1 return for this function so far
   vec_int_t emittedReturnDepths;
-  Iseq iseq;
+
+  Iseq iseq; // Generated instructions for the function
+  Table constTbl;
 } Compiler;
 
 
@@ -472,21 +474,34 @@ static ObjFunction *endCompiler() {
     vec_deinit(&current->emittedReturnDepths);
     ObjFunction *func = current->function;
     copyIseqToChunk(currentIseq(), currentChunk());
+    freeTable(&current->constTbl);
+
     current = current->enclosing;
     COMP_TRACE("/endCompiler");
     return func;
 }
 
-// Adds a constant to the current chunk's constant pool and returns an index
-// to it.
+// Adds a constant to the current instruction sequence's constant pool
+// and returns an index to it.
 static uint8_t makeConstant(Value value) {
-  int constant = iseqAddConstant(currentIseq(), value);
-  if (constant > UINT8_MAX) {
-    error("Too many constants in one chunk.");
-    return 0;
-  }
-
-  return (uint8_t)constant;
+    Value existingIdx;
+    bool canMemoize = IS_STRING(value);
+    if (canMemoize) {
+        if (tableGet(&current->constTbl, value, &existingIdx)) {
+            return (uint8_t)AS_NUMBER(existingIdx);
+        }
+    }
+    int constant = iseqAddConstant(currentIseq(), value);
+    if (constant > UINT8_MAX) {
+        error("Too many constants in one chunk.");
+        return 0;
+    }
+    if (canMemoize) {
+        ASSERT(
+            tableSet(&current->constTbl, value, NUMBER_VAL(constant))
+        );
+    }
+    return (uint8_t)constant;
 }
 
 // Add constant to constant pool from the token's lexeme, return index to it
@@ -616,6 +631,7 @@ static void initCompiler(
     compiler->hadError = false;
     compiler->emittedReturn = false;
     vec_init(&compiler->emittedReturnDepths);
+    initTable(&compiler->constTbl);
 
     current = compiler;
 
