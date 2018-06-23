@@ -18,7 +18,7 @@
 #include "vm.h"
 
 #ifdef NDEBUG
-#define COMP_TRACE(...)
+#define COMP_TRACE(...) (void(0))
 #else
 #define COMP_TRACE(...) compiler_trace_debug(__VA_ARGS__)
 #endif
@@ -827,9 +827,9 @@ static void emitNode(Node *n) {
             error("too many arguments given to function (%d), maximum 8", nArgs);
             return;
         }
-        emitNode(vec_first(n->children));
         Node *arg = NULL;
         int i = 0;
+        emitNode(vec_first(n->children));
         vec_foreach(n->children, arg, i) {
             if (i == 0) continue; // callable expr is pushed last
             emitNode(arg);

@@ -51,12 +51,17 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
         printNumber(file, AS_NUMBER(value));
         return;
     } else if (IS_OBJ(value)) {
-        if (OBJ_TYPE(value) == OBJ_T_STRING) {
+        if (IS_STRING(value)) {
             char *cstring = AS_CSTRING(value);
             fprintf(file, "%s", cstring ? cstring : "(NULL)");
             return;
-        } else if (OBJ_TYPE(value) == OBJ_T_FUNCTION) {
-            ObjFunction *func = AS_FUNCTION(value);
+        } else if (IS_FUNCTION(value) || IS_CLOSURE(value)) {
+            ObjFunction *func = NULL;
+            if (IS_FUNCTION(value)) {
+                func = AS_FUNCTION(value);
+            } else {
+                func = AS_CLOSURE(value)->function;
+            }
             if (func->name == NULL) {
                 fprintf(file, "%s", "<fun (Anon)>");
             } else {
@@ -94,8 +99,8 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
         } else if (OBJ_TYPE(value) == OBJ_T_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
             ObjString *name;
-            if (bmethod->callable->type == OBJ_T_FUNCTION) {
-                ObjFunction *func = (ObjFunction*)bmethod->callable;
+            if (bmethod->callable->type == OBJ_T_CLOSURE) {
+                ObjFunction *func = ((ObjClosure*)bmethod->callable)->function;
                 name = func->name;
             } else if (bmethod->callable->type == OBJ_T_NATIVE_FUNCTION) {
                 ObjNative *func = (ObjNative*)bmethod->callable;
@@ -146,8 +151,13 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             char *cstring = AS_CSTRING(value);
             ASSERT(cstring);
             ret = stringConstructor(cstring, strlen(cstring));
-        } else if (OBJ_TYPE(value) == OBJ_T_FUNCTION) {
-            ObjFunction *func = AS_FUNCTION(value);
+        } else if (IS_FUNCTION(value) || IS_CLOSURE(value)) {
+            ObjFunction *func = NULL;
+            if (IS_FUNCTION(value)) {
+                func = AS_FUNCTION(value);
+            } else {
+                func = AS_CLOSURE(value)->function;
+            }
             if (func->name == NULL) {
                 const char *anon = "<fun (Anon)>";
                 ret = stringConstructor(anon, strlen(anon));

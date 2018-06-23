@@ -8,6 +8,7 @@ char *boolOptNames[] = {
     "debugParser",
     "traceParserCalls",
     "traceVMExecution",
+    "debugVM",
     "debugTokens",
     "debugBytecode",
     "traceGC",
@@ -24,6 +25,7 @@ void initOptions(void) {
     options.debugParser = false;
     options.debugTokens = false;
     options.debugBytecode = false;
+    options.debugVM = false;
 
     options.traceParserCalls = false;
     options.traceVMExecution = false;
@@ -67,10 +69,6 @@ static void enableAllTraceOptions(void) {
 // idx by in the caller's code.
 int parseOption(char **argv, int i) {
     initOptions();
-    if (strcmp(argv[i], "-DDEBUG_PARSER") == 0) {
-        SET_OPTION(debugParser, true);
-        return 1;
-    }
     if (strcmp(argv[i], "-DTRACE_PARSER_CALLS") == 0) {
         SET_OPTION(traceParserCalls, true);
         return 1;
@@ -91,20 +89,28 @@ int parseOption(char **argv, int i) {
         enableAllTraceOptions();
         return 1;
     }
+    if (strcmp(argv[i], "--debug-tokens") == 0) {
+        SET_OPTION(debugTokens, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--debug-parser") == 0) {
+        SET_OPTION(debugParser, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--debug-bytecode") == 0) {
+        SET_OPTION(debugBytecode, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--debug-VM") == 0) {
+        SET_OPTION(debugVM, true);
+        return 1;
+    }
     if (strcmp(argv[i], "--compile-only") == 0) {
         SET_OPTION(compileOnly, true);
         return 1;
     }
     if (strcmp(argv[i], "--parse-only") == 0) {
         SET_OPTION(parseOnly, true);
-        return 1;
-    }
-    if (strcmp(argv[i], "--debug-tokens") == 0) {
-        SET_OPTION(debugTokens, true);
-        return 1;
-    }
-    if (strcmp(argv[i], "--debug-bytecode") == 0) {
-        SET_OPTION(debugBytecode, true);
         return 1;
     }
     return 0;

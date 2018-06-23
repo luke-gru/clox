@@ -171,6 +171,7 @@ void objFreeze(Obj*);
 // NOTE: don't call pushCString on a string value that's a key to a map! The
 // hash value changes and the map won't be able to index it anymore.
 void pushCString(ObjString *string, char *chars, int lenToAdd);
+void pushCStringFmt(ObjString *string, const char *format, ...);
 uint32_t hashString(char *key, int length);
 
 Value       arrayGet(Value aryVal, int idx);

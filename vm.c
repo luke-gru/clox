@@ -9,6 +9,22 @@
 
 VM vm;
 
+#ifndef NDEBUG
+#define VM_DEBUG(...) vm_debug(__VA_ARGS__)
+#else
+#define VM_DEBUG(...) (void(0))
+#endif
+
+static void vm_debug(const char *format, ...) {
+    if (!CLOX_OPTION_T(debugVM)) return;
+    va_list ap;
+    va_start(ap, format);
+    fprintf(stderr, "[VM]: ");
+    vfprintf(stderr, format, ap);
+    va_end(ap);
+    fprintf(stderr, "\n");
+}
+
 char *unredefinableGlobals[] = {
     "Object",
     "Array",
@@ -115,6 +131,12 @@ void defineNativeClasses() {
     lxArgErrClass = argErrClass;
 }
 
+
+static jmp_buf CCallJumpBuf;
+static bool inCCall = false;
+static bool cCallThrew = false;
+static bool returnedFromNativeErr = false;
+
 void resetStack() {
     vm.stackTop = vm.stack;
     vm.frameCount = 0;
@@ -142,6 +164,12 @@ void initVM() {
     defineNativeClasses();
     vec_init(&vm.hiddenObjs);
     vec_init(&vm.stackObjects);
+
+    inCCall = false;
+    cCallThrew = false;
+    returnedFromNativeErr = false;
+    memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
+
     turnGCOn();
     vm.inited = true;
 }
@@ -158,6 +186,12 @@ void freeVM() {
     vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
     vec_deinit(&vm.stackObjects);
+
+    inCCall = false;
+    cCallThrew = false;
+    returnedFromNativeErr = false;
+    memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
+
     freeObjects();
     vm.inited = false;
 }
@@ -166,12 +200,15 @@ int VMNumStackFrames() {
     return vm.stackTop - vm.stack;
 }
 
+#define ASSERT_VALID_STACK(...) ASSERT(vm.stackTop >= vm.stack)
+
 static bool isOpStackEmpty() {
-    return vm.stackTop <= vm.stack;
+    ASSERT_VALID_STACK();
+    return vm.stackTop == vm.stack;
 }
 
 void push(Value value) {
-    ASSERT(vm.stackTop >= vm.stack);
+    ASSERT_VALID_STACK();
     if (IS_OBJ(value)) {
         ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
     }
@@ -251,11 +288,6 @@ static Chunk *currentChunk() {
     return &getFrame()->closure->function->chunk;
 }
 
-static jmp_buf CCallJumpBuf;
-static bool inCCall = false;
-static bool cCallThrew = false;
-
-// TODO: throw lox error using setjmp/jmpbuf to allow catches
 void runtimeError(const char* format, ...) {
     va_list args;
     va_start(args, format);
@@ -265,19 +297,79 @@ void runtimeError(const char* format, ...) {
 
     for (int i = vm.frameCount - 1; i >= 0; i--) {
         CallFrame *frame = &vm.frames[i];
-        ObjFunction *function = frame->closure->function;
-        // -1 because the IP is sitting on the next instruction to be executed.
-        size_t instruction = frame->ip - function->chunk.code - 1;
-        fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
-        if (function->name == NULL) {
-            fprintf(stderr, "script\n");
+        if (frame->isCCall) {
+            ObjNative *nativeFunc = frame->nativeFunc;
+            ASSERT(nativeFunc);
+            fprintf(stderr, "in native function %s()\n", nativeFunc->name->chars);
         } else {
-            fprintf(stderr, "%s()\n", function->name->chars);
+            ObjFunction *function = frame->closure->function;
+            // -1 because the IP is sitting on the next instruction to be executed.
+            size_t instruction = frame->ip - function->chunk.code - 1;
+            fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
+            if (function->name == NULL) {
+                fprintf(stderr, "script\n"); // top-level
+            } else {
+                char *fnName = function->name ? function->name->chars : "(anon)";
+                fprintf(stderr, "%s()\n", fnName);
+            }
         }
     }
 
     vm.hadError = true;
     resetStack();
+}
+
+void showUncaughtError(Value err) {
+    char *className = AS_INSTANCE(err)->klass->name->chars;
+    Value msg = getProp(err, copyString("message", 7));
+    char *msgStr = NULL;
+    if (!IS_NIL(msg)) {
+        msgStr = AS_CSTRING(msg);
+    }
+    Value bt = getProp(err, copyString("backtrace", 9));
+    ASSERT(!IS_NIL(bt));
+    int btSz = ARRAY_SIZE(bt);
+    fprintf(stderr, "Uncaught Error, class: '%s'\n", className);
+    if (msgStr) {
+        fprintf(stderr, "Message: '%s'\n", msgStr);
+    } else {
+        fprintf(stderr, "Message: none\n");
+    }
+    fprintf(stderr, "Backtrace:\n");
+    for (int i = 0; i < btSz; i++) {
+        fprintf(stderr, "%s", AS_CSTRING(ARRAY_GET(bt, i)));
+    }
+
+    vm.hadError = true;
+    resetStack();
+}
+
+// every new error value, when thrown, gets its backtrace set first
+void setBacktrace(Value err) {
+    /*ASSERT(IS_AN_ERROR(err));*/
+    Value ret = newArray();
+    setProp(err, copyString("backtrace", 9), ret);
+    for (int i = vm.frameCount - 1; i >= 0; i--) {
+        CallFrame *frame = &vm.frames[i];
+        ObjString *out = hiddenString("", 0);
+        if (frame->isCCall) {
+            ObjNative *nativeFunc = frame->nativeFunc;
+            pushCStringFmt(out, "native function %s()\n",
+                nativeFunc->name->chars);
+        } else {
+            ObjFunction *function = frame->closure->function;
+            size_t instruction = frame->ip - function->chunk.code - 1;
+            pushCStringFmt(out, "[line %03d] in ", function->chunk.lines[instruction]);
+            if (function->name == NULL) {
+                pushCString(out, "script\n", 7); // top-level
+            } else {
+                char *fnName = function->name ? function->name->chars : "(anon)";
+                pushCStringFmt(out, "%s()\n", fnName);
+            }
+        }
+        arrayPush(ret, OBJ_VAL(out));
+        unhideFromGC((Obj*)out);
+    }
 }
 
 static bool isCallable(Value val) {
@@ -311,7 +403,7 @@ static void defineMethod(ObjString *name) {
     ASSERT(IS_CLOSURE(method));
     ASSERT(IS_CLASS(peek(1)));
     ObjClass *klass = AS_CLASS(peek(1));
-    /*fprintf(stderr, "defining method '%s' (%d)\n", name->chars, (int)strlen(name->chars));*/
+    VM_DEBUG("defining method '%s'", name->chars);
     ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
     pop();
 }
@@ -319,6 +411,7 @@ static void defineMethod(ObjString *name) {
 // Call method on instance, args are NOT expected to be pushed on to stack by
 // caller. `argCount` does not include the implicit instance argument.
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
+    VM_DEBUG("Calling VM method");
     push(OBJ_VAL(instance));
     for (int i = 0; i < argCount; i++) {
         ASSERT(args);
@@ -333,48 +426,79 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
         }
         pop(); // pop instance
         push(ret);
+        VM_DEBUG("/Calling VM method");
         return ret;
     } else {
         Value ret = pop();
         pop(); // pop instance
         push(ret);
+        VM_DEBUG("/Calling VM method");
         return ret;
     }
 }
 
-// sets up VM/C call jumpbuf
-static Value *captureNativeError() {
-    if (inCCall && cCallThrew) {
-        inCCall = false;
-        cCallThrew = false;
-        return &vm.lastErrorThrown;
-    } else if (!inCCall) {
+static void pushNativeFrame(ObjNative *native) {
+    ASSERT(native);
+    VM_DEBUG("Pushing native callframe for %s", native->name->chars);
+    if (vm.frameCount == FRAMES_MAX) {
+        runtimeError("Stack overflow.");
+        return;
+    }
+    CallFrame *prevFrame = getFrame();
+    CallFrame *newFrame = &vm.frames[vm.frameCount++];
+    newFrame->closure = prevFrame->closure;
+    newFrame->ip = prevFrame->ip;
+    newFrame->start = 0;
+    newFrame->slots = prevFrame->slots;
+    newFrame->isCCall = true;
+    newFrame->nativeFunc = native;
+    inCCall = true;
+}
+
+static void popFrame() {
+    ASSERT(vm.frameCount >= 1);
+    VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
+    vm.frameCount--;
+    inCCall = getFrame()->isCCall;
+    ASSERT_VALID_STACK();
+}
+
+
+// sets up VM/C call jumpbuf if not set
+static void captureNativeError(void) {
+    if (!inCCall) {
         int jumpRes = setjmp(CCallJumpBuf);
-        if (jumpRes == 0) { // jump was set
-            return NULL;
-        } else { // C call jumped here from throwError()
+        if (jumpRes == 0) { // jump is set, prepared to enter C land
+            return;
+        } else { // C call longjmped here from throwError()
+            ASSERT(getFrame()->isCCall);
             ASSERT(inCCall);
             ASSERT(cCallThrew);
             inCCall = false;
             cCallThrew = false;
-            return &vm.lastErrorThrown;
+            returnedFromNativeErr = true;
         }
     }
-    return NULL;
 }
 
-// arguments are expected to be pushed on to stack by caller
+static void checkFunctionArity(ObjFunction *func, int argCount) {
+    int arity = func->arity;
+    if (argCount != arity) {
+        throwArgErrorFmt("Expected %d arguments but got %d.",
+            arity, argCount);
+    }
+}
+
+// Arguments are expected to be pushed on to stack by caller. Argcount
+// includes the instance argument, ex: a method with no arguments will have an
+// argCount of 1. If the callable is a class, this function creates the
+// new instance and puts it in the proper spot in the stack. The return value
+// pushed to the stack. The caller is responsible for popping the arguments.
 static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     ObjClosure *closure = NULL;
     Value instanceVal;
     if (IS_CLOSURE(callable)) {
         closure = AS_CLOSURE(callable);
-        int arity = closure->function->arity;
-        if (argCount != arity) {
-            runtimeError("Expected %d arguments but got %d.",
-                arity, argCount);
-            return false;
-        }
     } else if (IS_CLASS(callable)) {
         ObjClass *klass = AS_CLASS(callable);
         ObjInstance *instance = newInstance(klass);
@@ -386,16 +510,25 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         if (init) {
             initializer = OBJ_VAL(init);
             if (IS_NATIVE_FUNCTION(initializer)) {
-                Value *err;
-                if ((err = captureNativeError()) != NULL) {
-                    ASSERT(!inCCall);
-                    throwError(*err); // re-throw inside VM
+                captureNativeError();
+                VM_DEBUG("calling native initializer with %d args", argCount);
+                ObjNative *nativeInit = AS_NATIVE_FUNCTION(initializer);
+                ASSERT(nativeInit->function);
+                pushNativeFrame(nativeInit);
+                CallFrame *newFrame = getFrame();
+                nativeInit->function(argCount+1, vm.stackTop-argCount-1);
+                if (returnedFromNativeErr) {
+                    returnedFromNativeErr = false;
+                    VM_DEBUG("native initializer returned from error");
+                    vec_clear(&vm.stackObjects);
+                    while (getFrame() >= newFrame) {
+                        popFrame();
+                    }
+                    throwError(vm.lastErrorThrown); // re-throw inside VM
                     return false;
                 } else {
-                    /*fprintf(stderr, "calling native initializer with %d args\n", argCount);*/
-                    ObjNative *nativeInit = AS_NATIVE_FUNCTION(initializer);
-                    ASSERT(nativeInit->function);
-                    nativeInit->function(argCount+1, vm.stackTop-argCount-1);
+                    VM_DEBUG("native initializer returned");
+                    popFrame();
                     push(OBJ_VAL(instance));
                     return true;
                 }
@@ -403,34 +536,44 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
             ASSERT(IS_CLOSURE(initializer));
             closure = AS_CLOSURE(initializer);
         } else if (argCount > 0) {
-          runtimeError("Expected 0 arguments (default init) but got %d.", argCount);
-          return false;
+            throwArgErrorFmt("Expected 0 arguments (Object#init) but got %d.", argCount);
+            return false;
         } else {
+            push(instanceVal);
             return true; // new instance is on the top of the stack
         }
     } else if (IS_BOUND_METHOD(callable)) {
-        /*fprintf(stderr, "calling bound method with %d args\n", argCount);*/
+        VM_DEBUG("calling bound method with %d args", argCount);
         ObjBoundMethod *bmethod = AS_BOUND_METHOD(callable);
         Obj *callable = bmethod->callable; // native function or user-defined function (ObjClosure)
         instanceVal = bmethod->receiver;
         vm.stackTop[-argCount - 1] = instanceVal;
-        return callCallable(OBJ_VAL(callable), argCount, true);
+        return doCallCallable(OBJ_VAL(callable), argCount, true);
     } else if (IS_NATIVE_FUNCTION(callable)) {
-        /*fprintf(stderr, "Calling native function with %d args\n", argCount);*/
+        VM_DEBUG("Calling native function with %d args", argCount);
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
         if (isMethod) argCount++;
-        Value *err;
-        if ((err = captureNativeError()) != NULL) {
-            ASSERT(!inCCall);
-            throwError(*err); // re-throw inside VM
+        captureNativeError();
+        pushNativeFrame(native);
+        CallFrame *newFrame = getFrame();
+        Value val = native->function(argCount, vm.stackTop-argCount);
+        if (returnedFromNativeErr) {
+            VM_DEBUG("Returned from native function with error");
+            returnedFromNativeErr = false;
+            while (getFrame() >= newFrame) {
+                popFrame();
+            }
+            vec_clear(&vm.stackObjects);
+            throwError(vm.lastErrorThrown); // re-throw inside VM
             return false;
         } else {
-            Value val = native->function(argCount, vm.stackTop-argCount);
+            VM_DEBUG("Returned from native function without error");
+            popFrame();
             push(val);
-            return true;
         }
+        return true;
     } else {
-        ASSERT(0);
+        UNREACHABLE("bug");
     }
 
     if (vm.frameCount == FRAMES_MAX) {
@@ -438,15 +581,19 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         return false;
     }
 
+    // non-native function/method call
     ASSERT(closure);
+    checkFunctionArity(closure->function, argCount);
+
     int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
-    /*fprintf(stderr, "setting new call frame to start=%d\n", parentStart);*/
     // add frame
     CallFrame *frame = &vm.frames[vm.frameCount++];
     frame->closure = closure;
     frame->ip = closure->function->chunk.code;
     frame->start = parentStart;
+    frame->isCCall = false;
+    frame->nativeFunc = NULL;
 
     // +1 to include either the called function or the receiver.
     frame->slots = vm.stackTop - (argCount + 1);
@@ -482,7 +629,7 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
             currentIpOff = getFrame()->start;
             ASSERT(vm.stackTop > getFrame()->slots);
             vm.stackTop = getFrame()->slots;
-            vm.frameCount--;
+            popFrame();
             row = currentChunk()->catchTbl;
             continue;
         }
@@ -496,8 +643,6 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
                 // found target catch
                 *ipOut = currentChunk()->code + row->itarget;
                 *rowFound = row;
-                /*fprintf(stderr, "new ip offset: %d\n", currentIpOff);*/
-                /*fprintf(stderr, "found catch row\n");*/
                 return true;
             }
         }
@@ -523,13 +668,15 @@ static CatchTable *getCatchTableRow(int idx) {
 
 void throwError(Value self) {
     ASSERT(vm.inited);
-    ASSERT(IS_AN_ERROR(self));
     vm.lastErrorThrown = self;
+    if (IS_NIL(getProp(self, copyString("backtrace", 9)))) {
+        setBacktrace(self);
+    }
     if (inCCall) {
         ASSERT(!cCallThrew);
         cCallThrew = true;
         longjmp(CCallJumpBuf, 1);
-        return;
+        UNREACHABLE("after longjmp");
     }
     // error from VM
     ObjInstance *obj = AS_INSTANCE(self);
@@ -543,12 +690,7 @@ void throwError(Value self) {
         getFrame()->ip = ipNew;
         return; // frames were popped by `findThrowJumpLoc`
     } else {
-        char *errMsg = "";
-        Value errVal = getProp(vm.lastErrorThrown, copyString("message", 7));
-        if (IS_STRING(errVal)) {
-            errMsg = AS_CSTRING(errVal);
-        }
-        runtimeError("Uncaught exception: %s, message: '%s'", klass->name->chars, errMsg);
+        showUncaughtError(vm.lastErrorThrown);
     }
 }
 
@@ -661,6 +803,9 @@ static InterpretResult run(void) {
       if (vm.hadError) {
           return INTERPRET_RUNTIME_ERROR;
       }
+      if (vm.stackTop < vm.stack) {
+          ASSERT(0);
+      }
 
 #ifndef NDEBUG
     if (CLOX_OPTION_T(traceVMExecution)) {
@@ -684,6 +829,7 @@ static InterpretResult run(void) {
       case OP_NEGATE: {
         Value val = pop();
         if (!IS_NUMBER(val)) {
+            // FIXME: throw error
             runtimeError("Can only negate numbers");
             return INTERPRET_RUNTIME_ERROR;
         }
@@ -694,6 +840,7 @@ static InterpretResult run(void) {
         Value rhs = pop(); // rhs
         Value lhs = pop(); // lhs
         if (!canCmpValues(lhs, rhs)) {
+            // FIXME: throw error
             runtimeError("Can only compare numbers");
             return INTERPRET_RUNTIME_ERROR;
         }
@@ -886,22 +1033,22 @@ static InterpretResult run(void) {
       case OP_CALL: {
           uint8_t numArgs = READ_BYTE();
           Value callableVal = peek(numArgs);
-          hideFromGC(AS_OBJ(callableVal));
           if (!isCallable(callableVal)) {
               runtimeError("Tried to call uncallable object (type=%s)", typeOfVal(callableVal));
               return INTERPRET_RUNTIME_ERROR;
           }
           callCallable(callableVal, numArgs, false);
-          unhideFromGC(AS_OBJ(callableVal));
+          ASSERT_VALID_STACK();
           break;
       }
       // return from function/method
       case OP_RETURN: {
           Value result = pop();
-          vm.stackTop = getFrame()->slots;
+          ASSERT(!getFrame()->isCCall);
+          Value *newTop = getFrame()->slots;
           closeUpvalues(getFrame()->slots);
-          ASSERT(vm.frameCount > 0);
-          vm.frameCount--;
+          popFrame();
+          vm.stackTop = newTop;
           push(result);
           break;
       }
@@ -1009,19 +1156,7 @@ static InterpretResult run(void) {
               runtimeError("Tried to throw unthrowable value, must throw an instance");
               return INTERPRET_RUNTIME_ERROR;
           }
-          ObjInstance *obj = AS_INSTANCE(throwable);
-          ObjClass *klass = obj->klass;
-          uint8_t *ipNew = NULL;
-          CatchTable *catchRow = NULL;
-          if (findThrowJumpLoc(klass, &ipNew, &catchRow)) {
-              ASSERT(ipNew);
-              ASSERT(catchRow);
-              catchRow->lastThrownValue = throwable;
-              getFrame()->ip = ipNew;
-          } else {
-              runtimeError("Uncaught exception: %s", klass->name->chars);
-              return INTERPRET_RUNTIME_ERROR;
-          }
+          throwError(throwable);
           break;
       }
       case OP_GET_THROWN: {
@@ -1030,6 +1165,7 @@ static InterpretResult run(void) {
           double idx = AS_NUMBER(catchTblIdx);
           CatchTable *tblRow = getCatchTableRow((int)idx);
           if (!isThrowable(tblRow->lastThrownValue)) { // bug
+              // FIXME: throw typeerror
               fprintf(stderr, "Non-throwable found (BUG): %s\n", typeOfVal(tblRow->lastThrownValue));
           }
           ASSERT(isThrowable(tblRow->lastThrownValue));
@@ -1038,6 +1174,7 @@ static InterpretResult run(void) {
       }
       // exit interpreter
       case OP_LEAVE:
+          resetStack();
           return INTERPRET_OK;
       default:
           runtimeError("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
@@ -1054,7 +1191,7 @@ static InterpretResult run(void) {
 InterpretResult interpret(Chunk *chunk) {
     ASSERT(chunk);
     vm.frameCount = 0;
-    // initialize top-level callframe
+    // initialize top-level callframe (frameCount = 1)
     CallFrame *frame = &vm.frames[vm.frameCount++];
     frame->start = 0;
     frame->ip = chunk->code;

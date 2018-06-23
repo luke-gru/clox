@@ -374,6 +374,7 @@ static int test_get_set_arbitrary_property() {
                 "p.name;";
     interp(src, true);
     Value *val = getLastValue();
+    printValue(stderr, *val, false);
     T_ASSERT(IS_STRING(*val));
     T_ASSERT_STREQ("Gracie", AS_CSTRING(*val));
 cleanup:
@@ -606,10 +607,10 @@ cleanup:
     return 0;
 }
 
-static int test_throw_catch_errors_from_c_code(void) {
+static int test_catch_thrown_errors_from_c_code(void) {
     char *src = "try {\n"
                 "  var m = Map(1, 2, 3, 4, 5);\n" // invalid constructor call
-                "} catch (Error e) {\n"
+                "}catch (Error e) {\n"
                 "  print \"caught\";\n"
                 "}";
     ObjString *buf = newString("", 0);
@@ -617,8 +618,25 @@ static int test_throw_catch_errors_from_c_code(void) {
     interp(src, true);
     const char *expected = "caught\n";
     T_ASSERT_STREQ(expected, buf->chars);
-    fprintf(stderr, "num stack frames: %d\n", VMNumStackFrames());
-    printVMStack(stderr);
+cleanup:
+    unsetPrintBuf();
+    freeVM();
+    return 0;
+}
+
+static int test_map_keys_work_as_expected(void) {
+    char *src = "var m = Map();\n"
+                "m[10] = 10;\n"
+                "m[\"10\"] = 5;\n"
+                "m[\"10\"] = m[\"10\"]+1;\n"
+                "m[10] = 9;\n"
+                "print m[10];\n"
+                "print m[\"10\"];\n";
+    ObjString *buf = newString("", 0);
+    setPrintBuf(buf);
+    interp(src, true);
+    const char *expected = "9.00\n6.00\n";
+    T_ASSERT_STREQ(expected, buf->chars);
 cleanup:
     unsetPrintBuf();
     freeVM();
@@ -665,6 +683,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_print_map);
     RUN_TEST(test_closures_global_scope);
     RUN_TEST(test_closures_env_saved);
-    RUN_TEST(test_throw_catch_errors_from_c_code);
+    RUN_TEST(test_catch_thrown_errors_from_c_code);
+    RUN_TEST(test_map_keys_work_as_expected);
     END_TESTS();
 }

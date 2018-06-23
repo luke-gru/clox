@@ -9,11 +9,11 @@
 #include "options.h"
 
 #ifdef NDEBUG
-#define GC_TRACE_MARK(obj)
-#define GC_TRACE_FREE(obj)
-#define GC_TRACE_DEBUG(...)
-#define TRACE_GC_FUNC_START(func)
-#define TRACE_GC_FUNC_END(func)
+#define GC_TRACE_MARK(obj) (void(0))
+#define GC_TRACE_FREE(obj) (void(0))
+#define GC_TRACE_DEBUG(...) (void(0))
+#define TRACE_GC_FUNC_START(func) (void(0))
+#define TRACE_GC_FUNC_END(func)   (void(0))
 #else
 #define GC_TRACE_MARK(obj) gc_trace_mark(obj)
 #define GC_TRACE_FREE(obj) gc_trace_free(obj)
@@ -22,7 +22,7 @@
 #define TRACE_GC_FUNC_END(func) trace_gc_func_end(func);
 #endif
 
-static inline void gc_trace_mark(Obj *obj) {
+static void gc_trace_mark(Obj *obj) {
     if (!CLOX_OPTION_T(traceGC)) return;
     fprintf(stderr, "[GC]: marking object at %p, ", obj);
     fprintf(stderr, "value => ");
@@ -30,7 +30,7 @@ static inline void gc_trace_mark(Obj *obj) {
     fprintf(stderr, "\n");
 }
 
-static inline void gc_trace_free(Obj *obj) {
+static void gc_trace_free(Obj *obj) {
     if (!CLOX_OPTION_T(traceGC)) return;
     fprintf(stderr, "[GC]: freeing object at %p, ", obj);
     fprintf(stderr, "type => %s , value => ", typeOfObj(obj));
@@ -38,7 +38,7 @@ static inline void gc_trace_free(Obj *obj) {
     fprintf(stderr, "\n");
 }
 
-static inline void gc_trace_debug(const char *fmt, ...) {
+static void gc_trace_debug(const char *fmt, ...) {
     if (!CLOX_OPTION_T(traceGC)) return;
     va_list ap;
     va_start(ap, fmt);

@@ -6,8 +6,8 @@
 #include "debug.h"
 
 #ifdef NDEBUG
-#define TRACE_START(name)
-#define TRACE_END(name)
+#define TRACE_START(name) (void(0))
+#define TRACE_END(name)   (void(0))
 #else
 #define TRACE_START(name) _trace_start(name)
 #define TRACE_END(name) _trace_end(name)

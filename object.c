@@ -170,10 +170,10 @@ ObjString *internedString(char *chars, int length) {
 // NOTE: length here is strlen(chars)
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
     if (((Obj*)string)->isFrozen) {
+        // FIXME: raise FrozenObjectError
         fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
         ASSERT(0);
     }
-    /*fprintf(stderr, "pushCSTring\n");*/
     string->chars = GROW_ARRAY(string->chars, char, string->length,
             string->length+lenToAdd+1);
     int i = 0;
@@ -186,7 +186,27 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     string->length += lenToAdd;
     // TODO: avoid rehash, hash should be calculated when needed (lazily)
     string->hash = hashString(string->chars, strlen(string->chars));
-    /*fprintf(stderr, "/pushCSTring\n");*/
+}
+
+void pushCStringFmt(ObjString *string, const char *format, ...) {
+    char sbuf[201] = {'\0'};
+    va_list args;
+    va_start(args, format);
+    vsnprintf(sbuf, 200, format, args);
+    va_end(args);
+    size_t buflen = strlen(sbuf);
+    sbuf[buflen] = '\0';
+    string->chars = GROW_ARRAY(string->chars, char, string->length,
+            string->length+buflen);
+    int i = 0;
+    for (i = 0; i < buflen; i++) {
+        char *c = sbuf+i;
+        if (c == NULL) break;
+        string->chars[string->length + i] = *c;
+    }
+    string->chars[string->length + i] = '\0';
+    string->length += buflen;
+    string->hash = hashString(string->chars, strlen(string->chars));
 }
 
 void clearObjString(ObjString *string) {
@@ -420,7 +440,7 @@ bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
 
 Value newError(ObjClass *errClass, ObjString *msg) {
     ASSERT(IS_SUBCLASS(errClass, lxErrClass));
-    push(OBJ_VAL(msg));
+    push(OBJ_VAL(msg)); // argument
     callCallable(OBJ_VAL(errClass), 1, false);
     Value err = pop();
     ASSERT(IS_AN_ERROR(err));
