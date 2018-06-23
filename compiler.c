@@ -41,7 +41,7 @@ typedef struct Upvalue {
 
   // Whether the captured variable is a local or upvalue in the enclosing
   // function.
-  bool isLocal;
+  bool isLocal; // is local variable in immediately enclosing scope
 } Upvalue;
 
 struct Compiler; // fwd decl
@@ -64,6 +64,7 @@ typedef struct Compiler {
   bool hadError;
   bool emittedReturn; // has emitted at least 1 return for this function so far
   vec_int_t emittedReturnDepths;
+  Iseq iseq;
 } Compiler;
 
 
@@ -140,8 +141,47 @@ static Chunk *currentChunk() {
   return &current->function->chunk;
 }
 
-static void emitByte(uint8_t byte) {
-    writeChunk(currentChunk(), byte, curTok ? curTok->line : 0);
+static Iseq *currentIseq() {
+    return &current->iseq;
+}
+
+static Insn *emitInsn(Insn in) {
+    in.lineno = curTok ? curTok->line : 0;
+    Insn *inHeap = calloc(sizeof(in), 1);
+    memcpy(inHeap, &in, sizeof(in));
+    iseqAddInsn(currentIseq(), inHeap);
+    return inHeap;
+}
+
+static Insn *emitOp0(uint8_t code) {
+    Insn in;
+    in.code = code;
+    in.numOperands = 0;
+    return emitInsn(in);
+}
+static Insn *emitOp1(uint8_t code, uint8_t op1) {
+    Insn in;
+    in.code = code;
+    in.operands[0] = op1;
+    in.numOperands = 1;
+    return emitInsn(in);
+}
+static Insn *emitOp2(uint8_t code, uint8_t op1, uint8_t op2) {
+    Insn in;
+    in.code = code;
+    in.operands[0] = op1;
+    in.operands[1] = op2;
+    in.numOperands = 2;
+    return emitInsn(in);
+}
+static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
+    Insn in;
+    in.code = code;
+    in.operands[0] = op1;
+    in.operands[1] = op2;
+    in.operands[2] = op3;
+    in.numOperands = 3;
+    return emitInsn(in);
 }
 
 // blocks (`{}`) push new scopes
@@ -176,10 +216,10 @@ static void emitReturn(Compiler *compiler) {
     COMP_TRACE("Emitting return");
     if (compiler->type == FUN_TYPE_INIT) {
         namedVariable(syntheticToken("this"), VAR_GET);
-        emitByte(OP_RETURN);
+        emitOp0(OP_RETURN);
     } else {
-        emitByte(OP_NIL);
-        emitByte(OP_RETURN);
+        emitOp0(OP_NIL);
+        emitOp0(OP_RETURN);
     }
     compiler->emittedReturn = true;
     vec_push(&compiler->emittedReturnDepths, compiler->scopeDepth);
@@ -191,7 +231,7 @@ static void emitCloseUpvalue(void) {
         return;
     }
     COMP_TRACE("Emitting close upvalue");
-    emitByte(OP_CLOSE_UPVALUE);
+    emitOp0(OP_CLOSE_UPVALUE);
 }
 
 static void popScope(CompileScopeType stype) {
@@ -199,11 +239,12 @@ static void popScope(CompileScopeType stype) {
     while (current->localCount > 0 &&
             current->locals[current->localCount - 1].depth >= current->scopeDepth) {
         if (stype != COMPILE_SCOPE_CLASS) {
-            COMP_TRACE("popScope emitting OP_POP");
             if (current->locals[current->localCount - 1].isUpvalue) {
+                COMP_TRACE("popScope closing upvalue");
                 emitCloseUpvalue();
             } else {
-                emitByte(OP_POP); // don't pop the non-pushed implicit 'super' in class scope
+                COMP_TRACE("popScope emitting OP_POP");
+                emitOp0(OP_POP); // don't pop the non-pushed implicit 'super' in class scope
             }
         }
         current->localCount--;
@@ -214,18 +255,17 @@ static void popScope(CompileScopeType stype) {
     current->scopeDepth--;
 }
 
-static void emitBytes(uint8_t byte1, uint8_t byte2) {
-  emitByte(byte1);
-  emitByte(byte2);
+static Insn *emitBytes(uint8_t code, uint8_t op) {
+    return emitOp1(code, op);
 }
 
 static void emitNil() {
-    emitByte(OP_NIL);
+    emitOp0(OP_NIL);
 }
 
 // exit from script
 static void emitLeave() {
-    emitByte(OP_LEAVE);
+    emitOp0(OP_LEAVE);
 }
 
 // Adds an upvalue to [compiler]'s function with the given properties. Does not
@@ -312,20 +352,47 @@ static int resolveUpvalue(Compiler *compiler, Token *name) {
   return -1;
 }
 
+static void writeChunkByte(Chunk *chunk, uint8_t byte, int lineno) {
+    writeChunk(chunk, byte, lineno);
+}
+
+static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
+    ASSERT(iseq);
+    ASSERT(chunk);
+    COMP_TRACE("copyIseqToChunk (%d insns, bytecount: %d)", iseq->count, iseq->byteCount);
+    chunk->catchTbl = iseq->catchTbl;
+    chunk->constants = iseq->constants;
+    Insn *in = iseq->insns;
+    int idx = 0;
+    while (in) {
+        idx++;
+        writeChunkByte(chunk, in->code, in->lineno);
+        for (int i = 0; i < in->numOperands; i++) {
+            writeChunkByte(chunk, in->operands[i], in->lineno);
+        }
+        in = in->next;
+    }
+    COMP_TRACE("/copyIseqToChunk, idx: %d, iseq->count: %d", idx, iseq->count);
+    ASSERT(idx == iseq->count);
+}
+
 static ObjFunction *endCompiler() {
+    COMP_TRACE("endCompiler");
     if (current->type == FUN_TYPE_TOP_LEVEL) {
         emitLeave();
     }
     vec_deinit(&current->emittedReturnDepths);
     ObjFunction *func = current->function;
+    copyIseqToChunk(currentIseq(), currentChunk());
     current = current->enclosing;
+    COMP_TRACE("/endCompiler");
     return func;
 }
 
 // Adds a constant to the current chunk's constant pool and returns an index
 // to it.
 static uint8_t makeConstant(Value value) {
-  int constant = addConstant(currentChunk(), value);
+  int constant = iseqAddConstant(currentIseq(), value);
   if (constant > UINT8_MAX) {
     error("Too many constants in one chunk.");
     return 0;
@@ -355,32 +422,29 @@ static void emitChildren(Node *n) {
 }
 
 // emit a jump (forwards) instruction, returns a pointer to the byte that needs patching
-static int emitJump(OpCode jumpOp) {
-    emitByte(jumpOp);
-    // TODO: make the offset bigger than 1 byte!
-    emitByte(0); // patched later (see patchJump)
-    return currentChunk()->count-1; // index for later patch
+static Insn *emitJump(OpCode jumpOp) {
+    return emitOp1(jumpOp, currentIseq()->byteCount); // patched later
 }
 
 // patch jump forwards instruction by given offset
 // TODO: make the offset bigger than 1 byte!
-static void patchJump(int topatch, int jumpoffset) {
-    ASSERT(currentChunk()->code[topatch] == 0);
+static void patchJump(Insn *toPatch, int jumpoffset) {
+    uint8_t bytecountOld = toPatch->operands[0];
     if (jumpoffset == -1) {
-        jumpoffset = currentChunk()->count - topatch - 1;
+        jumpoffset = (currentIseq()->byteCount - bytecountOld)-2;
     }
-    currentChunk()->code[topatch] = jumpoffset;
+    ASSERT(jumpoffset > 0);
+    toPatch->operands[0] = jumpoffset;
 }
 
 // Emit a jump backwards (loop) instruction from the current code count to offset `loopStart`
 // TODO: make the offset bigger than 1 byte!
 static void emitLoop(int loopStart) {
-  emitByte(OP_LOOP);
 
-  int offset = (currentChunk()->count - loopStart + 1);
+  int offset = (currentIseq()->byteCount - loopStart)+2;
   if (offset > UINT8_MAX) error("Loop body too large.");
 
-  emitByte(offset);
+  emitOp1(OP_LOOP, offset);
 }
 
 // adds local variable to current compiler's table, returns var slot
@@ -450,11 +514,13 @@ static void initCompiler(
     Token *fTok, /* if NULL, ftype must be FUN_TYPE_TOP_LEVEL */
     Chunk *chunk /* if NULL, creates new chunk */
 ) {
+    COMP_TRACE("initCompiler");
     memset(compiler, 0, sizeof(*compiler));
     compiler->enclosing = current;
     compiler->localCount = 0;
     compiler->scopeDepth = scopeDepth;
     compiler->function = newFunction(chunk);
+    initIseq(&compiler->iseq);
     hideFromGC((Obj*)compiler->function); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = ftype;
     compiler->hadError = false;
@@ -506,6 +572,7 @@ static void initCompiler(
         local->name.start = "";
         local->name.length = 0;
     }
+    COMP_TRACE("/initCompiler");
 }
 
 // Define a declared variable
@@ -596,8 +663,8 @@ static void emitFunction(Node *n, FunctionType ftype) {
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
     for (int i = 0; i < func->upvalueCount; i++) {
-        emitByte(fCompiler.upvalues[i].isLocal ? 1 : 0);
-        emitByte(fCompiler.upvalues[i].index);
+        emitOp0(fCompiler.upvalues[i].isLocal ? 1 : 0);
+        emitOp0(fCompiler.upvalues[i].index);
     }
 
     if (ftype != FUN_TYPE_ANON) {
@@ -620,23 +687,23 @@ static void emitNode(Node *n) {
     }
     case EXPR_STMT: {
         emitChildren(n);
-        emitByte(OP_POP);
+        emitOp0(OP_POP);
         return;
     }
     case BINARY_EXPR: {
         emitChildren(n);
         if (n->tok.type == TOKEN_PLUS) {
-            emitByte(OP_ADD);
+            emitOp0(OP_ADD);
         } else if (n->tok.type == TOKEN_MINUS) {
-            emitByte(OP_SUBTRACT);
+            emitOp0(OP_SUBTRACT);
         } else if (n->tok.type == TOKEN_STAR) {
-            emitByte(OP_MULTIPLY);
+            emitOp0(OP_MULTIPLY);
         } else if (n->tok.type == TOKEN_SLASH) {
-            emitByte(OP_DIVIDE);
+            emitOp0(OP_DIVIDE);
         } else if (n->tok.type == TOKEN_LESS) {
-            emitByte(OP_LESS);
+            emitOp0(OP_LESS);
         } else if (n->tok.type == TOKEN_GREATER) {
-            emitByte(OP_GREATER);
+            emitOp0(OP_GREATER);
         } else {
             error("invalid binary expr node (token: %s)", tokStr(&n->tok));
         }
@@ -646,15 +713,15 @@ static void emitNode(Node *n) {
         if (n->tok.type == TOKEN_AND) {
             emitNode(vec_first(n->children)); // lhs
             // false and "hi"
-            int skipRhsJump = emitJump(OP_JUMP_IF_FALSE_PEEK);
+            Insn *skipRhsJump = emitJump(OP_JUMP_IF_FALSE_PEEK);
             emitNode(vec_last(n->children)); // rhs
-            emitByte(OP_AND);
+            emitOp0(OP_AND);
             patchJump(skipRhsJump, -1);
         } else if (n->tok.type == TOKEN_OR) {
             emitNode(vec_first(n->children)); // lhs
-            int skipRhsJump = emitJump(OP_JUMP_IF_TRUE_PEEK);
+            Insn *skipRhsJump = emitJump(OP_JUMP_IF_TRUE_PEEK);
             emitNode(vec_last(n->children)); // rhs
-            emitByte(OP_OR);
+            emitOp0(OP_OR);
             patchJump(skipRhsJump, -1);
         } else {
             error("invalid logical expression node (token: %s)", tokStr(&n->tok));
@@ -665,9 +732,9 @@ static void emitNode(Node *n) {
     case UNARY_EXPR: {
         emitNode(n->children->data[0]);
         if (n->tok.type == TOKEN_MINUS) {
-            emitByte(OP_NEGATE);
+            emitOp0(OP_NEGATE);
         } else if (n->tok.type == TOKEN_BANG) {
-            emitByte(OP_NOT);
+            emitOp0(OP_NOT);
         } else {
             error("invalid unary expr node (token: %s)", tokStr(&n->tok));
         }
@@ -682,11 +749,11 @@ static void emitNode(Node *n) {
             Token *name = &n->tok;
             emitConstant(OBJ_VAL(copyString(name->start+1, name->length-2)));
         } else if (n->tok.type == TOKEN_TRUE) {
-            emitByte(OP_TRUE);
+            emitOp0(OP_TRUE);
         } else if (n->tok.type == TOKEN_FALSE) {
-            emitByte(OP_FALSE);
+            emitOp0(OP_FALSE);
         } else if (n->tok.type == TOKEN_NIL) {
-            emitByte(OP_NIL);
+            emitOp0(OP_NIL);
         } else {
             error("invalid literal expr node (token: %s)", tokStr(&n->tok));
         }
@@ -695,12 +762,12 @@ static void emitNode(Node *n) {
     case ARRAY_EXPR: {
         emitChildren(n);
         emitConstant(NUMBER_VAL(n->children->length));
-        emitByte(OP_CREATE_ARRAY);
+        emitOp0(OP_CREATE_ARRAY);
         return;
     }
     case IF_STMT: {
         emitNode(n->children->data[0]); // condition
-        int ifJumpStart = emitJump(OP_JUMP_IF_FALSE);
+        Insn *ifJumpStart = emitJump(OP_JUMP_IF_FALSE);
         emitNode(n->children->data[1]); // then branch
         Node *elseNode = NULL;
         if (n->children->length > 2) {
@@ -715,9 +782,9 @@ static void emitNode(Node *n) {
         break;
     }
     case WHILE_STMT: {
-        int loopStart = currentChunk()->count + 2;
+        int loopStart = currentIseq()->byteCount + 2;
         emitNode(vec_first(n->children)); // cond
-        int whileJumpStart = emitJump(OP_JUMP_IF_FALSE);
+        Insn *whileJumpStart = emitJump(OP_JUMP_IF_FALSE);
         emitNode(n->children->data[1]); // while block
         emitLoop(loopStart);
         patchJump(whileJumpStart, -1);
@@ -725,7 +792,7 @@ static void emitNode(Node *n) {
     }
     case PRINT_STMT: {
         emitChildren(n);
-        emitByte(OP_PRINT);
+        emitOp0(OP_PRINT);
         return;
     }
     case VAR_STMT: {
@@ -805,7 +872,7 @@ static void emitNode(Node *n) {
             } else {
                 emitChildren(n);
             }
-            emitByte(OP_RETURN);
+            emitOp0(OP_RETURN);
             COMP_TRACE("Emitting explicit return (children)");
             current->emittedReturn = true;
             vec_push(&current->emittedReturnDepths, current->scopeDepth);
@@ -829,33 +896,43 @@ static void emitNode(Node *n) {
         }
         Node *arg = NULL;
         int i = 0;
-        emitNode(vec_first(n->children));
-        vec_foreach(n->children, arg, i) {
-            if (i == 0) continue; // callable expr is pushed last
-            emitNode(arg);
+        Node *lhs = vec_first(n->children);
+        if (nodeKind(lhs) == PROP_ACCESS_EXPR) {
+            emitChildren(lhs); // the instance
+            uint8_t methodNameArg = identifierConstant(&lhs->tok);
+            vec_foreach(n->children, arg, i) {
+                if (i == 0) continue;
+                emitNode(arg);
+            }
+            emitOp2(OP_INVOKE, methodNameArg, (uint8_t)nArgs);
+        } else {
+            emitNode(lhs);
+            vec_foreach(n->children, arg, i) {
+                if (i == 0) continue;
+                emitNode(arg);
+            }
+            emitOp1(OP_CALL, (uint8_t)nArgs);
         }
-        emitByte(OP_CALL);
-        emitByte((uint8_t)nArgs);
         break;
     }
     case TRY_STMT: {
-        Chunk *chunk = currentChunk();
-        vec_int_t vjumps;
+        Iseq *iseq = currentIseq();
+        vec_void_t vjumps;
         vec_init(&vjumps);
-        int ifrom = chunk->count;
+        int ifrom = iseq->byteCount;
         emitNode(n->children->data[0]); // try block
-        int jumpToEnd = emitJump(OP_JUMP);
+        Insn *jumpToEnd = emitJump(OP_JUMP);
         vec_push(&vjumps, jumpToEnd);
-        int ito = chunk->count;
+        int ito = iseq->byteCount;
         Node *catchStmt = NULL; int i = 0;
         if (n->children->length > 1) {
             vec_foreach(n->children, catchStmt, i) {
                 if (i == 0) continue; // already emitted
-                int itarget = chunk->count;
+                int itarget = iseq->byteCount;
                 Token classTok = vec_first(catchStmt->children)->tok;
                 ObjString *className = copyString(tokStr(&classTok), strlen(tokStr(&classTok)));
-                double catchTblIdx = (double)addCatchRow(
-                    chunk, ifrom, ito,
+                double catchTblIdx = (double)iseqAddCatchRow(
+                    iseq, ifrom, ito,
                     itarget, OBJ_VAL(className)
                 );
                 pushScope(COMPILE_SCOPE_BLOCK);
@@ -868,13 +945,13 @@ static void emitNode(Node *n) {
                     namedVariable(varTok, VAR_SET);
                 }
                 emitNode(vec_last(catchStmt->children)); // catch block
-                ASSERT(chunk == currentChunk());
-                int jumpStart = emitJump(OP_JUMP); // jump to end of try statement
+                ASSERT(iseq == currentIseq());
+                Insn *jumpStart = emitJump(OP_JUMP); // jump to end of try statement
                 vec_push(&vjumps, jumpStart);
                 popScope(COMPILE_SCOPE_BLOCK);
             }
 
-            int jump = -1; int j = 0;
+            Insn *jump = NULL; int j = 0;
             vec_foreach(&vjumps, jump, j) {
                 patchJump(jump, -1);
             }
@@ -884,17 +961,17 @@ static void emitNode(Node *n) {
     }
     case THROW_STMT: {
         emitChildren(n);
-        emitByte(OP_THROW);
+        emitOp0(OP_THROW);
         break;
     }
     case INDEX_GET_EXPR: {
         emitChildren(n);
-        emitByte(OP_INDEX_GET);
+        emitOp0(OP_INDEX_GET);
         break;
     }
     case INDEX_SET_EXPR: {
         emitChildren(n);
-        emitByte(OP_INDEX_SET);
+        emitOp0(OP_INDEX_SET);
         break;
     }
     default:

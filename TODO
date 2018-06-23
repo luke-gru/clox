@@ -1,23 +1,22 @@
+TODO:
 * More language features to be close to my version of jlox []
-* Simple M&S GC [DONE]
 * Saving/loading bytecode to disk []
 * Debugger support []
-* bytecode optimization pass []
+* bytecode optimization pass [] (constant folding, jump consolidation, etc.)
 * simple JIT, maybe? []
+* different GC strategies, maybe support copying GC []
 
-* AND/OR short-circuit eval [DONE]
-* catch across function boundaries [DONE]
-* throw/catch from C native functions [DONE], just have to pop proper #
-arguments off the stack when an error is caught in native C func.
-* Get closures working []
-* Get arrays working [PARTLY DONE]
-* Get maps working [PARTLY DONE]
-* interactive mode (repl) [DONE]
-* add builtin classes [IN PROGRESS]
-* Fix VM callable to always add stack frame, even for C functions. This will
-help with throwing from C functions as well. []
+* get rid of calls to runtimeError(), or get it to actually throw an error
+instance []
+* Add benchmark library/internals so I can benchmark/profile performance of the
+interpreter []
+* Change the way chunks are written, so they can be edited/removed more easily
+through instruction optimization passes []
+* Change compiler so that constant value strings aren't always added to
+chunks even if they're the same strings that exist already in the chunk. []
+* Make is so that global variables aren't accessible everywhere, or that
+the syntax is different for them, like in $ruby.
+* Allow operator overloading with opAdd, etc.
 
 
 BUGS:
-Calling native functions keeps the function object on the stack for some
-reason

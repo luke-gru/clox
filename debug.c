@@ -64,6 +64,8 @@ const char *opName(OpCode code) {
         return "OP_CLOSE_UPVALUE";
     case OP_CALL:
         return "OP_CALL";
+    case OP_INVOKE:
+        return "OP_INVOKE";
     case OP_METHOD:
         return "OP_METHOD";
     case OP_CREATE_ARRAY:
@@ -305,6 +307,27 @@ static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
+static int printInvokeInstruction(char *op, Chunk *chunk, int i) {
+    uint8_t methodNameArg = chunk->code[i + 1];
+    Value methodName = getConstant(chunk, methodNameArg);
+    char *methodNameStr = AS_CSTRING(methodName);
+    uint8_t numArgs = chunk->code[i+2];
+    printf("%-16s    ('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
+    return i+3;
+}
+
+static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    uint8_t methodNameArg = chunk->code[i + 1];
+    Value methodName = getConstant(chunk, methodNameArg);
+    char *methodNameStr = AS_CSTRING(methodName);
+    uint8_t numArgs = chunk->code[i+2];
+    char *cbuf = calloc(strlen(op)+1+strlen(methodNameStr)+17, 1);
+    ASSERT_MEM(cbuf);
+    sprintf(cbuf, "%s\t('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
+    pushCString(buf, cbuf, strlen(cbuf));
+    free(cbuf);
+    return i+3;
+}
 
 static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
@@ -366,6 +389,8 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
             return printLoopInstruction(opName(byte), chunk, i);
         case OP_CALL:
             return printCallInstruction(opName(byte), chunk, i);
+        case OP_INVOKE:
+            return printInvokeInstruction(opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
         case OP_ADD:
@@ -429,6 +454,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             return loopInstruction(buf, opName(byte), chunk, i);
         case OP_CALL:
             return callInstruction(buf, opName(byte), chunk, i);
+        case OP_INVOKE:
+            return invokeInstruction(buf, opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
         case OP_ADD:

@@ -1041,6 +1041,24 @@ static InterpretResult run(void) {
           ASSERT_VALID_STACK();
           break;
       }
+      case OP_INVOKE: {
+          Value methodName = READ_CONSTANT();
+          uint8_t numArgs = READ_BYTE();
+          Value instanceVal = peek(0);
+          if (!IS_INSTANCE(instanceVal)) {
+              // TODO: throw error
+              UNREACHABLE("");
+          }
+          ObjInstance *inst = AS_INSTANCE(instanceVal);
+          Obj *callable = instanceFindMethod(inst, AS_STRING(methodName));
+          if (!callable) {
+              // TODO: throw error
+              UNREACHABLE("");
+          }
+          callCallable(OBJ_VAL(callable), numArgs, true);
+          ASSERT_VALID_STACK();
+          break;
+      }
       // return from function/method
       case OP_RETURN: {
           Value result = pop();

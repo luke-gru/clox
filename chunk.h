@@ -34,34 +34,50 @@ typedef struct Chunk {
     CatchTable *catchTbl;
 } Chunk;
 
-//#define MAX_INSN_SIZE 3
-//// single instruction
-//typedef struct Insn {
-    //uint8_t opcode;
-    //uint8_t operands[MAX_INSN_SIZE-1];
-    //int numOperands;
-    //int lineno;
-    //Insn *next;
-//} Insn;
+#define MAX_INSN_SIZE 4
+// single instruction
+typedef struct Insn {
+    uint8_t code;
+    uint8_t operands[MAX_INSN_SIZE-1];
+    int numOperands;
+    int lineno;
+    struct Insn *next;
+    struct Insn *prev;
+} Insn;
 
-//// Instruction sequence for a single function (or top-level).
-//// This format is easier to manipulate for bytecode optimization than
-//// the chunk format (a linear array of bytes), so the compiler generates
-//// Iseqs, then at the end compiles them into Chunks.
-//typedef struct Iseq {
-    //int count; // # of Insns
-    //ValueArray constants;
-    //CatchTable *catchTbl;
-    //Insn *insns;
-//} Iseq;
+// Instruction sequence for a single function (or top-level).
+// This format is easier to manipulate for bytecode optimization than
+// the chunk format (which is a linear array of bytes), so the compiler generates
+// Iseqs, then at the end compiles them into Chunks.
+typedef struct Iseq {
+    int count; // # of Insns
+    int byteCount;
+    ValueArray constants;
+    CatchTable *catchTbl;
+    Insn *tail; // tail of insns list
+    Insn *insns; // doubly linked list of insns
+} Iseq;
 
 void initChunk(Chunk *chunk);
 void writeChunk(Chunk *chunk, uint8_t byte, int lineno);
 void freeChunk(Chunk *chunk);
+
 int addConstant(Chunk *chunk, Value value);
 Value getConstant(Chunk *chunk, int idx);
 int addCatchRow(
     Chunk *chunk,
+    int ifrom,
+    int ito,
+    int itarget,
+    Value catchVal
+);
+
+void initIseq(Iseq *seq);
+void iseqAddInsn(Iseq *seq, Insn *toAdd);
+bool iseqRmInsn(Iseq *seq, Insn *toRm);
+int iseqAddConstant(Iseq *seq, Value value);
+int iseqAddCatchRow(
+    Iseq *seq,
     int ifrom,
     int ito,
     int itarget,

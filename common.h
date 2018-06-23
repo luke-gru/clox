@@ -33,7 +33,8 @@ typedef enum {
     OP_PROP_SET,
     OP_METHOD, // define a method in the VM, string constant index as operand, function object at top of stack, class object under that
 
-    OP_CALL,
+    OP_CALL, // call function
+    OP_INVOKE, // call method
     OP_RETURN,
     OP_PRINT,
 

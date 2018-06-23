@@ -88,7 +88,6 @@ static int test_compile_classdecl(void) {
                      "0000\t" "OP_CONSTANT\t"       "0000\t"    "'1.00'\n"
                      "0002\t" "OP_RETURN\n"
                      "----\n";
-
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     freeChunk(&chunk);
@@ -260,7 +259,7 @@ int test_upvalues_in_functions(void) {
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
-    fprintf(stderr, "\n'%s'\n", cstring);
+    /*fprintf(stderr, "\n'%s'\n", cstring);*/
     char *expected = "0000\t"	"OP_CONSTANT\t"       "0001\t"	"'1.00'\n"
                      "0002\t"	"OP_DEFINE_GLOBAL\t"	"0000\t"	"'a'\n"
                      "0004\t"	"OP_CLOSURE\t"	      "0002\t"	"'<fun add>'\t"	"(upvals: 000)\n"
@@ -284,6 +283,24 @@ cleanup:
     return 0;
 }
 
+static int test_compile_invoke(void) {
+    char *src = "m.foo();";
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int result = compile_src(src, &chunk, &err);
+    T_ASSERT_EQ(0, result);
+    ObjString *string = disassembleChunk(&chunk);
+    char *cstring = string->chars;
+    char *expected = "0000\t"	"OP_GET_GLOBAL\t"	"0000\t"	"'m'\n"
+                     "0002\t"	"OP_INVOKE\t"	"('foo', argc=0000)\n"
+                     "0005\t"	"OP_POP\n"
+                     "0006\t"	"OP_LEAVE\n";
+    T_ASSERT_STREQ(expected, cstring);
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initVM();
@@ -297,5 +314,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_pop_assign_if_parent_stmt);
     RUN_TEST(test_spam_return);
     RUN_TEST(test_upvalues_in_functions);
+    RUN_TEST(test_compile_invoke);
     END_TESTS();
 }

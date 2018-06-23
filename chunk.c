@@ -12,6 +12,51 @@ void initChunk(Chunk *chunk) {
     initValueArray(&chunk->constants);
 }
 
+void initIseq(Iseq *seq) {
+    seq->count = 0;
+    seq->byteCount = 0;
+    initValueArray(&seq->constants);
+    seq->catchTbl = NULL;
+    seq->tail = NULL;
+    seq->insns = NULL;
+}
+
+void iseqAddInsn(Iseq *seq, Insn *toAdd) {
+    Insn *prev = seq->tail;
+    if (prev) {
+        prev->next = toAdd;
+    } else {
+        seq->insns = toAdd;
+    }
+    toAdd->prev = prev;
+    toAdd->next = NULL;
+    seq->tail = toAdd;
+    seq->count++;
+    seq->byteCount += (toAdd->numOperands+1);
+}
+
+bool iseqRmInsn(Iseq *seq, Insn *toRm) {
+    Insn *in = seq->insns;
+    if (in == NULL) return false;
+    while (in && in != toRm) {
+        in = in->next;
+    }
+    if (!in) return false;
+    if (in->prev) {
+        in->prev->next = in->next;
+    } else {
+        seq->insns = in->next;
+    }
+    if (in->next) {
+        in->next->prev = in->prev;
+    } else {
+        seq->tail = in->prev;
+    }
+    seq->count--;
+    seq->byteCount -= (toRm->numOperands+1);
+    return true;
+}
+
 /**
  * Write 1 byte of bytecode operation/data to chunk. Chunk
  * grows automatically if no more space.
@@ -108,4 +153,45 @@ int addCatchRow(
     }
     row->next = tblRow;
     return idx;
+}
+
+int iseqAddCatchRow(
+    Iseq *seq,
+    int ifrom,
+    int ito,
+    int itarget,
+    Value catchVal
+) {
+    CatchTable *tblRow = ALLOCATE(CatchTable, 1);
+    tblRow->ifrom = ifrom;
+    tblRow->ito = ito;
+    tblRow->itarget = itarget;
+    tblRow->catchVal = catchVal;
+    memset(&tblRow->lastThrownValue, 0, sizeof(Value));
+    tblRow->next = NULL;
+
+    CatchTable *row = seq->catchTbl;
+    int idx = 0;
+    if (row == NULL) {
+        seq->catchTbl = tblRow;
+        return 0;
+    }
+    idx++;
+    while (row->next) {
+        row = row->next;
+        idx++;
+    }
+    row->next = tblRow;
+    return idx;
+}
+
+int iseqAddConstant(Iseq *seq, Value value) {
+    if (IS_OBJ(value)) {
+        hideFromGC(AS_OBJ(value));
+    }
+    writeValueArray(&seq->constants, value);
+    if (IS_OBJ(value)) {
+        unhideFromGC(AS_OBJ(value));
+    }
+    return seq->constants.count - 1;
 }
