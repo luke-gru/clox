@@ -96,11 +96,17 @@ static const char *compileScopeName(CompileScopeType stype) {
 Compiler *current = NULL;
 ClassCompiler *currentClass = NULL;
 Token *curTok = NULL;
+CompilerOpts compilerOpts; // [external]
 
 typedef enum {
-    VAR_GET,
+    VAR_GET = 1,
     VAR_SET,
 } VarOp;
+
+typedef enum {
+    CONST_T_NUM = 1,
+    CONST_T_STR,
+} ConstType;
 
 static void compiler_trace_debug(const char *fmt, ...) {
     if (!CLOX_OPTION_T(traceCompiler)) return;
@@ -157,6 +163,7 @@ static Insn *emitOp0(uint8_t code) {
     Insn in;
     in.code = code;
     in.numOperands = 0;
+    in.flags = 0;
     return emitInsn(in);
 }
 static Insn *emitOp1(uint8_t code, uint8_t op1) {
@@ -164,6 +171,7 @@ static Insn *emitOp1(uint8_t code, uint8_t op1) {
     in.code = code;
     in.operands[0] = op1;
     in.numOperands = 1;
+    in.flags = 0;
     return emitInsn(in);
 }
 static Insn *emitOp2(uint8_t code, uint8_t op1, uint8_t op2) {
@@ -172,6 +180,7 @@ static Insn *emitOp2(uint8_t code, uint8_t op1, uint8_t op2) {
     in.operands[0] = op1;
     in.operands[1] = op2;
     in.numOperands = 2;
+    in.flags = 0;
     return emitInsn(in);
 }
 static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
@@ -181,6 +190,7 @@ static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
     in.operands[1] = op2;
     in.operands[2] = op3;
     in.numOperands = 3;
+    in.flags = 0;
     return emitInsn(in);
 }
 
@@ -356,9 +366,87 @@ static void writeChunkByte(Chunk *chunk, uint8_t byte, int lineno) {
     writeChunk(chunk, byte, lineno);
 }
 
+static bool isBinOp(Insn *in) {
+    uint8_t code = in->code;
+    switch (code) {
+        case OP_ADD:
+        case OP_SUBTRACT:
+        case OP_MULTIPLY:
+        case OP_DIVIDE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool isNumConstOp(Insn *in) {
+    return in->code == OP_CONSTANT && ((in->flags & INSTR_FL_NUMBER) != 0);
+}
+
+static Value iseqGetConstant(Iseq *seq, uint8_t idx) {
+    return seq->constants.values[idx];
+}
+
+static Value foldConstant(Iseq *seq, Insn *cur, Insn *bin, Insn *ain) {
+    Value b = iseqGetConstant(seq, bin->operands[0]);
+    Value a = iseqGetConstant(seq, ain->operands[0]);
+    double aNum = AS_NUMBER(a);
+    double bNum = AS_NUMBER(b);
+    switch (cur->code) {
+        case OP_ADD: {
+            return NUMBER_VAL(aNum + bNum);
+        }
+        case OP_SUBTRACT:
+            return NUMBER_VAL(aNum - bNum);
+        case OP_MULTIPLY:
+            return NUMBER_VAL(aNum * bNum);
+        case OP_DIVIDE:
+            return NUMBER_VAL(aNum / bNum);
+        default:
+            UNREACHABLE("bug");
+    }
+}
+
+static void changeConstant(Iseq *seq, uint8_t constIdx, Value newVal) {
+    ASSERT(constIdx < seq->constants.count);
+    seq->constants.values[constIdx] = newVal;
+}
+
+static void optimizeIseq(Iseq *iseq) {
+    COMP_TRACE("OptimizeIseq");
+    Insn *cur = iseq->insns;
+    Insn *prev = NULL;
+    Insn *prevp = NULL;
+    int idx = 0;
+    while (cur) {
+        prev = cur->prev;
+        prevp = NULL;
+        if (isBinOp(cur)) {
+            if (prev && ((prevp = prev->prev) != NULL)) {
+                if (isNumConstOp(prev) && isNumConstOp(prevp)) {
+                    COMP_TRACE("constant folding candidate found");
+                    Value newVal = foldConstant(iseq, cur, prev, prevp);
+                    changeConstant(iseq, prevp->operands[0], newVal);
+                    iseqRmInsn(iseq, cur);
+                    iseqRmInsn(iseq, prev);
+                    cur = prevp;
+                    idx -= 2;
+                    continue;
+                }
+            }
+        }
+        idx++;
+        cur = cur->next;
+    }
+    COMP_TRACE("/OptimizeIseq");
+}
+
 static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
     ASSERT(iseq);
     ASSERT(chunk);
+    if (!compilerOpts.noOptimize) {
+        optimizeIseq(iseq);
+    }
     COMP_TRACE("copyIseqToChunk (%d insns, bytecount: %d)", iseq->count, iseq->byteCount);
     chunk->catchTbl = iseq->catchTbl;
     chunk->constants = iseq->constants;
@@ -408,8 +496,10 @@ static uint8_t identifierConstant(Token* name) {
 }
 
 // emits a constant instruction with the given operand
-static void emitConstant(Value constant) {
-    emitBytes(OP_CONSTANT, makeConstant(constant));
+static Insn *emitConstant(Value constant, ConstType ctype) {
+    Insn *ret = emitOp1(OP_CONSTANT, makeConstant(constant));
+    ret->flags |= INSTR_FL_NUMBER;
+    return ret;
 }
 
 static void emitNode(Node *n);
@@ -499,9 +589,9 @@ static void namedVariable(Token name, VarOp getSet) {
     setOp = OP_SET_GLOBAL;
   }
   if (getSet == VAR_SET) {
-    emitBytes(setOp, (uint8_t)arg);
+    emitOp1(setOp, (uint8_t)arg);
   } else {
-    emitBytes(getOp, (uint8_t)arg);
+    emitOp1(getOp, (uint8_t)arg);
   }
 }
 
@@ -578,7 +668,7 @@ static void initCompiler(
 // Define a declared variable
 static void defineVariable(uint8_t arg, bool checkDecl) {
   if (current->scopeDepth == 0) {
-    emitBytes(OP_DEFINE_GLOBAL, arg);
+    emitOp1(OP_DEFINE_GLOBAL, arg);
   } else {
     // Mark the given local as defined now (-1 is undefined, but declared)
     /*if (current->locals[arg].depth != -1 && checkDecl) {*/
@@ -621,9 +711,9 @@ static void emitClass(Node *n) {
         // Store the superclass in a local variable named "super".
         addLocal(syntheticToken("super"));
 
-        emitBytes(OP_SUBCLASS, nameConstant); // VM pops the superclass and gets the class name
+        emitOp1(OP_SUBCLASS, nameConstant); // VM pops the superclass and gets the class name
     } else {
-        emitBytes(OP_CLASS, nameConstant); // VM gets the class name
+        emitOp1(OP_CLASS, nameConstant); // VM gets the class name
     }
 
     emitChildren(n); // block node with methods
@@ -659,7 +749,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
 
     // save the chunk as a constant in the parent (now current) chunk
     uint8_t funcIdx = makeConstant(OBJ_VAL(func));
-    emitBytes(OP_CLOSURE, funcIdx);
+    emitOp1(OP_CLOSURE, funcIdx);
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
     for (int i = 0; i < func->upvalueCount; i++) {
@@ -671,7 +761,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
         if (currentClass == NULL) {
             defineVariable(identifierConstant(&n->tok), false); // define function as global or local var
         } else {
-            emitBytes(OP_METHOD, identifierConstant(&n->tok));
+            emitOp1(OP_METHOD, identifierConstant(&n->tok));
         }
     }
 }
@@ -744,10 +834,10 @@ static void emitNode(Node *n) {
         if (n->tok.type == TOKEN_NUMBER) {
             // TODO: handle error condition
             double d = strtod(tokStr(&n->tok), NULL);
-            emitConstant(NUMBER_VAL(d));
+            emitConstant(NUMBER_VAL(d), CONST_T_NUM);
         } else if (n->tok.type == TOKEN_STRING) {
             Token *name = &n->tok;
-            emitConstant(OBJ_VAL(copyString(name->start+1, name->length-2)));
+            emitConstant(OBJ_VAL(copyString(name->start+1, name->length-2)), CONST_T_STR);
         } else if (n->tok.type == TOKEN_TRUE) {
             emitOp0(OP_TRUE);
         } else if (n->tok.type == TOKEN_FALSE) {
@@ -761,7 +851,7 @@ static void emitNode(Node *n) {
     }
     case ARRAY_EXPR: {
         emitChildren(n);
-        emitConstant(NUMBER_VAL(n->children->length));
+        emitConstant(NUMBER_VAL(n->children->length), CONST_T_NUM);
         emitOp0(OP_CREATE_ARRAY);
         return;
     }
@@ -804,9 +894,9 @@ static void emitNode(Node *n) {
             emitNil();
         }
         if (current->scopeDepth == 0) {
-            emitBytes(OP_DEFINE_GLOBAL, (uint8_t)arg);
+            emitOp1(OP_DEFINE_GLOBAL, (uint8_t)arg);
         } else {
-            emitBytes(OP_SET_LOCAL, (uint8_t)arg);
+            emitOp1(OP_SET_LOCAL, (uint8_t)arg);
         }
         return;
     }
@@ -848,12 +938,12 @@ static void emitNode(Node *n) {
     }
     case PROP_ACCESS_EXPR: {
         emitChildren(n);
-        emitBytes(OP_PROP_GET, identifierConstant(&n->tok));
+        emitOp1(OP_PROP_GET, identifierConstant(&n->tok));
         break;
     }
     case PROP_SET_EXPR: {
         emitChildren(n);
-        emitBytes(OP_PROP_SET, identifierConstant(&n->tok));
+        emitOp1(OP_PROP_SET, identifierConstant(&n->tok));
         break;
     }
     case RETURN_STMT: {
@@ -939,7 +1029,7 @@ static void emitNode(Node *n) {
                 // given variable expression to bind to (Ex: (catch Error `err`))
                 if (catchStmt->children->length > 2) {
                     uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblIdx));
-                    emitBytes(OP_GET_THROWN, getThrownArg);
+                    emitOp1(OP_GET_THROWN, getThrownArg);
                     Token varTok = catchStmt->children->data[1]->tok;
                     declareVariable(&varTok);
                     namedVariable(varTok, VAR_SET);

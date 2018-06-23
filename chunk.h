@@ -35,12 +35,14 @@ typedef struct Chunk {
 } Chunk;
 
 #define MAX_INSN_SIZE 4
+#define INSTR_FL_NUMBER 1
 // single instruction
 typedef struct Insn {
     uint8_t code;
     uint8_t operands[MAX_INSN_SIZE-1];
     int numOperands;
     int lineno;
+    unsigned flags;
     struct Insn *next;
     struct Insn *prev;
 } Insn;

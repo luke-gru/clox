@@ -21,6 +21,14 @@ typedef enum {
     FUN_TYPE_TOP_LEVEL
 } FunctionType;
 
+typedef struct CompilerOpts {
+    bool noOptimize; // default: false (optimize)
+
+    bool _inited; // private
+} CompilerOpts;
+
+extern CompilerOpts compilerOpts;
+
 int compile_src(char *src, Chunk *chunk, CompileErr *err);
 int compile_file(char *fname, Chunk *chunk, CompileErr *err);
 

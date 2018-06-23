@@ -4,12 +4,30 @@
 #include "vm.h"
 #include "memory.h"
 
+// no optimizations
+static int compNoOpt(char *src, Chunk *chunk, CompileErr *err) {
+    bool oldNoOpt = compilerOpts.noOptimize;
+    compilerOpts.noOptimize = true;
+    int ret = compile_src(src, chunk, err);
+    compilerOpts.noOptimize = oldNoOpt;
+    return ret;
+}
+
+// optimizations applied
+static int compWithOpt(char *src, Chunk *chunk, CompileErr *err) {
+    bool oldNoOpt = compilerOpts.noOptimize;
+    compilerOpts.noOptimize = false;
+    int ret = compile_src(src, chunk, err);
+    compilerOpts.noOptimize = oldNoOpt;
+    return ret;
+}
+
 static int test_compile_addition(void) {
     char *src = "1+1;";
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -30,7 +48,7 @@ static int test_compile_global_variable(void) {
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -52,7 +70,7 @@ static int test_compile_local_variable(void) {
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -74,7 +92,7 @@ static int test_compile_classdecl(void) {
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -106,7 +124,7 @@ static int test_compile_try_stmt_with_catch1(void) {
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -152,7 +170,7 @@ static int test_compile_try_stmt_with_catch2(void) {
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -201,7 +219,7 @@ int test_pop_assign_if_parent_stmt(void) {
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -233,7 +251,7 @@ int test_spam_return(void) {
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -255,7 +273,7 @@ int test_upvalues_in_functions(void) {
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -288,7 +306,7 @@ static int test_compile_invoke(void) {
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
-    int result = compile_src(src, &chunk, &err);
+    int result = compNoOpt(src, &chunk, &err);
     T_ASSERT_EQ(0, result);
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
@@ -296,6 +314,40 @@ static int test_compile_invoke(void) {
                      "0002\t"	"OP_INVOKE\t"	"('foo', argc=0000)\n"
                      "0005\t"	"OP_POP\n"
                      "0006\t"	"OP_LEAVE\n";
+    T_ASSERT_STREQ(expected, cstring);
+cleanup:
+    return 0;
+}
+
+static int test_simple_constant_folding_opt(void) {
+    char *src = "1+1;";
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int result = compWithOpt(src, &chunk, &err);
+    T_ASSERT_EQ(0, result);
+    ObjString *string = disassembleChunk(&chunk);
+    char *cstring = string->chars;
+    char *expected = "0000\t"	"OP_CONSTANT\t"	"0000\t"	"'2.00'\n"
+                     "0002\t"	"OP_POP\n"
+                     "0003\t"	"OP_LEAVE\n";
+    T_ASSERT_STREQ(expected, cstring);
+cleanup:
+    return 0;
+}
+
+static int test_complex_constant_folding_opt(void) {
+    char *src = "1+2*8/4+1;";
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int result = compWithOpt(src, &chunk, &err);
+    T_ASSERT_EQ(0, result);
+    ObjString *string = disassembleChunk(&chunk);
+    char *cstring = string->chars;
+    char *expected = "0000\t"	"OP_CONSTANT\t"	"0000\t"	"'6.00'\n"
+                     "0002\t"	"OP_POP\n"
+                     "0003\t"	"OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     return 0;
@@ -315,5 +367,10 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_spam_return);
     RUN_TEST(test_upvalues_in_functions);
     RUN_TEST(test_compile_invoke);
+
+    // optimizations
+    RUN_TEST(test_simple_constant_folding_opt);
+    RUN_TEST(test_complex_constant_folding_opt);
+
     END_TESTS();
 }
