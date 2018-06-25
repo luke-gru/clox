@@ -21,6 +21,29 @@ void initIseq(Iseq *seq) {
     seq->insns = NULL;
 }
 
+// just zero it out, as well as the instructions
+void freeIseq(Iseq *seq) {
+    Insn *in = seq->insns;
+    int idx = 0;
+    while (in) {
+        Insn *next = in->next;
+        memset(in, 0, sizeof(*in));
+        // TODO: there's a memory corruption error here if I try
+        // to free the memory for some reason. Need to investigate.
+        /*free(in);*/
+        in = next;
+        idx++;
+    }
+    seq->insns = NULL;
+    seq->count = 0;
+    seq->byteCount = 0;
+    seq->tail = NULL;
+    // catchtbl is shared with chunk, don't free it
+    seq->catchTbl = NULL;
+    // constant valuearray is shared with chunk, don't free it
+    memset(&seq->constants, 0, sizeof(seq->constants));
+}
+
 void iseqAddInsn(Iseq *seq, Insn *toAdd) {
     Insn *prev = seq->tail;
     if (prev) {
@@ -35,6 +58,7 @@ void iseqAddInsn(Iseq *seq, Insn *toAdd) {
     seq->byteCount += (toAdd->numOperands+1);
 }
 
+// removes and frees the given insn
 bool iseqRmInsn(Iseq *seq, Insn *toRm) {
     Insn *in = seq->insns;
     if (in == NULL) return false;
@@ -52,8 +76,12 @@ bool iseqRmInsn(Iseq *seq, Insn *toRm) {
     } else {
         seq->tail = in->prev;
     }
+    if (seq->tail == NULL) {
+        seq->insns = NULL;
+    }
     seq->count--;
     seq->byteCount -= (toRm->numOperands+1);
+    free(toRm);
     return true;
 }
 
@@ -104,55 +132,10 @@ void freeChunk(Chunk *chunk) {
 }
 
 /**
- * Add a constant to constant pool and return its index into the pool
- */
-int addConstant(Chunk *chunk, Value value) {
-    if (IS_OBJ(value)) {
-        hideFromGC(AS_OBJ(value));
-    }
-    writeValueArray(&chunk->constants, value);
-    if (IS_OBJ(value)) {
-        unhideFromGC(AS_OBJ(value));
-    }
-    return chunk->constants.count - 1;
-}
-
-/**
  * Retrieve a constant from the provided chunk's constant pool
  */
 Value getConstant(Chunk *chunk, int idx) {
     return chunk->constants.values[idx];
-}
-
-// returns index to newly added catch table
-int addCatchRow(
-    Chunk *chunk,
-    int ifrom,
-    int ito,
-    int itarget,
-    Value catchVal
-) {
-    CatchTable *tblRow = ALLOCATE(CatchTable, 1);
-    tblRow->ifrom = ifrom;
-    tblRow->ito = ito;
-    tblRow->itarget = itarget;
-    tblRow->catchVal = catchVal;
-    memset(&tblRow->lastThrownValue, 0, sizeof(Value));
-    tblRow->next = NULL;
-
-    CatchTable *row = chunk->catchTbl;
-    int idx = 0;
-    if (row == NULL) {
-        chunk->catchTbl = tblRow;
-        return 0;
-    }
-    idx++;
-    while (row->next) {
-        row = row->next;
-        idx++;
-    }
-    row->next = tblRow;
-    return idx;
 }
 
 int iseqAddCatchRow(

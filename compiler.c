@@ -95,9 +95,10 @@ static const char *compileScopeName(CompileScopeType stype) {
     }
 }
 
-Compiler *current = NULL;
-ClassCompiler *currentClass = NULL;
-Token *curTok = NULL;
+static Compiler *current = NULL;
+static Compiler *top = NULL;
+static ClassCompiler *currentClass = NULL;
+static Token *curTok = NULL;
 CompilerOpts compilerOpts; // [external]
 
 typedef enum {
@@ -106,8 +107,9 @@ typedef enum {
 } VarOp;
 
 typedef enum {
-    CONST_T_NUM = 1,
-    CONST_T_STR,
+    CONST_T_NUMLIT = 1,
+    CONST_T_STRLIT,
+    CONST_T_CODE,
 } ConstType;
 
 static void compiler_trace_debug(const char *fmt, ...) {
@@ -136,6 +138,7 @@ static void error(const char *format, ...) {
     fputs("\n", stderr);
 
     current->hadError = true;
+    top->hadError = true;
 }
 
 static Token syntheticToken(const char *lexeme) {
@@ -154,6 +157,7 @@ static Iseq *currentIseq() {
 }
 
 static Insn *emitInsn(Insn in) {
+    COMP_TRACE("emitInsn: %s", opName(in.code));
     in.lineno = curTok ? curTok->line : 0;
     Insn *inHeap = calloc(sizeof(in), 1);
     memcpy(inHeap, &in, sizeof(in));
@@ -163,6 +167,7 @@ static Insn *emitInsn(Insn in) {
 
 static Insn *emitOp0(uint8_t code) {
     Insn in;
+    memset(&in, 0, sizeof(in));
     in.code = code;
     in.numOperands = 0;
     in.flags = 0;
@@ -170,6 +175,7 @@ static Insn *emitOp0(uint8_t code) {
 }
 static Insn *emitOp1(uint8_t code, uint8_t op1) {
     Insn in;
+    memset(&in, 0, sizeof(in));
     in.code = code;
     in.operands[0] = op1;
     in.numOperands = 1;
@@ -178,6 +184,7 @@ static Insn *emitOp1(uint8_t code, uint8_t op1) {
 }
 static Insn *emitOp2(uint8_t code, uint8_t op1, uint8_t op2) {
     Insn in;
+    memset(&in, 0, sizeof(in));
     in.code = code;
     in.operands[0] = op1;
     in.operands[1] = op2;
@@ -187,6 +194,7 @@ static Insn *emitOp2(uint8_t code, uint8_t op1, uint8_t op2) {
 }
 static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
     Insn in;
+    memset(&in, 0, sizeof(in));
     in.code = code;
     in.operands[0] = op1;
     in.operands[1] = op2;
@@ -382,7 +390,7 @@ static bool isBinOp(Insn *in) {
 }
 
 static bool isNumConstOp(Insn *in) {
-    return in->code == OP_CONSTANT && ((in->flags & INSTR_FL_NUMBER) != 0);
+    return in->code == OP_CONSTANT && ((in->flags & INSN_FL_NUMBER) != 0);
 }
 
 static Value iseqGetConstant(Iseq *seq, uint8_t idx) {
@@ -414,6 +422,120 @@ static void changeConstant(Iseq *seq, uint8_t constIdx, Value newVal) {
     seq->constants.values[constIdx] = newVal;
 }
 
+static bool isJump(Insn *in) {
+    switch (in->code) {
+        case OP_JUMP:
+        case OP_JUMP_IF_FALSE:
+        case OP_JUMP_IF_TRUE_PEEK:
+        case OP_JUMP_IF_FALSE_PEEK:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static Insn *jumpToInsn(Insn *in) {
+    return in->jumpTo;
+}
+
+static bool isJumpNextInsn(Insn *in) {
+    return in->operands[0] == 0;
+}
+
+static bool isJumpOrLoop(Insn *in) {
+    return isJump(in) || in->code == OP_LOOP;
+}
+
+static void rmInsnAndPatchLabels(Iseq *seq, Insn *insn) {
+    if (!insn->isLabel) {
+        COMP_TRACE("Removing non-label instruction %s", opName(insn->code));
+        iseqRmInsn(seq, insn);
+        return;
+    }
+    int numBytes = insn->numOperands+1;
+    Insn *in = seq->insns;
+    int numLabelsPatched = 0;
+    while (in) {
+        if (in == insn) {
+            in = in->next;
+            continue;
+        }
+        if (isJumpOrLoop(in) && in->jumpTo == insn) {
+            numLabelsPatched++;
+            in->jumpTo = insn->next;
+            insn->next->isLabel = true;
+            in->operands[0] -= numBytes;
+        }
+        in = in->next;
+    }
+    ASSERT(numLabelsPatched > 0);
+    COMP_TRACE("Removing label instruction %s after patching %d labels", opName(insn->code), numLabelsPatched);
+    iseqRmInsn(seq, insn);
+}
+
+static int replaceJumpInsn(Iseq *seq, Insn *jumpInsn) {
+    switch (jumpInsn->code) {
+        case OP_JUMP:
+        case OP_JUMP_IF_FALSE_PEEK:
+        case OP_JUMP_IF_TRUE_PEEK:
+            if (!jumpInsn->isLabel) {
+                rmInsnAndPatchLabels(seq, jumpInsn);
+                return -1;
+            } else {
+                return 0;
+            }
+        case OP_JUMP_IF_FALSE:
+            if (!jumpInsn->isLabel) {
+                jumpInsn->code = OP_POP;
+                jumpInsn->numOperands = 0;
+            }
+            return 0;
+        default:
+            UNREACHABLE("bug");
+    }
+}
+
+static bool isConst(Insn *insn) {
+    switch (insn->code) {
+    case OP_CONSTANT:
+    case OP_FALSE:
+    case OP_TRUE:
+    case OP_NIL:
+        return true;
+    }
+    return false;
+}
+
+static bool constBool(Insn *insn) {
+    switch (insn->code) {
+    case OP_CONSTANT:
+    case OP_TRUE:
+        return true;
+    case OP_FALSE:
+    case OP_NIL:
+        return false;
+    default:
+        UNREACHABLE("bug");
+    }
+}
+
+// Array literals can have side effects, ex;
+static bool noSideEffectsConst(Insn *insn) {
+    return isConst(insn);
+}
+
+static bool isJumpIfFalse(Insn *insn) {
+    return insn->code == OP_JUMP_IF_FALSE;
+}
+
+static bool isJumpIfTrue(Insn *insn) {
+    return insn->code == OP_JUMP_IF_TRUE_PEEK;
+}
+
+static bool isPop(Insn *insns) {
+    return insns->code == OP_POP;
+}
+
 static void optimizeIseq(Iseq *iseq) {
     COMP_TRACE("OptimizeIseq");
     Insn *cur = iseq->insns;
@@ -421,8 +543,10 @@ static void optimizeIseq(Iseq *iseq) {
     Insn *prevp = NULL;
     int idx = 0;
     while (cur) {
+        COMP_TRACE("optimize idx %d", idx);
         prev = cur->prev;
         prevp = NULL;
+        // constant folding, ex: turn 2+2 into 4
         if (isBinOp(cur)) {
             if (prev && ((prevp = prev->prev) != NULL)) {
                 if (isNumConstOp(prev) && isNumConstOp(prevp)) {
@@ -435,6 +559,52 @@ static void optimizeIseq(Iseq *iseq) {
                     idx -= 2;
                     continue;
                 }
+            }
+        }
+
+         // jump to next insn replacement/deletion
+        if (isJump(cur) && isJumpNextInsn(cur)) {
+            COMP_TRACE("Turning jump to next insn into POP/deletion");
+            Insn *next = cur->next;
+            replaceJumpInsn(iseq, cur);
+            COMP_TRACE("replacement done");
+            idx = 0;
+            cur = next;
+            continue;
+        }
+
+        // replace/remove jump instruction if test is a constant (ex: `if (true)`) =>
+        // OP_TRUE, OP_POP
+        if (isJump(cur) && isConst(prev)) {
+            COMP_TRACE("Found constant conditional, removing/replacing JUMP");
+            bool deleted = false;
+            if (isJumpIfFalse(cur) && constBool(prev)) {
+                deleted = replaceJumpInsn(iseq, cur) < 0;
+            } else if (isJumpIfTrue(cur) && !constBool(prev)) {
+                deleted = replaceJumpInsn(iseq, cur) < 0;
+            }
+            COMP_TRACE("/removed/replaced JUMP? %s", deleted ? "removed" : "replaced");
+            if (deleted) {
+                cur = iseq->insns;
+                idx = 0;
+                continue;
+            } else {
+                cur = cur->next;
+                idx++;
+                continue;
+            }
+        }
+
+        // 1+1; OP_CONSTANT '2', OP_POP => nothing (unused constant expression)
+        if (!compilerOpts.noRemoveUnusedExpressions) {
+            if (isPop(cur) && noSideEffectsConst(prev)) {
+                COMP_TRACE("removing side effect expr 1");
+                rmInsnAndPatchLabels(iseq, prev);
+                COMP_TRACE("removing side effect expr 2");
+                rmInsnAndPatchLabels(iseq, cur);
+                cur = iseq->insns;
+                idx = 0;
+                continue;
             }
         }
         idx++;
@@ -462,8 +632,8 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
         }
         in = in->next;
     }
-    COMP_TRACE("/copyIseqToChunk, idx: %d, iseq->count: %d", idx, iseq->count);
     ASSERT(idx == iseq->count);
+    COMP_TRACE("/copyIseqToChunk");
 }
 
 static ObjFunction *endCompiler() {
@@ -475,6 +645,7 @@ static ObjFunction *endCompiler() {
     ObjFunction *func = current->function;
     copyIseqToChunk(currentIseq(), currentChunk());
     freeTable(&current->constTbl);
+    freeIseq(&current->iseq);
 
     current = current->enclosing;
     COMP_TRACE("/endCompiler");
@@ -483,9 +654,9 @@ static ObjFunction *endCompiler() {
 
 // Adds a constant to the current instruction sequence's constant pool
 // and returns an index to it.
-static uint8_t makeConstant(Value value) {
+static uint8_t makeConstant(Value value, ConstType ctype) {
     Value existingIdx;
-    bool canMemoize = IS_STRING(value);
+    bool canMemoize = ctype == CONST_T_STRLIT;
     if (canMemoize) {
         if (tableGet(&current->constTbl, value, &existingIdx)) {
             return (uint8_t)AS_NUMBER(existingIdx);
@@ -506,14 +677,15 @@ static uint8_t makeConstant(Value value) {
 
 // Add constant to constant pool from the token's lexeme, return index to it
 static uint8_t identifierConstant(Token* name) {
-  ASSERT(vm.inited);
-  return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+    ASSERT(vm.inited);
+    return makeConstant(OBJ_VAL(copyString(name->start, name->length)),
+        CONST_T_STRLIT);
 }
 
 // emits a constant instruction with the given operand
 static Insn *emitConstant(Value constant, ConstType ctype) {
-    Insn *ret = emitOp1(OP_CONSTANT, makeConstant(constant));
-    ret->flags |= INSTR_FL_NUMBER;
+    Insn *ret = emitOp1(OP_CONSTANT, makeConstant(constant, ctype));
+    if (ctype == CONST_T_NUMLIT) ret->flags |= INSN_FL_NUMBER;
     return ret;
 }
 
@@ -528,18 +700,38 @@ static void emitChildren(Node *n) {
 
 // emit a jump (forwards) instruction, returns a pointer to the byte that needs patching
 static Insn *emitJump(OpCode jumpOp) {
-    return emitOp1(jumpOp, currentIseq()->byteCount); // patched later
+    return emitOp1(jumpOp, 0); // patched later
+}
+
+static int insnOffset(Insn *start, Insn *end) {
+    ASSERT(start);
+    ASSERT(end);
+    int offset = 0;
+    Insn *cur = start;
+    while (cur && cur != end) {
+        offset += (cur->numOperands+1);
+        cur = cur->next;
+    }
+    if (cur != end) {
+        ASSERT(0);
+        return -1;
+    }
+    return offset;
 }
 
 // patch jump forwards instruction by given offset
 // TODO: make the offset bigger than 1 byte!
-static void patchJump(Insn *toPatch, int jumpoffset) {
-    uint8_t bytecountOld = toPatch->operands[0];
+static void patchJump(Insn *toPatch, int jumpoffset, Insn *jumpTo) {
+    ASSERT(toPatch->operands[0] == 0);
     if (jumpoffset == -1) {
-        jumpoffset = (currentIseq()->byteCount - bytecountOld)-2;
+        if (!jumpTo) {
+            jumpTo = currentIseq()->tail;
+        }
+        jumpoffset = insnOffset(toPatch, jumpTo)+1;
     }
-    ASSERT(jumpoffset > 0);
     toPatch->operands[0] = jumpoffset;
+    toPatch->jumpTo = jumpTo;
+    jumpTo->isLabel = true;
 }
 
 // Emit a jump backwards (loop) instruction from the current code count to offset `loopStart`
@@ -548,8 +740,29 @@ static void emitLoop(int loopStart) {
 
   int offset = (currentIseq()->byteCount - loopStart)+2;
   if (offset > UINT8_MAX) error("Loop body too large.");
+  ASSERT(offset >= 0);
 
   emitOp1(OP_LOOP, offset);
+}
+
+static bool isBreak(Insn *in) {
+    return (in->code == OP_JUMP &&
+            (in->flags & INSN_FL_BREAK) != 0);
+}
+
+static void patchBreaks(Insn *start, Insn *end) {
+    Insn *cur = start;
+    int numFound = 0;
+    while (cur != end) {
+        if (isBreak(cur) && cur->operands[0] == 0) {
+            int offset = insnOffset(cur, end);
+            COMP_TRACE("jump offset found, patching break: %d", offset);
+            patchJump(cur, offset, end);
+            numFound++;
+        }
+        cur = cur->next;
+    }
+    COMP_TRACE("Patched %d breaks", numFound);
 }
 
 // adds local variable to current compiler's table, returns var slot
@@ -654,6 +867,7 @@ static void initCompiler(
         strcat(methodNameBuf, funcName);
         ObjString *methodName = copyString(methodNameBuf, strlen(methodNameBuf));
         current->function->name = methodName;
+        free(methodNameBuf);
         break;
     }
     case FUN_TYPE_ANON:
@@ -681,7 +895,8 @@ static void initCompiler(
     COMP_TRACE("/initCompiler");
 }
 
-// Define a declared variable
+// Define a declared variable in local or global scope (locals MUST be
+// declared before being defined)
 static void defineVariable(uint8_t arg, bool checkDecl) {
   if (current->scopeDepth == 0) {
     emitOp1(OP_DEFINE_GLOBAL, arg);
@@ -738,7 +953,12 @@ static void emitClass(Node *n) {
         popScope(COMPILE_SCOPE_CLASS);
     }
 
-    defineVariable(nameConstant, false);
+    if (current->scopeDepth == 0) {
+        defineVariable(nameConstant, false);
+    } else {
+        uint8_t defineArg = declareVariable(&n->tok);
+        defineVariable(defineArg, true);
+    }
     currentClass = cComp.enclosing;
 }
 
@@ -764,7 +984,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
     func = endCompiler();
 
     // save the chunk as a constant in the parent (now current) chunk
-    uint8_t funcIdx = makeConstant(OBJ_VAL(func));
+    uint8_t funcIdx = makeConstant(OBJ_VAL(func), CONST_T_CODE);
     emitOp1(OP_CLOSURE, funcIdx);
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
@@ -775,7 +995,14 @@ static void emitFunction(Node *n, FunctionType ftype) {
 
     if (ftype != FUN_TYPE_ANON) {
         if (currentClass == NULL) {
-            defineVariable(identifierConstant(&n->tok), false); // define function as global or local var
+            uint8_t defineArg;
+            if (current->scopeDepth > 0) {
+                defineArg = declareVariable(&n->tok);
+            } else {
+                defineArg = identifierConstant(&n->tok);
+            }
+            defineVariable(defineArg, true); // define function as global or local var
+        // TODO: allow regular function definitions in classes, along with methods
         } else {
             emitOp1(OP_METHOD, identifierConstant(&n->tok));
         }
@@ -808,8 +1035,12 @@ static void emitNode(Node *n) {
             emitOp0(OP_DIVIDE);
         } else if (n->tok.type == TOKEN_LESS) {
             emitOp0(OP_LESS);
+        } else if (n->tok.type == TOKEN_LESS_EQUAL) {
+            emitOp0(OP_LESS_EQUAL);
         } else if (n->tok.type == TOKEN_GREATER) {
             emitOp0(OP_GREATER);
+        } else if (n->tok.type == TOKEN_GREATER_EQUAL) {
+            emitOp0(OP_GREATER_EQUAL);
         } else {
             error("invalid binary expr node (token: %s)", tokStr(&n->tok));
         }
@@ -822,13 +1053,13 @@ static void emitNode(Node *n) {
             Insn *skipRhsJump = emitJump(OP_JUMP_IF_FALSE_PEEK);
             emitNode(vec_last(n->children)); // rhs
             emitOp0(OP_AND);
-            patchJump(skipRhsJump, -1);
+            patchJump(skipRhsJump, insnOffset(skipRhsJump, currentIseq()->tail), currentIseq()->tail);
         } else if (n->tok.type == TOKEN_OR) {
             emitNode(vec_first(n->children)); // lhs
             Insn *skipRhsJump = emitJump(OP_JUMP_IF_TRUE_PEEK);
             emitNode(vec_last(n->children)); // rhs
             emitOp0(OP_OR);
-            patchJump(skipRhsJump, -1);
+            patchJump(skipRhsJump, insnOffset(skipRhsJump, currentIseq()->tail), currentIseq()->tail);
         } else {
             error("invalid logical expression node (token: %s)", tokStr(&n->tok));
             ASSERT(0);
@@ -850,10 +1081,10 @@ static void emitNode(Node *n) {
         if (n->tok.type == TOKEN_NUMBER) {
             // TODO: handle error condition
             double d = strtod(tokStr(&n->tok), NULL);
-            emitConstant(NUMBER_VAL(d), CONST_T_NUM);
+            emitConstant(NUMBER_VAL(d), CONST_T_NUMLIT);
         } else if (n->tok.type == TOKEN_STRING) {
             Token *name = &n->tok;
-            emitConstant(OBJ_VAL(copyString(name->start+1, name->length-2)), CONST_T_STR);
+            emitConstant(OBJ_VAL(copyString(name->start+1, name->length-2)), CONST_T_STRLIT);
         } else if (n->tok.type == TOKEN_TRUE) {
             emitOp0(OP_TRUE);
         } else if (n->tok.type == TOKEN_FALSE) {
@@ -867,7 +1098,7 @@ static void emitNode(Node *n) {
     }
     case ARRAY_EXPR: {
         emitChildren(n);
-        emitConstant(NUMBER_VAL(n->children->length), CONST_T_NUM);
+        emitConstant(NUMBER_VAL(n->children->length), CONST_T_NUMLIT);
         emitOp0(OP_CREATE_ARRAY);
         return;
     }
@@ -880,21 +1111,61 @@ static void emitNode(Node *n) {
             elseNode = n->children->data[2];
         }
         if (elseNode == NULL) {
-            patchJump(ifJumpStart, -1);
+            patchJump(ifJumpStart, -1, NULL);
         } else {
-            patchJump(ifJumpStart, -1);
+            patchJump(ifJumpStart, -1, NULL);
             emitNode(elseNode);
         }
         break;
     }
     case WHILE_STMT: {
+        Insn *loopLabel = currentIseq()->tail;
         int loopStart = currentIseq()->byteCount + 2;
         emitNode(vec_first(n->children)); // cond
+        if (loopLabel) {
+            loopLabel = loopLabel->next; // beginning of conditional
+        } else {
+            loopLabel = currentIseq()->tail;
+        }
         Insn *whileJumpStart = emitJump(OP_JUMP_IF_FALSE);
+        whileJumpStart->isLabel = true;
         emitNode(n->children->data[1]); // while block
+        loopLabel->jumpTo = whileJumpStart;
         emitLoop(loopStart);
-        patchJump(whileJumpStart, -1);
+        patchJump(whileJumpStart, -1, NULL);
+        patchBreaks(whileJumpStart, currentIseq()->tail);
         break;
+    }
+    case FOR_STMT: {
+        pushScope(COMPILE_SCOPE_BLOCK);
+        Node *init = vec_first(n->children);
+        if (init) {
+            emitNode(init);
+        }
+        Node *test = n->children->data[1];
+        int beforeTest = currentIseq()->byteCount+2;
+        if (test) {
+            emitNode(test);
+        } else {
+            emitOp0(OP_TRUE);
+        }
+        Insn *forJump = emitJump(OP_JUMP_IF_FALSE);
+        Node *forBlock = vec_last(n->children);
+        emitNode(forBlock);
+        Node *incrExpr = n->children->data[2];
+        if (incrExpr) {
+            emitNode(incrExpr);
+        }
+        emitLoop(beforeTest);
+        patchJump(forJump, -1, NULL);
+        patchBreaks(forJump, currentIseq()->tail);
+        popScope(COMPILE_SCOPE_BLOCK);
+        break;
+    }
+    case BREAK_STMT: {
+        Insn *in = emitJump(OP_JUMP);
+        in->flags |= INSN_FL_BREAK;
+        break; // I heard you like break statements, so I put a break in your break
     }
     case PRINT_STMT: {
         emitChildren(n);
@@ -933,8 +1204,12 @@ static void emitNode(Node *n) {
         break;
     }
     case FUNCTION_STMT: {
+        emitFunction(n, FUN_TYPE_NAMED);
+        break;
+    }
+    case METHOD_STMT: {
         if (currentClass == NULL) {
-            emitFunction(n, FUN_TYPE_NAMED);
+            error("Methods can only be declared in classes. Maybe forgot keyword 'fun'?");
         } else {
             FunctionType ftype = FUN_TYPE_METHOD;
             if (strcmp(tokStr(&n->tok), "init") == 0) {
@@ -1044,7 +1319,7 @@ static void emitNode(Node *n) {
                 pushScope(COMPILE_SCOPE_BLOCK);
                 // given variable expression to bind to (Ex: (catch Error `err`))
                 if (catchStmt->children->length > 2) {
-                    uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblIdx));
+                    uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblIdx), CONST_T_NUMLIT);
                     emitOp1(OP_GET_THROWN, getThrownArg);
                     Token varTok = catchStmt->children->data[1]->tok;
                     declareVariable(&varTok);
@@ -1059,7 +1334,7 @@ static void emitNode(Node *n) {
 
             Insn *jump = NULL; int j = 0;
             vec_foreach(&vjumps, jump, j) {
-                patchJump(jump, -1);
+                patchJump(jump, insnOffset(jump, currentIseq()->tail), currentIseq()->tail);
             }
         }
         vec_deinit(&vjumps);
@@ -1090,6 +1365,7 @@ static void emitNode(Node *n) {
 int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     initScanner(src);
     Compiler mainCompiler;
+    top = &mainCompiler;
     initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, chunk);
     Node *program = parse();
     if (CLOX_OPTION_T(parseOnly)) {
@@ -1136,10 +1412,13 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
     memset(buf, 0, st.st_size+1);
     res = (int)read(fd, buf, st.st_size);
     if (res == -1) {
+        free(buf);
         *err = COMPILE_ERR_ERRNO;
         return res;
     }
-    return compile_src(buf, chunk, err);
+    res = compile_src(buf, chunk, err);
+    free(buf);
+    return res;
 }
 
 void grayCompilerRoots(void) {

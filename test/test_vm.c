@@ -180,7 +180,7 @@ cleanup:
 
 static int test_simple_class_initializer(void) {
     char *src = "class Train {\n"
-                "  fun init(color) {\n"
+                " init(color) {\n"
                 "    this.color = color;\n"
                 "  }\n"
                 "}\n"
@@ -199,7 +199,7 @@ cleanup:
 
 static int test_simple_class_initializer2(void) {
     char *src = "class Train {\n"
-                "  fun init(color) {\n"
+                "  init(color) {\n"
                 "    return \"non-instance!\";\n"
                 "  }\n"
                 "}\n"
@@ -216,7 +216,7 @@ cleanup:
 
 static int test_simple_subclass(void) {
     char *src = "class Train < Object {\n"
-                "  fun init(color) {\n"
+                "  init(color) {\n"
                 "    return \"non-instance!\";\n"
                 "  }\n"
                 "}\n"
@@ -233,7 +233,7 @@ cleanup:
 
 static int test_simple_method1(void) {
     char *src = "class Train {\n"
-                "  fun choo() { print \"choo\"; return this; }\n"
+                "  choo() { print \"choo\"; return this; }\n"
                 "}\n"
                 "var t = Train();\n"
                 "t.choo().choo();\n";
@@ -645,6 +645,7 @@ cleanup:
 
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
+    compilerOpts.noRemoveUnusedExpressions = true;
     INIT_TESTS();
     RUN_TEST(test_addition);
     RUN_TEST(test_subtraction);

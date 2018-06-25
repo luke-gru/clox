@@ -23,6 +23,7 @@ typedef enum {
 
 typedef struct CompilerOpts {
     bool noOptimize; // default: false (optimize)
+    bool noRemoveUnusedExpressions; // default: false (remove them)
 
     bool _inited; // private
 } CompilerOpts;

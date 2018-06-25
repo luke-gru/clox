@@ -88,7 +88,7 @@ cleanup:
 }
 
 static int test_compile_classdecl(void) {
-    char *src = "class Train { fun choo() { return 1; } }";
+    char *src = "class Train { choo() { return 1; } }";
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
@@ -320,7 +320,7 @@ cleanup:
 }
 
 static int test_simple_constant_folding_opt(void) {
-    char *src = "1+1;";
+    char *src = "print 1+1;";
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
@@ -329,7 +329,7 @@ static int test_simple_constant_folding_opt(void) {
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
     char *expected = "0000\t"	"OP_CONSTANT\t"	"0000\t"	"'2.00'\n"
-                     "0002\t"	"OP_POP\n"
+                     "0002\t"	"OP_PRINT\n"
                      "0003\t"	"OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
@@ -337,7 +337,7 @@ cleanup:
 }
 
 static int test_complex_constant_folding_opt(void) {
-    char *src = "1+2*8/4+1;";
+    char *src = "print 1+2*8/4+1;";
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
     initChunk(&chunk);
@@ -346,8 +346,48 @@ static int test_complex_constant_folding_opt(void) {
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
     char *expected = "0000\t"	"OP_CONSTANT\t"	"0000\t"	"'6.00'\n"
-                     "0002\t"	"OP_POP\n"
+                     "0002\t"	"OP_PRINT\n"
                      "0003\t"	"OP_LEAVE\n";
+    T_ASSERT_STREQ(expected, cstring);
+cleanup:
+    return 0;
+}
+
+static int test_jump_consolidation_and_unused_expression_removal(void) {
+    char *src = "if (true) { if (true) { } }";
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int result = compWithOpt(src, &chunk, &err);
+    T_ASSERT_EQ(0, result);
+    ObjString *string = disassembleChunk(&chunk);
+    char *cstring = string->chars;
+    char *expected = "0000\t"	  "OP_TRUE\n"
+                      "0001\t"	"OP_POP\n"
+                      "0002\t"	"OP_TRUE\n"
+                      "0003\t"	"OP_JUMP_IF_FALSE\t"	"0001\t"	"(addr=0005)\n"
+                      "0005\t"	"OP_LEAVE\n";
+
+    T_ASSERT_STREQ(expected, cstring);
+cleanup:
+    return 0;
+}
+
+static int test_while_true(void) {
+    char *src = "while (true) { print 1; }";
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int result = compWithOpt(src, &chunk, &err);
+    T_ASSERT_EQ(0, result);
+    ObjString *string = disassembleChunk(&chunk);
+    char *cstring = string->chars;
+    char *expected = "0000\t"	"OP_TRUE\n"
+                     "0001\t"	"OP_JUMP_IF_FALSE\t"	"0006\t"	"(addr=0008)\n"
+                     "0003\t"	"OP_CONSTANT\t"	"0000\t"	"'1.00'\n"
+                     "0005\t"	"OP_PRINT\n"
+                     "0006\t"	"OP_LOOP\t"  "   6\t"	"(addr=0000)\n"
+                     "0008\t"	"OP_LEAVE\n";
     T_ASSERT_STREQ(expected, cstring);
 cleanup:
     return 0;
@@ -356,6 +396,7 @@ cleanup:
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initVM();
+    turnGCOff();
     INIT_TESTS();
     RUN_TEST(test_compile_addition);
     RUN_TEST(test_compile_global_variable);
@@ -371,6 +412,8 @@ int main(int argc, char *argv[]) {
     // optimizations
     RUN_TEST(test_simple_constant_folding_opt);
     RUN_TEST(test_complex_constant_folding_opt);
+    RUN_TEST(test_jump_consolidation_and_unused_expression_removal);
+    RUN_TEST(test_while_true);
 
     END_TESTS();
 }

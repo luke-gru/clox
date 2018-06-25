@@ -63,6 +63,7 @@ typedef enum eStmtType {
     CONTINUE_STMT,
     BREAK_STMT,
     FUNCTION_STMT,
+    METHOD_STMT,
     RETURN_STMT,
     CLASS_STMT,
     MODULE_STMT,
@@ -128,6 +129,8 @@ typedef struct sNode {
     vec_nodep_t *children;
     struct sNode *parent;
 } Node;
+
+extern int astDetailLevel;
 
 typedef void (*NodeCallback)(Node *n, int idx);
 

@@ -161,8 +161,10 @@ ObjString *takeString(char *chars, int length); // uses provided memory as inter
 ObjString *copyString(char *chars, int length); // copies provided memory. Object lives on lox heap.
 ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
 ObjString *newString(char *chars, int length); // always creates new string in vm.objects
+void pushString(ObjString *a, ObjString *b); // always creates new string in vm.objects
 ObjString *newStackString(char *chars, int length); // Used in native C functions. Object first lives in VM arena, conceptually.
 ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
+ObjString *dupString(ObjString *string);
 
 void clearObjString(ObjString *str);
 

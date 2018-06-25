@@ -83,6 +83,7 @@ NORETURN void repl(void) {
     _resetScanner();
     initChunk(&rChunk);
     initVM();
+    compilerOpts.noRemoveUnusedExpressions = true;
 
     char *lines[50];
     int numLines = 0;

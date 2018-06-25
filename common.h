@@ -50,6 +50,8 @@ typedef enum {
     OP_EQUAL,
     OP_GREATER,
     OP_LESS,
+    OP_GREATER_EQUAL,
+    OP_LESS_EQUAL,
 
     OP_JUMP,
     OP_JUMP_IF_FALSE, // pops value off top of stack, checks truthiness

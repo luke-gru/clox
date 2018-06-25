@@ -35,7 +35,8 @@ typedef struct Chunk {
 } Chunk;
 
 #define MAX_INSN_SIZE 4
-#define INSTR_FL_NUMBER 1
+#define INSN_FL_NUMBER 1
+#define INSN_FL_BREAK 2
 // single instruction
 typedef struct Insn {
     uint8_t code;
@@ -45,6 +46,8 @@ typedef struct Insn {
     unsigned flags;
     struct Insn *next;
     struct Insn *prev;
+    struct Insn *jumpTo; // for jump instructions
+    bool isLabel;
 } Insn;
 
 // Instruction sequence for a single function (or top-level).
@@ -57,7 +60,7 @@ typedef struct Iseq {
     ValueArray constants;
     CatchTable *catchTbl;
     Insn *tail; // tail of insns list
-    Insn *insns; // doubly linked list of insns
+    Insn *insns; // head of doubly linked list of insns
 } Iseq;
 
 void initChunk(Chunk *chunk);
@@ -77,6 +80,7 @@ int addCatchRow(
 void initIseq(Iseq *seq);
 void iseqAddInsn(Iseq *seq, Insn *toAdd);
 bool iseqRmInsn(Iseq *seq, Insn *toRm);
+void freeIseq(Iseq *seq);
 int iseqAddConstant(Iseq *seq, Value value);
 int iseqAddCatchRow(
     Iseq *seq,

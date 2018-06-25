@@ -36,6 +36,10 @@ const char *opName(OpCode code) {
         return "OP_LESS";
     case OP_GREATER:
         return "OP_GREATER";
+    case OP_GREATER_EQUAL:
+        return "OP_GREATER_EQUAL";
+    case OP_LESS_EQUAL:
+        return "OP_LESS_EQUAL";
     case OP_RETURN:
         return "OP_RETURN";
     case OP_NIL:
@@ -257,9 +261,8 @@ static int closureInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec
 
 static int printJumpInstruction(char *op, Chunk *chunk, int i) {
     uint8_t jumpOffset = chunk->code[i + 1];
-    ASSERT(jumpOffset != 0); // should have been patched
-    ASSERT(jumpOffset != 122); // should have been patched
-    printf("%-16s %04" PRId8 " (addr=%04" PRId8 ")\n", op, jumpOffset+1, (i+1+jumpOffset+1));
+    /*ASSERT(jumpOffset != 0); // should have been patched*/
+    printf("%-16s %04" PRId8 " (addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
     return i+2;
 }
 
@@ -267,9 +270,8 @@ static int jumpInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     char *cbuf = calloc(strlen(op)+1+18, 1);
     ASSERT_MEM(cbuf);
     uint8_t jumpOffset = chunk->code[i + 1];
-    ASSERT(jumpOffset != 0); // should have been patched
-    ASSERT(jumpOffset != 122); // should have been patched
-    sprintf(cbuf, "%s\t%04" PRId8 "\t(addr=%04" PRId8 ")\n", op, jumpOffset+1, (i+1+jumpOffset+1));
+    /*ASSERT(jumpOffset != 0); // should have been patched*/
+    sprintf(cbuf, "%s\t%04" PRId8 "\t(addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
     pushCString(buf, cbuf, strlen(cbuf));
     free(cbuf);
     return i+2;
@@ -399,6 +401,8 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_DIVIDE:
         case OP_LESS:
         case OP_GREATER:
+        case OP_GREATER_EQUAL:
+        case OP_LESS_EQUAL:
         case OP_PRINT:
         case OP_TRUE:
         case OP_FALSE:
@@ -464,6 +468,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_DIVIDE:
         case OP_LESS:
         case OP_GREATER:
+        case OP_GREATER_EQUAL:
+        case OP_LESS_EQUAL:
         case OP_PRINT:
         case OP_TRUE:
         case OP_FALSE:

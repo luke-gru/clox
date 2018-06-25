@@ -1,12 +1,6 @@
-for (var a = 1; a <= 10; a = a + 1) {
+for (var a = 1; a < 10; a = a + 1) {
   print a;
-}
-
-var i = 0;
-for (;;) {
-  i = i + 1;
-  print i;
-  if (i >= 10) {
+  if (a > 6) {
     break;
   }
 }

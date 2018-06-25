@@ -4,6 +4,7 @@
 #include "options.h"
 #include "memory.h"
 #include "debug.h"
+#include "nodes.h"
 
 #ifdef NDEBUG
 #define TRACE_START(name) (void(0))
@@ -172,6 +173,11 @@ Node *parse(void) {
         nodeAddChild(ret, stmt);
     }
     TRACE_END("parse");
+
+    if (CLOX_OPTION_T(printAST)) {
+        char *output = outputASTString(ret, 0);
+        fprintf(stdout, "%s", output);
+    }
     return ret;
 }
 
@@ -305,7 +311,7 @@ static Node *statement() {
             // leave NULL
         } else {
             if (match(TOKEN_VAR)) {
-                initializer = varDeclaration();
+                initializer = statement();
             } else {
                 initializer = expressionStatement();
             }
@@ -498,7 +504,12 @@ static Node *classBody() {
     };
     Node *stmtListNode = createNode(nType, lbraceTok, NULL);
     while (!isAtEnd() && !check(TOKEN_RIGHT_BRACE)) {
-        Node *decl = declaration();
+        Node *decl;
+        if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_LEFT_PAREN) {
+            decl = funDeclaration(FUNCTION_TYPE_METHOD);
+        } else {
+            decl = declaration();
+        }
         nodeAddChild(stmtListNode, decl);
     }
     consume(TOKEN_RIGHT_BRACE, "Expected '}' to end class body");
@@ -545,11 +556,11 @@ static vec_nodep_t *createNodeVec(void) {
     return paramNodes;
 }
 
-// FUN keyword has already been parsed.
+// FUN keyword has already been parsed, for regular functions
 static Node *funDeclaration(ParseFunctionType fnType) {
     TRACE_START("funDeclaration");
     Token nameTok = parser.previous;
-    if (fnType == FUNCTION_TYPE_NAMED) {
+    if (fnType != FUNCTION_TYPE_ANON) {
         consume(TOKEN_IDENTIFIER, "Expect function name (identifier) after 'fun' keyword");
         nameTok = parser.previous;
     }
@@ -582,6 +593,11 @@ static Node *funDeclaration(ParseFunctionType fnType) {
         funcType = (node_type_t){
             .type = NODE_STMT,
             .kind = FUNCTION_STMT,
+        };
+    } else if (fnType == FUNCTION_TYPE_METHOD) {
+        funcType = (node_type_t){
+            .type = NODE_STMT,
+            .kind = METHOD_STMT,
         };
     } else {
         funcType = (node_type_t){

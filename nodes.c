@@ -5,6 +5,9 @@
 #include "memory.h"
 #include "debug.h"
 
+// every time the "--print-ast" option is given, this is incremented. Given once, = 1.
+int astDetailLevel = 0;
+
 Node *createNode(node_type_t type, Token tok, vec_nodep_t *children) {
     Node *n = ALLOCATE(Node, 1);
     ASSERT_MEM(n);
@@ -257,20 +260,28 @@ static char *outputSuperExpr(Node *n, int indentLevel) {
 }
 
 static char *outputSplatCallExpr(Node *n, int indentLevel) {
-    return "";
+    return ""; // TODO
 }
 
 static char *outputKeywordArgExpr(Node *n, int indentLevel) {
-    return "";
+    return ""; // TODO
 }
 
 static char *outputExpressionStmt(Node *n, int indentLevel) {
+    char *pre = "";
+    if (astDetailLevel > 1) {
+        pre = "(exprStmt ";
+    }
     Node *expr = vec_first(n->children);
     char *exprStr = outputASTString(expr, indentLevel);
     char *indent = i(indentLevel);
-    char *buf = calloc(strlen(indent)+1+strlen(exprStr)+1, 1);
+    char *post = "";
+    if (astDetailLevel > 1) {
+        post = ")";
+    }
+    char *buf = calloc(strlen(indent)+1+strlen(exprStr)+strlen(pre)+strlen(post)+1, 1);
     ASSERT_MEM(buf);
-    sprintf(buf, "%s%s\n", indent, exprStr);
+    sprintf(buf, "%s%s%s%s\n", indent, pre, exprStr, post);
     return buf;
 }
 
@@ -390,7 +401,7 @@ static char *outputForStmt(Node *n, int indentLevel) {
 }
 
 static char *outputForeachStmt(Node *n, int indentLevel) {
-    return "";
+    return ""; // TODO
 }
 
 static char *outputContinueStmt(Node *n, int indentLevel) {
@@ -433,11 +444,11 @@ static char *outputFunctionStmt(Node *n, int indentLevel) {
     buf = strAdd(buf, " (");
     vec_nodep_t *params = (vec_nodep_t*)n->data;
     ASSERT_MEM(params);
-    Node *param = NULL; int i = 0;
+    Node *param = NULL; int j = 0;
     int len = params->length;
-    vec_foreach(params, param, i) {
+    vec_foreach(params, param, j) {
         buf = strAdd(buf, tokStr(&param->tok));
-        if (i != len-1) {
+        if (j != len-1) {
             buf = strAdd(buf, " ");
         }
     }
@@ -446,7 +457,7 @@ static char *outputFunctionStmt(Node *n, int indentLevel) {
     Node *blockStmt = vec_first(n->children);
     buf = strAdd(buf, outputASTString(blockStmt, indentLevel+1));
 
-    buf = strAdd(buf, ")\n");
+    buf = strAdd(buf, strAdd(i(indentLevel), ")\n"));
     return buf;
 }
 
@@ -491,7 +502,7 @@ static char *outputClassStmt(Node *n, int indentLevel) {
 }
 
 static char *outputModuleStmt(Node *n, int indentLevel) {
-    return "";
+    return ""; // TODO
 }
 
 static char *outputTryStmt(Node *n, int indentLevel) {
@@ -559,12 +570,25 @@ static char *outputInStmt(Node *n, int indentLevel) {
 }
 
 static char *outputStmtlistStmt(Node *n, int indentLevel) {
-    char *buf = (char*)"";
+    char *pre = "";
+    if (astDetailLevel > 1) {
+        pre = strAdd(i(indentLevel), "(stmtList\n");
+    }
+    char *post = "";
+    if (astDetailLevel > 1) {
+        post = strAdd(i(indentLevel), ")\n");
+        indentLevel++;
+    }
+    char *buf = "";
     int i = 0;
     Node *child = NULL;
     vec_foreach(n->children, child, i) {
         char *childBuf = outputASTString(child, indentLevel);
         buf = strAdd(buf, childBuf);
+    }
+    if (astDetailLevel > 1) {
+        buf = strAdd(pre, buf);
+        buf = strAdd(buf, post);
     }
     return buf;
 }

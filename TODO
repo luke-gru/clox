@@ -18,5 +18,8 @@ chunks even if they're the same strings that exist already in the chunk. []
 the syntax is different for them, like in $ruby.
 * Allow operator overloading with opAdd, etc.
 
+* optimize array and string method lookup with an inline cache in the
+bytecode, and benchmark the lookup results
+
 
 BUGS:

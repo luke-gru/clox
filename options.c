@@ -1,11 +1,13 @@
 #include <string.h>
 #include "options.h"
 #include "debug.h"
+#include "compiler.h"
+#include "nodes.h"
 
 static CloxOptions options;
 
 char *boolOptNames[] = {
-    "debugParser",
+    "printAST",
     "traceParserCalls",
     "traceVMExecution",
     "debugVM",
@@ -13,6 +15,7 @@ char *boolOptNames[] = {
     "debugBytecode",
     "traceGC",
     "traceCompiler",
+    "disableBcodeOptimizer",
     "parseOnly",
     "compileOnly",
     NULL,
@@ -22,7 +25,7 @@ void initOptions(void) {
     if (options._inited) {
         return;
     }
-    options.debugParser = false;
+    options.printAST = false;
     options.debugTokens = false;
     options.debugBytecode = false;
     options.debugVM = false;
@@ -34,6 +37,8 @@ void initOptions(void) {
 
     options.parseOnly = false;
     options.compileOnly = false;
+    options.disableBcodeOptimizer = false;
+
     options._inited = true;
 }
 
@@ -93,8 +98,9 @@ int parseOption(char **argv, int i) {
         SET_OPTION(debugTokens, true);
         return 1;
     }
-    if (strcmp(argv[i], "--debug-parser") == 0) {
-        SET_OPTION(debugParser, true);
+    if (strcmp(argv[i], "--print-ast") == 0) {
+        astDetailLevel++;
+        SET_OPTION(printAST, true);
         return 1;
     }
     if (strcmp(argv[i], "--debug-bytecode") == 0) {
@@ -105,6 +111,12 @@ int parseOption(char **argv, int i) {
         SET_OPTION(debugVM, true);
         return 1;
     }
+    if (strcmp(argv[i], "--disable-bopt") == 0) {
+        SET_OPTION(disableBcodeOptimizer, true);
+        compilerOpts.noOptimize = true;
+        return 1;
+    }
+
     if (strcmp(argv[i], "--compile-only") == 0) {
         SET_OPTION(compileOnly, true);
         return 1;

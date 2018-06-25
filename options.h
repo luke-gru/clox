@@ -4,17 +4,19 @@
 #include <stdbool.h>
 
 typedef struct sCloxOptions {
-    // debug options
-    bool debugParser; // default false
+    // debug options (default: false)
+    bool printAST;
     bool traceParserCalls;
     bool traceVMExecution;
     bool debugVM;
-    bool parseOnly;
-    bool compileOnly;
     bool debugTokens;
     bool debugBytecode;
     bool traceGC;
     bool traceCompiler;
+    bool disableBcodeOptimizer;
+
+    bool compileOnly;
+    bool parseOnly;
     //bool profileGC; // TODO
 
     bool _inited; // internal use, if singleton is inited

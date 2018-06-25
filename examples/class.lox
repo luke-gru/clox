@@ -37,4 +37,4 @@ class Cake {
 
 var chocCake = Cake("German chocolate");
 print chocCake.flavor;
-//chocCake.taste(); // Prints "The German chocolate cake is delicious!".
+chocCake.taste(); // Prints "The German chocolate cake is delicious!".

@@ -162,6 +162,15 @@ ObjString *internedString(char *chars, int length) {
     return interned;
 }
 
+ObjString *dupString(ObjString *string) {
+    ASSERT(string);
+    return newString(string->chars, string->length);
+}
+
+void pushString(ObjString *a, ObjString *b) {
+    pushCString(a, b->chars, b->length);
+}
+
 // Copies `chars`, adds them to end of string.
 // NOTE: don't use this function on a ObjString that is already a key
 // for a table, it will fail.

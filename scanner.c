@@ -39,6 +39,7 @@ static Keyword keywords[] = {
   {"while",   5, TOKEN_WHILE},
   {"continue",   8, TOKEN_CONTINUE},
   {"break",   5, TOKEN_BREAK},
+  {"__END__",   5, TOKEN_END_SCRIPT},
   // Sentinel to mark the end of the array.
   {NULL,      0, TOKEN_EOF}
 };
@@ -61,7 +62,7 @@ static bool isAlphaNumeric(char c) {
 }
 
 static bool isAtEnd() {
-  return *scanner.current == '\0';
+  return scanner.scriptEnded || *scanner.current == '\0';
 }
 
 static char advance() {
@@ -95,6 +96,9 @@ static Token makeToken(TokenType type) {
   token.line = scanner.line;
   if (CLOX_OPTION_T(debugTokens)) {
       fprintf(stderr, "Tok: %s\n", tokTypeStr(type));
+  }
+  if (type == TOKEN_END_SCRIPT) {
+      scanner.scriptEnded = true;
   }
   return token;
 }
@@ -243,6 +247,7 @@ void initScanner(const char *src) {
   scanner.current = src;
   scanner.line = 1;
   scanner.indent = 0;
+  scanner.scriptEnded = false;
 }
 
 void resetScanner(void) {
@@ -250,6 +255,7 @@ void resetScanner(void) {
   scanner.current = scanner.source;
   scanner.line = 1;
   scanner.indent = 0;
+  scanner.scriptEnded = false;
 }
 
 const char *tokTypeStr(TokenType ttype) {
@@ -338,6 +344,8 @@ const char *tokTypeStr(TokenType ttype) {
       return "VAR";
     case TOKEN_WHILE:
       return "WHILE";
+    case TOKEN_END_SCRIPT:
+      return "__END__";
     case TOKEN_ERROR:
       return "!!ERROR!!";
     case TOKEN_EOF:

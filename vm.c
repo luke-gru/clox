@@ -780,6 +780,21 @@ static void closeUpvalues(Value *last) {
   }
 }
 
+static ObjString *methodNameForBinop(OpCode code) {
+    switch (code) {
+    case OP_ADD:
+        return copyString("opAdd", 5);
+    case OP_SUBTRACT:
+        return copyString("opDiff", 6);
+    case OP_MULTIPLY:
+        return copyString("opMul", 5);
+    case OP_DIVIDE:
+        return copyString("opDiv", 5);
+    default:
+        return NULL;
+    }
+}
+
 /**
  * Run the VM's instructions.
  */
@@ -789,14 +804,32 @@ static InterpretResult run(void) {
     }
 #define READ_BYTE() (*getFrame()->ip++)
 #define READ_CONSTANT() (currentChunk()->constants.values[READ_BYTE()])
-#define BINARY_OP(op) \
+#define BINARY_OP(op, opcode) \
     do { \
       Value b = pop(); \
       Value a = pop(); \
-      if (!IS_NUMBER(a) || !IS_NUMBER(b)) {\
-        return INTERPRET_RUNTIME_ERROR;\
+      if (IS_NUMBER(a) && IS_NUMBER(b)) {\
+        push(NUMBER_VAL(AS_NUMBER(a) op AS_NUMBER(b))); \
+      } else if (IS_STRING(a) && IS_STRING(b)) {\
+          ObjString *str = dupString(AS_STRING(a));\
+          pushString(str, AS_STRING(b));\
+          push(OBJ_VAL(str));\
+      } else if (IS_INSTANCE(a)) {\
+          push(a);\
+          push(b);\
+          ObjInstance *inst = AS_INSTANCE(a);\
+          ObjString *methodName = methodNameForBinop(opcode);\
+          Obj *callable = NULL;\
+          if (methodName) {\
+            callable = instanceFindMethod(inst, methodName);\
+          }\
+          if (!callable) {\
+              UNREACHABLE("method not found");\
+          }\
+          callCallable(OBJ_VAL(callable), 1, true);\
+      } else {\
+        UNREACHABLE("bug");\
       }\
-      push(NUMBER_VAL(AS_NUMBER(a) op AS_NUMBER(b))); \
     } while (0)
 
   for (;;) {
@@ -822,10 +855,10 @@ static InterpretResult run(void) {
         break;
       }
       // TODO: allow addition of strings
-      case OP_ADD:      BINARY_OP(+); break;
-      case OP_SUBTRACT: BINARY_OP(-); break;
-      case OP_MULTIPLY: BINARY_OP(*); break;
-      case OP_DIVIDE:   BINARY_OP(/); break;
+      case OP_ADD:      BINARY_OP(+,OP_ADD); break;
+      case OP_SUBTRACT: BINARY_OP(-,OP_SUBTRACT); break;
+      case OP_MULTIPLY: BINARY_OP(*,OP_MULTIPLY); break;
+      case OP_DIVIDE:   BINARY_OP(/,OP_DIVIDE); break;
       case OP_NEGATE: {
         Value val = pop();
         if (!IS_NUMBER(val)) {
@@ -859,6 +892,34 @@ static InterpretResult run(void) {
             return INTERPRET_RUNTIME_ERROR;
         }
         if (cmpValues(lhs, rhs) == 1) {
+            push(trueValue());
+        } else {
+            push(falseValue());
+        }
+        break;
+      }
+      case OP_GREATER_EQUAL: {
+          Value rhs = pop(); // rhs
+          Value lhs = pop(); // lhs
+        if (!canCmpValues(lhs, rhs)) {
+            runtimeError("Can only compare numbers");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        if (cmpValues(lhs, rhs) != -1) {
+            push(trueValue());
+        } else {
+            push(falseValue());
+        }
+        break;
+      }
+      case OP_LESS_EQUAL: {
+          Value rhs = pop(); // rhs
+          Value lhs = pop(); // lhs
+        if (!canCmpValues(lhs, rhs)) {
+            runtimeError("Can only compare numbers");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        if (cmpValues(lhs, rhs) != 1) {
             push(trueValue());
         } else {
             push(falseValue());
@@ -994,7 +1055,7 @@ static InterpretResult run(void) {
           uint8_t ipOffset = READ_BYTE();
           if (!isTruthy(cond)) {
               ASSERT(ipOffset > 0);
-              getFrame()->ip += ipOffset;
+              getFrame()->ip += (ipOffset-1);
           }
           break;
       }
@@ -1003,7 +1064,7 @@ static InterpretResult run(void) {
           uint8_t ipOffset = READ_BYTE();
           if (!isTruthy(cond)) {
               ASSERT(ipOffset > 0);
-              getFrame()->ip += ipOffset;
+              getFrame()->ip += (ipOffset-1);
           }
           break;
       }
@@ -1012,14 +1073,14 @@ static InterpretResult run(void) {
           uint8_t ipOffset = READ_BYTE();
           if (isTruthy(cond)) {
               ASSERT(ipOffset > 0);
-              getFrame()->ip += ipOffset;
+              getFrame()->ip += (ipOffset-1);
           }
           break;
       }
       case OP_JUMP: {
           uint8_t ipOffset = READ_BYTE();
           ASSERT(ipOffset > 0);
-          getFrame()->ip += ipOffset;
+          getFrame()->ip += (ipOffset-1);
           break;
       }
       case OP_LOOP: {
@@ -1044,16 +1105,16 @@ static InterpretResult run(void) {
       case OP_INVOKE: {
           Value methodName = READ_CONSTANT();
           uint8_t numArgs = READ_BYTE();
-          Value instanceVal = peek(0);
+          Value instanceVal = peek(numArgs);
           if (!IS_INSTANCE(instanceVal)) {
               // TODO: throw error
-              UNREACHABLE("");
+              UNREACHABLE("not an instance?");
           }
           ObjInstance *inst = AS_INSTANCE(instanceVal);
           Obj *callable = instanceFindMethod(inst, AS_STRING(methodName));
           if (!callable) {
               // TODO: throw error
-              UNREACHABLE("");
+              UNREACHABLE("method not found");
           }
           callCallable(OBJ_VAL(callable), numArgs, true);
           ASSERT_VALID_STACK();

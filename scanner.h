@@ -1,6 +1,8 @@
 #ifndef clox_scanner_h
 #define clox_scanner_h
 
+#include <stdbool.h>
+
 typedef enum {
   // all AST nodes need a token, so this is just a
   // placeholder token type for nodes that don't need one.
@@ -54,12 +56,14 @@ typedef enum {
   TOKEN_CONTINUE,
   TOKEN_BREAK,
 
+  TOKEN_END_SCRIPT,
   TOKEN_ERROR,
   TOKEN_EOF
 } TokenType;
 
 typedef enum {
     FUNCTION_TYPE_NAMED = 1,
+    FUNCTION_TYPE_METHOD,
     FUNCTION_TYPE_ANON,
 } ParseFunctionType;
 
@@ -77,6 +81,7 @@ typedef struct {
   const char *current;
   int line;
   int indent;
+  bool scriptEnded;
 } Scanner;
 
 extern Scanner scanner; // global
