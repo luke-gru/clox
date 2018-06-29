@@ -394,6 +394,18 @@ static bool lookupGetter(ObjInstance *obj, ObjString *propName, Value *ret) {
     return false;
 }
 
+static bool lookupSetter(ObjInstance *obj, ObjString *propName, Value *ret) {
+    ObjClass *klass = obj->klass;
+    Value key = OBJ_VAL(propName);
+    while (klass) {
+        if (tableGet(&klass->setters, key, ret)) {
+            return true;
+        }
+        klass = klass->superclass;
+    }
+    return false;
+}
+
 static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName, Value *ret) {
     Value key = OBJ_VAL(propName);
     while (klass) {
@@ -424,7 +436,14 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
 }
 
 static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
-    tableSet(&obj->fields, OBJ_VAL(propName), rval);
+    Value setterMethod;
+    if (lookupSetter(obj, propName, &setterMethod)) {
+        VM_DEBUG("setter found");
+        callVMMethod(obj, setterMethod, 1, &rval);
+        pop();
+    } else {
+        tableSet(&obj->fields, OBJ_VAL(propName), rval);
+    }
 }
 
 static void defineMethod(ObjString *name) {

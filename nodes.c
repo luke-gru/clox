@@ -250,7 +250,7 @@ static char *outputThisExpr(Node *n, int indentLevel) {
 }
 
 static char *outputSuperExpr(Node *n, int indentLevel) {
-    char *fmt = (char*)"(propGet super %s)";
+    char *fmt = "(propGet super %s)";
     Node *tokNode = vec_first(n->children);
     char *propName = tokStr(&tokNode->tok);
     char *buf = calloc(strlen(propName)+1+16, 1);
@@ -434,8 +434,26 @@ static char *outputFunctionStmt(Node *n, int indentLevel) {
         Token tokName = n->tok;
         char *name = tokStr(&tokName);
         buf = strAdd(buf, name);
+    } else if (nodeKind(n) == GETTER_STMT) {
+        char *indent = i(indentLevel);
+        char *startFmt = "%s(getter ";
+        buf = calloc(strlen(indent)+1+8, 1);
+        ASSERT_MEM(buf);
+        sprintf(buf, startFmt, indent);
+        Token tokName = n->tok;
+        char *name = tokStr(&tokName);
+        buf = strAdd(buf, name);
+    } else if (nodeKind(n) == SETTER_STMT) {
+        char *indent = i(indentLevel);
+        char *startFmt = "%s(setter ";
+        buf = calloc(strlen(indent)+1+8, 1);
+        ASSERT_MEM(buf);
+        sprintf(buf, startFmt, indent);
+        Token tokName = n->tok;
+        char *name = tokStr(&tokName);
+        buf = strAdd(buf, name);
     } else if (nodeKind(n) == ANON_FN_EXPR) {
-        buf = "(fnAnon";
+        buf = "(fnanon";
     } else {
         UNREACHABLE("node kind: %d", nodeKind(n));
     }
@@ -660,6 +678,8 @@ char *outputASTString(Node *node, int indentLevel) {
                 case BREAK_STMT:
                     return outputBreakStmt(node, indentLevel);
                 case FUNCTION_STMT:
+                case GETTER_STMT:
+                case SETTER_STMT:
                     return outputFunctionStmt(node, indentLevel);
                 case RETURN_STMT:
                     return outputReturnStmt(node, indentLevel);

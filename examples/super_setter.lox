@@ -6,7 +6,7 @@ class A {
 
 class B < A {
   color=(color) {
-    super.color = color;
+    //super.color = color;
     print "B color set: " + color;
   }
 }

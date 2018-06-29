@@ -507,8 +507,8 @@ static Node *classBody() {
         Node *decl;
         if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_LEFT_PAREN) {
             decl = funDeclaration(FUNCTION_TYPE_METHOD);
-        } else if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_LEFT_BRACE &&
-                peekTokN(2).type == TOKEN_EQUAL) {
+        } else if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_EQUAL &&
+                peekTokN(2).type == TOKEN_LEFT_PAREN) {
             decl = funDeclaration(FUNCTION_TYPE_SETTER);
         } else if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_LEFT_BRACE) {
             decl = funDeclaration(FUNCTION_TYPE_GETTER);
