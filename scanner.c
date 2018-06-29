@@ -40,7 +40,7 @@ static Keyword keywords[] = {
   {"while",   5, TOKEN_WHILE},
   {"continue",   8, TOKEN_CONTINUE},
   {"break",   5, TOKEN_BREAK},
-  {"__END__",   5, TOKEN_END_SCRIPT},
+  {"__END__",   7, TOKEN_END_SCRIPT},
   // Sentinel to mark the end of the array.
   {NULL,      0, TOKEN_EOF}
 };
@@ -114,6 +114,7 @@ static Token makeToken(TokenType type) {
   }
   if (type == TOKEN_END_SCRIPT) {
       scanner.scriptEnded = true;
+      return makeToken(TOKEN_EOF);
   }
   return token;
 }

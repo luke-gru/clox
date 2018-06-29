@@ -237,6 +237,7 @@ ObjFunction *newFunction(Chunk *chunk) {
     function->arity = 0;
     function->upvalueCount = 0;
     function->name = NULL;
+    function->isMethod = false;
     if (chunk == NULL) {
         initChunk(&function->chunk);
     } else {

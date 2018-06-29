@@ -453,7 +453,7 @@ static char *outputFunctionStmt(Node *n, int indentLevel) {
         char *name = tokStr(&tokName);
         buf = strAdd(buf, name);
     } else if (nodeKind(n) == ANON_FN_EXPR) {
-        buf = "(fnanon";
+        buf = "(fnAnon";
     } else {
         UNREACHABLE("node kind: %d", nodeKind(n));
     }

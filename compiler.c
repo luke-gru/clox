@@ -725,7 +725,7 @@ static void patchJump(Insn *toPatch, int jumpoffset, Insn *jumpTo) {
         if (!jumpTo) {
             jumpTo = currentIseq()->tail;
         }
-        jumpoffset = insnOffset(toPatch, jumpTo)+1;
+        jumpoffset = insnOffset(toPatch, jumpTo)+jumpTo->numOperands;
     }
     toPatch->operands[0] = jumpoffset;
     toPatch->jumpTo = jumpTo;
@@ -1002,15 +1002,10 @@ static void emitFunction(Node *n, FunctionType ftype) {
 
     if (ftype != FUN_TYPE_ANON) {
         if (currentClass == NULL || ftype == FUN_TYPE_NAMED) { // regular function
-            uint8_t defineArg;
-            if (current->scopeDepth > 0) {
-                defineArg = declareVariable(&n->tok);
-            } else {
-                defineArg = identifierConstant(&n->tok);
-            }
-            defineVariable(defineArg, true); // define function as global or local var
+            namedVariable(n->tok, VAR_SET);
         // TODO: allow regular function definitions in classes, along with methods
         } else {
+            func->isMethod = true;
             switch (ftype) {
                 case FUN_TYPE_METHOD:
                 case FUN_TYPE_INIT:
@@ -1133,8 +1128,10 @@ static void emitNode(Node *n) {
         if (elseNode == NULL) {
             patchJump(ifJumpStart, -1, NULL);
         } else {
+            Insn *elseJump = emitJump(OP_JUMP);
             patchJump(ifJumpStart, -1, NULL);
             emitNode(elseNode);
+            patchJump(elseJump, -1, NULL);
         }
         break;
     }

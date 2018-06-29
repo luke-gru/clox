@@ -256,8 +256,8 @@ int test_spam_return(void) {
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
     /*fprintf(stderr, "\n'%s'\n", cstring);*/
-    char *expected = "0000\t"	"OP_CLOSURE\t"	"0000\t"	"'<fun ret>'\t" "(upvals: 000)\n"
-                     "0002\t"	"OP_DEFINE_GLOBAL\t"	"0001\t"	"'ret'\n"
+    char *expected = "0000\t"	"OP_CLOSURE\t"	  "0000\t"	"'<fun ret>'\t" "(upvals: 000)\n"
+                     "0002\t"	"OP_SET_GLOBAL\t"	"0001\t"	"'ret'\n"
                      "0004\t"	"OP_LEAVE\n"
                      "-- Function ret --\n"
                      "0000\t"	"OP_CONSTANT\t"	"0000\t"	"'HI'\n"
@@ -281,7 +281,7 @@ int test_upvalues_in_functions(void) {
     char *expected = "0000\t"	"OP_CONSTANT\t"       "0001\t"	"'1.00'\n"
                      "0002\t"	"OP_DEFINE_GLOBAL\t"	"0000\t"	"'a'\n"
                      "0004\t"	"OP_CLOSURE\t"	      "0002\t"	"'<fun add>'\t"	"(upvals: 000)\n"
-                     "0006\t"	"OP_DEFINE_GLOBAL\t"	"0003\t"	"'add'\n"
+                     "0006\t"	"OP_SET_GLOBAL\t"	    "0003\t"	"'add'\n"
                      "0008\t"	"OP_LEAVE\n"
                      "-- Function add --\n"
                      "0000\t"	"OP_CLOSURE\t"	      "0000\t"	  "'<fun (Anon)>'\t"	"(upvals: 001)\n"

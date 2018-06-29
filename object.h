@@ -58,6 +58,7 @@ typedef struct ObjFunction {
   // and needs to be read by the VM, or serialized/loaded to/from disk.
   Chunk chunk;
   ObjString *name;
+  bool isMethod;
 } ObjFunction;
 
 typedef struct ObjUpvalue ObjUpvalue;

@@ -426,7 +426,11 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     } else if (lookupGetter(obj, propName, &ret)) {
         VM_DEBUG("getter found");
         callVMMethod(obj, ret, 0, NULL);
-        return pop();
+        if (vm.hadError) {
+            return NIL_VAL;
+        } else {
+            return pop();
+        }
     } else if (lookupMethod(obj, obj->klass, propName, &ret)) {
         ObjBoundMethod *bmethod = newBoundMethod(obj, AS_OBJ(ret));
         return OBJ_VAL(bmethod);
@@ -440,7 +444,7 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
     if (lookupSetter(obj, propName, &setterMethod)) {
         VM_DEBUG("setter found");
         callVMMethod(obj, setterMethod, 1, &rval);
-        pop();
+        if (!vm.hadError) pop();
     } else {
         tableSet(&obj->fields, OBJ_VAL(propName), rval);
     }
@@ -493,7 +497,11 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
         runUntilReturn = oldRunUntilReturn;
     }
     VM_DEBUG("call done");
-    return peek(0);
+    if (vm.hadError) {
+        return NIL_VAL;
+    } else {
+        return peek(0);
+    }
 }
 
 static void pushNativeFrame(ObjNative *native) {
@@ -540,12 +548,14 @@ static void captureNativeError(void) {
     }
 }
 
-static void checkFunctionArity(ObjFunction *func, int argCount) {
+static bool checkFunctionArity(ObjFunction *func, int argCount) {
     int arity = func->arity;
     if (argCount != arity) {
         throwArgErrorFmt("Expected %d arguments but got %d.",
             arity, argCount);
+        return false;
     }
+    return true;
 }
 
 // Arguments are expected to be pushed on to stack by caller. Argcount
@@ -558,8 +568,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     Value instanceVal;
     if (IS_CLOSURE(callable)) {
         closure = AS_CLOSURE(callable);
-        if (!isMethod)
+        if (!isMethod) {
             vm.stackTop[-argCount - 1] = callable;
+        }
     } else if (IS_CLASS(callable)) {
         ObjClass *klass = AS_CLASS(callable);
         ObjInstance *instance = newInstance(klass);
@@ -596,7 +607,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
             }
             ASSERT(IS_CLOSURE(initializer));
             closure = AS_CLOSURE(initializer);
-            if (argCount == 0) argCount++; // for implicit self
         } else if (argCount > 0) {
             throwArgErrorFmt("Expected 0 arguments (Object#init) but got %d.", argCount);
             return false;
@@ -646,7 +656,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     VM_DEBUG("doCallCallable found closure");
     // non-native function/method call
     ASSERT(closure);
-    checkFunctionArity(closure->function, argCount);
+    bool arityOK = checkFunctionArity(closure->function, argCount);
+    if (!arityOK) return false;
 
     int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
@@ -1193,6 +1204,9 @@ static InterpretResult run(void) {
               return INTERPRET_RUNTIME_ERROR;
           }
           callCallable(callableVal, numArgs, false);
+          if (vm.hadError) {
+              return INTERPRET_RUNTIME_ERROR;
+          }
           ASSERT_VALID_STACK();
           break;
       }
@@ -1211,6 +1225,9 @@ static InterpretResult run(void) {
               UNREACHABLE("method not found");
           }
           callCallable(OBJ_VAL(callable), numArgs, true);
+          if (vm.hadError) {
+              return INTERPRET_RUNTIME_ERROR;
+          }
           ASSERT_VALID_STACK();
           break;
       }
