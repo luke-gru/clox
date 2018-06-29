@@ -134,7 +134,17 @@ void blackenObject(Obj *obj) {
         case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
             grayObject((Obj*)klass->name);
-            grayObject((Obj*)klass->superclass);
+            if (klass->klass) {
+                grayObject((Obj*)klass->klass);
+            }
+            if (klass->singletonKlass) {
+                grayObject((Obj*)klass->singletonKlass);
+            }
+            if (klass->superclass) {
+                grayObject((Obj*)klass->superclass);
+            }
+            grayTable(&klass->fields);
+            grayTable(&klass->hiddenFields);
             grayTable(&klass->methods);
             grayTable(&klass->getters);
             grayTable(&klass->setters);
@@ -161,6 +171,9 @@ void blackenObject(Obj *obj) {
         case OBJ_T_INSTANCE: {
             ObjInstance *instance = (ObjInstance*)obj;
             grayObject((Obj*)instance->klass);
+            if (instance->singletonKlass) {
+                grayObject((Obj*)instance->singletonKlass);
+            }
             grayTable(&instance->fields);
             grayTable(&instance->hiddenFields);
             break;
@@ -238,7 +251,13 @@ void freeObject(Obj *obj, bool unlink) {
         }
         case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
+            if (klass->singletonKlass) {
+                GC_TRACE_DEBUG("Freeing class's singleton class");
+                freeObject((Obj*)klass->singletonKlass, unlink);
+            }
             GC_TRACE_DEBUG("Freeing class methods/getters/setters tables");
+            freeTable(&klass->fields);
+            freeTable(&klass->hiddenFields);
             freeTable(&klass->methods);
             freeTable(&klass->getters);
             freeTable(&klass->setters);
@@ -271,6 +290,10 @@ void freeObject(Obj *obj, bool unlink) {
             freeTable(&instance->fields);
             GC_TRACE_DEBUG("Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
             freeTable(&instance->hiddenFields);
+            if (instance->singletonKlass) {
+                GC_TRACE_DEBUG("Freeing instance's singleton class");
+                freeObject((Obj*)instance->singletonKlass, unlink);
+            }
             GC_TRACE_DEBUG("Freeing ObjInstance: p=%p", obj);
             FREE(ObjInstance, obj);
             break;

@@ -67,6 +67,7 @@ typedef enum {
     FUNCTION_TYPE_METHOD,
     FUNCTION_TYPE_GETTER,
     FUNCTION_TYPE_SETTER,
+    FUNCTION_TYPE_CLASS_METHOD,
 } ParseFunctionType;
 
 typedef struct {

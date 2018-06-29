@@ -512,6 +512,9 @@ static Node *classBody() {
             decl = funDeclaration(FUNCTION_TYPE_SETTER);
         } else if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_LEFT_BRACE) {
             decl = funDeclaration(FUNCTION_TYPE_GETTER);
+        } else if (check(TOKEN_CLASS) && peekTokN(1).type == TOKEN_IDENTIFIER && peekTokN(2).type == TOKEN_LEFT_PAREN) {
+            advance();
+            decl = funDeclaration(FUNCTION_TYPE_CLASS_METHOD);
         } else {
             decl = declaration();
         }
@@ -608,6 +611,11 @@ static Node *funDeclaration(ParseFunctionType fnType) {
         funcType = (node_type_t){
             .type = NODE_STMT,
             .kind = METHOD_STMT,
+        };
+    } else if (fnType == FUNCTION_TYPE_CLASS_METHOD) {
+        funcType = (node_type_t){
+            .type = NODE_STMT,
+            .kind = CLASS_METHOD_STMT,
         };
     } else if (fnType == FUNCTION_TYPE_GETTER) {
         funcType = (node_type_t){

@@ -77,6 +77,8 @@ const char *opName(OpCode code) {
         return "OP_GET_SUPER";
     case OP_METHOD:
         return "OP_METHOD";
+    case OP_CLASS_METHOD:
+        return "OP_CLASS_METHOD";
     case OP_GETTER:
         return "OP_GETTER";
     case OP_SETTER:
@@ -380,6 +382,7 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_CLASS:
         case OP_SUBCLASS:
         case OP_METHOD:
+        case OP_CLASS_METHOD:
         case OP_GETTER:
         case OP_SETTER:
         case OP_PROP_GET:
@@ -451,6 +454,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_CLASS:
         case OP_SUBCLASS:
         case OP_METHOD:
+        case OP_CLASS_METHOD:
         case OP_GETTER:
         case OP_SETTER:
         case OP_PROP_GET:

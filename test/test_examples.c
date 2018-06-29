@@ -5,18 +5,16 @@
 #include "compiler.h"
 #include "vm.h"
 
+#define FILENAME_BUFSZ (300)
+
 DIR *getDir(const char *name) {
     DIR *dir = opendir(name);
-
-    if (dir == NULL) {
-        return NULL;
-    }
-    return dir;
+    return dir; // can be NULL
 }
 
 static int test_run_example_files(void) {
     DIR *d = getDir("./examples");
-    char fbuf[300] = { '\0' };
+    char fbuf[FILENAME_BUFSZ] = { '\0' };
     if (d == NULL) {
         fprintf(stderr, "[ERROR]: Cannot open './examples' directory.\n");
         exit(1);
@@ -33,7 +31,7 @@ static int test_run_example_files(void) {
         if (strstr(ent->d_name, ".lox") == NULL) {
             continue;
         }
-        memset(fbuf, 0, 300);
+        memset(fbuf, 0, FILENAME_BUFSZ);
         strcat(fbuf, "./examples/");
         strcat(fbuf, ent->d_name);
         fprintf(stderr, "Opening file '%s'\n", fbuf);
@@ -46,20 +44,23 @@ static int test_run_example_files(void) {
         CompileErr cerr = COMPILE_ERR_NONE;
         fprintf(stdout, "Compiling file '%s'...\n", ent->d_name);
         initChunk(&chunk);
+        initVM();
         int compres = compile_file(fbuf, &chunk, &cerr);
         if (compres != 0 || cerr != COMPILE_ERR_NONE) {
             fprintf(stderr, "Error during compilation\n");
+            freeVM();
             numErrors++;
             continue;
         }
         fprintf(stdout, "Running file '%s'...\n", ent->d_name);
         InterpretResult ires = interpret(&chunk);
+        freeVM();
         if (ires != INTERPRET_OK) {
-            fprintf(stderr, "Error during interpretation\n");
+            fprintf(stderr, "Error during interpretation: (%d)\n", ires);
             numErrors++;
             continue;
         }
-        fprintf(stdout, "Success\n", ent->d_name);
+        fprintf(stdout, "Success\n");
         numSuccesses++;
         T_ASSERT(true);
     }

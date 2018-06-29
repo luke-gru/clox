@@ -21,5 +21,12 @@ the syntax is different for them, like in $ruby.
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results
 
+* Implement continue [DONE]
+* Get jump patching working better, and consolidate jumps
+* Allow String#== [DONE]
+* Get all test examples working [DONE]
+* Make ObjClass an ObjInstance, and get metaclasses working, with property
+get/set and class methods. [DONE]
+* Allow re-opening classes []
 
 BUGS:

@@ -8,7 +8,7 @@
 
 typedef enum ObjType {
   OBJ_T_NONE = 0,
-  OBJ_T_STRING,
+  OBJ_T_STRING, // TODO: make strings instances
   OBJ_T_FUNCTION,
   OBJ_T_CLASS,
   OBJ_T_INSTANCE,
@@ -59,6 +59,7 @@ typedef struct ObjFunction {
   Chunk chunk;
   ObjString *name;
   bool isMethod;
+  bool isSingletonMethod;
 } ObjFunction;
 
 typedef struct ObjUpvalue ObjUpvalue;
@@ -94,7 +95,15 @@ typedef struct ObjNative {
 
 typedef struct ObjClass ObjClass;
 typedef struct ObjClass {
+
+  // NOTE: same fields, in same order, as instance. Can be cast to an
+  // instance.
   Obj object;
+  ObjClass *klass;
+  ObjClass *singletonKlass;
+  Table fields;
+  Table hiddenFields;
+
   ObjString *name;
   ObjClass *superclass;
   Table methods;
@@ -103,6 +112,7 @@ typedef struct ObjClass {
 } ObjClass;
 
 extern ObjClass *lxObjClass;
+extern ObjClass *lxClassClass;
 extern ObjClass *lxAryClass;
 extern ObjClass *lxMapClass;
 extern ObjClass *lxErrClass;
@@ -111,6 +121,7 @@ extern ObjClass *lxArgErrClass;
 typedef struct ObjInstance {
   Obj object;
   ObjClass *klass;
+  ObjClass *singletonKlass;
   Table fields;
   Table hiddenFields;
 } ObjInstance;
@@ -209,6 +220,10 @@ void *internalGetData(ObjInternal *obj);
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
 bool instanceIsA(ObjInstance *inst, ObjClass *klass);
 bool isSubclass(ObjClass *subklass, ObjClass *superklass);
+Obj *classFindClassMethod(ObjClass *obj, ObjString *name);
+
+ObjClass *classSingletonClass(ObjClass *klass);
+//ObjClass *instanceSingletonClass(ObjInstance *instance);
 
 // Returns true if [value] is an object of type [type]. Do not call this
 // directly, instead use the [IS_XXX] macro for the type in question.

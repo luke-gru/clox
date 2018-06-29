@@ -98,11 +98,11 @@ static int test_compile_classdecl(void) {
     char *cstring = string->chars;
     /*fprintf(stderr, "\n'%s'\n", cstring);*/
     char *expected = "0000\t" "OP_CLASS\t"          "0000\t"    "'Train'\n"
-                     "0002\t" "OP_CLOSURE\t"        "0001\t"    "'<fun Train.choo>'\t" "(upvals: 000)\n"
+                     "0002\t" "OP_CLOSURE\t"        "0001\t"    "'<fun Train#choo>'\t" "(upvals: 000)\n"
                      "0004\t" "OP_METHOD\t"         "0002\t"    "'choo'\n"
                      "0006\t" "OP_DEFINE_GLOBAL\t"  "0000\t"    "'Train'\n"
                      "0008\t" "OP_LEAVE\n"
-                     "-- Function Train.choo --\n"
+                     "-- Function Train#choo --\n"
                      "0000\t" "OP_CONSTANT\t"       "0000\t"    "'1.00'\n"
                      "0002\t" "OP_RETURN\n"
                      "----\n";

@@ -1,7 +1,7 @@
 fun makePoint(x, y) {
   fun closure(method) {
-    if (method == "x") return x;
-    if (method == "y") return y;
+    if (method == "x") { return x; }
+    if (method == "y") { return y; }
     print "unknown method " + method;
   }
 

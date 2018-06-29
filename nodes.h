@@ -64,6 +64,7 @@ typedef enum eStmtType {
     BREAK_STMT,
     FUNCTION_STMT,
     METHOD_STMT,
+    CLASS_METHOD_STMT,
     GETTER_STMT,
     SETTER_STMT,
     RETURN_STMT,

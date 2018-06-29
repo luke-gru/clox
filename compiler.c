@@ -99,6 +99,7 @@ static Compiler *current = NULL;
 static Compiler *top = NULL;
 static ClassCompiler *currentClass = NULL;
 static Token *curTok = NULL;
+static int loopStart = -1;
 CompilerOpts compilerOpts; // [external]
 
 typedef enum {
@@ -270,6 +271,11 @@ static void popScope(CompileScopeType stype) {
     if (stype == COMPILE_SCOPE_FUNCTION) {
         emitReturn(current);
     }
+    int idx = -1;
+    vec_find(&current->emittedReturnDepths, current->scopeDepth, idx);
+    if (idx != -1) {
+        vec_splice(&current->emittedReturnDepths, idx, 1);
+    }
     current->scopeDepth--;
 }
 
@@ -322,6 +328,7 @@ static int resolveLocal(Compiler *compiler, Token* name) {
   for (int i = compiler->localCount - 1; i >= 0; i--) {
     Local *local = &compiler->locals[i];
     if (identifiersEqual(name, &local->name)) {
+        if (local->depth == -1) continue;
       return i;
     }
   }
@@ -728,7 +735,7 @@ static void patchJump(Insn *toPatch, int jumpoffset, Insn *jumpTo) {
         jumpoffset = insnOffset(toPatch, jumpTo)+jumpTo->numOperands;
     }
     toPatch->operands[0] = jumpoffset;
-    toPatch->jumpTo = jumpTo;
+    toPatch->jumpTo = jumpTo; // FIXME: should be jumpToPrev
     jumpTo->isLabel = true;
 }
 
@@ -753,7 +760,7 @@ static void patchBreaks(Insn *start, Insn *end) {
     int numFound = 0;
     while (cur != end) {
         if (isBreak(cur) && cur->operands[0] == 0) {
-            int offset = insnOffset(cur, end);
+            int offset = insnOffset(cur, end)+1;
             COMP_TRACE("jump offset found, patching break: %d", offset);
             patchJump(cur, offset, end);
             numFound++;
@@ -855,7 +862,8 @@ static void initCompiler(
     case FUN_TYPE_INIT:
     case FUN_TYPE_GETTER:
     case FUN_TYPE_SETTER:
-    case FUN_TYPE_METHOD: {
+    case FUN_TYPE_METHOD:
+    case FUN_TYPE_CLASS_METHOD: {
         ASSERT(currentClass);
         char *className = tokStr(&currentClass->name);
         char *funcName = tokStr(fTok);
@@ -863,7 +871,11 @@ static void initCompiler(
         char *methodNameBuf = calloc(methodNameBuflen, 1);
         ASSERT_MEM(methodNameBuf);
         strcpy(methodNameBuf, className);
-        strncat(methodNameBuf, ".", 1);
+        char *sep = "#";
+        if (ftype == FUN_TYPE_CLASS_METHOD) {
+            sep = ".";
+        }
+        strncat(methodNameBuf, sep, 1);
         strcat(methodNameBuf, funcName);
         ObjString *methodName = copyString(methodNameBuf, strlen(methodNameBuf));
         current->function->name = methodName;
@@ -883,7 +895,8 @@ static void initCompiler(
     local->depth = current->scopeDepth;
     local->isUpvalue = false;
     if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
-            ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER) {
+            ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
+            ftype == FUN_TYPE_CLASS_METHOD) {
         // In a method, it holds the receiver, "this".
         local->name.start = "this";
         local->name.length = 4;
@@ -1003,13 +1016,15 @@ static void emitFunction(Node *n, FunctionType ftype) {
     if (ftype != FUN_TYPE_ANON) {
         if (currentClass == NULL || ftype == FUN_TYPE_NAMED) { // regular function
             namedVariable(n->tok, VAR_SET);
-        // TODO: allow regular function definitions in classes, along with methods
         } else {
             func->isMethod = true;
             switch (ftype) {
                 case FUN_TYPE_METHOD:
                 case FUN_TYPE_INIT:
                     emitOp1(OP_METHOD, identifierConstant(&n->tok));
+                    break;
+                case FUN_TYPE_CLASS_METHOD:
+                    emitOp1(OP_CLASS_METHOD, identifierConstant(&n->tok));
                     break;
                 case FUN_TYPE_GETTER:
                     emitOp1(OP_GETTER, identifierConstant(&n->tok));
@@ -1136,8 +1151,9 @@ static void emitNode(Node *n) {
         break;
     }
     case WHILE_STMT: {
+        int oldLoopStart = loopStart;
         Insn *loopLabel = currentIseq()->tail;
-        int loopStart = currentIseq()->byteCount + 2;
+        loopStart = currentIseq()->byteCount + 2;
         emitNode(vec_first(n->children)); // cond
         if (loopLabel) {
             loopLabel = loopLabel->next; // beginning of conditional
@@ -1151,6 +1167,7 @@ static void emitNode(Node *n) {
         emitLoop(loopStart);
         patchJump(whileJumpStart, -1, NULL);
         patchBreaks(whileJumpStart, currentIseq()->tail);
+        loopStart = oldLoopStart;
         break;
     }
     case FOR_STMT: {
@@ -1159,8 +1176,10 @@ static void emitNode(Node *n) {
         if (init) {
             emitNode(init);
         }
+        int oldLoopStart = loopStart;
         Node *test = n->children->data[1];
         int beforeTest = currentIseq()->byteCount+2;
+        loopStart = beforeTest;
         if (test) {
             emitNode(test);
         } else {
@@ -1177,12 +1196,23 @@ static void emitNode(Node *n) {
         patchJump(forJump, -1, NULL);
         patchBreaks(forJump, currentIseq()->tail);
         popScope(COMPILE_SCOPE_BLOCK);
+        loopStart = oldLoopStart;
         break;
     }
     case BREAK_STMT: {
+        if (loopStart == -1) {
+            error("'break' can only be used in loops ('while' or 'for' loops)");
+        }
         Insn *in = emitJump(OP_JUMP);
         in->flags |= INSN_FL_BREAK;
         break; // I heard you like break statements, so I put a break in your break
+    }
+    case CONTINUE_STMT: {
+        if (loopStart == -1) {
+            error("'continue' can only be used in loops ('while' or 'for' loops)");
+        }
+        emitLoop(loopStart);
+        break;
     }
     case PRINT_STMT: {
         emitChildren(n);
@@ -1190,13 +1220,13 @@ static void emitNode(Node *n) {
         return;
     }
     case VAR_STMT: {
-        int arg = declareVariable(&n->tok);
-        if (arg == -1) return; // error already printed
         if (n->children->length > 0) {
             emitChildren(n);
         } else {
             emitNil();
         }
+        int arg = declareVariable(&n->tok);
+        if (arg == -1) return; // error already printed
         if (current->scopeDepth == 0) {
             emitOp1(OP_DEFINE_GLOBAL, (uint8_t)arg);
         } else {
@@ -1232,6 +1262,15 @@ static void emitNode(Node *n) {
             if (strcmp(tokStr(&n->tok), "init") == 0) {
                 ftype = FUN_TYPE_INIT;
             }
+            emitFunction(n, ftype);
+        }
+        break;
+    }
+    case CLASS_METHOD_STMT: {
+        if (currentClass == NULL) {
+            error("Class methods can only be declared in classes.");
+        } else {
+            FunctionType ftype = FUN_TYPE_CLASS_METHOD;
             emitFunction(n, ftype);
         }
         break;

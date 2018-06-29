@@ -59,6 +59,7 @@ void defineNativeFunctions() {
 
 // Builtin classes:
 ObjClass *lxObjClass;
+ObjClass *lxClassClass;
 ObjClass *lxAryClass;
 ObjClass *lxMapClass;
 ObjClass *lxErrClass;
@@ -70,6 +71,12 @@ void defineNativeClasses() {
     ObjClass *objClass = newClass(objClassName, NULL);
     tableSet(&vm.globals, OBJ_VAL(objClassName), OBJ_VAL(objClass));
     lxObjClass = objClass;
+
+    // class Class
+    ObjString *classClassName = copyString("Class", 5);
+    ObjClass *classClass = newClass(classClassName, objClass);
+    tableSet(&vm.globals, OBJ_VAL(classClassName), OBJ_VAL(classClass));
+    lxClassClass = classClass;
 
     // class Array
     ObjString *arrayClassName = copyString("Array", 5);
@@ -261,7 +268,8 @@ static bool isTruthy(Value val) {
 }
 
 static bool canCmpValues(Value lhs, Value rhs) {
-    return IS_NUMBER(lhs) && IS_NUMBER(rhs);
+    return (IS_NUMBER(lhs) && IS_NUMBER(rhs)) ||
+        (IS_STRING(lhs) && IS_STRING(rhs));
 }
 
 static int cmpValues(Value lhs, Value rhs) {
@@ -275,6 +283,8 @@ static int cmpValues(Value lhs, Value rhs) {
         } else {
             return 1;
         }
+    } else if (IS_STRING(lhs) && IS_STRING(rhs)) {
+        return strcmp(AS_STRING(lhs)->chars, AS_STRING(rhs)->chars);
     }
     // TODO: error out
     return -2;
@@ -457,6 +467,16 @@ static void defineMethod(ObjString *name) {
     ObjClass *klass = AS_CLASS(peek(1));
     VM_DEBUG("defining method '%s'", name->chars);
     ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
+    pop();
+}
+static void defineClassMethod(ObjString *name) {
+    Value method = peek(0); // function
+    ASSERT(IS_CLOSURE(method));
+    ASSERT(IS_CLASS(peek(1)));
+    ObjClass *klass = AS_CLASS(peek(1));
+    ObjClass *singletonClass = classSingletonClass(klass);
+    VM_DEBUG("defining class method '%s#%s'", singletonClass->name->chars, name->chars);
+    ASSERT(tableSet(&singletonClass->methods, OBJ_VAL(name), method));
     pop();
 }
 static void defineGetter(ObjString *name) {
@@ -965,7 +985,7 @@ static InterpretResult run(void) {
         Value lhs = pop(); // lhs
         if (!canCmpValues(lhs, rhs)) {
             // FIXME: throw error
-            runtimeError("Can only compare numbers");
+            runtimeError("Can only compare numbers and strings with <");
             return INTERPRET_RUNTIME_ERROR;
         }
         if (cmpValues(lhs, rhs) == -1) {
@@ -979,7 +999,7 @@ static InterpretResult run(void) {
         Value rhs = pop(); // rhs
         Value lhs = pop(); // lhs
         if (!canCmpValues(lhs, rhs)) {
-            runtimeError("Can only compare numbers");
+            runtimeError("Can only compare numbers and strings with >");
             return INTERPRET_RUNTIME_ERROR;
         }
         if (cmpValues(lhs, rhs) == 1) {
@@ -993,7 +1013,7 @@ static InterpretResult run(void) {
         Value rhs = pop(); // rhs
         Value lhs = pop(); // lhs
         if (!canCmpValues(lhs, rhs)) {
-            runtimeError("Can only compare numbers");
+            runtimeError("Can only compare numbers and strings with ==");
             return INTERPRET_RUNTIME_ERROR;
         }
         if (cmpValues(lhs, rhs) == 0) {
@@ -1212,19 +1232,28 @@ static InterpretResult run(void) {
       }
       case OP_INVOKE: {
           Value methodName = READ_CONSTANT();
+          ObjString *mname = AS_STRING(methodName);
           uint8_t numArgs = READ_BYTE();
           Value instanceVal = peek(numArgs);
-          if (!IS_INSTANCE(instanceVal)) {
-              // TODO: throw error
-              UNREACHABLE("not an instance?");
+          if (IS_INSTANCE(instanceVal)) {
+              ObjInstance *inst = AS_INSTANCE(instanceVal);
+              ObjString *className = inst->klass->name;
+              Obj *callable = instanceFindMethod(inst, mname);
+              if (!callable) {
+                  // FIXME: throw error
+                  UNREACHABLE("instance method '%s#%s' not found", className->chars, mname->chars);
+              }
+              callCallable(OBJ_VAL(callable), numArgs, true);
+          } else if (IS_CLASS(instanceVal)) {
+              ObjClass *klass = AS_CLASS(instanceVal);
+              Obj *callable = classFindClassMethod(klass, mname);
+              if (!callable) {
+                  // FIXME: throw error
+                  UNREACHABLE("class method '%s.%s' not found", klass->name->chars, mname->chars);
+              }
+              vm.stackTop[-numArgs-1] = instanceVal;
+              callCallable(OBJ_VAL(callable), numArgs, true);
           }
-          ObjInstance *inst = AS_INSTANCE(instanceVal);
-          Obj *callable = instanceFindMethod(inst, AS_STRING(methodName));
-          if (!callable) {
-              // TODO: throw error
-              UNREACHABLE("method not found");
-          }
-          callCallable(OBJ_VAL(callable), numArgs, true);
           if (vm.hadError) {
               return INTERPRET_RUNTIME_ERROR;
           }
@@ -1234,7 +1263,7 @@ static InterpretResult run(void) {
       case OP_GET_SUPER: {
           Value methodName = READ_CONSTANT();
           Value instanceVal = pop();
-          ASSERT(IS_INSTANCE(instanceVal));
+          ASSERT(IS_INSTANCE(instanceVal)); // FIXME: get working for classes (singleton methods)
           Value klassVal = peek(0);
           ASSERT(IS_CLASS(klassVal));
           ObjClass *klass = AS_CLASS(klassVal);
@@ -1298,6 +1327,12 @@ static InterpretResult run(void) {
           defineMethod(methStr);
           break;
       }
+      case OP_CLASS_METHOD: { // method definition
+          Value methodName = READ_CONSTANT();
+          ObjString *methStr = AS_STRING(methodName);
+          defineClassMethod(methStr);
+          break;
+      }
       case OP_GETTER: { // getter method definition
           Value methodName = READ_CONSTANT();
           ObjString *methStr = AS_STRING(methodName);
@@ -1315,9 +1350,9 @@ static InterpretResult run(void) {
           ObjString *propStr = AS_STRING(propName);
           ASSERT(propStr && propStr->chars);
           Value instance = peek(0);
-          if (!IS_INSTANCE(instance)) {
+          if (!IS_INSTANCE(instance) && !IS_CLASS(instance)) {
               // TODO: throw TypeError
-              runtimeError("Tried to access property '%s' on non-instance (type: %s)", propStr->chars, typeOfVal(instance));
+              runtimeError("Tried to access property '%s' of non-instance (type: %s)", propStr->chars, typeOfVal(instance));
               return INTERPRET_RUNTIME_ERROR;
           }
           pop();
@@ -1330,8 +1365,8 @@ static InterpretResult run(void) {
           Value rval = peek(0);
           Value instance = peek(1);
           // TODO: throw TypeError
-          if (!IS_INSTANCE(instance)) {
-              runtimeError("Tried to set property '%s' on non-instance", propStr->chars);
+          if (!IS_INSTANCE(instance) && !IS_CLASS(instance)) {
+              runtimeError("Tried to set property '%s' of non-instance", propStr->chars);
               return INTERPRET_RUNTIME_ERROR;
           }
           propertySet(AS_INSTANCE(instance), propStr, rval);

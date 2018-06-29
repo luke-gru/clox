@@ -277,6 +277,10 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     ObjClass *klass = ALLOCATE_OBJ(
         ObjClass, OBJ_T_CLASS
     );
+    klass->klass = lxClassClass;
+    klass->singletonKlass = NULL;
+    initTable(&klass->fields);
+    initTable(&klass->hiddenFields);
     initTable(&klass->methods);
     initTable(&klass->getters);
     initTable(&klass->setters);
@@ -291,6 +295,7 @@ ObjInstance *newInstance(ObjClass *klass) {
         ObjInstance, OBJ_T_INSTANCE
     );
     obj->klass = klass;
+    obj->singletonKlass = NULL;
     initTable(&obj->fields);
     initTable(&obj->hiddenFields);
     return obj;
@@ -329,6 +334,18 @@ ObjInternal *newInternalObject(void *data, GCMarkFunc markFunc, GCFreeFunc freeF
 
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     ObjClass *klass = obj->klass;
+    Value method;
+    while (klass) {
+        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
+            return AS_OBJ(method);
+        }
+        klass = klass->superclass;
+    }
+    return NULL;
+}
+
+Obj *classFindClassMethod(ObjClass *obj, ObjString *name) {
+    ObjClass *klass = classSingletonClass(obj);
     Value method;
     while (klass) {
         if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
@@ -466,4 +483,16 @@ bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
         subklass = subklass->superclass;
     }
     return subklass != NULL;
+}
+
+ObjClass *classSingletonClass(ObjClass *klass) {
+    if (klass->singletonKlass) {
+        return klass->singletonKlass;
+    }
+    ObjString *name = dupString(klass->name);
+    pushCString(name, " (meta)", 7);
+    ObjClass *meta = newClass(name, klass->superclass);
+    klass->singletonKlass = meta;
+    klass->superclass = meta;
+    return meta;
 }
