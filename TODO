@@ -11,10 +11,10 @@ instance []
 * Add benchmark library/internals so I can benchmark/profile performance of the
 interpreter []
 * Change the way chunks are written, so they can be edited/removed more easily
-through instruction optimization passes []
+through instruction optimization passes [DONE]
 * Change compiler so that constant value strings aren't always added to
-chunks even if they're the same strings that exist already in the chunk. []
-* Make is so that global variables aren't accessible everywhere, or that
+chunks even if they're the same strings that exist already in the chunk. [DONE]
+* Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in $ruby.
 * Allow operator overloading with opAdd, etc.
 

@@ -2,7 +2,7 @@ class Shape {
   init(color) {
     this.color = color;
   }
-  computedColor() {
+  computedColor {
     return "color: " + this.color;
   }
 }

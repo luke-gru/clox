@@ -1,0 +1,7 @@
+class Train < Object {
+  init(color) {
+    return "non-instance!";
+  }
+}
+var t = Train("Red");
+t;

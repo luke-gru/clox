@@ -32,9 +32,12 @@ typedef enum {
     OP_PROP_GET,
     OP_PROP_SET,
     OP_METHOD, // define a method in the VM, string constant index as operand, function object at top of stack, class object under that
+    OP_GETTER, // define a getter method in the VM, string constant index as operand, function object at top of stack, class object under that
+    OP_SETTER, // define a setter method in the VM, string constant index as operand, function object at top of stack, class object under that
 
-    OP_CALL, // call function
-    OP_INVOKE, // call method
+    OP_CALL, // call function, arguments are on stack
+    OP_INVOKE, // call regular method, instance and arguments are on stack
+    OP_GET_SUPER, // method lookup begins in superclass, class and instance are on stack
     OP_RETURN,
     OP_PRINT,
 

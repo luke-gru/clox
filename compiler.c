@@ -145,6 +145,7 @@ static Token syntheticToken(const char *lexeme) {
     Token tok;
     tok.start = lexeme;
     tok.length = strlen(lexeme);
+    tok.lexeme = lexeme;
     return tok;
 }
 
@@ -256,16 +257,13 @@ static void emitCloseUpvalue(void) {
 
 static void popScope(CompileScopeType stype) {
     COMP_TRACE("popScope: %s", compileScopeName(stype));
-    while (current->localCount > 0 &&
-            current->locals[current->localCount - 1].depth >= current->scopeDepth) {
-        if (stype != COMPILE_SCOPE_CLASS) {
-            if (current->locals[current->localCount - 1].isUpvalue) {
-                COMP_TRACE("popScope closing upvalue");
-                emitCloseUpvalue();
-            } else {
-                COMP_TRACE("popScope emitting OP_POP");
-                emitOp0(OP_POP); // don't pop the non-pushed implicit 'super' in class scope
-            }
+    while (current->localCount > 0 && current->locals[current->localCount - 1].depth >= current->scopeDepth) {
+        if (current->locals[current->localCount - 1].isUpvalue) {
+            COMP_TRACE("popScope closing upvalue");
+            emitCloseUpvalue();
+        } else {
+            COMP_TRACE("popScope emitting OP_POP");
+            emitOp0(OP_POP);
         }
         current->localCount--;
     }
@@ -292,23 +290,23 @@ static void emitLeave() {
 // add one if an upvalue for that variable is already in the list. Returns the
 // index of the upvalue.
 static int addUpvalue(Compiler *compiler, uint8_t index, bool isLocal) {
-  // Look for an existing one.
-  COMP_TRACE("Adding upvalue to COMP=%p, index: %d, isLocal: %s",
-          compiler, index, isLocal ? "true" : "false");
-  for (int i = 0; i < compiler->function->upvalueCount; i++) {
-    Upvalue *upvalue = &compiler->upvalues[i];
-    if (upvalue->index == index && upvalue->isLocal == isLocal) return i;
-  }
+    // Look for an existing one.
+    COMP_TRACE("Adding upvalue to COMP=%p, index: %d, isLocal: %s",
+            compiler, index, isLocal ? "true" : "false");
+    for (int i = 0; i < compiler->function->upvalueCount; i++) {
+        Upvalue *upvalue = &compiler->upvalues[i];
+        if (upvalue->index == index && upvalue->isLocal == isLocal) return i;
+    }
 
-  // If we got here, it's a new upvalue.
-  if (compiler->function->upvalueCount == 256) {
-    error("Too many closure variables in function.");
-    return 0;
-  }
+    if (compiler->function->upvalueCount == 256) {
+        error("Too many closure variables in function.");
+        return 0;
+    }
 
-  compiler->upvalues[compiler->function->upvalueCount].isLocal = isLocal;
-  compiler->upvalues[compiler->function->upvalueCount].index = index;
-  return compiler->function->upvalueCount++;
+    // If we got here, it's a new upvalue.
+    compiler->upvalues[compiler->function->upvalueCount].isLocal = isLocal;
+    compiler->upvalues[compiler->function->upvalueCount].index = index;
+    return compiler->function->upvalueCount++;
 }
 
 static bool identifiersEqual(Token *a, Token *b) {
@@ -340,36 +338,36 @@ static int resolveLocal(Compiler *compiler, Token* name) {
 // will flatten the closure and add upvalues to all of the intermediate
 // functions so that it gets walked down to this one.
 static int resolveUpvalue(Compiler *compiler, Token *name) {
-  COMP_TRACE("Resolving upvalue for variable '%s'", tokStr(name));
-  // If we are at the top level, we didn't find it.
-  if (compiler->enclosing == NULL) return -1;
+    COMP_TRACE("Resolving upvalue for variable '%s'", tokStr(name));
+    // If we are at the top level, we didn't find it.
+    if (compiler->enclosing == NULL) return -1;
 
-  // See if it's a local variable in the immediately enclosing function.
-  int local = resolveLocal(compiler->enclosing, name);
-  if (local != -1) {
-      COMP_TRACE("Upvalue variable '%s' found as local", tokStr(name));
-    // Mark the local as an upvalue so we know to close it when it goes out of
-    // scope.
-    compiler->enclosing->locals[local].isUpvalue = true;
-    return addUpvalue(compiler, (uint8_t)local, true);
-  }
+    // See if it's a local variable in the immediately enclosing function.
+    int local = resolveLocal(compiler->enclosing, name);
+    if (local != -1) {
+        COMP_TRACE("Upvalue variable '%s' found as local", tokStr(name));
+        // Mark the local as an upvalue so we know to close it when it goes out of
+        // scope.
+        compiler->enclosing->locals[local].isUpvalue = true;
+        return addUpvalue(compiler, (uint8_t)local, true);
+    }
 
-  // See if it's an upvalue in the immediately enclosing function. In other
-  // words, if it's a local variable in a non-immediately enclosing function.
-  // This "flattens" closures automatically: it adds upvalues to all of the
-  // intermediate functions to get from the function where a local is declared
-  // all the way into the possibly deeply nested function that is closing over
-  // it.
-  int upvalue = resolveUpvalue(compiler->enclosing, name);
-  if (upvalue != -1) {
-     COMP_TRACE("Upvalue variable '%s' found as non-local", tokStr(name));
-    return addUpvalue(compiler, (uint8_t)upvalue, false);
-  }
+    // See if it's an upvalue in the immediately enclosing function. In other
+    // words, if it's a local variable in a non-immediately enclosing function.
+    // This "flattens" closures automatically: it adds upvalues to all of the
+    // intermediate functions to get from the function where a local is declared
+    // all the way into the possibly deeply nested function that is closing over
+    // it.
+    int upvalue = resolveUpvalue(compiler->enclosing, name);
+    if (upvalue != -1) {
+        COMP_TRACE("Upvalue variable '%s' found as non-local", tokStr(name));
+        return addUpvalue(compiler, (uint8_t)upvalue, false);
+    }
 
-  // If we got here, we walked all the way up the parent chain and couldn't
-  // find it.
-   COMP_TRACE("Upvalue variable '%s' not found", tokStr(name));
-  return -1;
+    // If we got here, we walked all the way up the parent chain and couldn't
+    // find it.
+    COMP_TRACE("Upvalue variable '%s' not found", tokStr(name));
+    return -1;
 }
 
 static void writeChunkByte(Chunk *chunk, uint8_t byte, int lineno) {
@@ -855,6 +853,8 @@ static void initCompiler(
         );
         break;
     case FUN_TYPE_INIT:
+    case FUN_TYPE_GETTER:
+    case FUN_TYPE_SETTER:
     case FUN_TYPE_METHOD: {
         ASSERT(currentClass);
         char *className = tokStr(&currentClass->name);
@@ -875,14 +875,15 @@ static void initCompiler(
         current->function->name = NULL;
         break;
     default:
-        error("invalid function type %d", ftype);
+        UNREACHABLE("invalid function type %d", ftype);
     }
 
     // The first slot is always implicitly declared.
     Local* local = &current->locals[current->localCount++];
     local->depth = current->scopeDepth;
     local->isUpvalue = false;
-    if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT) {
+    if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
+            ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER) {
         // In a method, it holds the receiver, "this".
         local->name.start = "this";
         local->name.length = 4;
@@ -940,16 +941,18 @@ static void emitClass(Node *n) {
         // get the superclass
         namedVariable(*superClassTok, VAR_GET);
         // Store the superclass in a local variable named "super".
-        addLocal(syntheticToken("super"));
+        Token superTok = syntheticToken("super");
+        addLocal(superTok);
 
-        emitOp1(OP_SUBCLASS, nameConstant); // VM pops the superclass and gets the class name
+        emitOp1(OP_SUBCLASS, nameConstant); // VM peeks the superclass and gets the class name
     } else {
         emitOp1(OP_CLASS, nameConstant); // VM gets the class name
     }
 
-    emitChildren(n); // block node with methods
+    emitChildren(n); // block node with methods and other declarations
 
     if (cComp.hasSuperclass) {
+        namedVariable(*superClassTok, VAR_GET); // this is popped to close the "super" upvalue
         popScope(COMPILE_SCOPE_CLASS);
     }
 
@@ -993,8 +996,12 @@ static void emitFunction(Node *n, FunctionType ftype) {
         emitOp0(fCompiler.upvalues[i].index);
     }
 
+    if (ftype == FUN_TYPE_TOP_LEVEL) {
+        return;
+    }
+
     if (ftype != FUN_TYPE_ANON) {
-        if (currentClass == NULL) {
+        if (currentClass == NULL || ftype == FUN_TYPE_NAMED) { // regular function
             uint8_t defineArg;
             if (current->scopeDepth > 0) {
                 defineArg = declareVariable(&n->tok);
@@ -1004,7 +1011,19 @@ static void emitFunction(Node *n, FunctionType ftype) {
             defineVariable(defineArg, true); // define function as global or local var
         // TODO: allow regular function definitions in classes, along with methods
         } else {
-            emitOp1(OP_METHOD, identifierConstant(&n->tok));
+            switch (ftype) {
+                case FUN_TYPE_METHOD:
+                case FUN_TYPE_INIT:
+                    emitOp1(OP_METHOD, identifierConstant(&n->tok));
+                    break;
+                case FUN_TYPE_GETTER:
+                    emitOp1(OP_GETTER, identifierConstant(&n->tok));
+                    break;
+                case FUN_TYPE_SETTER:
+                    emitOp1(OP_SETTER, identifierConstant(&n->tok));
+                    break;
+                default: UNREACHABLE("bug: invalid function type: %d\n", ftype);
+            }
         }
     }
 }
@@ -1041,8 +1060,10 @@ static void emitNode(Node *n) {
             emitOp0(OP_GREATER);
         } else if (n->tok.type == TOKEN_GREATER_EQUAL) {
             emitOp0(OP_GREATER_EQUAL);
+        } else if (n->tok.type == TOKEN_EQUAL_EQUAL) {
+            emitOp0(OP_EQUAL);
         } else {
-            error("invalid binary expr node (token: %s)", tokStr(&n->tok));
+            UNREACHABLE("invalid binary expr node (token: %s)", tokStr(&n->tok));
         }
         return;
     }
@@ -1061,8 +1082,7 @@ static void emitNode(Node *n) {
             emitOp0(OP_OR);
             patchJump(skipRhsJump, insnOffset(skipRhsJump, currentIseq()->tail), currentIseq()->tail);
         } else {
-            error("invalid logical expression node (token: %s)", tokStr(&n->tok));
-            ASSERT(0);
+            UNREACHABLE("invalid logical expression node (token: %s)", tokStr(&n->tok));
         }
         return;
     }
@@ -1073,7 +1093,7 @@ static void emitNode(Node *n) {
         } else if (n->tok.type == TOKEN_BANG) {
             emitOp0(OP_NOT);
         } else {
-            error("invalid unary expr node (token: %s)", tokStr(&n->tok));
+            UNREACHABLE("invalid unary expr node (token: %s)", tokStr(&n->tok));
         }
         return;
     }
@@ -1092,7 +1112,7 @@ static void emitNode(Node *n) {
         } else if (n->tok.type == TOKEN_NIL) {
             emitOp0(OP_NIL);
         } else {
-            error("invalid literal expr node (token: %s)", tokStr(&n->tok));
+            UNREACHABLE("invalid literal expr node (token: %s)", tokStr(&n->tok));
         }
         return;
     }
@@ -1219,6 +1239,22 @@ static void emitNode(Node *n) {
         }
         break;
     }
+    case GETTER_STMT: {
+        if (currentClass == NULL) {
+            error("Getter methods can only be declared in classes");
+        } else {
+            emitFunction(n, FUN_TYPE_GETTER);
+        }
+        break;
+    }
+    case SETTER_STMT: {
+        if (currentClass == NULL) {
+            error("Setter methods can only be declared in classes");
+        } else {
+            emitFunction(n, FUN_TYPE_SETTER);
+        }
+        break;
+    }
     case ANON_FN_EXPR: {
         emitFunction(n, FUN_TYPE_ANON);
         break;
@@ -1265,6 +1301,14 @@ static void emitNode(Node *n) {
     }
     case THIS_EXPR: {
         namedVariable(syntheticToken("this"), VAR_GET);
+        break;
+    }
+    case SUPER_EXPR: {
+        namedVariable(syntheticToken("super"), VAR_GET);
+        namedVariable(syntheticToken("this"), VAR_GET);
+        Node *tokNode = vec_last(n->children);
+        uint8_t methodNameArg = identifierConstant(&tokNode->tok);
+        emitOp1(OP_GET_SUPER, methodNameArg);
         break;
     }
     case CALL_EXPR: {
@@ -1356,8 +1400,8 @@ static void emitNode(Node *n) {
         break;
     }
     default:
-        error("invalid (unknown) node. kind (%d) not implemented (tok=%s)",
-              nodeKind(n), tokStr(&n->tok)
+        UNREACHABLE("invalid (unknown) node. kind (%d) not implemented (tok=%s)",
+            nodeKind(n), tokStr(&n->tok)
         );
     }
 }

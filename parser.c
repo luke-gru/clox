@@ -507,6 +507,11 @@ static Node *classBody() {
         Node *decl;
         if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_LEFT_PAREN) {
             decl = funDeclaration(FUNCTION_TYPE_METHOD);
+        } else if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_LEFT_BRACE &&
+                peekTokN(2).type == TOKEN_EQUAL) {
+            decl = funDeclaration(FUNCTION_TYPE_SETTER);
+        } else if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_LEFT_BRACE) {
+            decl = funDeclaration(FUNCTION_TYPE_GETTER);
         } else {
             decl = declaration();
         }
@@ -564,21 +569,26 @@ static Node *funDeclaration(ParseFunctionType fnType) {
         consume(TOKEN_IDENTIFIER, "Expect function name (identifier) after 'fun' keyword");
         nameTok = parser.previous;
     }
-    consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");
-    vec_nodep_t *paramNodes = createNodeVec();
-    while (match(TOKEN_IDENTIFIER)) {
-        Token paramTok = parser.previous;
-        node_type_t nType = {
-            .type = NODE_OTHER,
-            .kind = PARAM_NODE,
-        };
-        Node *n = createNode(nType, paramTok, NULL);
-        vec_push(paramNodes, n);
-        if (!match(TOKEN_COMMA)) {
-            break;
-        }
+    if (fnType == FUNCTION_TYPE_SETTER) {
+        consume(TOKEN_EQUAL, "Expect '=' after setter method name");
     }
-    consume(TOKEN_RIGHT_PAREN, "Expect ')' after function parameters");
+    vec_nodep_t *paramNodes = createNodeVec();
+    if (fnType != FUNCTION_TYPE_GETTER) {
+        consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");
+        while (match(TOKEN_IDENTIFIER)) {
+            Token paramTok = parser.previous;
+            node_type_t nType = {
+                .type = NODE_OTHER,
+                .kind = PARAM_NODE,
+            };
+            Node *n = createNode(nType, paramTok, NULL);
+            vec_push(paramNodes, n);
+            if (!match(TOKEN_COMMA)) {
+                break;
+            }
+        }
+        consume(TOKEN_RIGHT_PAREN, "Expect ')' after function parameters");
+    }
     consume(TOKEN_LEFT_BRACE, "Expect '{' after function parameter list");
     Token lbrace = parser.previous;
     Node *stmtList = blockStmts();
@@ -598,6 +608,16 @@ static Node *funDeclaration(ParseFunctionType fnType) {
         funcType = (node_type_t){
             .type = NODE_STMT,
             .kind = METHOD_STMT,
+        };
+    } else if (fnType == FUNCTION_TYPE_GETTER) {
+        funcType = (node_type_t){
+            .type = NODE_STMT,
+            .kind = GETTER_STMT,
+        };
+    } else if (fnType == FUNCTION_TYPE_SETTER) {
+        funcType = (node_type_t){
+            .type = NODE_STMT,
+            .kind = SETTER_STMT,
         };
     } else {
         funcType = (node_type_t){

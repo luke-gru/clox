@@ -17,6 +17,8 @@ typedef enum {
     FUN_TYPE_ANON,
     FUN_TYPE_INIT,
     FUN_TYPE_METHOD,
+    FUN_TYPE_GETTER,
+    FUN_TYPE_SETTER,
     // implementation detail, top-level is compiled as if it was a function
     FUN_TYPE_TOP_LEVEL
 } FunctionType;

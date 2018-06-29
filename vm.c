@@ -136,6 +136,7 @@ static jmp_buf CCallJumpBuf;
 static bool inCCall = false;
 static bool cCallThrew = false;
 static bool returnedFromNativeErr = false;
+static bool runUntilReturn = false;
 
 void resetStack() {
     vm.stackTop = vm.stack;
@@ -381,12 +382,40 @@ static bool isThrowable(Value val) {
     return IS_INSTANCE(val) && !IS_STRING(val);
 }
 
+static bool lookupGetter(ObjInstance *obj, ObjString *propName, Value *ret) {
+    ObjClass *klass = obj->klass;
+    Value key = OBJ_VAL(propName);
+    while (klass) {
+        if (tableGet(&klass->getters, key, ret)) {
+            return true;
+        }
+        klass = klass->superclass;
+    }
+    return false;
+}
+
+static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName, Value *ret) {
+    Value key = OBJ_VAL(propName);
+    while (klass) {
+        if (tableGet(&klass->methods, key, ret)) {
+            return true;
+        }
+        klass = klass->superclass;
+    }
+    return false;
+}
+
+static InterpretResult run(void);
+
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
     if (tableGet(&obj->fields, OBJ_VAL(propName), &ret)) {
         return ret;
-    } else if (tableGet(&obj->klass->methods, OBJ_VAL(propName), &ret)) {
-        ASSERT(isCallable(ret));
+    } else if (lookupGetter(obj, propName, &ret)) {
+        VM_DEBUG("getter found");
+        callVMMethod(obj, ret, 0, NULL);
+        return pop();
+    } else if (lookupMethod(obj, obj->klass, propName, &ret)) {
         ObjBoundMethod *bmethod = newBoundMethod(obj, AS_OBJ(ret));
         return OBJ_VAL(bmethod);
     } else {
@@ -407,9 +436,28 @@ static void defineMethod(ObjString *name) {
     ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
     pop();
 }
+static void defineGetter(ObjString *name) {
+    Value method = peek(0); // function
+    ASSERT(IS_CLOSURE(method));
+    ASSERT(IS_CLASS(peek(1)));
+    ObjClass *klass = AS_CLASS(peek(1));
+    VM_DEBUG("defining getter '%s'", name->chars);
+    ASSERT(tableSet(&klass->getters, OBJ_VAL(name), method));
+    pop();
+}
+static void defineSetter(ObjString *name) {
+    Value method = peek(0); // function
+    ASSERT(IS_CLOSURE(method));
+    ASSERT(IS_CLASS(peek(1)));
+    ObjClass *klass = AS_CLASS(peek(1));
+    VM_DEBUG("defining setter '%s'", name->chars);
+    ASSERT(tableSet(&klass->setters, OBJ_VAL(name), method));
+    pop();
+}
 
 // Call method on instance, args are NOT expected to be pushed on to stack by
 // caller. `argCount` does not include the implicit instance argument.
+// Return value is pushed to stack and returned.
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
     VM_DEBUG("Calling VM method");
     push(OBJ_VAL(instance));
@@ -417,24 +465,16 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
         ASSERT(args);
         push(args[i]);
     }
+    VM_DEBUG("call begin");
     callCallable(callable, argCount, true); // pushes return value to stack
-    if (argCount > 0) {
-        Value ret = peek(0);
-        pop();
-        for (int i = 0; i < argCount; i++) {
-            pop();
-        }
-        pop(); // pop instance
-        push(ret);
-        VM_DEBUG("/Calling VM method");
-        return ret;
-    } else {
-        Value ret = pop();
-        pop(); // pop instance
-        push(ret);
-        VM_DEBUG("/Calling VM method");
-        return ret;
+    if (IS_CLOSURE(callable)) {
+        bool oldRunUntilReturn = runUntilReturn;
+        runUntilReturn = true;
+        run(); // actually run the function
+        runUntilReturn = oldRunUntilReturn;
     }
+    VM_DEBUG("call done");
+    return peek(0);
 }
 
 static void pushNativeFrame(ObjNative *native) {
@@ -499,6 +539,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     Value instanceVal;
     if (IS_CLOSURE(callable)) {
         closure = AS_CLOSURE(callable);
+        if (!isMethod)
+            vm.stackTop[-argCount - 1] = callable;
     } else if (IS_CLASS(callable)) {
         ObjClass *klass = AS_CLASS(callable);
         ObjInstance *instance = newInstance(klass);
@@ -535,6 +577,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
             }
             ASSERT(IS_CLOSURE(initializer));
             closure = AS_CLOSURE(initializer);
+            if (argCount == 0) argCount++; // for implicit self
         } else if (argCount > 0) {
             throwArgErrorFmt("Expected 0 arguments (Object#init) but got %d.", argCount);
             return false;
@@ -581,6 +624,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         return false;
     }
 
+    VM_DEBUG("doCallCallable found closure");
     // non-native function/method call
     ASSERT(closure);
     checkFunctionArity(closure->function, argCount);
@@ -594,8 +638,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     frame->start = parentStart;
     frame->isCCall = false;
     frame->nativeFunc = NULL;
-
-    // +1 to include either the called function or the receiver.
+    // +1 to include either the called function (for non-methods) or the receiver (for methods)
     frame->slots = vm.stackTop - (argCount + 1);
     return true;
 }
@@ -713,28 +756,48 @@ void throwArgErrorFmt(const char *format, ...) {
 }
 
 void printVMStack(FILE *f) {
+    /*int frameNum = 0;*/
+    /*CallFrame *curFrame = &vm.frames[frameNum];*/
     if (vm.stackTop == vm.stack) {
-        fprintf(f, "%s", "Stack: empty\n");
+        fprintf(f, "Stack: empty\n");
         return;
     }
-    fprintf(f, "%s", "Stack:\n");
+    fprintf(f, "Stack (%d frames):\n", vm.frameCount);
+    /*for (int i = 0; i < vm.frameCount; i++) {*/
+        /*fprintf(f, "Frame %d slots: %p\n", i+1, vm.frames[i].slots);*/
+    /*}*/
     // print VM stack values from bottom of stack to top
     for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
         if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE)) {
             fprintf(stderr, "Broken object pointer: %p\n", AS_OBJ(*slot));
             ASSERT(0);
         }
-        fprintf(f, "%s", "[ ");
+        /*if (frameNum < vm.frameCount) {*/
+            /*if (curFrame->slots+1 == slot || curFrame->slots == slot) {*/
+                /*fprintf(f, " |FRM %d| ", frameNum+1);*/
+                /*frameNum++;*/
+                /*if (frameNum < vm.frameCount) {*/
+                    /*curFrame = &vm.frames[frameNum];*/
+                /*}*/
+            /*}*/
+        /*}*/
+        fprintf(f, "[ ");
         printValue(f, *slot, false);
-        fprintf(f, "%s", " ]");
+        fprintf(f, " ]");
     }
-    fprintf(f, "%s", "\n");
+    fprintf(f, "\n");
 }
 
 ObjUpvalue *captureUpvalue(Value *local) {
     if (vm.openUpvalues == NULL) {
         vm.openUpvalues = newUpvalue(local);
         return vm.openUpvalues;
+    }
+
+    if (CLOX_OPTION_T(debugVM)) {
+        VM_DEBUG("Capturing upvalue: ");
+        printValue(stderr, *local, false);
+        fprintf(stderr, "\n");
     }
 
     ObjUpvalue* prevUpvalue = NULL;
@@ -767,8 +830,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
 }
 
 static void closeUpvalues(Value *last) {
-  while (vm.openUpvalues != NULL &&
-         vm.openUpvalues->value >= last) {
+  while (vm.openUpvalues != NULL && vm.openUpvalues->value >= last) {
     ObjUpvalue *upvalue = vm.openUpvalues;
 
     // Move the value into the upvalue itself and point the upvalue to it.
@@ -828,7 +890,7 @@ static InterpretResult run(void) {
           }\
           callCallable(OBJ_VAL(callable), 1, true);\
       } else {\
-        UNREACHABLE("bug");\
+        UNREACHABLE("bug in binary op");\
       }\
     } while (0)
 
@@ -854,7 +916,6 @@ static InterpretResult run(void) {
         push(constant);
         break;
       }
-      // TODO: allow addition of strings
       case OP_ADD:      BINARY_OP(+,OP_ADD); break;
       case OP_SUBTRACT: BINARY_OP(-,OP_SUBTRACT); break;
       case OP_MULTIPLY: BINARY_OP(*,OP_MULTIPLY); break;
@@ -892,6 +953,20 @@ static InterpretResult run(void) {
             return INTERPRET_RUNTIME_ERROR;
         }
         if (cmpValues(lhs, rhs) == 1) {
+            push(trueValue());
+        } else {
+            push(falseValue());
+        }
+        break;
+      }
+      case OP_EQUAL: {
+        Value rhs = pop(); // rhs
+        Value lhs = pop(); // lhs
+        if (!canCmpValues(lhs, rhs)) {
+            runtimeError("Can only compare numbers");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+        if (cmpValues(lhs, rhs) == 0) {
             push(trueValue());
         } else {
             push(falseValue());
@@ -1120,6 +1195,27 @@ static InterpretResult run(void) {
           ASSERT_VALID_STACK();
           break;
       }
+      case OP_GET_SUPER: {
+          Value methodName = READ_CONSTANT();
+          Value instanceVal = pop();
+          ASSERT(IS_INSTANCE(instanceVal));
+          Value klassVal = peek(0);
+          ASSERT(IS_CLASS(klassVal));
+          ObjClass *klass = AS_CLASS(klassVal);
+          Value method;
+          bool found = lookupMethod(
+              AS_INSTANCE(instanceVal), klass,
+              AS_STRING(methodName), &method);
+          if (!found) {
+              // TODO: Raise error
+              runtimeError("Could not find method");
+              return INTERPRET_RUNTIME_ERROR;
+          }
+          ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method));
+          pop(); // classval
+          push(OBJ_VAL(bmethod));
+          break;
+      }
       // return from function/method
       case OP_RETURN: {
           Value result = pop();
@@ -1129,6 +1225,9 @@ static InterpretResult run(void) {
           popFrame();
           vm.stackTop = newTop;
           push(result);
+          if (runUntilReturn) {
+              return INTERPRET_OK;
+          }
           break;
       }
       case OP_CLASS: {
@@ -1157,10 +1256,22 @@ static InterpretResult run(void) {
           push(OBJ_VAL(klass));
           break;
       }
-      case OP_METHOD: {
+      case OP_METHOD: { // method definition
           Value methodName = READ_CONSTANT();
           ObjString *methStr = AS_STRING(methodName);
           defineMethod(methStr);
+          break;
+      }
+      case OP_GETTER: { // getter method definition
+          Value methodName = READ_CONSTANT();
+          ObjString *methStr = AS_STRING(methodName);
+          defineGetter(methStr);
+          break;
+      }
+      case OP_SETTER: { // setter method definition
+          Value methodName = READ_CONSTANT();
+          ObjString *methStr = AS_STRING(methodName);
+          defineSetter(methStr);
           break;
       }
       case OP_PROP_GET: {
@@ -1169,6 +1280,7 @@ static InterpretResult run(void) {
           ASSERT(propStr && propStr->chars);
           Value instance = peek(0);
           if (!IS_INSTANCE(instance)) {
+              // TODO: throw TypeError
               runtimeError("Tried to access property '%s' on non-instance (type: %s)", propStr->chars, typeOfVal(instance));
               return INTERPRET_RUNTIME_ERROR;
           }
@@ -1181,6 +1293,7 @@ static InterpretResult run(void) {
           ObjString *propStr = AS_STRING(propName);
           Value rval = peek(0);
           Value instance = peek(1);
+          // TODO: throw TypeError
           if (!IS_INSTANCE(instance)) {
               runtimeError("Tried to set property '%s' on non-instance", propStr->chars);
               return INTERPRET_RUNTIME_ERROR;

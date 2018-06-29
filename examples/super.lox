@@ -2,7 +2,7 @@ class Animal {
   init(name) {
     this.name = name;
   }
-  computedcolor {
+  computedcolor() {
     return "color: " + this.color;
   }
 }
@@ -12,8 +12,8 @@ class Snake < Animal {
     super.init(name);
     this.color = color;
   }
-  computedcolor {
-    return "my " + super.computedcolor;
+  computedcolor() {
+    return "my " + super.computedcolor();
   }
 }
 
@@ -21,9 +21,9 @@ var s = Snake("Jake", "red");
 var s2 = Snake("Leo", "blue");
 print s.color;
 print s;
-print s.computedcolor;
-print s == s2;
-print s == s;
+print s.computedcolor();
+//print s == s2;
+//print s == s;
 
 class A {
   method() {

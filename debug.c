@@ -13,6 +13,7 @@ NORETURN void die(const char *fmt, ...) {
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
+    fprintf(stderr, "\n");
     exit(1);
 }
 
@@ -40,6 +41,8 @@ const char *opName(OpCode code) {
         return "OP_GREATER_EQUAL";
     case OP_LESS_EQUAL:
         return "OP_LESS_EQUAL";
+    case OP_EQUAL:
+        return "OP_EQUAL";
     case OP_RETURN:
         return "OP_RETURN";
     case OP_NIL:
@@ -70,8 +73,14 @@ const char *opName(OpCode code) {
         return "OP_CALL";
     case OP_INVOKE:
         return "OP_INVOKE";
+    case OP_GET_SUPER:
+        return "OP_GET_SUPER";
     case OP_METHOD:
         return "OP_METHOD";
+    case OP_GETTER:
+        return "OP_GETTER";
+    case OP_SETTER:
+        return "OP_SETTER";
     case OP_CREATE_ARRAY:
         return "OP_CREATE_ARRAY";
     case OP_PRINT:
@@ -371,9 +380,12 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_CLASS:
         case OP_SUBCLASS:
         case OP_METHOD:
+        case OP_GETTER:
+        case OP_SETTER:
         case OP_PROP_GET:
         case OP_PROP_SET:
         case OP_GET_THROWN:
+        case OP_GET_SUPER:
             return printConstantInstruction(opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
@@ -403,6 +415,7 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_GREATER:
         case OP_GREATER_EQUAL:
         case OP_LESS_EQUAL:
+        case OP_EQUAL:
         case OP_PRINT:
         case OP_TRUE:
         case OP_FALSE:
@@ -438,9 +451,12 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_CLASS:
         case OP_SUBCLASS:
         case OP_METHOD:
+        case OP_GETTER:
+        case OP_SETTER:
         case OP_PROP_GET:
         case OP_PROP_SET:
         case OP_GET_THROWN:
+        case OP_GET_SUPER:
             return constantInstruction(buf, opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
@@ -470,6 +486,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_GREATER:
         case OP_GREATER_EQUAL:
         case OP_LESS_EQUAL:
+        case OP_EQUAL:
         case OP_PRINT:
         case OP_TRUE:
         case OP_FALSE:

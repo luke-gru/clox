@@ -63,8 +63,10 @@ typedef enum {
 
 typedef enum {
     FUNCTION_TYPE_NAMED = 1,
-    FUNCTION_TYPE_METHOD,
     FUNCTION_TYPE_ANON,
+    FUNCTION_TYPE_METHOD,
+    FUNCTION_TYPE_GETTER,
+    FUNCTION_TYPE_SETTER,
 } ParseFunctionType;
 
 typedef struct {

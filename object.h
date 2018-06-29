@@ -97,6 +97,8 @@ typedef struct ObjClass {
   ObjString *name;
   ObjClass *superclass;
   Table methods;
+  Table getters;
+  Table setters;
 } ObjClass;
 
 extern ObjClass *lxObjClass;

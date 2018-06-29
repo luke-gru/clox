@@ -5,6 +5,7 @@
 #include "stdlib.h"
 #include "memory.h"
 #include "options.h"
+#include "debug.h"
 
 // global
 Scanner scanner;
@@ -87,6 +88,20 @@ static bool match(char expected) {
   return true;
 }
 
+static void strReplace(char *str, char *substr, char replace) {
+    char *found = NULL;
+    int len = strlen(substr);
+    int difflen = len-1;
+    while ((found = strstr(str, substr)) != NULL) {
+        *found = replace;
+        if (len != 1) {
+            int left = strlen(str)-(found-str);
+            memmove(found+1, found+1+difflen, left-(difflen+1));
+            memset(str + strlen(str)-difflen, 0, difflen);
+        }
+    }
+}
+
 static Token makeToken(TokenType type) {
   Token token;
   token.type = type;
@@ -131,6 +146,20 @@ static void skipWhitespace() {
         if (peekNext() == '/') {
           // A comment goes until the end of the line.
           while (peek() != '\n' && !isAtEnd()) advance();
+        } else if (peekNext() == '*') { // multiline comment /* */
+            advance(); advance();
+            char c;
+            while (!isAtEnd()) {
+                c = peek();
+                if (c == '*' && peekNext() == '/') {
+                    advance(); advance();
+                    break;
+                }
+                if (c == '\n') {
+                    scanner.line++;
+                }
+                advance();
+            }
         } else {
           return;
         }
@@ -157,6 +186,17 @@ static Token identifier() {
     }
   }
 
+  if (type == TOKEN_IDENTIFIER && memcmp(scanner.tokenStart, "__LINE__", length) == 0) {
+      Token token = makeToken(TOKEN_NUMBER);
+      char *numBuf = calloc(8, 1);
+      ASSERT_MEM(numBuf);
+      sprintf(numBuf, "%d", scanner.line);
+      token.start = numBuf;
+      token.length = strlen(numBuf);
+      token.lexeme = numBuf;
+      return token;
+  }
+
   return makeToken(type);
 }
 
@@ -175,9 +215,16 @@ static Token number() {
 }
 
 static Token string() {
-  while (peek() != '"' && !isAtEnd()) {
-    if (peek() == '\n') scanner.line++;
-    advance();
+  char last = '\0';
+  while (!isAtEnd()) {
+    if (peek() == '"' && last == '\\') {
+        last = advance();
+    } else if (peek() == '"') {
+        break;
+    } else {
+        if (peek() == '\n') scanner.line++;
+        last = advance();
+    }
   }
 
   // Unterminated string.
@@ -185,7 +232,20 @@ static Token string() {
 
   // The closing ".
   advance();
-  return makeToken(TOKEN_STRING);
+  Token tok = makeToken(TOKEN_STRING);
+
+  // replace \" with "
+  char *newBuf = calloc(tok.length+1, 1);
+  ASSERT_MEM(newBuf);
+  strncpy(newBuf, tok.start, tok.length);
+  strReplace(newBuf, "\\\"", '"');
+  strReplace(newBuf, "\\n", '\n');
+  strReplace(newBuf, "\\t", '\t');
+  strReplace(newBuf, "\\r", '\r');
+  tok.start = newBuf;
+  tok.length = strlen(newBuf);
+  tok.lexeme = newBuf;
+  return tok;
 }
 
 Token scanToken() {
@@ -375,6 +435,7 @@ void scanAllPrint(const char *src) {
 char *tokStr(Token *tok) {
     if (tok->lexeme != NULL) return tok->lexeme;
     char *buf = calloc(tok->length+1, 1);
+    ASSERT_MEM(buf);
     memcpy(buf, tok->start, tok->length);
     tok->lexeme = buf;
     return buf;

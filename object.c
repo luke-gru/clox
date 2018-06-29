@@ -277,6 +277,8 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
         ObjClass, OBJ_T_CLASS
     );
     initTable(&klass->methods);
+    initTable(&klass->getters);
+    initTable(&klass->setters);
     klass->name = name;
     klass->superclass = superclass;
     return klass;

@@ -1,0 +1,5 @@
+class Train {
+  choo() { print "choo"; return this; }
+}
+var t = Train();
+t.choo().choo();

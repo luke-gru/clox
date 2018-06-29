@@ -64,6 +64,8 @@ typedef enum eStmtType {
     BREAK_STMT,
     FUNCTION_STMT,
     METHOD_STMT,
+    GETTER_STMT,
+    SETTER_STMT,
     RETURN_STMT,
     CLASS_STMT,
     MODULE_STMT,
@@ -114,6 +116,10 @@ typedef enum eLiteralType {
     STRING_TYPE,
     NIL_TYPE,
     BOOL_TYPE,
+
+    // TODO: put somewhere else, these aren't literals
+    SUPER_CALL,
+    SUPER_PROP,
 } LiteralType;
 
 typedef struct sNodeType {
@@ -130,7 +136,7 @@ typedef struct sNode {
     struct sNode *parent;
 } Node;
 
-extern int astDetailLevel;
+extern int astDetailLevel; // for printing AST
 
 typedef void (*NodeCallback)(Node *n, int idx);
 

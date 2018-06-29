@@ -136,6 +136,8 @@ void blackenObject(Obj *obj) {
             grayObject((Obj*)klass->name);
             grayObject((Obj*)klass->superclass);
             grayTable(&klass->methods);
+            grayTable(&klass->getters);
+            grayTable(&klass->setters);
             break;
         }
         case OBJ_T_FUNCTION: {
@@ -236,8 +238,10 @@ void freeObject(Obj *obj, bool unlink) {
         }
         case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
-            GC_TRACE_DEBUG("Freeing class method table");
+            GC_TRACE_DEBUG("Freeing class methods/getters/setters tables");
             freeTable(&klass->methods);
+            freeTable(&klass->getters);
+            freeTable(&klass->setters);
             GC_TRACE_DEBUG("Freeing class: p=%p", obj);
             FREE(ObjClass, obj);
             break;
