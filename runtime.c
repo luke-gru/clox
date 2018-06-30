@@ -84,7 +84,7 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
         if (checkLoaded) {
             vec_push(&vm.loadedScripts, OBJ_VAL(fpath));
         }
-        InterpretResult ires = loadScript(&chunk);
+        InterpretResult ires = loadScript(&chunk, pathbuf);
         return BOOL_VAL(ires == INTERPRET_OK);
     } else {
         fprintf(stderr, "File '%s' not found (%s)\n", cfile, funcName);

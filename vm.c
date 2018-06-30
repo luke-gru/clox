@@ -196,6 +196,8 @@ void initVM() {
     initTable(&vm.globals);
     initTable(&vm.strings);
     vm.initString = copyString("init", 4);
+    vm.fileString = copyString("__FILE__", 8);
+    vm.dirString = copyString("__DIR__", 7);
     defineNativeFunctions();
     defineNativeClasses();
     vec_init(&vm.hiddenObjs);
@@ -219,6 +221,8 @@ void freeVM() {
     freeTable(&vm.globals);
     freeTable(&vm.strings);
     vm.initString = NULL;
+    vm.fileString = NULL;
+    vm.dirString = NULL;
     vm.hadError = false;
     vm.printBuf = NULL;
     vm.lastValue = NULL;
@@ -1510,7 +1514,21 @@ static InterpretResult run(bool doResetStack) {
 #undef BINARY_OP
 }
 
-InterpretResult interpret(Chunk *chunk) {
+static void setupPerScriptGlobals(char *filename) {
+    ObjString *file = newString(filename, strlen(filename));
+    tableSet(&vm.globals, OBJ_VAL(vm.fileString), OBJ_VAL(file));
+
+    if (filename[0] == pathSeparator) {
+        char *lastSep = rindex(filename, pathSeparator);
+        int len = lastSep - filename;
+        ObjString *dir = newString(filename, len);
+        tableSet(&vm.globals, OBJ_VAL(vm.dirString), OBJ_VAL(dir));
+    } else {
+        tableSet(&vm.globals, OBJ_VAL(vm.dirString), NIL_VAL);
+    }
+}
+
+InterpretResult interpret(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     vm.frameCount = 0;
     // initialize top-level callframe (frameCount = 1)
@@ -1524,6 +1542,7 @@ InterpretResult interpret(Chunk *chunk) {
     unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
+    setupPerScriptGlobals(filename);
 
     InterpretResult result = run(true);
     return result;
@@ -1536,7 +1555,7 @@ InterpretResult interpret(Chunk *chunk) {
 // how it was (stack, ip, etc.). Or, better yet, make a way to create a VM
 // context with its own stack/IP,etc. and just run it on that. This is what
 // Ruby does, for instance. They call it an execution context.
-InterpretResult loadScript(Chunk *chunk) {
+InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();
     // initialize top-level callframe (frameCount = 1)
@@ -1550,6 +1569,8 @@ InterpretResult loadScript(Chunk *chunk) {
     unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
+
+    setupPerScriptGlobals(filename);
 
     InterpretResult result = run(false);
     while (getFrame() > oldFrame) {

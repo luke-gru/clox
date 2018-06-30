@@ -431,6 +431,8 @@ void collectGarbage(void) {
     grayCompilerRoots();
     GC_TRACE_DEBUG("Marking VM init string");
     grayObject((Obj*)vm.initString);
+    grayObject((Obj*)vm.fileString);
+    grayObject((Obj*)vm.dirString);
     if (vm.printBuf) {
         GC_TRACE_DEBUG("Marking VM print buf");
         grayObject((Obj*)vm.printBuf);

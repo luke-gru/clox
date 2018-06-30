@@ -31,7 +31,7 @@ get/set and class methods. [DONE]
 * Add loadScript(), requireScript() [DONE]
 * Add eval() []
 * Add string interpolation []
-* Add __DIR__ and __FILE__ []
+* Add __DIR__ and __FILE__ [DONE]
 * Add `in` block []
 * Add `foreach *el in item` syntax with iter() support
 * Add system() for running OS commands

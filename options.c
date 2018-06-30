@@ -103,14 +103,20 @@ int parseOption(char **argv, int i) {
             SET_OPTION(initialLoadPath, path);
             return 2;
         } else {
-            fprintf(stderr, "Load path not given, ignoring. Example: -L $HOME/workspace");
+            fprintf(stderr, "[WARN]: Load path not given, ignoring. Example: -L $HOME/workspace");
             return 1;
         }
     }
-    /*if (strcmp(argv[i], "-f") == 0) {*/
-        /*SET_OPTION(initialScript, argv[i+1]);*/
-        /*return 2;*/
-    /*}*/
+
+    if (strcmp(argv[i], "-f") == 0) {
+        if (argv[i+1]) {
+            SET_OPTION(initialScript, argv[i+1]);
+            return 2;
+        } else {
+            fprintf(stderr, "[WARN]: Path to script file not given with -f flag");
+            return 1;
+        }
+    }
 
     if (strcmp(argv[i], "-DTRACE_PARSER_CALLS") == 0) {
         SET_OPTION(traceParserCalls, true);

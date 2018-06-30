@@ -12,6 +12,7 @@
     }\
     } while (0)
 
+extern const char pathSeparator;
 
 Value runtimeNativeClock(int argCount, Value *args);
 Value runtimeNativeTypeof(int argCount, Value *args);

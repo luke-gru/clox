@@ -4,7 +4,9 @@
 #include "vm.h"
 #include "debug.h"
 #include "options.h"
+#include "runtime.h"
 #include <stdio.h>
+#include <unistd.h>
 
 static void usage(int exitstatus) {
     fprintf(stdout, "Usage:\n"
@@ -25,15 +27,40 @@ int main(int argc, char *argv[]) {
             i+=incrOpt;
             continue;
         }
-        if (strcmp(argvp[i], "-f") == 0 && argvp[i+1]) {
-            fname = argvp[i+1];
-            i+=2;
-        } else if (strcmp(argvp[i], "-i") == 0) {
+        if (strcmp(argvp[i], "-i") == 0) {
             interactive = true;
             i+=1;
         } else {
             fprintf(stderr, "Invalid option: %s\n", argvp[i]);
             usage(1);
+        }
+    }
+
+    fname = GET_OPTION(initialScript);
+    if (strlen(fname) == 0) {
+        interactive = true;
+    }
+
+    // Normalize filename to full path to file. Don't yet check if the file
+    // exists, though.
+    if (!interactive && strlen(fname) > 0 && fname[0] != pathSeparator) {
+        char dirbuf[350] = { '\0' };
+        memset(dirbuf, 0, 350);
+        char *cwdres = getcwd(dirbuf, 250);
+        if (cwdres != NULL) {
+            if (dirbuf[strlen(dirbuf)-1] != pathSeparator) {
+                strncat(dirbuf, &pathSeparator, 1);
+            }
+            if (fname[0] == '.' && fname[1] && fname[1] == pathSeparator) {
+                strcat(dirbuf, fname+2);
+            } else {
+                strcat(dirbuf, fname);
+            }
+            char *fullPath = calloc(strlen(dirbuf)+1, 1);
+            ASSERT_MEM(fullPath);
+            strcpy(fullPath, dirbuf);
+            fname = fullPath;
+            SET_OPTION(initialScript, fname);
         }
     }
 
@@ -68,7 +95,7 @@ int main(int argc, char *argv[]) {
         exit(0);
     }
 
-    InterpretResult ires = interpret(&chunk);
+    InterpretResult ires = interpret(&chunk, fname);
     if (ires != INTERPRET_OK) {
         freeVM();
         freeChunk(&chunk);

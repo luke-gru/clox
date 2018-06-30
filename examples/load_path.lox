@@ -2,3 +2,5 @@ print loadPath;
 print loadScript("anon_fun.lox");
 print requireScript("anon_fun.lox");
 print requireScript("anon_fun.lox");
+print __DIR__;
+print __FILE__;

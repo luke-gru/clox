@@ -53,7 +53,7 @@ static int test_run_example_files(void) {
             continue;
         }
         fprintf(stdout, "Running file '%s'...\n", ent->d_name);
-        InterpretResult ires = interpret(&chunk);
+        InterpretResult ires = interpret(&chunk, ent->d_name);
         freeVM();
         if (ires != INTERPRET_OK) {
             fprintf(stderr, "Error during interpretation: (%d)\n", ires);

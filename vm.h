@@ -36,6 +36,8 @@ typedef struct VM {
   Table globals; // global variables
   Table strings; // interned strings
   ObjString *initString;
+  ObjString *fileString;
+  ObjString *dirString;
   ObjString *printBuf;
 
   // GC fields
@@ -66,8 +68,8 @@ typedef enum {
 
 void initVM();
 void freeVM();
-InterpretResult interpret(Chunk *chunk);
-InterpretResult loadScript(Chunk *chunk);
+InterpretResult interpret(Chunk *chunk, char *filename);
+InterpretResult loadScript(Chunk *chunk, char *filename);
 bool VMLoadedScript(char *fname);
 Value *getLastValue();
 Value callVMMethod(
