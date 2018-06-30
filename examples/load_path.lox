@@ -1,0 +1,2 @@
+print loadPath;
+loadScript("anon_fun.lox");

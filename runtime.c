@@ -1,9 +1,27 @@
 #include <time.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include "runtime.h"
 #include "object.h"
 #include "memory.h"
 #include "debug.h"
+#include "compiler.h"
+
+const char pathSeparator =
+#ifdef _WIN32
+                            '\\';
+#else
+                            '/';
+#endif
+
+// TODO
+#define CHECK_ARG_TYPE(...)
+
+static bool fileExists(char *fname) {
+    struct stat buffer;
+    return (stat(fname, &buffer) == 0);
+}
 
 Value runtimeNativeClock(int argCount, Value *args) {
     CHECK_ARGS("clock", 0, 0, argCount);
@@ -14,6 +32,61 @@ Value runtimeNativeTypeof(int argCount, Value *args) {
     CHECK_ARGS("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
     return OBJ_VAL(newStackString(strType, strlen(strType)));
+}
+
+Value lxLoadScript(int argCount, Value *args) {
+    CHECK_ARGS("loadScript", 1, 1, argCount);
+    Value fname = *args;
+    CHECK_ARG_TYPE(fname, VAL_T_OBJ, IS_STRING, 1);
+    char *cfile = AS_CSTRING(fname);
+    bool isAbsFile = cfile[0] == pathSeparator;
+    char pathbuf[300] = { '\0' };
+    bool fileFound = false;
+    if (isAbsFile) {
+        memcpy(pathbuf, cfile, strlen(cfile));
+        fileFound = true;
+    } else {
+        Value el; int i = 0;
+        LXARRAY_FOREACH(lxLoadPath, el, i) {
+            if (!IS_STRING(el)) continue;
+            char *dir = AS_CSTRING(el);
+            memset(pathbuf, 0, 300);
+            memcpy(pathbuf, dir, strlen(dir));
+            if (strcmp(pathbuf, ".") == 0) {
+                char *cwdres = getcwd(pathbuf, 250);
+                if (cwdres == NULL) {
+                    fprintf(stderr,
+                        "Couldn't get current working directory for loading script!"
+                        " Maybe too long?\n");
+                    continue;
+                }
+            }
+            if (dir[strlen(dir)-1] != pathSeparator) {
+                strncat(pathbuf, &pathSeparator, 1);
+            }
+            strcat(pathbuf, cfile);
+            if (!fileExists(pathbuf)) {
+                continue;
+            }
+            fileFound = true;
+            break;
+        }
+    }
+    if (fileFound) {
+        /*fprintf(stderr, "File '%s' exists, loading...\n", pathbuf);*/
+        Chunk chunk;
+        initChunk(&chunk);
+        CompileErr err = COMPILE_ERR_NONE;
+        int compile_res = compile_file(pathbuf, &chunk, &err);
+        if (compile_res != 0) {
+            return BOOL_VAL(false);
+        }
+        InterpretResult ires = loadScript(&chunk);
+        return BOOL_VAL(ires == INTERPRET_OK);
+    } else {
+        fprintf(stderr, "File '%s' not found\n", cfile);
+        return NIL_VAL;
+    }
 }
 
 static void markInternalAry(Obj *internalObj) {
@@ -66,7 +139,7 @@ Value lxArrayPush(int argCount, Value *args) {
 
 // print a;
 // OR
-// a.toString();
+// a.toString(); // => [1,2,3]
 Value lxArrayToString(int argCount, Value *args) {
     CHECK_ARGS("Array#toString", 1, 1, argCount);
     Value self = *args;
@@ -93,8 +166,6 @@ Value lxArrayToString(int argCount, Value *args) {
     return OBJ_VAL(ret);
 }
 
-// TODO
-#define CHECK_ARG_TYPE(...)
 
 Value lxArrayIndexGet(int argCount, Value *args) {
     CHECK_ARGS("Array#[]", 2, 2, argCount);

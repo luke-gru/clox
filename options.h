@@ -19,6 +19,9 @@ typedef struct sCloxOptions {
     bool parseOnly;
     //bool profileGC; // TODO
 
+    char *initialLoadPath; // COLON-separated load path
+    char *initialScript;
+
     bool _inited; // internal use, if singleton is inited
 } CloxOptions; // [singleton]
 
@@ -28,6 +31,7 @@ bool findOption(const char *optName, const char *typeName);
 
 int parseOption(char **argv, int idx);
 
+#define GET_OPTION(opt) (getOptions()->opt)
 #define CLOX_OPTION_T(opt) ((bool)(getOptions()->opt) == true)
 #define SET_OPTION(name, val) do {\
     (getOptions())->name = val;\

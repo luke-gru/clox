@@ -243,6 +243,18 @@ static Token doubleQuotedString() {
   strReplace(newBuf, "\\n", '\n');
   strReplace(newBuf, "\\t", '\t');
   strReplace(newBuf, "\\r", '\r');
+
+  /*char *begInterp = NULL;*/
+  /*char *beforeStart =  newBuf;*/
+  /*while ((begInterp = strstr(beforeStart, "{$")) != NULL) {*/
+      /*char *beforeEnd = begInterp-1;*/
+      /*char *interpEnd = strstr(begInterp, "}");*/
+      /*if (interpEnd == NULL) {*/
+          /*return errorToken("Unterminated string interpolation");*/
+      /*}*/
+      /*beforeStart = interpEnd+1;*/
+  /*}*/
+
   tok.start = newBuf;
   tok.length = strlen(newBuf);
   tok.lexeme = newBuf;

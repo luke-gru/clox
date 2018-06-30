@@ -14,7 +14,6 @@ static void usage(int exitstatus) {
 }
 
 int main(int argc, char *argv[]) {
-
     initOptions();
     char *fname = NULL;
     char **argvp = argv+1;
@@ -22,7 +21,7 @@ int main(int argc, char *argv[]) {
     int incrOpt = 0;
     bool interactive = false;
     while (argvp[i] != NULL) {
-        if ((incrOpt = parseOption(argvp, i) > 0)) {
+        if ((incrOpt = parseOption(argvp, i)) > 0) {
             i+=incrOpt;
             continue;
         }

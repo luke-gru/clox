@@ -66,6 +66,7 @@ typedef enum {
 void initVM();
 void freeVM();
 InterpretResult interpret(Chunk *chunk);
+InterpretResult loadScript(Chunk *chunk);
 Value *getLastValue();
 Value callVMMethod(
     ObjInstance *instance, Value callable,

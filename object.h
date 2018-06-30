@@ -117,6 +117,7 @@ extern ObjClass *lxAryClass;
 extern ObjClass *lxMapClass;
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
+extern Value lxLoadPath;
 
 typedef struct ObjInstance {
   Obj object;
@@ -164,6 +165,10 @@ typedef struct ObjBoundMethod {
 #define ARRAY_GET(value, idx)    (arrayGet(value, idx))
 #define ARRAY_SIZE(value)        (arraySize(value))
 #define ARRAY_GETHIDDEN(value)   (arrayGetHidden(value))
+
+#define LXARRAY_FOREACH(ary, el, idx) \
+    for (idx = 0; idx < ARRAY_SIZE(ary) && \
+        (el = ARRAY_GET(ary, idx)).type != VAL_T_SENTINEL; idx++)
 
 #define MAP_GET(value, valkey)   (mapGet(value, valKey))
 #define MAP_SIZE(value)          (mapSize(value))

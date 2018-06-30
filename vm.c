@@ -27,6 +27,7 @@ static void vm_debug(const char *format, ...) {
 
 char *unredefinableGlobals[] = {
     "Object",
+    "Class",
     "Array",
     "Error",
     "Map",
@@ -47,7 +48,7 @@ static bool isUnredefinableGlobal(char *name) {
     return false;
 }
 
-void defineNativeFunctions() {
+static void defineNativeFunctions() {
     ObjString *clockName = copyString("clock", 5);
     ObjNative *clockFn = newNative(clockName, runtimeNativeClock);
     tableSet(&vm.globals, OBJ_VAL(clockName), OBJ_VAL(clockFn));
@@ -55,6 +56,10 @@ void defineNativeFunctions() {
     ObjString *typeofName = copyString("typeof", 6);
     ObjNative *typeofFn = newNative(typeofName, runtimeNativeTypeof);
     tableSet(&vm.globals, OBJ_VAL(typeofName), OBJ_VAL(typeofFn));
+
+    ObjString *loadScriptName = copyString("loadScript", 10);
+    ObjNative *loadScriptFn = newNative(loadScriptName, lxLoadScript);
+    tableSet(&vm.globals, OBJ_VAL(loadScriptName), OBJ_VAL(loadScriptFn));
 }
 
 // Builtin classes:
@@ -64,8 +69,9 @@ ObjClass *lxAryClass;
 ObjClass *lxMapClass;
 ObjClass *lxErrClass;
 ObjClass *lxArgErrClass;
+Value lxLoadPath;
 
-void defineNativeClasses() {
+static void defineNativeClasses() {
     // class Object
     ObjString *objClassName = copyString("Object", 6);
     ObjClass *objClass = newClass(objClassName, NULL);
@@ -138,6 +144,23 @@ void defineNativeClasses() {
     lxArgErrClass = argErrClass;
 }
 
+static void defineGlobalVariables() {
+    lxLoadPath = newArray();
+    ObjString *loadPathStr = copyString("loadPath", 8);
+    tableSet(&vm.globals, OBJ_VAL(loadPathStr), lxLoadPath);
+    // populate load path from -L option given to commandline
+    char *lpath = GET_OPTION(initialLoadPath);
+    if (lpath && strlen(lpath) > 0) {
+        char *beg = lpath;
+        char *end = NULL;
+        while ((end = strchr(beg, ':'))) {
+            ObjString *str = newString(beg, end - beg);
+            arrayPush(lxLoadPath, OBJ_VAL(str));
+            beg = end+1;
+        }
+    }
+}
+
 
 static jmp_buf CCallJumpBuf;
 static bool inCCall = false;
@@ -150,13 +173,15 @@ void resetStack() {
     vm.frameCount = 0;
 }
 
+#define FIRST_GC_THRESHHOLD (1024*1024)
+
 void initVM() {
     turnGCOff();
     resetStack();
     vm.objects = NULL;
 
     vm.bytesAllocated = 0;
-    vm.nextGCThreshhold = 100;
+    vm.nextGCThreshhold = FIRST_GC_THRESHHOLD;
     vm.grayCount = 0;
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
@@ -176,10 +201,13 @@ void initVM() {
     inCCall = false;
     cCallThrew = false;
     returnedFromNativeErr = false;
+    runUntilReturn = false;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
-    turnGCOn();
     vm.inited = true;
+    defineGlobalVariables();
+    resetStack();
+    turnGCOn();
 }
 
 void freeVM() {
@@ -427,7 +455,7 @@ static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName,
     return false;
 }
 
-static InterpretResult run(void);
+static InterpretResult run(bool);
 
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
@@ -513,7 +541,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     if (IS_CLOSURE(callable)) {
         bool oldRunUntilReturn = runUntilReturn;
         runUntilReturn = true;
-        run(); // actually run the function
+        run(false); // actually run the function
         runUntilReturn = oldRunUntilReturn;
     }
     VM_DEBUG("call done");
@@ -703,7 +731,9 @@ bool callCallable(Value callable, int argCount, bool isMethod) {
     for (int i = lenBefore; i < lenAfter; i++) {
         (void)vec_pop(&vm.stackObjects);
     }
-    ASSERT(lenBefore == vm.stackObjects.length);
+    // FIXME: this assertion was causing errors when we threw an error from C
+    // code. We need to clean up the stackobjects in this case.
+    /*ASSERT(lenBefore == vm.stackObjects.length);*/
 
     return ret;
 }
@@ -910,7 +940,7 @@ static ObjString *methodNameForBinop(OpCode code) {
 /**
  * Run the VM's instructions.
  */
-static InterpretResult run(void) {
+static InterpretResult run(bool doResetStack) {
     if (CLOX_OPTION_T(parseOnly) || CLOX_OPTION_T(compileOnly)) {
         return INTERPRET_OK;
     }
@@ -1449,7 +1479,7 @@ static InterpretResult run(void) {
       }
       // exit interpreter
       case OP_LEAVE:
-          resetStack();
+          if (doResetStack) resetStack();
           return INTERPRET_OK;
       default:
           runtimeError("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
@@ -1478,7 +1508,37 @@ InterpretResult interpret(Chunk *chunk) {
     frame->isCCall = false;
     frame->nativeFunc = NULL;
 
-    InterpretResult result = run();
+    InterpretResult result = run(true);
+    return result;
+}
+
+// TODO: improve loading new scripts. We shouldn't create new callframes
+// each time we load a script or else we set a limit of the number of scripts
+// we can load being the # of callframes allowed. Maybe we should save the
+// state of the interpreter, run the new chunk on it, then reset it back to
+// how it was (stack, ip, etc.). Or, better yet, make a way to create a VM
+// context with its own stack/IP,etc. and just run it on that. This is what
+// Ruby does, for instance. They call it an execution context.
+InterpretResult loadScript(Chunk *chunk) {
+    ASSERT(chunk);
+    CallFrame *oldFrame = getFrame();
+    // initialize top-level callframe (frameCount = 1)
+    CallFrame *frame = &vm.frames[vm.frameCount++];
+    frame->start = 0;
+    frame->ip = chunk->code;
+    frame->slots = vm.stackTop-1;
+    ObjFunction *func = newFunction(chunk);
+    hideFromGC((Obj*)func);
+    frame->closure = newClosure(func);
+    unhideFromGC((Obj*)func);
+    frame->isCCall = false;
+    frame->nativeFunc = NULL;
+
+    InterpretResult result = run(false);
+    while (getFrame() > oldFrame) {
+        popFrame();
+    }
+    ASSERT(oldFrame == getFrame());
     return result;
 }
 

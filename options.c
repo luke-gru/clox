@@ -21,6 +21,12 @@ char *boolOptNames[] = {
     NULL,
 };
 
+char *stringOptNames[] = {
+    "initialLoadPath",
+    "initialScript",
+    NULL,
+};
+
 void initOptions(void) {
     if (options._inited) {
         return;
@@ -39,6 +45,9 @@ void initOptions(void) {
     options.compileOnly = false;
     options.disableBcodeOptimizer = false;
 
+    options.initialLoadPath = "";
+    options.initialScript = "";
+
     options._inited = true;
 }
 
@@ -52,6 +61,15 @@ bool findOption(const char *optName, const char *typeName) {
         int i = 0;
         while (boolOptNames[i]) {
             if (strcmp(optName, boolOptNames[i]) == 0) {
+                return true;
+            }
+            i++;
+        }
+        return false;
+    } else if (strcmp(typeName, "string") == 0) {
+        int i = 0;
+        while (stringOptNames[i]) {
+            if (strcmp(optName, stringOptNames[i]) == 0) {
                 return true;
             }
             i++;
@@ -74,6 +92,26 @@ static void enableAllTraceOptions(void) {
 // idx by in the caller's code.
 int parseOption(char **argv, int i) {
     initOptions();
+    if (strcmp(argv[i], "-L") == 0) {
+        if (argv[i+1]) {
+            char *path = calloc(strlen(argv[i+1])+2, 1);
+            ASSERT_MEM(path);
+            strcpy(path, argv[i+1]);
+            if (path[strlen(path)-1] != ':') {
+                strcat(path, ":");
+            }
+            SET_OPTION(initialLoadPath, path);
+            return 2;
+        } else {
+            fprintf(stderr, "Load path not given, ignoring. Example: -L $HOME/workspace");
+            return 1;
+        }
+    }
+    /*if (strcmp(argv[i], "-f") == 0) {*/
+        /*SET_OPTION(initialScript, argv[i+1]);*/
+        /*return 2;*/
+    /*}*/
+
     if (strcmp(argv[i], "-DTRACE_PARSER_CALLS") == 0) {
         SET_OPTION(traceParserCalls, true);
         return 1;

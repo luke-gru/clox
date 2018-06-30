@@ -53,8 +53,8 @@ static Obj *allocateCStackObject(size_t size, ObjType type) {
     vm.objects = object;
     object->isLinked = true;
 
-    ASSERT(vm.inited);
-    vec_push(&vm.stackObjects, object);
+    if (vm.inited)
+        vec_push(&vm.stackObjects, object);
 
     return object;
 }
