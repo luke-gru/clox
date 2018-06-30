@@ -215,7 +215,7 @@ static Token number() {
   return makeToken(TOKEN_NUMBER);
 }
 
-static Token string() {
+static Token doubleQuotedString() {
   char last = '\0';
   while (!isAtEnd()) {
     if (peek() == '"' && last == '\\') {
@@ -231,9 +231,9 @@ static Token string() {
   // Unterminated string.
   if (isAtEnd()) return errorToken("Unterminated string.");
 
-  // The closing ".
+  // The closing "
   advance();
-  Token tok = makeToken(TOKEN_STRING);
+  Token tok = makeToken(TOKEN_STRING_DQUOTE);
 
   // replace \" with "
   char *newBuf = calloc(tok.length+1, 1);
@@ -249,6 +249,41 @@ static Token string() {
   return tok;
 }
 
+static Token singleQuotedString(bool isStatic) {
+    char last = '\0';
+    while (!isAtEnd()) {
+        if (peek() == '\'' && last == '\\') {
+            last = advance();
+        } else if (peek() == '\'') {
+            break;
+        } else {
+            if (peek() == '\n') scanner.line++;
+            last = advance();
+        }
+    }
+
+    // Unterminated string.
+    if (isAtEnd()) return errorToken("Unterminated string.");
+    // The closing '
+    advance();
+    Token tok;
+    if (isStatic) {
+        tok = makeToken(TOKEN_STRING_STATIC);
+    } else {
+        tok = makeToken(TOKEN_STRING_SQUOTE);
+    }
+
+    // replace \" with "
+    char *newBuf = calloc(tok.length+1, 1);
+    ASSERT_MEM(newBuf);
+    strncpy(newBuf, tok.start, tok.length);
+    strReplace(newBuf, "\\\'", '\'');
+    tok.start = newBuf;
+    tok.length = strlen(newBuf);
+    tok.lexeme = newBuf;
+    return tok;
+}
+
 Token scanToken() {
   skipWhitespace();
 
@@ -257,7 +292,6 @@ Token scanToken() {
 
   char c = advance();
 
-  if (isAlpha(c)) return identifier();
   if (isDigit(c)) return number();
 
   switch (c) {
@@ -296,8 +330,17 @@ Token scanToken() {
       if (match('=')) return makeToken(TOKEN_GREATER_EQUAL);
       return makeToken(TOKEN_GREATER);
 
-    case '"': return string();
+    case '"': return doubleQuotedString();
+    case '\'': return singleQuotedString(false);
+    case 's': {
+        if (peek() == '\'') {
+            advance();
+            return singleQuotedString(true);
+        }
+        break;
+    }
   }
+  if (isAlpha(c)) return identifier();
 
   return errorToken("Unexpected character.");
 }
@@ -367,8 +410,12 @@ const char *tokTypeStr(TokenType ttype) {
       return "STAR";
     case TOKEN_IDENTIFIER:
       return "IDENTIFIER";
-    case TOKEN_STRING:
-      return "STRING";
+    case TOKEN_STRING_DQUOTE:
+      return "DOUBLE_QUOTED_STRING";
+    case TOKEN_STRING_SQUOTE:
+      return "SINGLE_QUOTED_STRING";
+    case TOKEN_STRING_STATIC:
+      return "STATIC_STRING";
     case TOKEN_NUMBER:
       return "NUMBER";
     case TOKEN_AND:

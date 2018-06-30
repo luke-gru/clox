@@ -919,13 +919,26 @@ static Node *call() {
 
 static Node *primary() {
     TRACE_START("primary");
-    if (match(TOKEN_STRING)) {
+    if (match(TOKEN_STRING_DQUOTE) || match(TOKEN_STRING_SQUOTE)) {
         TRACE_START("string");
         Token strTok = parser.previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = LITERAL_EXPR,
             .litKind = STRING_TYPE,
+        };
+        Node *ret = createNode(nType, strTok, NULL);
+        TRACE_END("string");
+        TRACE_END("primary");
+        return ret;
+    }
+    if (match(TOKEN_STRING_STATIC)) {
+        TRACE_START("string");
+        Token strTok = parser.previous;
+        node_type_t nType = {
+            .type = NODE_EXPR,
+            .kind = LITERAL_EXPR,
+            .litKind = STATIC_STRING_TYPE,
         };
         Node *ret = createNode(nType, strTok, NULL);
         TRACE_END("string");

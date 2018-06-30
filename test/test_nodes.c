@@ -47,7 +47,7 @@ static int test_output_node_literal_string(void) {
         .litKind = STRING_TYPE,
     };
     Token strTok = {
-        .type = TOKEN_STRING,
+        .type = TOKEN_STRING_DQUOTE,
         .start = "\"testing\n\"",
         .length = strlen("\"testing\n\"")+1,
         .line = 1

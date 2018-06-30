@@ -115,6 +115,7 @@ typedef enum eLiteralType {
     LIT_TYPE_NONE = 0,
     NUMBER_TYPE,
     STRING_TYPE,
+    STATIC_STRING_TYPE,
     NIL_TYPE,
     BOOL_TYPE,
 

@@ -1295,24 +1295,36 @@ static InterpretResult run(void) {
           }
           break;
       }
-      case OP_CLASS: {
+      case OP_CLASS: { // add or re-open class
           Value className = READ_CONSTANT();
           Value objClassVal;
           ASSERT(tableGet(&vm.globals, OBJ_VAL(copyString("Object", 6)), &objClassVal));
           ASSERT(IS_CLASS(objClassVal));
+          Value existingClass;
+          // FIXME: not perfect, if class is declared non-globally this won't
+          // detect it. Maybe a new op-code is needed for class re-opening.
+          if (tableGet(&vm.globals, className, &existingClass) && IS_CLASS(existingClass)) {
+              push(existingClass);
+              break;
+          }
           ObjClass *klass = newClass(AS_STRING(className), AS_CLASS(objClassVal));
           push(OBJ_VAL(klass));
           break;
       }
-      case OP_SUBCLASS: {
+      case OP_SUBCLASS: { // add new class inheriting from an existing class
           Value className = READ_CONSTANT();
           Value superclass =  pop();
           if (!IS_CLASS(superclass)) {
-              runtimeError(
+              runtimeError( // FIXME: better error
                   "Class %s tried to inherit from non-class",
                   AS_CSTRING(className)
               );
               return INTERPRET_RUNTIME_ERROR;
+          }
+          // FIXME: not perfect, if class is declared non-globally this won't detect it.
+          Value existingClass;
+          if (tableGet(&vm.globals, className, &existingClass) && IS_CLASS(existingClass)) {
+              runtimeError("Class %s already exists", AS_CSTRING(className));
           }
           ObjClass *klass = newClass(
               AS_STRING(className),

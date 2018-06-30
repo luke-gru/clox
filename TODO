@@ -27,6 +27,13 @@ bytecode, and benchmark the lookup results
 * Get all test examples working [DONE]
 * Make ObjClass an ObjInstance, and get metaclasses working, with property
 get/set and class methods. [DONE]
-* Allow re-opening classes []
+* Allow re-opening classes [DONE]
+* Add loadScript(), requireScript()
+* Add eval()
+* Add string interpolation []
+* Add __DIR__ and __FILE__
+* Add `in` block
+* Add `foreach *el in item` syntax with iter() support
+* Add system() for running OS commands
 
 BUGS:

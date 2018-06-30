@@ -1112,9 +1112,14 @@ static void emitNode(Node *n) {
             // TODO: handle error condition
             double d = strtod(tokStr(&n->tok), NULL);
             emitConstant(NUMBER_VAL(d), CONST_T_NUMLIT);
-        } else if (n->tok.type == TOKEN_STRING) {
+        } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
             emitConstant(OBJ_VAL(copyString(name->start+1, name->length-2)), CONST_T_STRLIT);
+        } else if (n->tok.type == TOKEN_STRING_STATIC) {
+            Token *name = &n->tok;
+            ObjString *str = copyString(name->start+2, name->length-3);
+            objFreeze((Obj*)str);
+            emitConstant(OBJ_VAL(str), CONST_T_STRLIT);
         } else if (n->tok.type == TOKEN_TRUE) {
             emitOp0(OP_TRUE);
         } else if (n->tok.type == TOKEN_FALSE) {
