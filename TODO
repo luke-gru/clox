@@ -28,8 +28,8 @@ bytecode, and benchmark the lookup results
 * Make ObjClass an ObjInstance, and get metaclasses working, with property
 get/set and class methods. [DONE]
 * Allow re-opening classes [DONE]
-* Add loadScript(), requireScript() [IN PROGRESS]
-* Add eval()
+* Add loadScript(), requireScript() [DONE]
+* Add eval() []
 * Add string interpolation []
 * Add __DIR__ and __FILE__ []
 * Add `in` block []

@@ -398,6 +398,11 @@ void collectGarbage(void) {
         grayObject(stackObjPtr);
     }
 
+    Value *scriptName; int i = 0;
+    vec_foreach_ptr(&vm.loadedScripts, scriptName, i) {
+        grayValue(*scriptName);
+    }
+
     GC_TRACE_DEBUG("Marking VM frame functions");
     // gray active function closure objects
     for (int i = 0; i < vm.frameCount; i++) {

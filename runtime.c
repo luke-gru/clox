@@ -34,10 +34,7 @@ Value runtimeNativeTypeof(int argCount, Value *args) {
     return OBJ_VAL(newStackString(strType, strlen(strType)));
 }
 
-Value lxLoadScript(int argCount, Value *args) {
-    CHECK_ARGS("loadScript", 1, 1, argCount);
-    Value fname = *args;
-    CHECK_ARG_TYPE(fname, VAL_T_OBJ, IS_STRING, 1);
+static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoaded) {
     char *cfile = AS_CSTRING(fname);
     bool isAbsFile = cfile[0] == pathSeparator;
     char pathbuf[300] = { '\0' };
@@ -73,7 +70,9 @@ Value lxLoadScript(int argCount, Value *args) {
         }
     }
     if (fileFound) {
-        /*fprintf(stderr, "File '%s' exists, loading...\n", pathbuf);*/
+        if (checkLoaded && VMLoadedScript(pathbuf)) {
+            return BOOL_VAL(false);
+        }
         Chunk chunk;
         initChunk(&chunk);
         CompileErr err = COMPILE_ERR_NONE;
@@ -81,12 +80,30 @@ Value lxLoadScript(int argCount, Value *args) {
         if (compile_res != 0) {
             return BOOL_VAL(false);
         }
+        ObjString *fpath = newString(pathbuf, strlen(pathbuf));
+        if (checkLoaded) {
+            vec_push(&vm.loadedScripts, OBJ_VAL(fpath));
+        }
         InterpretResult ires = loadScript(&chunk);
         return BOOL_VAL(ires == INTERPRET_OK);
     } else {
-        fprintf(stderr, "File '%s' not found\n", cfile);
-        return NIL_VAL;
+        fprintf(stderr, "File '%s' not found (%s)\n", cfile, funcName);
+        return BOOL_VAL(false);
     }
+}
+
+Value lxRequireScript(int argCount, Value *args) {
+    CHECK_ARGS("requireScript", 1, 1, argCount);
+    Value fname = *args;
+    CHECK_ARG_TYPE(fname, VAL_T_OBJ, IS_STRING, 1);
+    return loadScriptHelper(fname, "requireScript", true);
+}
+
+Value lxLoadScript(int argCount, Value *args) {
+    CHECK_ARGS("loadScript", 1, 1, argCount);
+    Value fname = *args;
+    CHECK_ARG_TYPE(fname, VAL_T_OBJ, IS_STRING, 1);
+    return loadScriptHelper(fname, "loadScript", false);
 }
 
 static void markInternalAry(Obj *internalObj) {

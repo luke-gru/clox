@@ -1,2 +1,4 @@
 print loadPath;
-loadScript("anon_fun.lox");
+print loadScript("anon_fun.lox");
+print requireScript("anon_fun.lox");
+print requireScript("anon_fun.lox");

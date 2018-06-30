@@ -60,6 +60,10 @@ static void defineNativeFunctions() {
     ObjString *loadScriptName = copyString("loadScript", 10);
     ObjNative *loadScriptFn = newNative(loadScriptName, lxLoadScript);
     tableSet(&vm.globals, OBJ_VAL(loadScriptName), OBJ_VAL(loadScriptFn));
+
+    ObjString *reqScriptName = copyString("requireScript", 13);
+    ObjNative *reqScriptFn = newNative(reqScriptName, lxRequireScript);
+    tableSet(&vm.globals, OBJ_VAL(reqScriptName), OBJ_VAL(reqScriptFn));
 }
 
 // Builtin classes:
@@ -186,10 +190,9 @@ void initVM() {
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
     vm.openUpvalues = NULL;
+    vec_init(&vm.loadedScripts);
 
     vm.lastValue = NULL;
-    vm.lastErrorThrown = NIL_VAL;
-    vm.hadError = false;
     initTable(&vm.globals);
     initTable(&vm.strings);
     vm.initString = copyString("init", 4);
@@ -198,6 +201,8 @@ void initVM() {
     vec_init(&vm.hiddenObjs);
     vec_init(&vm.stackObjects);
 
+    vm.lastErrorThrown = NIL_VAL;
+    vm.hadError = false;
     inCCall = false;
     cCallThrew = false;
     returnedFromNativeErr = false;
@@ -222,6 +227,7 @@ void freeVM() {
     vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
     vec_deinit(&vm.stackObjects);
+    vec_deinit(&vm.loadedScripts);
 
     inCCall = false;
     cCallThrew = false;
@@ -234,6 +240,17 @@ void freeVM() {
 
 int VMNumStackFrames() {
     return vm.stackTop - vm.stack;
+}
+
+bool VMLoadedScript(char *fname) {
+    ASSERT(vm.inited);
+    Value *loaded = NULL; int i = 0;
+    vec_foreach_ptr(&vm.loadedScripts, loaded, i) {
+        if (strcmp(fname, AS_CSTRING(*loaded)) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 #define ASSERT_VALID_STACK(...) ASSERT(vm.stackTop >= vm.stack)

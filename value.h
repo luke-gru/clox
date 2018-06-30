@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include "common.h"
+#include "vec.h"
 
 // fwd decls
 typedef struct Obj Obj;
@@ -16,7 +17,7 @@ typedef enum {
   VAL_T_SENTINEL // used as an 'undefined' value type, for example as an undefined hash key
 } ValueType;
 
-typedef struct {
+typedef struct Value {
   ValueType type;
   union {
     bool boolean;
@@ -25,7 +26,9 @@ typedef struct {
   } as;
 } Value;
 
-typedef struct {
+typedef vec_t(Value) vec_val_t;
+
+typedef struct ValueArray {
     int capacity;
     int count;
     Value *values;

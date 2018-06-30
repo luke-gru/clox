@@ -50,10 +50,11 @@ typedef struct VM {
   // collected during GC.
   vec_void_t stackObjects;
 
+  Value lastErrorThrown;
+  vec_val_t loadedScripts;
+
   bool inited;
   bool hadError;
-
-  Value lastErrorThrown;
 } VM; // singleton
 
 extern VM vm;
@@ -67,6 +68,7 @@ void initVM();
 void freeVM();
 InterpretResult interpret(Chunk *chunk);
 InterpretResult loadScript(Chunk *chunk);
+bool VMLoadedScript(char *fname);
 Value *getLastValue();
 Value callVMMethod(
     ObjInstance *instance, Value callable,
