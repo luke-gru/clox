@@ -80,6 +80,7 @@ typedef enum {
     COMPILE_SCOPE_BLOCK = 1,
     COMPILE_SCOPE_FUNCTION,
     COMPILE_SCOPE_CLASS,
+    COMPILE_SCOPE_IN,
     COMPILE_SCOPE_MODULE, // TODO
 } CompileScopeType;
 
@@ -88,6 +89,7 @@ static const char *compileScopeName(CompileScopeType stype) {
     case COMPILE_SCOPE_BLOCK: return "SCOPE_BLOCK";
     case COMPILE_SCOPE_FUNCTION: return "SCOPE_FUNCTION";
     case COMPILE_SCOPE_CLASS: return "SCOPE_CLASS";
+    case COMPILE_SCOPE_IN: return "SCOPE_IN";
     case COMPILE_SCOPE_MODULE: return "SCOPE_MODULE";
     default: {
         UNREACHABLE("invalid scope type: %d", stype);
@@ -98,6 +100,7 @@ static const char *compileScopeName(CompileScopeType stype) {
 static Compiler *current = NULL;
 static Compiler *top = NULL;
 static ClassCompiler *currentClass = NULL;
+static bool inINBlock = false;
 static Token *curTok = NULL;
 static int loopStart = -1;
 CompilerOpts compilerOpts; // [external]
@@ -316,24 +319,23 @@ static int addUpvalue(Compiler *compiler, uint8_t index, bool isLocal) {
 }
 
 static bool identifiersEqual(Token *a, Token *b) {
-  if (a->length != b->length) return false;
-  return memcmp(a->start, b->start, a->length) == 0;
+    if (a->length != b->length) return false;
+    return memcmp(a->start, b->start, a->length) == 0;
 }
 
 // returns -1 if local variable not found, otherwise returns slot index
 // in the given compiler's locals table.
 static int resolveLocal(Compiler *compiler, Token* name) {
-  // Look it up in the local scopes. Look in reverse order so that the most
-  // nested variable is found first and shadows outer ones.
-  for (int i = compiler->localCount - 1; i >= 0; i--) {
-    Local *local = &compiler->locals[i];
-    if (identifiersEqual(name, &local->name)) {
-        if (local->depth == -1) continue;
-      return i;
+    // Look it up in the local scopes. Look in reverse order so that the most
+    // nested variable is found first and shadows outer ones.
+    for (int i = compiler->localCount - 1; i >= 0; i--) {
+        Local *local = &compiler->locals[i];
+        if (identifiersEqual(name, &local->name)) {
+            return i;
+        }
     }
-  }
 
-  return -1;
+    return -1;
 }
 
 // Attempts to look up [name] in the functions enclosing the one being compiled
@@ -408,9 +410,8 @@ static Value foldConstant(Iseq *seq, Insn *cur, Insn *bin, Insn *ain) {
     double aNum = AS_NUMBER(a);
     double bNum = AS_NUMBER(b);
     switch (cur->code) {
-        case OP_ADD: {
+        case OP_ADD:
             return NUMBER_VAL(aNum + bNum);
-        }
         case OP_SUBTRACT:
             return NUMBER_VAL(aNum - bNum);
         case OP_MULTIPLY:
@@ -864,8 +865,11 @@ static void initCompiler(
     case FUN_TYPE_SETTER:
     case FUN_TYPE_METHOD:
     case FUN_TYPE_CLASS_METHOD: {
-        ASSERT(currentClass);
-        char *className = tokStr(&currentClass->name);
+        ASSERT(currentClass || inINBlock);
+        char *className = "";
+        if (currentClass) {
+            className = tokStr(&currentClass->name);
+        }
         char *funcName = tokStr(fTok);
         size_t methodNameBuflen = strlen(className)+1+strlen(funcName)+1; // +1 for '.' in between
         char *methodNameBuf = calloc(methodNameBuflen, 1);
@@ -978,6 +982,18 @@ static void emitClass(Node *n) {
     currentClass = cComp.enclosing;
 }
 
+static void emitIn(Node *n) {
+    bool oldIn = inINBlock;
+    emitNode(n->children->data[0]); // expression
+    emitOp0(OP_IN);
+    inINBlock = true;
+    pushScope(COMPILE_SCOPE_IN);
+    addLocal(syntheticToken("this"));
+    emitNode(n->children->data[1]);
+    popScope(COMPILE_SCOPE_IN);
+    inINBlock = oldIn;
+}
+
 // emit function or method
 static void emitFunction(Node *n, FunctionType ftype) {
     Compiler fCompiler;
@@ -1014,7 +1030,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
     }
 
     if (ftype != FUN_TYPE_ANON) {
-        if (currentClass == NULL || ftype == FUN_TYPE_NAMED) { // regular function
+        if ((currentClass == NULL && !inINBlock) || ftype == FUN_TYPE_NAMED) { // regular function
             namedVariable(n->tok, VAR_SET);
         } else {
             func->isMethod = true;
@@ -1260,7 +1276,7 @@ static void emitNode(Node *n) {
         break;
     }
     case METHOD_STMT: {
-        if (currentClass == NULL) {
+        if (currentClass == NULL && !inINBlock) {
             error("Methods can only be declared in classes. Maybe forgot keyword 'fun'?");
         } else {
             FunctionType ftype = FUN_TYPE_METHOD;
@@ -1272,7 +1288,7 @@ static void emitNode(Node *n) {
         break;
     }
     case CLASS_METHOD_STMT: {
-        if (currentClass == NULL) {
+        if (currentClass == NULL && !inINBlock) {
             error("Class methods can only be declared in classes.");
         } else {
             FunctionType ftype = FUN_TYPE_CLASS_METHOD;
@@ -1281,7 +1297,7 @@ static void emitNode(Node *n) {
         break;
     }
     case GETTER_STMT: {
-        if (currentClass == NULL) {
+        if (currentClass == NULL && !inINBlock) {
             error("Getter methods can only be declared in classes");
         } else {
             emitFunction(n, FUN_TYPE_GETTER);
@@ -1289,7 +1305,7 @@ static void emitNode(Node *n) {
         break;
     }
     case SETTER_STMT: {
-        if (currentClass == NULL) {
+        if (currentClass == NULL && !inINBlock) {
             error("Setter methods can only be declared in classes");
         } else {
             emitFunction(n, FUN_TYPE_SETTER);
@@ -1302,6 +1318,10 @@ static void emitNode(Node *n) {
     }
     case CLASS_STMT: {
         emitClass(n);
+        break;
+    }
+    case IN_STMT: {
+        emitIn(n);
         break;
     }
     case PROP_ACCESS_EXPR: {

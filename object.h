@@ -228,7 +228,7 @@ bool isSubclass(ObjClass *subklass, ObjClass *superklass);
 Obj *classFindClassMethod(ObjClass *obj, ObjString *name);
 
 ObjClass *classSingletonClass(ObjClass *klass);
-//ObjClass *instanceSingletonClass(ObjInstance *instance);
+ObjClass *instanceSingletonClass(ObjInstance *instance);
 
 // Returns true if [value] is an object of type [type]. Do not call this
 // directly, instead use the [IS_XXX] macro for the type in question.

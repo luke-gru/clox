@@ -30,9 +30,11 @@ get/set and class methods. [DONE]
 * Allow re-opening classes [DONE]
 * Add loadScript(), requireScript() [DONE]
 * Add eval() []
-* Add string interpolation []
+* Add string interpolation [DONE], needs better error handling still, and
+maybe recursive interpolations? This should work in theory with the way it's
+implemented, but it probably needs a few changes.
 * Add __DIR__ and __FILE__ [DONE]
-* Add `in` block []
+* Add `in` block [IN PROGRESS]
 * Add `foreach *el in item` syntax with iter() support
 * Add system() for running OS commands
 * Add execution context for VM's, so loading a script doesn't screw up the

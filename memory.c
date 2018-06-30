@@ -291,6 +291,9 @@ void freeObject(Obj *obj, bool unlink) {
             GC_TRACE_DEBUG("Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
             freeTable(&instance->hiddenFields);
             if (instance->singletonKlass) {
+                // FIXME: the singleton class should have a link back to the
+                // object, in case it's still referenced but the object is no
+                // longer referenced.
                 GC_TRACE_DEBUG("Freeing instance's singleton class");
                 freeObject((Obj*)instance->singletonKlass, unlink);
             }

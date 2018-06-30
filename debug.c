@@ -111,6 +111,8 @@ const char *opName(OpCode code) {
         return "OP_CLASS";
     case OP_SUBCLASS:
         return "OP_SUBCLASS";
+    case OP_IN:
+        return "OP_IN";
     case OP_THROW:
         return "OP_THROW";
     case OP_GET_THROWN:
@@ -432,6 +434,7 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_INDEX_GET:
         case OP_INDEX_SET:
         case OP_CLOSE_UPVALUE:
+        case OP_IN:
             return printSimpleInstruction(opName(byte), i);
         default:
             printf("Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
@@ -504,6 +507,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_INDEX_GET:
         case OP_INDEX_SET:
         case OP_CLOSE_UPVALUE:
+        case OP_IN:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             ASSERT(0);

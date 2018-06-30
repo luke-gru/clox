@@ -41,6 +41,7 @@ static Keyword keywords[] = {
   {"while",   5, TOKEN_WHILE},
   {"continue",   8, TOKEN_CONTINUE},
   {"break",   5, TOKEN_BREAK},
+  {"in",      2, TOKEN_IN},
   {"__END__",   7, TOKEN_END_SCRIPT},
   // Sentinel to mark the end of the array.
   {NULL,      0, TOKEN_EOF}

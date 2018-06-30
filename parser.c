@@ -453,6 +453,24 @@ static Node *statement() {
         TRACE_END("statement");
         return retNode;
     }
+
+    if (match(TOKEN_IN)) {
+        Token inTok = current->previous;
+        node_type_t inT = {
+            .type = NODE_STMT,
+            .kind = IN_STMT,
+        };
+        Node *inNode = createNode(inT, inTok, NULL);
+        consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'in'");
+        Node *expr = expression();
+        nodeAddChild(inNode, expr);
+        consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'in' expression");
+        consume(TOKEN_LEFT_BRACE, "Expected '{' after 'in' expression");
+        Node *body = classBody();
+        nodeAddChild(inNode, body);
+        TRACE_END("statement");
+        return inNode;
+    }
     Node *ret = expressionStatement();
     TRACE_END("statement");
     return ret;

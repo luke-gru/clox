@@ -334,6 +334,9 @@ ObjInternal *newInternalObject(void *data, GCMarkFunc markFunc, GCFreeFunc freeF
 
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     ObjClass *klass = obj->klass;
+    if (obj->singletonKlass) {
+        klass = obj->singletonKlass;
+    }
     Value method;
     while (klass) {
         if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
@@ -494,5 +497,16 @@ ObjClass *classSingletonClass(ObjClass *klass) {
     ObjClass *meta = newClass(name, klass->superclass);
     klass->singletonKlass = meta;
     klass->superclass = meta;
+    return meta;
+}
+
+ObjClass *instanceSingletonClass(ObjInstance *inst) {
+    if (inst->singletonKlass) {
+        return inst->singletonKlass;
+    }
+    ObjString *name = valueToString(OBJ_VAL(inst), newString);
+    pushCString(name, " (meta)", 7);
+    ObjClass *meta = newClass(name, inst->klass);
+    inst->singletonKlass = meta;
     return meta;
 }

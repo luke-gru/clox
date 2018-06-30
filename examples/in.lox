@@ -1,0 +1,8 @@
+var o = Object();
+in(o) {
+  print this;
+  choo() { print this; return "choochoo"; }
+}
+
+print o.choo;
+print o.choo();

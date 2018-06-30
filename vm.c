@@ -443,6 +443,9 @@ static bool isThrowable(Value val) {
 
 static bool lookupGetter(ObjInstance *obj, ObjString *propName, Value *ret) {
     ObjClass *klass = obj->klass;
+    if (klass->singletonKlass != NULL) {
+        klass = klass->singletonKlass;
+    }
     Value key = OBJ_VAL(propName);
     while (klass) {
         if (tableGet(&klass->getters, key, ret)) {
@@ -455,6 +458,9 @@ static bool lookupGetter(ObjInstance *obj, ObjString *propName, Value *ret) {
 
 static bool lookupSetter(ObjInstance *obj, ObjString *propName, Value *ret) {
     ObjClass *klass = obj->klass;
+    if (klass->singletonKlass != NULL) {
+        klass = klass->singletonKlass;
+    }
     Value key = OBJ_VAL(propName);
     while (klass) {
         if (tableGet(&klass->setters, key, ret)) {
@@ -466,6 +472,9 @@ static bool lookupSetter(ObjInstance *obj, ObjString *propName, Value *ret) {
 }
 
 static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName, Value *ret) {
+    if (klass == obj->klass && obj->singletonKlass) {
+        klass = obj->singletonKlass;
+    }
     Value key = OBJ_VAL(propName);
     while (klass) {
         if (tableGet(&klass->methods, key, ret)) {
@@ -514,7 +523,7 @@ static void defineMethod(ObjString *name) {
     ASSERT(IS_CLOSURE(method));
     ASSERT(IS_CLASS(peek(1)));
     ObjClass *klass = AS_CLASS(peek(1));
-    VM_DEBUG("defining method '%s'", name->chars);
+    VM_DEBUG("defining method '%s' in class '%s'", name->chars, klass->name->chars);
     ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
     pop();
 }
@@ -1382,6 +1391,18 @@ static InterpretResult run(bool doResetStack) {
               AS_CLASS(superclass)
           );
           push(OBJ_VAL(klass));
+          break;
+      }
+      case OP_IN: {
+          Value classOrInst = peek(0);
+          ASSERT(IS_OBJ(classOrInst));
+          if (IS_CLASS(classOrInst)) {
+          } else {
+              ASSERT(IS_INSTANCE(classOrInst)); // FIXME: throw error if not instance
+              ObjClass *klass = instanceSingletonClass(AS_INSTANCE(classOrInst));
+              pop();
+              push(OBJ_VAL(klass));
+          }
           break;
       }
       case OP_METHOD: { // method definition
