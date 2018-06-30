@@ -390,9 +390,12 @@ void collectGarbage(void) {
 
     GC_TRACE_DEBUG("Marking VM stack roots");
     if (CLOX_OPTION_T(traceGC)) printVMStack(stderr);
-    // Mark stack roots up the stack
-    for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
-        grayValue(*slot);
+    // Mark stack roots up the stack for every execution context
+    VMExecContext *ctx = NULL; int k = 0;
+    vec_foreach_ptr(&vm.v_ecs, ctx, k) {
+        for (Value *slot = ctx->stack; slot < ctx->stackTop; slot++) {
+            grayValue(*slot);
+        }
     }
 
     GC_TRACE_DEBUG("Marking VM C stack objects (%d found)", vm.stackObjects.length);
@@ -408,8 +411,11 @@ void collectGarbage(void) {
 
     GC_TRACE_DEBUG("Marking VM frame functions");
     // gray active function closure objects
-    for (int i = 0; i < vm.frameCount; i++) {
-        grayObject((Obj*)vm.frames[i].closure);
+    ctx = NULL; k = 0;
+    vec_foreach_ptr(&vm.v_ecs, ctx, k) {
+        for (int i = 0; i < ctx->frameCount; i++) {
+            grayObject((Obj*)ctx->frames[i].closure);
+        }
     }
 
     GC_TRACE_DEBUG("Marking open upvalues");

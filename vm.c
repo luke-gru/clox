@@ -15,6 +15,8 @@ VM vm;
 #define VM_DEBUG(...) (void(0))
 #endif
 
+#define EC (vm.ec)
+
 static void vm_debug(const char *format, ...) {
     if (!CLOX_OPTION_T(debugVM)) return;
     va_list ap;
@@ -173,14 +175,19 @@ static bool returnedFromNativeErr = false;
 static bool runUntilReturn = false;
 
 void resetStack() {
-    vm.stackTop = vm.stack;
-    vm.frameCount = 0;
+    EC->stackTop = EC->stack;
+    EC->frameCount = 0;
 }
 
 #define FIRST_GC_THRESHHOLD (1024*1024)
 
 void initVM() {
     turnGCOff();
+    vec_init(&vm.v_ecs);
+    VMExecContext ectx;
+    memset(&ectx, 0, sizeof(ectx));
+    vec_push(&vm.v_ecs, ectx);
+    vm.ec = &vm.v_ecs.data[0];
     resetStack();
     vm.objects = NULL;
 
@@ -238,12 +245,16 @@ void freeVM() {
     returnedFromNativeErr = false;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
+    vec_deinit(&vm.v_ecs);
+    vm.ec = NULL;
+
     freeObjects();
     vm.inited = false;
 }
 
+
 int VMNumStackFrames() {
-    return vm.stackTop - vm.stack;
+    return EC->stackTop - EC->stack;
 }
 
 bool VMLoadedScript(char *fname) {
@@ -257,11 +268,11 @@ bool VMLoadedScript(char *fname) {
     return false;
 }
 
-#define ASSERT_VALID_STACK(...) ASSERT(vm.stackTop >= vm.stack)
+#define ASSERT_VALID_STACK(...) ASSERT(EC->stackTop >= EC->stack)
 
 static bool isOpStackEmpty() {
     ASSERT_VALID_STACK();
-    return vm.stackTop == vm.stack;
+    return EC->stackTop == EC->stack;
 }
 
 void push(Value value) {
@@ -269,27 +280,27 @@ void push(Value value) {
     if (IS_OBJ(value)) {
         ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
     }
-    *vm.stackTop = value;
-    vm.stackTop++;
+    *EC->stackTop = value;
+    EC->stackTop++;
 }
 
 Value pop() {
-    ASSERT(vm.stackTop > vm.stack);
-    vm.stackTop--;
-    vm.lastValue = vm.stackTop;
+    ASSERT(EC->stackTop > EC->stack);
+    EC->stackTop--;
+    vm.lastValue = EC->stackTop;
     return *vm.lastValue;
 }
 
 Value peek(unsigned n) {
-    ASSERT((vm.stackTop-n) > vm.stack);
-    return *(vm.stackTop-1-n);
+    ASSERT((EC->stackTop-n) > EC->stack);
+    return *(EC->stackTop-1-n);
 }
 
 Value *getLastValue() {
     if (isOpStackEmpty()) {
         return vm.lastValue;
     } else {
-        return vm.stackTop-1;
+        return EC->stackTop-1;
     }
 }
 
@@ -340,8 +351,8 @@ static int cmpValues(Value lhs, Value rhs) {
 }
 
 static inline CallFrame *getFrame() {
-    ASSERT(vm.frameCount >= 1);
-    return &vm.frames[vm.frameCount-1];
+    ASSERT(EC->frameCount >= 1);
+    return &EC->frames[EC->frameCount-1];
 }
 
 static Chunk *currentChunk() {
@@ -355,8 +366,8 @@ void runtimeError(const char* format, ...) {
     va_end(args);
     fputs("\n", stderr);
 
-    for (int i = vm.frameCount - 1; i >= 0; i--) {
-        CallFrame *frame = &vm.frames[i];
+    for (int i = EC->frameCount - 1; i >= 0; i--) {
+        CallFrame *frame = &EC->frames[i];
         if (frame->isCCall) {
             ObjNative *nativeFunc = frame->nativeFunc;
             ASSERT(nativeFunc);
@@ -409,8 +420,8 @@ void setBacktrace(Value err) {
     /*ASSERT(IS_AN_ERROR(err));*/
     Value ret = newArray();
     setProp(err, copyString("backtrace", 9), ret);
-    for (int i = vm.frameCount - 1; i >= 0; i--) {
-        CallFrame *frame = &vm.frames[i];
+    for (int i = EC->frameCount - 1; i >= 0; i--) {
+        CallFrame *frame = &EC->frames[i];
         ObjString *out = hiddenString("", 0);
         if (frame->isCCall) {
             ObjNative *nativeFunc = frame->nativeFunc;
@@ -585,12 +596,12 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
 static void pushNativeFrame(ObjNative *native) {
     ASSERT(native);
     VM_DEBUG("Pushing native callframe for %s", native->name->chars);
-    if (vm.frameCount == FRAMES_MAX) {
+    if (EC->frameCount == FRAMES_MAX) {
         runtimeError("Stack overflow.");
         return;
     }
     CallFrame *prevFrame = getFrame();
-    CallFrame *newFrame = &vm.frames[vm.frameCount++];
+    CallFrame *newFrame = &EC->frames[EC->frameCount++];
     newFrame->closure = prevFrame->closure;
     newFrame->ip = prevFrame->ip;
     newFrame->start = 0;
@@ -601,9 +612,9 @@ static void pushNativeFrame(ObjNative *native) {
 }
 
 static void popFrame() {
-    ASSERT(vm.frameCount >= 1);
+    ASSERT(EC->frameCount >= 1);
     VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
-    vm.frameCount--;
+    EC->frameCount--;
     inCCall = getFrame()->isCCall;
     ASSERT_VALID_STACK();
 }
@@ -647,13 +658,13 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     if (IS_CLOSURE(callable)) {
         closure = AS_CLOSURE(callable);
         if (!isMethod) {
-            vm.stackTop[-argCount - 1] = callable;
+            EC->stackTop[-argCount - 1] = callable;
         }
     } else if (IS_CLASS(callable)) {
         ObjClass *klass = AS_CLASS(callable);
         ObjInstance *instance = newInstance(klass);
         instanceVal = OBJ_VAL(instance);
-        vm.stackTop[-argCount - 1] = instanceVal; // first argument is instance
+        EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance
         // Call the initializer, if there is one.
         Value initializer;
         Obj *init = instanceFindMethod(instance, vm.initString);
@@ -666,7 +677,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
                 ASSERT(nativeInit->function);
                 pushNativeFrame(nativeInit);
                 CallFrame *newFrame = getFrame();
-                nativeInit->function(argCount+1, vm.stackTop-argCount-1);
+                nativeInit->function(argCount+1, EC->stackTop-argCount-1);
                 if (returnedFromNativeErr) {
                     returnedFromNativeErr = false;
                     VM_DEBUG("native initializer returned from error");
@@ -697,7 +708,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         ObjBoundMethod *bmethod = AS_BOUND_METHOD(callable);
         Obj *callable = bmethod->callable; // native function or user-defined function (ObjClosure)
         instanceVal = bmethod->receiver;
-        vm.stackTop[-argCount - 1] = instanceVal;
+        EC->stackTop[-argCount - 1] = instanceVal;
         return doCallCallable(OBJ_VAL(callable), argCount, true);
     } else if (IS_NATIVE_FUNCTION(callable)) {
         VM_DEBUG("Calling native function with %d args", argCount);
@@ -706,7 +717,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         captureNativeError();
         pushNativeFrame(native);
         CallFrame *newFrame = getFrame();
-        Value val = native->function(argCount, vm.stackTop-argCount);
+        Value val = native->function(argCount, EC->stackTop-argCount);
         if (returnedFromNativeErr) {
             VM_DEBUG("Returned from native function with error");
             returnedFromNativeErr = false;
@@ -726,7 +737,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         UNREACHABLE("bug");
     }
 
-    if (vm.frameCount == FRAMES_MAX) {
+    if (EC->frameCount >= FRAMES_MAX) {
         runtimeError("Stack overflow.");
         return false;
     }
@@ -740,14 +751,14 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
     // add frame
-    CallFrame *frame = &vm.frames[vm.frameCount++];
+    CallFrame *frame = &EC->frames[EC->frameCount++];
     frame->closure = closure;
     frame->ip = closure->function->chunk.code;
     frame->start = parentStart;
     frame->isCCall = false;
     frame->nativeFunc = NULL;
     // +1 to include either the called function (for non-methods) or the receiver (for methods)
-    frame->slots = vm.stackTop - (argCount + 1);
+    frame->slots = EC->stackTop - (argCount + 1);
     return true;
 }
 
@@ -776,12 +787,12 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
     CatchTable *tbl = currentChunk()->catchTbl;
     CatchTable *row = tbl;
     int currentIpOff = (int)(getFrame()->ip - currentChunk()->code);
-    while (row || vm.frameCount > 1) {
+    while (row || EC->frameCount > 1) {
         if (row == NULL) { // pop a call frame
-            ASSERT(vm.frameCount > 1);
+            ASSERT(EC->frameCount > 1);
             currentIpOff = getFrame()->start;
-            ASSERT(vm.stackTop > getFrame()->slots);
-            vm.stackTop = getFrame()->slots;
+            ASSERT(EC->stackTop > getFrame()->slots);
+            EC->stackTop = getFrame()->slots;
             popFrame();
             row = currentChunk()->catchTbl;
             continue;
@@ -868,26 +879,26 @@ void throwArgErrorFmt(const char *format, ...) {
 void printVMStack(FILE *f) {
     /*int frameNum = 0;*/
     /*CallFrame *curFrame = &vm.frames[frameNum];*/
-    if (vm.stackTop == vm.stack) {
+    if (EC->stackTop == EC->stack) {
         fprintf(f, "Stack: empty\n");
         return;
     }
-    fprintf(f, "Stack (%d frames):\n", vm.frameCount);
+    fprintf(f, "Stack (%d frames):\n", EC->frameCount);
     /*for (int i = 0; i < vm.frameCount; i++) {*/
         /*fprintf(f, "Frame %d slots: %p\n", i+1, vm.frames[i].slots);*/
     /*}*/
     // print VM stack values from bottom of stack to top
-    for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
+    for (Value *slot = EC->stack; slot < EC->stackTop; slot++) {
         if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE)) {
             fprintf(stderr, "Broken object pointer: %p\n", AS_OBJ(*slot));
             ASSERT(0);
         }
-        /*if (frameNum < vm.frameCount) {*/
+        /*if (frameNum < EC->frameCount) {*/
             /*if (curFrame->slots+1 == slot || curFrame->slots == slot) {*/
                 /*fprintf(f, " |FRM %d| ", frameNum+1);*/
                 /*frameNum++;*/
-                /*if (frameNum < vm.frameCount) {*/
-                    /*curFrame = &vm.frames[frameNum];*/
+                /*if (frameNum < EC->frameCount) {*/
+                    /*curFrame = &EC->frames[frameNum];*/
                 /*}*/
             /*}*/
         /*}*/
@@ -1008,7 +1019,7 @@ static InterpretResult run(bool doResetStack) {
       if (vm.hadError) {
           return INTERPRET_RUNTIME_ERROR;
       }
-      if (vm.stackTop < vm.stack) {
+      if (EC->stackTop < EC->stack) {
           ASSERT(0);
       }
 
@@ -1210,7 +1221,7 @@ static InterpretResult run(bool doResetStack) {
           break;
       }
       case OP_CLOSE_UPVALUE: {
-          closeUpvalues(vm.stackTop - 1);
+          closeUpvalues(EC->stackTop - 1);
           pop(); // pop the variable from the stack frame
           break;
       }
@@ -1311,7 +1322,7 @@ static InterpretResult run(bool doResetStack) {
                   // FIXME: throw error
                   UNREACHABLE("class method '%s.%s' not found", klass->name->chars, mname->chars);
               }
-              vm.stackTop[-numArgs-1] = instanceVal;
+              EC->stackTop[-numArgs-1] = instanceVal;
               callCallable(OBJ_VAL(callable), numArgs, true);
           }
           if (vm.hadError) {
@@ -1348,7 +1359,7 @@ static InterpretResult run(bool doResetStack) {
           Value *newTop = getFrame()->slots;
           closeUpvalues(getFrame()->slots);
           popFrame();
-          vm.stackTop = newTop;
+          EC->stackTop = newTop;
           push(result);
           if (runUntilReturn) {
               return INTERPRET_OK;
@@ -1551,12 +1562,12 @@ static void setupPerScriptGlobals(char *filename) {
 
 InterpretResult interpret(Chunk *chunk, char *filename) {
     ASSERT(chunk);
-    vm.frameCount = 0;
+    EC->frameCount = 0;
     // initialize top-level callframe (frameCount = 1)
-    CallFrame *frame = &vm.frames[vm.frameCount++];
+    CallFrame *frame = &EC->frames[EC->frameCount++];
     frame->start = 0;
     frame->ip = chunk->code;
-    frame->slots = vm.stack;
+    frame->slots = EC->stack;
     ObjFunction *func = newFunction(chunk);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
@@ -1580,10 +1591,10 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();
     // initialize top-level callframe (frameCount = 1)
-    CallFrame *frame = &vm.frames[vm.frameCount++];
+    CallFrame *frame = &EC->frames[EC->frameCount++];
     frame->start = 0;
     frame->ip = chunk->code;
-    frame->slots = vm.stackTop-1;
+    frame->slots = EC->stackTop-1;
     ObjFunction *func = newFunction(chunk);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);

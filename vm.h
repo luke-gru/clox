@@ -11,52 +11,62 @@
 #define FRAMES_MAX 64
 
 typedef struct CallFrame {
-  // Non-native function fields
-  ObjClosure *closure; // if call frame is from compiled code, this is set
-  uint8_t *ip;
-  int start; // starting instruction offset in parent (for throw/catch)
-  Value *slots;
+    // Non-native function fields
+    ObjClosure *closure; // if call frame is from compiled code, this is set
+    uint8_t *ip;
+    int start; // starting instruction offset in parent (for throw/catch)
+    Value *slots;
 
-  // Native (C) function fields
-  bool isCCall; // native call, callframe created for C (native) function call
-  ObjNative *nativeFunc; // only if isCCall is true
+    // Native (C) function fields
+    bool isCCall; // native call, callframe created for C (native) function call
+    ObjNative *nativeFunc; // only if isCCall is true
 } CallFrame; // represents a local scope (block, function, etc)
 
+// Execution context for VM. When loading a script, a new context is created.
+// When evaling, a new context is also created.
+typedef struct VMExecContext {
+    Value stack[STACK_MAX]; // stack VM, this is the stack of operands
+    Value *stackTop;
+    // NOTE: the current callframe contains the closure, which contains the
+    // function, which contains the chunk of bytecode for the current function
+    // (or top-level)
+    CallFrame frames[FRAMES_MAX];
+    unsigned frameCount;
+} VMExecContext;
+
+typedef vec_t(VMExecContext) vec_VM_EC_t;
+
 typedef struct VM {
-  Value stack[STACK_MAX]; // stack VM, this is the stack of operands
-  Value *stackTop;
-  // NOTE: the current callframe contains the closure, which contains the
-  // function, which contains the chunk of bytecode for the current function
-  // (or top-level)
-  CallFrame frames[FRAMES_MAX];
-  unsigned frameCount;
-  Obj *objects; // linked list of heap objects
-  ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
-  Value *lastValue;
-  Table globals; // global variables
-  Table strings; // interned strings
-  ObjString *initString;
-  ObjString *fileString;
-  ObjString *dirString;
-  ObjString *printBuf;
+    VMExecContext *ec; // current execution context
+    vec_VM_EC_t v_ecs; // stack of execution contexts. Top of stack is current context.
 
-  // GC fields
-  size_t bytesAllocated;
-  size_t nextGCThreshhold;
-  int grayCount;
-  int grayCapacity;
-  Obj **grayStack;
-  vec_void_t hiddenObjs;
-  // stack of object pointers created during C function calls. When
-  // control returns to the VM, these are popped. Stack objects aren't
-  // collected during GC.
-  vec_void_t stackObjects;
+    Obj *objects; // linked list of heap objects
+    ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
+    Value *lastValue;
+    Table globals; // global variables
+    Table strings; // interned strings
+    ObjString *initString;
+    ObjString *fileString;
+    ObjString *dirString;
+    ObjString *printBuf;
 
-  Value lastErrorThrown;
-  vec_val_t loadedScripts;
+    // GC fields
+    size_t bytesAllocated;
+    size_t nextGCThreshhold;
+    int grayCount;
+    int grayCapacity;
+    Obj **grayStack;
+    vec_void_t hiddenObjs;
+    // stack of object pointers created during C function calls. When
+    // control returns to the VM, these are popped. Stack objects aren't
+    // collected during GC.
+    vec_void_t stackObjects;
 
-  bool inited;
-  bool hadError;
+    Value lastErrorThrown;
+    vec_val_t loadedScripts;
+
+    bool inited;
+    bool hadError;
 } VM; // singleton
 
 extern VM vm;
