@@ -27,23 +27,24 @@ static void _trace_end(const char *name) {
 
 // global
 Parser parser;
+static Parser *current = NULL;
 
 // initialize/reinitialize parser
-void initParser(void) {
-    parser.hadError = false;
-    parser.panicMode = false;
-    memset(&parser.current, 0, sizeof(Token));
-    memset(&parser.previous, 0, sizeof(Token));
-    if (parser.peekBuf.length > 0) {
-        vec_deinit(&parser.peekBuf);
+void initParser(Parser *p) {
+    p->hadError = false;
+    p->panicMode = false;
+    memset(&p->current, 0, sizeof(Token));
+    memset(&p->previous, 0, sizeof(Token));
+    if (p->peekBuf.length > 0) {
+        vec_deinit(&p->peekBuf); // this also calls vec_init after freeing
     } else {
-        vec_init(&parser.peekBuf);
+        vec_init(&p->peekBuf);
     }
 }
 
 static void errorAt(Token *token, const char *message) {
-  if (parser.panicMode) return;
-  parser.panicMode = true;
+  if (current->panicMode) return;
+  current->panicMode = true;
 
   fprintf(stderr, "[Parse Error], (line %d) Error", token->line);
 
@@ -56,21 +57,21 @@ static void errorAt(Token *token, const char *message) {
   }
 
   fprintf(stderr, ": %s\n", message);
-  parser.hadError = true;
+  current->hadError = true;
 }
 
 static void error(const char *message) {
-  errorAt(&parser.previous, message);
+  errorAt(&current->previous, message);
 }
 static void errorAtCurrent(const char *message) {
-  errorAt(&parser.current, message);
+  errorAt(&current->current, message);
 }
 
 // takes into account peekbuffer, which scanToken() doesn't
 static Token nextToken() {
-    if (parser.peekBuf.length > 0) {
-        Token val = vec_first(&parser.peekBuf);
-        vec_splice(&parser.peekBuf, 0, 1);
+    if (current->peekBuf.length > 0) {
+        Token val = vec_first(&current->peekBuf);
+        vec_splice(&current->peekBuf, 0, 1);
         return val;
     } else {
         return scanToken();
@@ -79,21 +80,21 @@ static Token nextToken() {
 
 // Fill `parser.current` with next token in stream
 static void advance() {
-  parser.previous = parser.current;
+  current->previous = current->current;
 
   // parse the next non-error token
   for (;;) {
-    parser.current = nextToken();
-    if (parser.current.type != TOKEN_ERROR) break;
+    current->current = nextToken();
+    if (current->current.type != TOKEN_ERROR) break;
 
-    errorAtCurrent(parser.current.start);
+    errorAtCurrent(current->current.start);
   }
 }
 
 // Expect current token to be of given type, otherwise error with given
 // message.
 static void consume(TokenType type, const char *message) {
-  if (parser.current.type == type) {
+  if (current->current.type == type) {
     advance();
     return;
   }
@@ -103,21 +104,21 @@ static void consume(TokenType type, const char *message) {
 
 // Check that the current token is of given type
 static bool check(TokenType type) {
-  return parser.current.type == type;
+  return current->current.type == type;
 }
 
 // peekTokN(1) gives token that nextToken() will return on next call
 static Token peekTokN(int n) {
     ASSERT(n > 0);
-    if (parser.peekBuf.length < n) {
-        for (int i = parser.peekBuf.length; i < n; i++) {
+    if (current->peekBuf.length < n) {
+        for (int i = current->peekBuf.length; i < n; i++) {
             Token tok = scanToken();
-            vec_push(&parser.peekBuf, tok);
+            vec_push(&current->peekBuf, tok);
             if (tok.type == TOKEN_EOF) break;
         }
-        return vec_last(&parser.peekBuf);
+        return vec_last(&current->peekBuf);
     } else {
-        return parser.peekBuf.data[n-1];
+        return current->peekBuf.data[n-1];
     }
 }
 
@@ -152,14 +153,16 @@ static Node *blockStatements(void);
 static Node *expressionStatement(void);
 
 static bool isAtEnd(void) {
-    return parser.previous.type == TOKEN_EOF || check(TOKEN_EOF);
+    return current->previous.type == TOKEN_EOF || check(TOKEN_EOF);
 }
 
 // returns program node that contains list of statement nodes
 // initScanner(char *src) must be called so the scanner is ready
 // to pass us the tokens to parse.
-Node *parse(void) {
-    initParser();
+Node *parse(Parser *p) {
+    initParser(p);
+    Parser *oldCurrent = current;
+    current = p;
     node_type_t nType = {
         .type = NODE_STMT,
         .kind = STMTLIST_STMT,
@@ -178,6 +181,7 @@ Node *parse(void) {
         char *output = outputASTString(ret, 0);
         fprintf(stdout, "%s", output);
     }
+    current = oldCurrent;
     return ret;
 }
 
@@ -196,7 +200,7 @@ static Node *declaration(void) {
     }
     if (match(TOKEN_CLASS)) {
         consume(TOKEN_IDENTIFIER, "Expected class name (identifier) after keyword 'class'");
-        Token nameTok = parser.previous;
+        Token nameTok = current->previous;
         node_type_t classType = {
             .type = NODE_STMT,
             .kind = CLASS_STMT,
@@ -204,7 +208,7 @@ static Node *declaration(void) {
         Node *classNode = createNode(classType, nameTok, NULL);
         if (match(TOKEN_LESS)) {
             consume(TOKEN_IDENTIFIER, "Expected class name after '<' in class declaration");
-            Token superName = parser.previous;
+            Token superName = current->previous;
             nodeAddData(classNode, (void*)copyToken(&superName));
         }
 
@@ -248,13 +252,13 @@ static Node *statement() {
             .type = NODE_STMT,
             .kind = BLOCK_STMT,
         };
-        Node *block = createNode(blockType, parser.previous, NULL);
+        Node *block = createNode(blockType, current->previous, NULL);
         nodeAddChild(block, stmtList);
         TRACE_END("statement");
         return block;
     }
     if (match(TOKEN_IF)) {
-        Token ifTok = parser.previous;
+        Token ifTok = current->previous;
         consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'if'");
         node_type_t ifType = {
             .type = NODE_STMT,
@@ -264,7 +268,7 @@ static Node *statement() {
         Node *cond = expression();
         consume(TOKEN_RIGHT_PAREN, "Expected ')' to end 'if' condition");
         consume(TOKEN_LEFT_BRACE, "Expected '{' after 'if' condition");
-        Token lbraceTok = parser.previous;
+        Token lbraceTok = current->previous;
         nodeAddChild(ifNode, cond);
         Node *ifStmtList = blockStatements();
         Node *ifBlock = wrapStmtsInBlock(ifStmtList, lbraceTok);
@@ -281,7 +285,7 @@ static Node *statement() {
     }
 
     if (match(TOKEN_WHILE)) {
-        Token whileTok = parser.previous;
+        Token whileTok = current->previous;
         consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'while'");
         Node *cond = expression();
         consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'while' condition");
@@ -303,7 +307,7 @@ static Node *statement() {
             .type = NODE_STMT,
             .kind = FOR_STMT,
         };
-        Token forTok = parser.previous;
+        Token forTok = current->previous;
         Node *forNode = createNode(forT, forTok, NULL);
         consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'for'");
         Node *initializer = NULL; // can be null
@@ -342,7 +346,7 @@ static Node *statement() {
 
     // try { } [catch (Error e) { }]+
     if (match(TOKEN_TRY)) {
-        Token tryTok = parser.previous;
+        Token tryTok = current->previous;
         node_type_t nType = {
             .type = NODE_STMT,
             .kind = TRY_STMT,
@@ -350,23 +354,23 @@ static Node *statement() {
         TRACE_START("tryStatement");
         Node *try = createNode(nType, tryTok, NULL);
         consume(TOKEN_LEFT_BRACE, "Expected '{' after keyword 'try'");
-        Token lbraceTok = parser.previous;
+        Token lbraceTok = current->previous;
         Node *stmtList = blockStatements();
         Node *tryBlock = wrapStmtsInBlock(stmtList, lbraceTok);
         nodeAddChild(try, tryBlock);
         while (match(TOKEN_CATCH)) {
-            Token catchTok = parser.previous;
+            Token catchTok = current->previous;
             consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'catch'");
             Node *catchExpr = expression();
             Token identToken;
             bool foundIdentToken = false;
             if (match(TOKEN_IDENTIFIER)) {
-                identToken = parser.previous;
+                identToken = current->previous;
                 foundIdentToken = true;
             }
             consume(TOKEN_RIGHT_PAREN, "Expected ')' to end 'catch' expression");
             consume(TOKEN_LEFT_BRACE, "Expected '{' after 'catch' expression");
-            lbraceTok = parser.previous;
+            lbraceTok = current->previous;
             Node *catchStmtList = blockStatements();
             Node *catchBlock = wrapStmtsInBlock(catchStmtList, lbraceTok);
             node_type_t catchT = {
@@ -392,7 +396,7 @@ static Node *statement() {
     }
 
     if (match(TOKEN_THROW)) {
-        Token throwTok = parser.previous;
+        Token throwTok = current->previous;
         Node *expr = expression();
         consume(TOKEN_SEMICOLON, "Expected ';' to end 'throw' statement");
         node_type_t throwT = {
@@ -405,7 +409,7 @@ static Node *statement() {
         return throw;
     }
     if (match(TOKEN_CONTINUE)) {
-        Token contTok = parser.previous;
+        Token contTok = current->previous;
         node_type_t contT = {
             .type = NODE_STMT,
             .kind = CONTINUE_STMT,
@@ -416,7 +420,7 @@ static Node *statement() {
         return cont;
     }
     if (match(TOKEN_BREAK)) {
-        Token breakTok = parser.previous;
+        Token breakTok = current->previous;
         node_type_t breakT = {
             .type = NODE_STMT,
             .kind = BREAK_STMT,
@@ -427,7 +431,7 @@ static Node *statement() {
         return breakNode;
     }
     if (match(TOKEN_RETURN)) {
-        Token retTok = parser.previous;
+        Token retTok = current->previous;
         node_type_t retT = {
             .type = NODE_STMT,
             .kind = RETURN_STMT,
@@ -454,7 +458,7 @@ static Node *printStatement() {
         .type = NODE_STMT,
         .kind = PRINT_STMT,
     };
-    Node *printNode = createNode(printType, parser.previous, NULL);
+    Node *printNode = createNode(printType, current->previous, NULL);
     Node *expr = expression();
     consume(TOKEN_SEMICOLON, "Expected ';' after 'print' statement");
     nodeAddChild(printNode, expr);
@@ -469,7 +473,7 @@ static Node *blockStatements() {
         .type = NODE_STMT,
         .kind = STMTLIST_STMT,
     };
-    Node *stmtList = createNode(stmtListT, parser.previous, NULL);
+    Node *stmtList = createNode(stmtListT, current->previous, NULL);
     while (!isAtEnd() && !check(TOKEN_RIGHT_BRACE)) {
         Node *decl = declaration();
         nodeAddChild(stmtList, decl);
@@ -481,7 +485,7 @@ static Node *blockStatements() {
 
 static Node *expressionStatement() {
     TRACE_START("expressionStatement");
-    Token tok = parser.current;
+    Token tok = current->current;
     Node *expr = expression();
     node_type_t stmtT = {
         .type = NODE_STMT,
@@ -497,7 +501,7 @@ static Node *expressionStatement() {
 // '{' already parsed. Continue parsing up to and including closing '}'
 static Node *classBody() {
     TRACE_START("classBody");
-    Token lbraceTok = parser.previous;
+    Token lbraceTok = current->previous;
     node_type_t nType = {
         .type = NODE_STMT,
         .kind = STMTLIST_STMT,
@@ -535,7 +539,7 @@ static Node *classBody() {
 static Node *varDeclaration(void) {
     TRACE_START("varDeclaration");
     consume(TOKEN_IDENTIFIER, "Expected identifier after keyword 'var'");
-    Token identTok = parser.previous;
+    Token identTok = current->previous;
     node_type_t nType = {
         .type = NODE_STMT,
         .kind = VAR_STMT,
@@ -567,10 +571,10 @@ static vec_nodep_t *createNodeVec(void) {
 // FUN keyword has already been parsed, for regular functions
 static Node *funDeclaration(ParseFunctionType fnType) {
     TRACE_START("funDeclaration");
-    Token nameTok = parser.previous;
+    Token nameTok = current->previous;
     if (fnType != FUNCTION_TYPE_ANON) {
         consume(TOKEN_IDENTIFIER, "Expect function name (identifier) after 'fun' keyword");
-        nameTok = parser.previous;
+        nameTok = current->previous;
     }
     if (fnType == FUNCTION_TYPE_SETTER) {
         consume(TOKEN_EQUAL, "Expect '=' after setter method name");
@@ -579,7 +583,7 @@ static Node *funDeclaration(ParseFunctionType fnType) {
     if (fnType != FUNCTION_TYPE_GETTER) {
         consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");
         while (match(TOKEN_IDENTIFIER)) {
-            Token paramTok = parser.previous;
+            Token paramTok = current->previous;
             node_type_t nType = {
                 .type = NODE_OTHER,
                 .kind = PARAM_NODE,
@@ -593,7 +597,7 @@ static Node *funDeclaration(ParseFunctionType fnType) {
         consume(TOKEN_RIGHT_PAREN, "Expect ')' after function parameters");
     }
     consume(TOKEN_LEFT_BRACE, "Expect '{' after function parameter list");
-    Token lbrace = parser.previous;
+    Token lbrace = current->previous;
     Node *stmtList = blockStmts();
     node_type_t blockType = {
         .type = NODE_STMT,
@@ -643,7 +647,7 @@ static Node *funDeclaration(ParseFunctionType fnType) {
 // a list of stmts
 static Node *blockStmts() {
     TRACE_START("blockStmts");
-    Token lbraceTok = parser.previous;
+    Token lbraceTok = current->previous;
     node_type_t nType = {
         .type = NODE_STMT,
         .kind = STMTLIST_STMT,
@@ -663,7 +667,7 @@ static Node *assignment() {
     Node *lval = logicOr();
     // TODO: support +=, -=, /=, *=
     if (match(TOKEN_EQUAL)) {
-        Token eqTok = parser.previous;
+        Token eqTok = current->previous;
         Node *rval = assignment(); // assignment goes right to left in precedence (a = (b = c))
         Node *ret = NULL;
         if (nodeKind(lval) == VARIABLE_EXPR) {
@@ -715,7 +719,7 @@ static Node *logicOr() {
     // precedence left to right ((this or that) or other)
     while (match(TOKEN_OR)) {
         TRACE_START("logicalExpr");
-        Token orTok = parser.previous;
+        Token orTok = current->previous;
         node_type_t orT = {
             .type = NODE_EXPR,
             .kind = LOGICAL_EXPR,
@@ -736,7 +740,7 @@ static Node *logicAnd() {
     Node *left = equality();
     while (match(TOKEN_AND)) {
         TRACE_START("logicalExpr");
-        Token andTok = parser.previous;
+        Token andTok = current->previous;
         node_type_t andT = {
             .type = NODE_EXPR,
             .kind = LOGICAL_EXPR,
@@ -757,7 +761,7 @@ static Node *equality() {
     Node *left = comparison();
     while (match(TOKEN_EQUAL_EQUAL) || match(TOKEN_BANG_EQUAL)) {
         TRACE_START("binaryExpr");
-        Token eqTok = parser.previous;
+        Token eqTok = current->previous;
         node_type_t eqT = {
             .type = NODE_EXPR,
             .kind = BINARY_EXPR,
@@ -779,7 +783,7 @@ static Node *comparison() {
     while (match(TOKEN_LESS) || match(TOKEN_LESS_EQUAL) ||
            match(TOKEN_GREATER) || match(TOKEN_GREATER_EQUAL)) {
         TRACE_START("binaryExpr");
-        Token cmpTok = parser.previous;
+        Token cmpTok = current->previous;
         node_type_t cmpT = {
             .type = NODE_EXPR,
             .kind = BINARY_EXPR,
@@ -800,7 +804,7 @@ static Node *addition() {
     Node *left = multiplication();
     while (match(TOKEN_PLUS) || match(TOKEN_MINUS)) {
         TRACE_START("binaryExpr");
-        Token addTok = parser.previous;
+        Token addTok = current->previous;
         node_type_t addT = {
             .type = NODE_EXPR,
             .kind = BINARY_EXPR,
@@ -821,7 +825,7 @@ static Node *multiplication() {
     Node *left = unary();
     while (match(TOKEN_STAR) || match(TOKEN_SLASH)) {
         TRACE_START("binaryExpr");
-        Token mulTok = parser.previous;
+        Token mulTok = current->previous;
         node_type_t mulT = {
             .type = NODE_EXPR,
             .kind = BINARY_EXPR,
@@ -841,7 +845,7 @@ static Node *multiplication() {
 static Node *unary() {
     TRACE_START("unary");
     if (match(TOKEN_BANG) || match(TOKEN_MINUS)) {
-        Token unTok = parser.previous;
+        Token unTok = current->previous;
         node_type_t unT = {
             .type = NODE_EXPR,
             .kind = UNARY_EXPR,
@@ -866,7 +870,7 @@ static Node *call() {
                 .type = NODE_EXPR,
                 .kind = CALL_EXPR,
             };
-            Token lparenTok = parser.previous;
+            Token lparenTok = current->previous;
             Node *callNode = createNode(callT, lparenTok, NULL);
             nodeAddChild(callNode, expr);
             expr = callNode;
@@ -886,7 +890,7 @@ static Node *call() {
         } else if (match(TOKEN_DOT)) {
             TRACE_START("propAccessExpr");
             consume(TOKEN_IDENTIFIER, "Expected identifier (property name) after '.' in property access");
-            Token propName = parser.previous;
+            Token propName = current->previous;
             node_type_t propT = {
                 .type = NODE_EXPR,
                 .kind = PROP_ACCESS_EXPR,
@@ -897,7 +901,7 @@ static Node *call() {
             TRACE_END("propAccessExpr");
         } else if (match(TOKEN_LEFT_BRACKET)) {
             TRACE_START("indexGetExpr");
-            Token lBracket = parser.previous;
+            Token lBracket = current->previous;
             Node *indexExpr = expression();
             node_type_t idxGetT = {
                 .type = NODE_EXPR,
@@ -921,7 +925,7 @@ static Node *primary() {
     TRACE_START("primary");
     if (match(TOKEN_STRING_DQUOTE) || match(TOKEN_STRING_SQUOTE)) {
         TRACE_START("string");
-        Token strTok = parser.previous;
+        Token strTok = current->previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = LITERAL_EXPR,
@@ -934,7 +938,7 @@ static Node *primary() {
     }
     if (match(TOKEN_STRING_STATIC)) {
         TRACE_START("string");
-        Token strTok = parser.previous;
+        Token strTok = current->previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = LITERAL_EXPR,
@@ -947,7 +951,7 @@ static Node *primary() {
     }
     if (match(TOKEN_NUMBER)) {
         TRACE_START("number");
-        Token numTok = parser.previous;
+        Token numTok = current->previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = LITERAL_EXPR,
@@ -960,7 +964,7 @@ static Node *primary() {
     }
     if (match(TOKEN_NIL)) {
         TRACE_START("nil");
-        Token nilTok = parser.previous;
+        Token nilTok = current->previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = LITERAL_EXPR,
@@ -973,7 +977,7 @@ static Node *primary() {
     }
     if (match(TOKEN_TRUE) || match(TOKEN_FALSE)) {
         TRACE_START("bool");
-        Token boolTok = parser.previous;
+        Token boolTok = current->previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = LITERAL_EXPR,
@@ -986,7 +990,7 @@ static Node *primary() {
     }
     if (match(TOKEN_IDENTIFIER)) {
         TRACE_START("varExpr");
-        Token varName = parser.previous;
+        Token varName = current->previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = VARIABLE_EXPR,
@@ -998,7 +1002,7 @@ static Node *primary() {
     }
     if (match(TOKEN_LEFT_BRACKET)) {
         TRACE_START("arrayExpr");
-        Token lbrackTok = parser.previous;
+        Token lbrackTok = current->previous;
         node_type_t arrType = {
             .type = NODE_EXPR,
             .kind = ARRAY_EXPR,
@@ -1018,7 +1022,7 @@ static Node *primary() {
     }
     if (match(TOKEN_LEFT_PAREN)) {
         TRACE_END("groupExpr");
-        Token lparenTok = parser.previous;
+        Token lparenTok = current->previous;
         node_type_t gType = {
             .type = NODE_EXPR,
             .kind = GROUPING_EXPR,
@@ -1033,10 +1037,10 @@ static Node *primary() {
     }
     if (match(TOKEN_SUPER)) {
         TRACE_START("superExpr");
-        Token superTok = parser.previous;
+        Token superTok = current->previous;
         consume(TOKEN_DOT, "Expected '.' after keyword 'super'");
         consume(TOKEN_IDENTIFIER, "Expected identifier after 'super.'");
-        Token identTok = parser.previous;
+        Token identTok = current->previous;
         node_type_t sType = {
             .type = NODE_EXPR,
             .kind = SUPER_EXPR,
@@ -1054,7 +1058,7 @@ static Node *primary() {
     }
     if (match(TOKEN_THIS)) {
         TRACE_START("thisExpr");
-        Token thisTok = parser.previous;
+        Token thisTok = current->previous;
         node_type_t nType = {
             .type = NODE_EXPR,
             .kind = THIS_EXPR,

@@ -1452,7 +1452,8 @@ int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     Compiler mainCompiler;
     top = &mainCompiler;
     initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, chunk);
-    Node *program = parse();
+    initParser(&parser);
+    Node *program = parse(&parser);
     if (CLOX_OPTION_T(parseOnly)) {
         *err = parser.hadError ? COMPILE_ERR_SYNTAX :
             COMPILE_ERR_NONE;

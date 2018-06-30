@@ -87,7 +87,7 @@ cleanup:
 static int test_output_nodes_from_parser_vardecl(void) {
     const char *src = "var a = 1;";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -100,7 +100,7 @@ cleanup:
 static int test_output_nodes_from_parser_funcdecl(void) {
     const char *src = "fun f(a, b) {}";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -115,7 +115,7 @@ cleanup:
 static int test_output_nodes_from_parser_print(void) {
     const char *src = "print \"hi\";";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -127,7 +127,7 @@ cleanup:
 static int test_output_nodes_from_parser_classdecl1(void) {
     const char *src = "class A {}";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -138,7 +138,7 @@ static int test_output_nodes_from_parser_classdecl1(void) {
 
     src = "class A < B { }";
     initScanner(src);
-    program = parse();
+    program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     output = outputASTString(program, 0);
@@ -155,7 +155,7 @@ static int test_output_nodes_from_parser_if1(void) {
                       "  print \"got nil\";\n"
                       "} else { print \"not nil\"; }";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -179,7 +179,7 @@ static int test_output_nodes_from_parser_while1(void) {
                       "  print \"again...\";\n"
                       "}";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -199,7 +199,7 @@ static int test_output_nodes_from_parser_for1(void) {
                       "  print \"again...\";\n"
                       "}";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -219,7 +219,7 @@ static int test_output_nodes_from_parser_try1(void) {
                       "  print \"again...\";\n"
                       "} catch (\"uh oh\") { }";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -240,7 +240,7 @@ cleanup:
 static int test_output_nodes_from_parser_throw1(void) {
     const char *src = "throw \"UH OH\";";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -254,7 +254,7 @@ cleanup:
 static int test_output_nodes_from_parser_return1(void) {
     const char *src = "fun a() { return; }";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -272,7 +272,7 @@ cleanup:
 static int test_output_nodes_from_parser_assign1(void) {
     const char *src = "var a; a = 1;";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -287,7 +287,7 @@ cleanup:
 static int test_output_nodes_from_parser_array1(void) {
     const char *src = "var a = [1,2,\"three\"];";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -297,7 +297,7 @@ static int test_output_nodes_from_parser_array1(void) {
 
     src = "[1,2,3,4,[5],];";
     initScanner(src);
-    program = parse();
+    program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     output = outputASTString(program, 0);
@@ -311,7 +311,7 @@ cleanup:
 static int test_output_nodes_from_parser_binaryop1(void) {
     const char *src = "1+101;";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -325,7 +325,7 @@ cleanup:
 static int test_output_nodes_from_parser_logicalop1(void) {
     const char *src = "1 <= 101;";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -339,7 +339,7 @@ cleanup:
 static int test_output_nodes_from_parser_grouping1(void) {
     const char *src = "(\"in parens\");";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -353,7 +353,7 @@ cleanup:
 static int test_output_nodes_from_parser_superexpr(void) {
     const char *src = "fun a(n) { return super.a(n); }";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -371,7 +371,7 @@ cleanup:
 static int test_output_nodes_from_parser_thisexpr(void) {
     const char *src = "fun me() { return this; }";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -389,7 +389,7 @@ cleanup:
 static int test_output_nodes_from_parser_anonfn(void) {
     const char *src = "var f = fun() { return \"FUN\"; };";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -408,7 +408,7 @@ cleanup:
 static int test_output_nodes_from_parser_indexget(void) {
     const char *src = "var two = [1,2,3][1];";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -422,7 +422,7 @@ cleanup:
 static int test_output_nodes_from_parser_indexset(void) {
     const char *src = "[1,2,3][1] = 1;";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -436,7 +436,7 @@ cleanup:
 static int test_output_nodes_from_parser_propget(void) {
     const char *src = "expr.propname;";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -450,7 +450,7 @@ cleanup:
 static int test_output_nodes_from_parser_propset(void) {
     const char *src = "expr.propname = propval;";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
@@ -464,7 +464,7 @@ cleanup:
 static int test_output_nodes_from_parser_precedence1(void) {
     const char *src = "1+2*3*4;";
     initScanner(src);
-    Node *program = parse();
+    Node *program = parse(&parser);
     T_ASSERT(!parser.hadError);
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);

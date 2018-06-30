@@ -16,9 +16,9 @@ typedef struct sParser {
   vec_tok_t peekBuf;
 } Parser;
 
-void initParser(void);
-Node *parse(void);
+void initParser(Parser *p);
+Node *parse(Parser *p);
 
-extern Parser parser;
+extern Parser parser; // main parser
 
 #endif
