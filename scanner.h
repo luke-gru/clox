@@ -97,6 +97,8 @@ void resetScanner(Scanner *scan);
 const char *tokTypeStr(TokenType ttype);
 Token scanToken(void);
 void scanAllPrint(Scanner *scan, const char *src);
+Scanner *getScanner(void);
+void setScanner(Scanner *scan);
 
 Token emptyTok(void);
 char *tokStr(Token *tok);

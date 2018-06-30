@@ -365,7 +365,14 @@ void initScanner(Scanner *scan, const char *src) {
   scan->line = 1;
   scan->indent = 0;
   scan->scriptEnded = false;
-  current = scan;
+  setScanner(scan);
+}
+
+Scanner *getScanner(void) {
+    return current;
+}
+void setScanner(Scanner *scan) {
+    current = scan;
 }
 
 void resetScanner(Scanner *scan) {
@@ -374,7 +381,7 @@ void resetScanner(Scanner *scan) {
   scan->line = 1;
   scan->indent = 0;
   scan->scriptEnded = false;
-  current = scan;
+  setScanner(scan);
 }
 
 const char *tokTypeStr(TokenType ttype) {

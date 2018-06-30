@@ -35,11 +35,7 @@ void initParser(Parser *p) {
     p->panicMode = false;
     memset(&p->current, 0, sizeof(Token));
     memset(&p->previous, 0, sizeof(Token));
-    if (p->peekBuf.length > 0) {
-        vec_deinit(&p->peekBuf); // this also calls vec_init after freeing
-    } else {
-        vec_init(&p->peekBuf);
-    }
+    vec_init(&p->peekBuf);
 }
 
 static void errorAt(Token *token, const char *message) {
@@ -151,6 +147,17 @@ static Node *statement(void);
 static Node *printStatement(void);
 static Node *blockStatements(void);
 static Node *expressionStatement(void);
+
+Node *parseExpression(Parser *p) {
+    Parser *oldCurrent = current;
+    current = p;
+    advance(); // prime parser with parser.current
+    TRACE_START("parseExpression");
+    Node *ret = expression();
+    TRACE_END("parseExpression");
+    current = oldCurrent;
+    return ret;
+}
 
 static bool isAtEnd(void) {
     return current->previous.type == TOKEN_EOF || check(TOKEN_EOF);
@@ -921,17 +928,138 @@ static Node *call() {
     return expr;
 }
 
+// FIXME: this creates right-associative binary operations, not left-associative
+static Node *stringTogetherNodesBinop(vec_void_t *nodes, TokenType ttype, char *lexeme) {
+    Node *ret = NULL;
+    Node *last = NULL;
+    int len = nodes->length;
+    Node *n = NULL; int i = 0;
+    vec_foreach(nodes, n, i) {
+        if (i == len-1) {
+            nodeAddChild(last, n);
+        } else {
+            node_type_t binop_T = {
+                .type = NODE_EXPR,
+                .kind = BINARY_EXPR,
+            };
+            Token tok;
+            tok.line = getScanner()->line;
+            tok.lexeme = lexeme;
+            tok.start = lexeme;
+            tok.length = strlen(lexeme);
+            tok.type = ttype;
+            Node *binop = createNode(binop_T, tok, NULL);
+            nodeAddChild(binop, n);
+            if (last) {
+                nodeAddChild(last, binop);
+            }
+            if (i == 0) {
+                ret = binop;
+            }
+            last = binop;
+        }
+    }
+    return ret;
+}
+
 static Node *primary() {
     TRACE_START("primary");
     if (match(TOKEN_STRING_DQUOTE) || match(TOKEN_STRING_SQUOTE)) {
+        char *interpBegin = NULL;
         TRACE_START("string");
         Token strTok = current->previous;
-        node_type_t nType = {
-            .type = NODE_EXPR,
-            .kind = LITERAL_EXPR,
-            .litKind = STRING_TYPE,
-        };
-        Node *ret = createNode(nType, strTok, NULL);
+        char *str = strdup(tokStr(&strTok));
+        str = str+1; // opening '"'
+        str[strlen(str)-1] = '\0'; // closing '"'
+        /*fprintf(stderr, "String: '%s'\n", str);*/
+        char *beg = str;
+
+        Scanner *oldScan = getScanner();
+        Parser *oldParser = current;
+        vec_void_t vnodes;
+        vec_init(&vnodes);
+        char *end = NULL;
+        while ((interpBegin = strstr(beg, "${"))) {
+            end = index(interpBegin, '}'); // FIXME: what if this is inside a single or double-quoted string?
+            if (end == NULL) break;
+            char *contents = calloc((end-interpBegin)+1, 1);
+            ASSERT_MEM(contents);
+            char *before = calloc((interpBegin-beg)+3, 1); // add room to surround with double-quotes
+            ASSERT_MEM(before);
+            strncpy(before+1, beg, (interpBegin-beg));
+            before[0] = '"';
+            before[strlen(before)] = '"';
+            strncpy(contents, interpBegin+2, (end-interpBegin)-2);
+            /*fprintf(stderr, "Interplation contents: '%s'\n", contents);*/
+            /*fprintf(stderr, "Interplation before: '%s'\n", before);*/
+            Scanner newScan;
+            initScanner(&newScan, contents);
+            setScanner(&newScan);
+            Parser newParser;
+            initParser(&newParser);
+            Node *inner = parseExpression(&newParser);
+            // FIXME: handle parse errors
+            node_type_t nType = {
+                .type = NODE_EXPR,
+                .kind = LITERAL_EXPR,
+                .litKind = STRING_TYPE,
+            };
+            Token litTok;
+            litTok.start = before;
+            litTok.length = strlen(before);
+            litTok.line = strTok.line;
+            litTok.type = TOKEN_STRING_DQUOTE;
+            litTok.lexeme = before;
+            Node *litNode = createNode(nType, litTok, NULL);
+            vec_push(&vnodes, litNode);
+            vec_push(&vnodes, inner);
+            beg = end+1;
+        }
+        if (vnodes.length > 0) {
+            char *restStart = end+1;
+            int restLen = (str+strlen(str))-end;
+            char *rest = calloc(restLen+1+2, 1);
+            ASSERT_MEM(rest);
+            rest[0] = '"';
+            strncpy(rest+1, restStart, restLen);
+            rest[strlen(rest)] = '"';
+            Token litTok;
+            litTok.start = rest;
+            litTok.length = strlen(rest);
+            litTok.line = strTok.line;
+            litTok.type = TOKEN_STRING_DQUOTE;
+            litTok.lexeme = rest;
+            /*fprintf(stderr, "Interpolation after: '%s'\n", rest);*/
+            node_type_t nType = {
+                .type = NODE_EXPR,
+                .kind = LITERAL_EXPR,
+                .litKind = STRING_TYPE,
+            };
+            Node *litNode = createNode(nType, litTok, NULL);
+            vec_push(&vnodes, litNode);
+
+        }
+
+        setScanner(oldScan);
+        current = oldParser;
+
+        Node *ret = NULL;
+        if (vnodes.length > 0) {
+            ASSERT(vnodes.length > 1);
+            ret = stringTogetherNodesBinop(&vnodes, TOKEN_PLUS, "+");
+            /*fprintf(stderr, "Interpolation AST inner\n");*/
+            /*char *output = outputASTString(ret, 0);*/
+            /*fprintf(stderr, output);*/
+            /*fprintf(stderr, "\n");*/
+            vec_deinit(&vnodes);
+        } else {
+            node_type_t nType = {
+                .type = NODE_EXPR,
+                .kind = LITERAL_EXPR,
+                .litKind = STRING_TYPE,
+            };
+            ret = createNode(nType, strTok, NULL);
+        }
         TRACE_END("string");
         TRACE_END("primary");
         return ret;

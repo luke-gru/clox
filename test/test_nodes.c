@@ -475,6 +475,20 @@ cleanup:
     return 0;
 }
 
+static int test_parser_string_interpolation(void) {
+    const char *src = "\"Hey ${name}, how's it going?\";\n";
+    initScanner(&scanner, src);
+    Node *program = parse(&parser);
+    T_ASSERT(!parser.hadError);
+    T_ASSERT(!parser.panicMode);
+    char *output = outputASTString(program, 0);
+    /*fprintf(stderr, "\n'%s'\n", output);*/
+    char *expected = "(+ \"Hey \" (+ (var name) \", how's it going?\"))\n";
+    T_ASSERT_STREQ(expected, output);
+cleanup:
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initVM();
@@ -504,5 +518,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_output_nodes_from_parser_propget);
     RUN_TEST(test_output_nodes_from_parser_propset);
     RUN_TEST(test_output_nodes_from_parser_precedence1);
+    RUN_TEST(test_parser_string_interpolation);
     END_TESTS();
 }

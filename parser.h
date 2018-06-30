@@ -18,6 +18,7 @@ typedef struct sParser {
 
 void initParser(Parser *p);
 Node *parse(Parser *p);
+Node *parseExpression(Parser *p);
 
 extern Parser parser; // main parser
 
