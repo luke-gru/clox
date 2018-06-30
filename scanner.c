@@ -9,6 +9,7 @@
 
 // global
 Scanner scanner;
+static Scanner *current = NULL;
 
 typedef struct {
   const char *name;
@@ -63,28 +64,28 @@ static bool isAlphaNumeric(char c) {
 }
 
 static bool isAtEnd() {
-  return scanner.scriptEnded || *scanner.current == '\0';
+  return current->scriptEnded || *current->current == '\0';
 }
 
 static char advance() {
-  scanner.current++;
-  return scanner.current[-1];
+  current->current++;
+  return current->current[-1];
 }
 
 static char peek() {
-  return *scanner.current;
+  return *current->current;
 }
 
 static char peekNext() {
   if (isAtEnd()) return '\0';
-  return scanner.current[1];
+  return current->current[1];
 }
 
 static bool match(char expected) {
   if (isAtEnd()) return false;
-  if (*scanner.current != expected) return false;
+  if (*current->current != expected) return false;
 
-  scanner.current++;
+  current->current++;
   return true;
 }
 
@@ -105,15 +106,15 @@ static void strReplace(char *str, char *substr, char replace) {
 static Token makeToken(TokenType type) {
   Token token;
   token.type = type;
-  token.start = scanner.tokenStart;
-  token.length = (int)(scanner.current - scanner.tokenStart);
+  token.start = current->tokenStart;
+  token.length = (int)(current->current - current->tokenStart);
   token.lexeme = NULL; // only created on demand, see tokStr()
-  token.line = scanner.line;
+  token.line = current->line;
   if (CLOX_OPTION_T(debugTokens)) {
       fprintf(stderr, "Tok: %s\n", tokTypeStr(type));
   }
   if (type == TOKEN_END_SCRIPT) {
-      scanner.scriptEnded = true;
+      current->scriptEnded = true;
       return makeToken(TOKEN_EOF);
   }
   return token;
@@ -124,7 +125,7 @@ static Token errorToken(const char *message) {
   token.type = TOKEN_ERROR;
   token.start = message;
   token.length = (int)strlen(message);
-  token.line = scanner.line;
+  token.line = current->line;
   return token;
 }
 
@@ -139,7 +140,7 @@ static void skipWhitespace() {
         break;
 
       case '\n':
-        scanner.line++;
+        current->line++;
         advance();
         break;
 
@@ -157,7 +158,7 @@ static void skipWhitespace() {
                     break;
                 }
                 if (c == '\n') {
-                    scanner.line++;
+                    current->line++;
                 }
                 advance();
             }
@@ -178,20 +179,20 @@ static Token identifier() {
   TokenType type = TOKEN_IDENTIFIER;
 
   // See if the identifier is a reserved word.
-  size_t length = scanner.current - scanner.tokenStart;
+  size_t length = current->current - current->tokenStart;
   for (Keyword *keyword = keywords; keyword->name != NULL; keyword++) {
     if (length == keyword->length &&
-        memcmp(scanner.tokenStart, keyword->name, length) == 0) {
+        memcmp(current->tokenStart, keyword->name, length) == 0) {
       type = keyword->type;
       break;
     }
   }
 
-  if (type == TOKEN_IDENTIFIER && memcmp(scanner.tokenStart, "__LINE__", length) == 0) {
+  if (type == TOKEN_IDENTIFIER && memcmp(current->tokenStart, "__LINE__", length) == 0) {
       Token token = makeToken(TOKEN_NUMBER);
       char *numBuf = calloc(8, 1);
       ASSERT_MEM(numBuf);
-      sprintf(numBuf, "%d", scanner.line);
+      sprintf(numBuf, "%d", current->line);
       token.start = numBuf;
       token.length = strlen(numBuf);
       token.lexeme = numBuf;
@@ -223,7 +224,7 @@ static Token doubleQuotedString() {
     } else if (peek() == '"') {
         break;
     } else {
-        if (peek() == '\n') scanner.line++;
+        if (peek() == '\n') current->line++;
         last = advance();
     }
   }
@@ -269,7 +270,7 @@ static Token singleQuotedString(bool isStatic) {
         } else if (peek() == '\'') {
             break;
         } else {
-            if (peek() == '\n') scanner.line++;
+            if (peek() == '\n') current->line++;
             last = advance();
         }
     }
@@ -296,10 +297,10 @@ static Token singleQuotedString(bool isStatic) {
     return tok;
 }
 
-Token scanToken() {
+Token scanToken(void) {
   skipWhitespace();
 
-  scanner.tokenStart = scanner.current;
+  current->tokenStart = current->current;
   if (isAtEnd()) return makeToken(TOKEN_EOF);
 
   char c = advance();
@@ -310,11 +311,11 @@ Token scanToken() {
     case '(': return makeToken(TOKEN_LEFT_PAREN);
     case ')': return makeToken(TOKEN_RIGHT_PAREN);
     case '{': {
-        scanner.indent++;
+        current->indent++;
         return makeToken(TOKEN_LEFT_BRACE);
     }
     case '}': {
-        scanner.indent--;
+        current->indent--;
         return makeToken(TOKEN_RIGHT_BRACE);
     }
     case '[': return makeToken(TOKEN_LEFT_BRACKET);
@@ -357,21 +358,23 @@ Token scanToken() {
   return errorToken("Unexpected character.");
 }
 
-void initScanner(const char *src) {
-  scanner.source = src;
-  scanner.tokenStart = src;
-  scanner.current = src;
-  scanner.line = 1;
-  scanner.indent = 0;
-  scanner.scriptEnded = false;
+void initScanner(Scanner *scan, const char *src) {
+  scan->source = src;
+  scan->tokenStart = src;
+  scan->current = src;
+  scan->line = 1;
+  scan->indent = 0;
+  scan->scriptEnded = false;
+  current = scan;
 }
 
-void resetScanner(void) {
-  scanner.tokenStart = scanner.source;
-  scanner.current = scanner.source;
-  scanner.line = 1;
-  scanner.indent = 0;
-  scanner.scriptEnded = false;
+void resetScanner(Scanner *scan) {
+  scan->tokenStart = scan->source;
+  scan->current = scan->source;
+  scan->line = 1;
+  scan->indent = 0;
+  scan->scriptEnded = false;
+  current = scan;
 }
 
 const char *tokTypeStr(TokenType ttype) {
@@ -475,8 +478,9 @@ const char *tokTypeStr(TokenType ttype) {
   }
 }
 
-void scanAllPrint(const char *src) {
-    initScanner(src);
+void scanAllPrint(Scanner *scan, const char *src) {
+    Scanner *oldCurrent = current;
+    initScanner(scan, src);
     int line = -1;
     for (;;) {
         Token token = scanToken();
@@ -490,6 +494,7 @@ void scanAllPrint(const char *src) {
 
         if (token.type == TOKEN_EOF) break;
     }
+    current = oldCurrent;
 }
 
 char *tokStr(Token *tok) {

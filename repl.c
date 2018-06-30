@@ -50,7 +50,7 @@ static void freeLines(char *lines[], int numLines) {
 
 static bool scanToEnd(void) {
     Token tok;
-    resetScanner();
+    resetScanner(&scanner);
     while (true) {
         tok = scanToken();
         if (tok.type == TOKEN_EOF) {
@@ -75,7 +75,7 @@ void scannerAddSrc(char *src) {
 }
 
 static void _resetScanner(void) {
-    initScanner("");
+    initScanner(&scanner, "");
 }
 
 NORETURN void repl(void) {

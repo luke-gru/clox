@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 typedef enum {
-  // all AST nodes need a token, so this is just a
+  // all AST nodes require a token, so this is just a
   // placeholder token type for nodes that don't need one.
   TOKEN_EMPTY = 1,
   TOKEN_LEFT_PAREN,
@@ -75,7 +75,7 @@ typedef enum {
 typedef struct {
   TokenType type;
   const char *start;
-  char *lexeme;
+  char *lexeme; // lazily computed, could be NULL. See `tokStr()`
   int length; // not including NULL byte
   int line;
 } Token;
@@ -86,17 +86,17 @@ typedef struct {
   const char *current;
   int line;
   int indent;
-  bool scriptEnded;
+  bool scriptEnded; // seen `__END__` keyword
 } Scanner;
 
-extern Scanner scanner; // global
+extern Scanner scanner; // main scanner
 
 // init/reinit scanner
-void initScanner(const char *src);
-void resetScanner(void);
+void initScanner(Scanner *scan, const char *src);
+void resetScanner(Scanner *scan);
 const char *tokTypeStr(TokenType ttype);
-Token scanToken();
-void scanAllPrint(const char *src);
+Token scanToken(void);
+void scanAllPrint(Scanner *scan, const char *src);
 
 Token emptyTok(void);
 char *tokStr(Token *tok);

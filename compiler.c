@@ -1448,7 +1448,7 @@ static void emitNode(Node *n) {
 }
 
 int compile_src(char *src, Chunk *chunk, CompileErr *err) {
-    initScanner(src);
+    initScanner(&scanner, src);
     Compiler mainCompiler;
     top = &mainCompiler;
     initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, chunk);
