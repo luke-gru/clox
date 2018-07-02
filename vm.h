@@ -32,6 +32,7 @@ typedef struct VMExecContext {
     // (or top-level)
     CallFrame frames[FRAMES_MAX];
     unsigned frameCount;
+    Table roGlobals; // per-script readonly global vars
 } VMExecContext;
 
 typedef vec_t(VMExecContext) vec_VM_EC_t;
@@ -86,15 +87,15 @@ Value callVMMethod(
     ObjInstance *instance, Value callable,
     int argCount, Value *args
 );
-void push(Value value);
-Value pop();
+void push(Value value); // push onto operand stack
+Value pop(); // pop top of operand stack
 void runtimeError(const char *format, ...);
 
-void setPrintBuf(ObjString *buf);
+void setPrintBuf(ObjString *buf); // `print` will output given strings to this buffer, if given
 void unsetPrintBuf(void);
 
 NORETURN void repl(void);
-void resetStack();
+void resetStack(); // reset operand stack
 int VMNumStackFrames(void);
 void printVMStack(FILE *f);
 void setBacktrace(Value err);

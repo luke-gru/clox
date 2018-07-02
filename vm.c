@@ -35,6 +35,9 @@ char *unredefinableGlobals[] = {
     "Map",
     "clock",
     "typeof",
+    "__FILE__",
+    "__DIR__",
+    "__LINE__",
     NULL
 };
 
@@ -178,6 +181,7 @@ static bool runUntilReturn = false;
 static inline void push_EC(void) {
     VMExecContext ectx;
     memset(&ectx, 0, sizeof(ectx));
+    initTable(&ectx.roGlobals);
     vec_push(&vm.v_ecs, ectx);
     vm.ec = &vec_last(&vm.v_ecs);
 }
@@ -185,7 +189,8 @@ static inline void push_EC(void) {
 // Pop the current execution context and use the one created before
 // the current one.
 static inline void pop_EC(void) {
-    (void)vec_pop(&vm.v_ecs);
+    VMExecContext *ctx = &vec_pop(&vm.v_ecs);
+    freeTable(&ctx->roGlobals);
     vm.ec = &vec_last(&vm.v_ecs);
 }
 
@@ -1170,10 +1175,12 @@ static InterpretResult run(bool doResetStack) {
       case OP_GET_GLOBAL: {
         Value varName = READ_CONSTANT();
         Value val;
-        if (tableGet(&vm.globals, varName, &val)) {
+        if (tableGet(&EC->roGlobals, varName, &val)) {
+            push(val);
+        } else if (tableGet(&vm.globals, varName, &val)) {
             push(val);
         } else {
-            runtimeError("Undefined variable '%s'.", AS_STRING(varName)->chars);
+            runtimeError("Undefined global variable '%s'.", AS_STRING(varName)->chars);
             return INTERPRET_RUNTIME_ERROR;
         }
         break;
@@ -1565,18 +1572,17 @@ static InterpretResult run(bool doResetStack) {
 #undef BINARY_OP
 }
 
-// NOTE: perScriptGlobals should live in the current execution context, maybe?
-static void setupPerScriptGlobals(char *filename) {
+static void setupPerScriptROGlobals(char *filename) {
     ObjString *file = newString(filename, strlen(filename));
-    tableSet(&vm.globals, OBJ_VAL(vm.fileString), OBJ_VAL(file));
+    tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), OBJ_VAL(file));
 
     if (filename[0] == pathSeparator) {
         char *lastSep = rindex(filename, pathSeparator);
         int len = lastSep - filename;
         ObjString *dir = newString(filename, len);
-        tableSet(&vm.globals, OBJ_VAL(vm.dirString), OBJ_VAL(dir));
+        tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), OBJ_VAL(dir));
     } else {
-        tableSet(&vm.globals, OBJ_VAL(vm.dirString), NIL_VAL);
+        tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), NIL_VAL);
     }
 }
 
@@ -1593,7 +1599,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     frame->closure = newClosure(func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
-    setupPerScriptGlobals(filename);
+    setupPerScriptROGlobals(filename);
 
     InterpretResult result = run(true);
     return result;
@@ -1622,7 +1628,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     frame->isCCall = false;
     frame->nativeFunc = NULL;
 
-    setupPerScriptGlobals(filename);
+    setupPerScriptROGlobals(filename);
 
     InterpretResult result = run(false);
     pop_EC();

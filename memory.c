@@ -399,6 +399,7 @@ void collectGarbage(void) {
     // Mark stack roots up the stack for every execution context
     VMExecContext *ctx = NULL; int k = 0;
     vec_foreach_ptr(&vm.v_ecs, ctx, k) {
+        grayTable(&ctx->roGlobals);
         for (Value *slot = ctx->stack; slot < ctx->stackTop; slot++) {
             grayValue(*slot);
         }
