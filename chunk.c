@@ -119,15 +119,24 @@ static void freeCatchTable(CatchTable *catchTbl) {
  * Does NOT free the provided pointer.
  */
 void freeChunk(Chunk *chunk) {
-    FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
+    if (chunk->code) {
+        fprintf(stderr, "freeChunk code\n");
+        FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
+    }
     chunk->code = NULL;
-    FREE_ARRAY(int, chunk->lines, chunk->capacity);
+    if (chunk->lines) {
+        fprintf(stderr, "freeChunk lines\n");
+        FREE_ARRAY(int, chunk->lines, chunk->capacity);
+    }
     chunk->lines = NULL;
+    fprintf(stderr, "freeChunk constants\n");
     freeValueArray(&chunk->constants);
     if (chunk->catchTbl) {
+        fprintf(stderr, "freeChunk catchTbl\n");
         freeCatchTable(chunk->catchTbl);
         chunk->catchTbl = NULL;
     }
+    fprintf(stderr, "freeChunk reinit\n");
     initChunk(chunk);
 }
 

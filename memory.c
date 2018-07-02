@@ -33,7 +33,7 @@ static void gc_trace_mark(Obj *obj) {
 static void gc_trace_free(Obj *obj) {
     if (!CLOX_OPTION_T(traceGC)) return;
     fprintf(stderr, "[GC]: freeing object at %p, ", obj);
-    fprintf(stderr, "type => %s , value => ", typeOfObj(obj));
+    fprintf(stderr, "type => %s, value => ", typeOfObj(obj));
     printValue(stderr, OBJ_VAL(obj), false);
     fprintf(stderr, "\n");
 }
@@ -64,6 +64,9 @@ static bool GCOn = true;
 // NOTE: memory is NOT initialized (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START("reallocate");
+    if (newSize > 0) {
+        ASSERT(!inGC);
+    }
     vm.bytesAllocated += (newSize - oldSize);
 
     if (vm.bytesAllocated > vm.nextGCThreshhold && newSize > oldSize) {
@@ -71,7 +74,7 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     }
 
     if (newSize == 0) { // freeing
-        GC_TRACE_DEBUG("freeing %p from realloc", previous);
+        GC_TRACE_DEBUG("  freeing %p from realloc", previous);
         free(previous);
         TRACE_GC_FUNC_END("reallocate");
         return NULL;
@@ -79,6 +82,9 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
 
     void *ret = realloc(previous, newSize);
     ASSERT_MEM(ret);
+    if (newSize > 0) {
+        GC_TRACE_DEBUG("  allocated %p", ret);
+    }
     TRACE_GC_FUNC_END("reallocate");
     return ret;
 }
@@ -204,6 +210,10 @@ void blackenObject(Obj *obj) {
 // be okay.
 void freeObject(Obj *obj, bool unlink) {
     if (obj == NULL) return;
+    if (obj->type == OBJ_T_NONE) {
+        return; // already freed
+    }
+
     ASSERT(!obj->noGC);
     TRACE_GC_FUNC_START("freeObject");
     if (vm.inited) {
@@ -220,9 +230,11 @@ void freeObject(Obj *obj, bool unlink) {
         }
 
     }
+
     GC_TRACE_FREE(obj);
 
     if (unlink) {
+        ASSERT(obj->isLinked);
         GC_TRACE_DEBUG("Unlinking object p=%p", obj);
         Obj *next = obj->next;
         Obj *prev = obj->prev;
@@ -230,15 +242,15 @@ void freeObject(Obj *obj, bool unlink) {
             obj->next->prev = prev;
             obj->next = NULL;
         }
-        if (obj->prev) {
+        if (prev) {
             obj->prev->next = next;
             obj->prev = NULL;
         }
+        obj->isLinked = false;
         if (next == NULL && prev == NULL) { // must be the only object
             GC_TRACE_DEBUG("Unlinking last object p=%p", obj);
             vm.objects = NULL;
         }
-        obj->isLinked = false;
     }
 
     switch (obj->type) {
@@ -251,10 +263,6 @@ void freeObject(Obj *obj, bool unlink) {
         }
         case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
-            if (klass->singletonKlass) {
-                GC_TRACE_DEBUG("Freeing class's singleton class");
-                freeObject((Obj*)klass->singletonKlass, unlink);
-            }
             GC_TRACE_DEBUG("Freeing class methods/getters/setters tables");
             freeTable(&klass->fields);
             freeTable(&klass->hiddenFields);
@@ -268,13 +276,18 @@ void freeObject(Obj *obj, bool unlink) {
         case OBJ_T_FUNCTION: {
             ObjFunction *func = (ObjFunction*)obj;
             GC_TRACE_DEBUG("Freeing ObjFunction chunk: p=%p", &func->chunk);
-            freeChunk(&func->chunk);
-            GC_TRACE_DEBUG("Freeing ObjFunction chunk: p=%p", obj);
+            // FIXME: right now, multiple function objects can refer to the same
+            // chunk, due to how chunks are passed around and copied by value
+            // (I think this is the reason). Freeing them right now results in
+            // double free errors.
+            /*freeChunk(&func->chunk);*/
+            GC_TRACE_DEBUG("Freeing ObjFunction: p=%p", obj);
             FREE(ObjFunction, obj);
             break;
         }
         case OBJ_T_CLOSURE: {
             ObjClosure *closure = (ObjClosure*)obj;
+            GC_TRACE_DEBUG("Freeing ObjClosure: p=%p", closure);
             FREE_ARRAY(Value, closure->upvalues, closure->upvalueCount);
             FREE(ObjClosure, obj);
             break;
@@ -290,13 +303,6 @@ void freeObject(Obj *obj, bool unlink) {
             freeTable(&instance->fields);
             GC_TRACE_DEBUG("Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
             freeTable(&instance->hiddenFields);
-            if (instance->singletonKlass) {
-                // FIXME: the singleton class should have a link back to the
-                // object, in case it's still referenced but the object is no
-                // longer referenced.
-                GC_TRACE_DEBUG("Freeing instance's singleton class");
-                freeObject((Obj*)instance->singletonKlass, unlink);
-            }
             GC_TRACE_DEBUG("Freeing ObjInstance: p=%p", obj);
             FREE(ObjInstance, obj);
             break;
@@ -307,17 +313,17 @@ void freeObject(Obj *obj, bool unlink) {
                 GC_TRACE_DEBUG("Freeing internal object's references: p=%p, datap=%p", internal, internal->data);
                 internal->freeFunc(obj);
             }
-            GC_TRACE_DEBUG("Freeing internal object: p=%p, ", internal);
+            GC_TRACE_DEBUG("Freeing internal object: p=%p", internal);
             FREE(ObjInternal, internal);
             break;
         }
         case OBJ_T_UPVALUE: {
+            GC_TRACE_DEBUG("Freeing upvalue: p=%p", obj);
             FREE(ObjUpvalue, obj);
             break;
         }
         case OBJ_T_STRING: {
             ObjString *string = (ObjString*)obj;
-            /*if (!string->chars) return;*/
             ASSERT(string->chars);
             GC_TRACE_DEBUG("Freeing string chars: p=%p", string->chars);
             GC_TRACE_DEBUG("Freeing string chars: s=%s", string->chars);
@@ -489,29 +495,30 @@ void collectGarbage(void) {
 
     GC_TRACE_DEBUG("Begin FREE process");
     // Collect the white (unmarked) objects.
-    Obj **object = &vm.objects;
+    Obj *object = vm.objects;
     vec_void_t vvisited;
     vec_init(&vvisited);
     int iter = 0;
-    while (*object != NULL) {
+    while (object != NULL) {
         int idx = 0;
-        vec_find(&vvisited, *object, idx);
+        vec_find(&vvisited, object, idx);
         if (idx != -1) {
-            const char *otypeStr = typeOfObj(*object);
+            const char *otypeStr = typeOfObj(object);
             GC_TRACE_DEBUG("Found cycle during free process (iter=%d, p=%p, otype=%s), stopping", iter, *object, otypeStr);
             break; // found cycles, dangerous (TODO: proper cycle detection)
         }
-        vec_push(&vvisited, *object);
-        if (!((*object)->isDark) && !((*object)->noGC)) {
+        vec_push(&vvisited, object);
+        if (!object->isDark && !object->noGC) {
             // This object wasn't reached, so remove it from the list and free it.
-            Obj *unreached = *object;
-            *object = unreached->next;
+            Obj *unreached = object;
+            object = unreached->next;
+            ASSERT(unreached->isLinked);
             freeObject(unreached, true);
         } else {
             // This object was reached, so unmark it (for the next GC) and move on to
             // the next.
-            (*object)->isDark = false;
-            object = &(*object)->next;
+            object->isDark = false;
+            object = object->next;
         }
         iter++;
     }
@@ -545,7 +552,10 @@ void freeObjects(void) {
         object = next;
     }
 
-    if (vm.grayStack) free(vm.grayStack);
+    if (vm.grayStack) {
+        free(vm.grayStack);
+        vm.grayStack = NULL;
+    }
     GC_TRACE_DEBUG("/freeObjects");
     numRootsLastGC = 0;
 }

@@ -183,7 +183,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
         fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
         ASSERT(0);
     }
-    string->chars = GROW_ARRAY(string->chars, char, string->length,
+    string->chars = GROW_ARRAY(string->chars, char, string->length+1,
             string->length+lenToAdd+1);
     int i = 0;
     for (i = 0; i < lenToAdd; i++) {
@@ -198,6 +198,11 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
 }
 
 void pushCStringFmt(ObjString *string, const char *format, ...) {
+    if (((Obj*)string)->isFrozen) {
+        // FIXME: raise FrozenObjectError
+        fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
+        ASSERT(0);
+    }
     char sbuf[201] = {'\0'};
     va_list args;
     va_start(args, format);
@@ -205,8 +210,8 @@ void pushCStringFmt(ObjString *string, const char *format, ...) {
     va_end(args);
     size_t buflen = strlen(sbuf);
     sbuf[buflen] = '\0';
-    string->chars = GROW_ARRAY(string->chars, char, string->length,
-            string->length+buflen);
+    string->chars = GROW_ARRAY(string->chars, char, string->length+1,
+            string->length+buflen+1);
     int i = 0;
     for (i = 0; i < buflen; i++) {
         char *c = sbuf+i;
@@ -220,10 +225,11 @@ void pushCStringFmt(ObjString *string, const char *format, ...) {
 
 void clearObjString(ObjString *string) {
     if (((Obj*)string)->isFrozen) {
+        // FIXME: raise FrozenObjectError
         fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
         ASSERT(0);
     }
-    string->chars = GROW_ARRAY(string->chars, char, string->length, 1);
+    string->chars = GROW_ARRAY(string->chars, char, string->length+1, 1);
     string->chars[0] = '\0';
     string->length = 0;
     string->hash = hashString(string->chars, 0);
@@ -374,6 +380,7 @@ const char *typeOfObj(Obj *obj) {
     case OBJ_T_FUNCTION:
     case OBJ_T_NATIVE_FUNCTION:
     case OBJ_T_BOUND_METHOD:
+        return "function";
     case OBJ_T_INTERNAL:
         return "internal";
     case OBJ_T_CLOSURE:

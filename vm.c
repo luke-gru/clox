@@ -174,6 +174,22 @@ static bool cCallThrew = false;
 static bool returnedFromNativeErr = false;
 static bool runUntilReturn = false;
 
+// Add and use a new execution context
+static inline void push_EC(void) {
+    VMExecContext ectx;
+    memset(&ectx, 0, sizeof(ectx));
+    vec_push(&vm.v_ecs, ectx);
+    vm.ec = &vec_last(&vm.v_ecs);
+}
+
+// Pop the current execution context and use the one created before
+// the current one.
+static inline void pop_EC(void) {
+    (void)vec_pop(&vm.v_ecs);
+    vm.ec = &vec_last(&vm.v_ecs);
+}
+
+// reset (clear) value stack for current execution context
 void resetStack() {
     EC->stackTop = EC->stack;
     EC->frameCount = 0;
@@ -184,10 +200,7 @@ void resetStack() {
 void initVM() {
     turnGCOff();
     vec_init(&vm.v_ecs);
-    VMExecContext ectx;
-    memset(&ectx, 0, sizeof(ectx));
-    vec_push(&vm.v_ecs, ectx);
-    vm.ec = &vm.v_ecs.data[0];
+    push_EC();
     resetStack();
     vm.objects = NULL;
 
@@ -225,6 +238,7 @@ void initVM() {
 }
 
 void freeVM() {
+    if (!vm.inited) return;
     freeTable(&vm.globals);
     freeTable(&vm.strings);
     vm.initString = NULL;
@@ -233,11 +247,9 @@ void freeVM() {
     vm.hadError = false;
     vm.printBuf = NULL;
     vm.lastValue = NULL;
-    vm.objects = NULL;
     vm.grayStack = NULL;
     vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
-    vec_deinit(&vm.stackObjects);
     vec_deinit(&vm.loadedScripts);
 
     inCCall = false;
@@ -245,11 +257,13 @@ void freeVM() {
     returnedFromNativeErr = false;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
-    vec_deinit(&vm.v_ecs);
-    vm.ec = NULL;
-
-    freeObjects();
     vm.inited = false;
+    vec_deinit(&vm.stackObjects);
+    freeObjects();
+    vm.objects = NULL;
+
+    vec_clear(&vm.v_ecs);
+    vm.ec = NULL;
 }
 
 
@@ -593,6 +607,19 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     }
 }
 
+
+static void popFrame(void) {
+    ASSERT(EC->frameCount >= 1);
+    VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
+    EC->frameCount--;
+    inCCall = getFrame()->isCCall;
+    ASSERT_VALID_STACK();
+}
+
+static CallFrame *pushFrame(void) {
+    return &EC->frames[EC->frameCount++];
+}
+
 static void pushNativeFrame(ObjNative *native) {
     ASSERT(native);
     VM_DEBUG("Pushing native callframe for %s", native->name->chars);
@@ -601,7 +628,7 @@ static void pushNativeFrame(ObjNative *native) {
         return;
     }
     CallFrame *prevFrame = getFrame();
-    CallFrame *newFrame = &EC->frames[EC->frameCount++];
+    CallFrame *newFrame = pushFrame();
     newFrame->closure = prevFrame->closure;
     newFrame->ip = prevFrame->ip;
     newFrame->start = 0;
@@ -610,15 +637,6 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->nativeFunc = native;
     inCCall = true;
 }
-
-static void popFrame() {
-    ASSERT(EC->frameCount >= 1);
-    VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
-    EC->frameCount--;
-    inCCall = getFrame()->isCCall;
-    ASSERT_VALID_STACK();
-}
-
 
 // sets up VM/C call jumpbuf if not set
 static void captureNativeError(void) {
@@ -751,7 +769,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
     // add frame
-    CallFrame *frame = &EC->frames[EC->frameCount++];
+    CallFrame *frame = pushFrame();
     frame->closure = closure;
     frame->ip = closure->function->chunk.code;
     frame->start = parentStart;
@@ -759,6 +777,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     frame->nativeFunc = NULL;
     // +1 to include either the called function (for non-methods) or the receiver (for methods)
     frame->slots = EC->stackTop - (argCount + 1);
+    // NOTE: the frame is popped on OP_RETURN
     return true;
 }
 
@@ -1546,6 +1565,7 @@ static InterpretResult run(bool doResetStack) {
 #undef BINARY_OP
 }
 
+// NOTE: perScriptGlobals should live in the current execution context, maybe?
 static void setupPerScriptGlobals(char *filename) {
     ObjString *file = newString(filename, strlen(filename));
     tableSet(&vm.globals, OBJ_VAL(vm.fileString), OBJ_VAL(file));
@@ -1564,14 +1584,13 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     EC->frameCount = 0;
     // initialize top-level callframe (frameCount = 1)
-    CallFrame *frame = &EC->frames[EC->frameCount++];
+    CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
     ObjFunction *func = newFunction(chunk);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
-    unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
     setupPerScriptGlobals(filename);
@@ -1590,8 +1609,9 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
 InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();
+    push_EC();
     // initialize top-level callframe (frameCount = 1)
-    CallFrame *frame = &EC->frames[EC->frameCount++];
+    CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stackTop-1;
@@ -1605,9 +1625,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     setupPerScriptGlobals(filename);
 
     InterpretResult result = run(false);
-    while (getFrame() > oldFrame) {
-        popFrame();
-    }
+    pop_EC();
     ASSERT(oldFrame == getFrame());
     return result;
 }
