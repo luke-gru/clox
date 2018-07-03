@@ -37,11 +37,24 @@ static bool breakptIsRegistered(Debugger *dbg, char *file, int line) {
     return false;
 }
 
-bool shouldEnterDebugger(Debugger *dbg, char *fname, int line, int lastLine) {
-    if (dbg->awaitingPause) {
+bool shouldEnterDebugger(Debugger *dbg, char *fname, int line, int lastLine,
+        int ndepth, int nwidth) {
+    if (dbg->awaitingPause) { // debugger() just called
         return true;
     }
-    return lastLine != line && breakptIsRegistered(dbg, fname, line);
+    if (dbg->v_breaklvls.length > 0) {
+        BreakLvl breaklvl; int i = 0;
+        vec_foreach(&dbg->v_breaklvls, breaklvl, i) {
+            if ((breaklvl.ndepth == ndepth || breaklvl.ndepth == -1) &&
+                    (breaklvl.nwidth == nwidth || breaklvl.nwidth == -1)) {
+                return true;
+            }
+        }
+    }
+    if (lastLine == line) {
+        return false;
+    }
+    return breakptIsRegistered(dbg, fname, line);
 }
 
 const char *debuggerUsage[] = {
@@ -50,8 +63,8 @@ const char *debuggerUsage[] = {
     "delbr [FILE,]LINE  Delete a specific breakpoint",
     "next (n)           Step over and stop at next statement",
     "into (i)           Step into and stop at next statement",
-    "frames             View call frames",
-    "eval (e) EXPR      Evaluate expression",
+    /*"frames             View call frames",*/
+    /*"eval (e) EXPR      Evaluate expression",*/
     NULL
 };
 
@@ -84,9 +97,10 @@ static void deleteBreakpt(Debugger *dbg, char *file, int line) {
     }
 }
 
-void enterDebugger(Debugger *dbg) {
+void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nwidth) {
     fprintf(stdout, "Entered lox debugger\n");
     dbg->awaitingPause = false;
+    vec_clear(&dbg->v_breaklvls);
     char buf[LINE_SZ+1] = { '\0' };
     fprintf(stdout, DBG_PROMPT);
     char *idx = NULL;
@@ -119,6 +133,26 @@ void enterDebugger(Debugger *dbg) {
             }
             deleteBreakpt(&vm.debugger, "", (int)lline);
             fprintf(stdout, "Successfully deleted breakpoint\n");
+        } else if (strcmp(buf, "n") == 0 || strcmp(buf, "next") == 0) {
+            BreakLvl nextWidth = { .ndepth = ndepth, .nwidth = nwidth+1 };
+            vec_push(&dbg->v_breaklvls, nextWidth);
+            if (ndepth > 0) {
+                BreakLvl nextUp = { .ndepth = ndepth-1, .nwidth = -1 };
+                vec_push(&dbg->v_breaklvls, nextUp);
+                BreakLvl nextLoop = { .ndepth = ndepth, .nwidth = 0 };
+                vec_push(&dbg->v_breaklvls, nextLoop);
+            }
+            return;
+        } else if (strcmp(buf, "i") == 0 || strcmp(buf, "into") == 0) {
+            BreakLvl nextIn = { .ndepth = ndepth+1, .nwidth = 0 };
+            vec_push(&dbg->v_breaklvls, nextIn);
+            BreakLvl nextWidth = { .ndepth = ndepth, .nwidth = nwidth+1 };
+            vec_push(&dbg->v_breaklvls, nextWidth);
+            if (ndepth > 0) {
+                BreakLvl nextLoop = { .ndepth = ndepth, .nwidth = 0 };
+                vec_push(&dbg->v_breaklvls, nextLoop);
+            }
+            return;
         } else {
             fprintf(stderr, "Unrecognized command: '%s'\n", buf);
             fprintf(stderr, "'help' for usage details\n");

@@ -24,15 +24,22 @@ typedef struct CatchTable {
  * top-level (main) function.
  */
 typedef struct Chunk {
-    int count;
+    int count; // number of bytes written to chunk
     int capacity;
-    uint8_t *code;
+    uint8_t *code; // bytecode written to chunk
     // parallel array with `code`, ex: byte chunk->code[i] comes from line
     // chunk->lines[i]
-    int *lines;
+    int *lines; // lineno associated with bytecode instruction
+    int *ndepths; // node depth level associated with bytecode instruction (used by debugger)
+    int *nwidths; // node width level ...
     ValueArray constants;
     CatchTable *catchTbl;
 } Chunk;
+
+typedef struct NodeLvl {
+    int depth;
+    int width;
+} NodeLvl;
 
 #define MAX_INSN_SIZE 4
 #define INSN_FL_NUMBER 1
@@ -47,6 +54,7 @@ typedef struct Insn {
     struct Insn *next;
     struct Insn *prev;
     struct Insn *jumpTo; // for jump instructions
+    NodeLvl nlvl;
     bool isLabel;
 } Insn;
 
@@ -64,7 +72,7 @@ typedef struct Iseq {
 } Iseq;
 
 void initChunk(Chunk *chunk);
-void writeChunk(Chunk *chunk, uint8_t byte, int lineno);
+void writeChunk(Chunk *chunk, uint8_t byte, int lineno, int nodeDepth, int nodeWidth);
 void freeChunk(Chunk *chunk);
 
 int addConstant(Chunk *chunk, Value value);

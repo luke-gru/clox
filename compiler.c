@@ -103,6 +103,9 @@ static ClassCompiler *currentClass = NULL;
 static bool inINBlock = false;
 static Token *curTok = NULL;
 static int loopStart = -1;
+static int nodeDepth = 0;
+static int nodeWidth = -1;
+
 CompilerOpts compilerOpts; // [external]
 
 typedef enum {
@@ -164,6 +167,8 @@ static Iseq *currentIseq() {
 static Insn *emitInsn(Insn in) {
     COMP_TRACE("emitInsn: %s", opName(in.code));
     in.lineno = curTok ? curTok->line : 0;
+    in.nlvl.depth = nodeDepth;
+    in.nlvl.width = nodeWidth;
     Insn *inHeap = calloc(sizeof(in), 1);
     memcpy(inHeap, &in, sizeof(in));
     iseqAddInsn(currentIseq(), inHeap);
@@ -379,8 +384,8 @@ static int resolveUpvalue(Compiler *compiler, Token *name) {
     return -1;
 }
 
-static void writeChunkByte(Chunk *chunk, uint8_t byte, int lineno) {
-    writeChunk(chunk, byte, lineno);
+static void writeChunkByte(Chunk *chunk, uint8_t byte, int lineno, int nDepth, int nWidth) {
+    writeChunk(chunk, byte, lineno, nDepth, nWidth);
 }
 
 static bool isBinOp(Insn *in) {
@@ -632,9 +637,9 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
     int idx = 0;
     while (in) {
         idx++;
-        writeChunkByte(chunk, in->code, in->lineno);
+        writeChunkByte(chunk, in->code, in->lineno, in->nlvl.depth, in->nlvl.width);
         for (int i = 0; i < in->numOperands; i++) {
-            writeChunkByte(chunk, in->operands[i], in->lineno);
+            writeChunkByte(chunk, in->operands[i], in->lineno, in->nlvl.depth, in->nlvl.width);
         }
         in = in->next;
     }
@@ -699,9 +704,14 @@ static void emitNode(Node *n);
 static void emitChildren(Node *n) {
     Node *stmt = NULL;
     int i = 0;
+    nodeDepth++;
+    int lastWidth = nodeWidth;
+    nodeWidth = 0;
     vec_foreach(n->children, stmt, i) {
         emitNode(stmt);
     }
+    nodeDepth--;
+    nodeWidth = lastWidth;
 }
 
 // emit a jump (forwards) instruction, returns a pointer to the byte that needs patching
@@ -1057,6 +1067,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
 static void emitNode(Node *n) {
     if (current->hadError) return;
     curTok = &n->tok;
+    nodeWidth++;
     switch (nodeKind(n)) {
     case STMTLIST_STMT:
     case GROUPING_EXPR: {

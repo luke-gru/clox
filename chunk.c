@@ -8,6 +8,8 @@ void initChunk(Chunk *chunk) {
     chunk->capacity = 0;
     chunk->code = NULL;
     chunk->lines = NULL;
+    chunk->ndepths = NULL;
+    chunk->nwidths = NULL;
     chunk->catchTbl = NULL;
     initValueArray(&chunk->constants);
 }
@@ -89,17 +91,21 @@ bool iseqRmInsn(Iseq *seq, Insn *toRm) {
  * Write 1 byte of bytecode operation/data to chunk. Chunk
  * grows automatically if no more space.
  */
-void writeChunk(Chunk *chunk, uint8_t byte, int line) {
+void writeChunk(Chunk *chunk, uint8_t byte, int line, int nDepth, int nWidth) {
     int prevCapa = chunk->capacity;
     if (chunk->count == prevCapa) {
         int capa = prevCapa;
         capa = GROW_CAPACITY(capa);
         chunk->code = GROW_ARRAY(chunk->code, uint8_t, prevCapa, capa);
         chunk->lines = GROW_ARRAY(chunk->lines, int, prevCapa, capa);
+        chunk->ndepths = GROW_ARRAY(chunk->ndepths, int, prevCapa, capa);
+        chunk->nwidths = GROW_ARRAY(chunk->nwidths, int, prevCapa, capa);
         chunk->capacity = capa;
     }
     chunk->code[chunk->count] = byte;
     chunk->lines[chunk->count] = line;
+    chunk->ndepths[chunk->count] = nDepth;
+    chunk->nwidths[chunk->count] = nWidth;
     chunk->count++;
 }
 

@@ -1058,20 +1058,24 @@ static InterpretResult run(bool doResetStack) {
           ASSERT(0);
       }
 
-      int byteCount = (int)(getFrame()->ip - currentChunk()->code);
-      int curLine = currentChunk()->lines[byteCount];
+      Chunk *ch = currentChunk();
+      int byteCount = (int)(getFrame()->ip - ch->code);
+      int curLine = ch->lines[byteCount];
       int lastLine = -1;
+      int ndepth = ch->ndepths[byteCount];
+      int nwidth = ch->nwidths[byteCount];
+      /*fprintf(stderr, "line: %d, depth: %d, width: %d\n", curLine, ndepth, nwidth);*/
       if (byteCount > 0) {
-          lastLine = currentChunk()->lines[byteCount-1];
+          lastLine = ch->lines[byteCount-1];
       }
-      if (shouldEnterDebugger(&vm.debugger, "", curLine, lastLine)) {
-          enterDebugger(&vm.debugger);
+      if (shouldEnterDebugger(&vm.debugger, "", curLine, lastLine, ndepth, nwidth)) {
+          enterDebugger(&vm.debugger, "", curLine, ndepth, nwidth);
       }
 
 #ifndef NDEBUG
     if (CLOX_OPTION_T(traceVMExecution)) {
         printVMStack(stderr);
-        printDisassembledInstruction(currentChunk(), (int)(getFrame()->ip - currentChunk()->code), NULL);
+        printDisassembledInstruction(ch, (int)(getFrame()->ip - ch->code), NULL);
     }
 #endif
 
