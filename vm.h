@@ -5,6 +5,7 @@
 #include "chunk.h"
 #include "object.h"
 #include "table.h"
+#include "debugger.h"
 #include "debug.h"
 
 #define STACK_MAX 256
@@ -66,6 +67,8 @@ typedef struct VM {
     Value lastErrorThrown;
     vec_val_t loadedScripts;
 
+    Debugger debugger;
+
     bool inited;
     bool hadError;
 } VM; // singleton
@@ -74,7 +77,8 @@ extern VM vm;
 
 typedef enum {
   INTERPRET_OK = 1,
-  INTERPRET_RUNTIME_ERROR
+  INTERPRET_UNINITIALIZED, // tried to call interpret() before initVM()
+  INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
 
 void initVM();

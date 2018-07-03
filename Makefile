@@ -1,9 +1,9 @@
 CC=gcc
-CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers
-SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c table.c runtime.c repl.c
-TEST_SRCS = debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c table.c runtime.c
+CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -I.
+SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c table.c runtime.c repl.c debugger.c
+TEST_SRCS = debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c table.c runtime.c debugger.c
 TEST_FILES = test/test_object.c test/test_nodes.c test/test_compiler.c test/test_vm.c test/test_gc.c test/test_examples.c
-DEBUG_FLAGS=-DDEBUG_TRACE_EXECUTION -g
+DEBUG_FLAGS=-O0 -DDEBUG_TRACE_EXECUTION -g
 TEST_FLAGS=-O0 -Itest/include -I.
 BUILD_DIR=bin
 BUILD_FILE=clox
@@ -28,12 +28,12 @@ clean:
 
 .PHONY: test
 test: build
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_object.c ${TEST_FLAGS} -o bin/test_object
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_nodes.c ${TEST_FLAGS} -o bin/test_nodes
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_compiler.c ${TEST_FLAGS} -o bin/test_compiler
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_vm.c ${TEST_FLAGS} -o bin/test_vm
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_gc.c ${TEST_FLAGS} -o bin/test_gc
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_examples.c ${TEST_FLAGS} -o bin/test_examples
-	./bin/test_object && ./bin/test_nodes && ./bin/test_compiler && ./bin/test_vm && \
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_object.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_object
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_nodes.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_nodes
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_compiler.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_compiler
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_vm.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_vm
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_gc.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_gc
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_examples.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_examples
+	@ ./bin/test_object && ./bin/test_nodes && ./bin/test_compiler && ./bin/test_vm && \
 		./bin/test_gc && ./bin/test_examples
 

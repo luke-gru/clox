@@ -93,11 +93,14 @@ NORETURN void repl(void) {
     fprintf(stderr, "%s", prompt);
     while ((getres = getline(&line, &size, stdin)) != -1) {
         if (numLines == 0 && strcmp(line, "exit\n") == 0) {
+            free(line);
+            line = NULL;
             break;
         }
         if (numLines == 0 && strcmp(line, "pstack\n") == 0) {
             printVMStack(stderr);
             fprintf(stderr, "%s", prompt);
+            free(line);
             line = NULL;
             continue;
         }
@@ -108,6 +111,7 @@ NORETURN void repl(void) {
             freeVM();
             initVM();
             _resetScanner();
+            free(line);
             line = NULL;
             fprintf(stderr, "done.\n");
             fprintf(stderr, "%s", prompt);
@@ -123,6 +127,7 @@ NORETURN void repl(void) {
             numLines = 0;
             _resetScanner();
             fprintf(stderr, "%s", prompt);
+            free(line);
             line = NULL;
             continue;
         }
@@ -132,6 +137,7 @@ NORETURN void repl(void) {
                 numLines = 0;
                 _resetScanner();
                 fprintf(stderr, "%s", prompt);
+                free(line);
                 line = NULL;
                 continue;
             }

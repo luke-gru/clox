@@ -10,10 +10,6 @@ TODO:
 instance []
 * Add benchmark library/internals so I can benchmark/profile performance of the
 interpreter []
-* Change the way chunks are written, so they can be edited/removed more easily
-through instruction optimization passes [DONE]
-* Change compiler so that constant value strings aren't always added to
-chunks even if they're the same strings that exist already in the chunk. [DONE]
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in $ruby.
 * Allow operator overloading with opAdd, etc.
@@ -21,23 +17,18 @@ the syntax is different for them, like in $ruby.
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results
 
-* Implement continue [DONE]
 * Get jump patching working better, and consolidate jumps []
-* Allow String#== [DONE]
-* Get all test examples working [DONE]
-* Make ObjClass an ObjInstance, and get metaclasses working, with property
-get/set and class methods. [DONE]
-* Allow re-opening classes [DONE]
-* Add loadScript(), requireScript() [DONE]
 * Add eval() []
 * Add string interpolation [DONE], needs better error handling still, and
 maybe recursive interpolations? This should work in theory with the way it's
 implemented, but it probably needs a few changes.
-* Add __DIR__ and __FILE__ [DONE]
 * Add `in` block [IN PROGRESS]
 * Add `foreach *el in item` syntax with iter() support
 * Add system() for running OS commands
-* Add execution context for VM's, so loading a script doesn't screw up the
-VM's state.
+* Make error reporting and throwing/catching errors work across
+execution contexts []
+* Add default arguments
+* Add keyword arguments
+* Add splat arguments/parameters
 
 BUGS:

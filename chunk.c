@@ -120,23 +120,23 @@ static void freeCatchTable(CatchTable *catchTbl) {
  */
 void freeChunk(Chunk *chunk) {
     if (chunk->code) {
-        fprintf(stderr, "freeChunk code\n");
+        /*fprintf(stderr, "freeChunk code\n");*/
         FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
     }
     chunk->code = NULL;
     if (chunk->lines) {
-        fprintf(stderr, "freeChunk lines\n");
+        /*fprintf(stderr, "freeChunk lines\n");*/
         FREE_ARRAY(int, chunk->lines, chunk->capacity);
     }
     chunk->lines = NULL;
-    fprintf(stderr, "freeChunk constants\n");
+    /*fprintf(stderr, "freeChunk constants\n");*/
     freeValueArray(&chunk->constants);
     if (chunk->catchTbl) {
-        fprintf(stderr, "freeChunk catchTbl\n");
+        /*fprintf(stderr, "freeChunk catchTbl\n");*/
         freeCatchTable(chunk->catchTbl);
         chunk->catchTbl = NULL;
     }
-    fprintf(stderr, "freeChunk reinit\n");
+    /*fprintf(stderr, "freeChunk reinit\n");*/
     initChunk(chunk);
 }
 

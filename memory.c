@@ -305,6 +305,7 @@ void freeObject(Obj *obj, bool unlink) {
             freeTable(&instance->hiddenFields);
             GC_TRACE_DEBUG("Freeing ObjInstance: p=%p", obj);
             FREE(ObjInstance, obj);
+            /*memset(obj, 0, sizeof(ObjInstance));*/
             break;
         }
         case OBJ_T_INTERNAL: {
@@ -328,9 +329,11 @@ void freeObject(Obj *obj, bool unlink) {
             GC_TRACE_DEBUG("Freeing string chars: p=%p", string->chars);
             GC_TRACE_DEBUG("Freeing string chars: s=%s", string->chars);
             FREE_ARRAY(char, string->chars, string->length + 1);
+            /*memset(string->chars, 0, string->length+1);*/
             string->chars = NULL;
             GC_TRACE_DEBUG("Freeing ObjString: p=%p", obj);
             FREE(ObjString, obj);
+            /*memset(obj, 0, sizeof(ObjString));*/
             break;
         }
         default: {
@@ -501,6 +504,7 @@ void collectGarbage(void) {
     vec_init(&vvisited);
     int iter = 0;
     while (object != NULL) {
+        ASSERT(object->type > OBJ_T_NONE);
         int idx = 0;
         vec_find(&vvisited, object, idx);
         if (idx != -1) {
@@ -515,6 +519,7 @@ void collectGarbage(void) {
             object = unreached->next;
             ASSERT(unreached->isLinked);
             freeObject(unreached, true);
+            ASSERT(!unreached->isLinked);
         } else {
             // This object was reached, so unmark it (for the next GC) and move on to
             // the next.

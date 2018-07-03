@@ -7,6 +7,7 @@
 #include "memory.h"
 #include "debug.h"
 #include "compiler.h"
+#include "vm.h"
 
 const char pathSeparator =
 #ifdef _WIN32
@@ -32,6 +33,12 @@ Value runtimeNativeTypeof(int argCount, Value *args) {
     CHECK_ARGS("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
     return OBJ_VAL(newStackString(strType, strlen(strType)));
+}
+
+Value lxDebugger(int argCount, Value *args) {
+    CHECK_ARGS("debugger", 0, 0, argCount);
+    vm.debugger.awaitingPause = true;
+    return NIL_VAL;
 }
 
 static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoaded) {

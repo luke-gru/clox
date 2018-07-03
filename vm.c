@@ -35,6 +35,9 @@ char *unredefinableGlobals[] = {
     "Map",
     "clock",
     "typeof",
+    "debugger",
+    "loadScript",
+    "requireScript",
     "__FILE__",
     "__DIR__",
     "__LINE__",
@@ -69,6 +72,10 @@ static void defineNativeFunctions() {
     ObjString *reqScriptName = copyString("requireScript", 13);
     ObjNative *reqScriptFn = newNative(reqScriptName, lxRequireScript);
     tableSet(&vm.globals, OBJ_VAL(reqScriptName), OBJ_VAL(reqScriptFn));
+
+    ObjString *debuggerName = copyString("debugger", 8);
+    ObjNative *debuggerFn = newNative(debuggerName, lxDebugger);
+    tableSet(&vm.globals, OBJ_VAL(debuggerName), OBJ_VAL(debuggerFn));
 }
 
 // Builtin classes:
@@ -228,6 +235,8 @@ void initVM() {
     vec_init(&vm.hiddenObjs);
     vec_init(&vm.stackObjects);
 
+    initDebugger(&vm.debugger);
+
     vm.lastErrorThrown = NIL_VAL;
     vm.hadError = false;
     inCCall = false;
@@ -256,6 +265,8 @@ void freeVM() {
     vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
     vec_deinit(&vm.loadedScripts);
+
+    freeDebugger(&vm.debugger);
 
     inCCall = false;
     cCallThrew = false;
@@ -1047,6 +1058,16 @@ static InterpretResult run(bool doResetStack) {
           ASSERT(0);
       }
 
+      int byteCount = (int)(getFrame()->ip - currentChunk()->code);
+      int curLine = currentChunk()->lines[byteCount];
+      int lastLine = -1;
+      if (byteCount > 0) {
+          lastLine = currentChunk()->lines[byteCount-1];
+      }
+      if (shouldEnterDebugger(&vm.debugger, "", curLine, lastLine)) {
+          enterDebugger(&vm.debugger);
+      }
+
 #ifndef NDEBUG
     if (CLOX_OPTION_T(traceVMExecution)) {
         printVMStack(stderr);
@@ -1588,6 +1609,9 @@ static void setupPerScriptROGlobals(char *filename) {
 
 InterpretResult interpret(Chunk *chunk, char *filename) {
     ASSERT(chunk);
+    if (!EC) {
+        return INTERPRET_UNINITIALIZED; // call initVM() first!
+    }
     EC->frameCount = 0;
     // initialize top-level callframe (frameCount = 1)
     CallFrame *frame = pushFrame();
@@ -1605,13 +1629,6 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     return result;
 }
 
-// TODO: improve loading new scripts. We shouldn't create new callframes
-// each time we load a script or else we set a limit of the number of scripts
-// we can load being the # of callframes allowed. Maybe we should save the
-// state of the interpreter, run the new chunk on it, then reset it back to
-// how it was (stack, ip, etc.). Or, better yet, make a way to create a VM
-// context with its own stack/IP,etc. and just run it on that. This is what
-// Ruby does, for instance. They call it an execution context.
 InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();
