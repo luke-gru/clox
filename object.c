@@ -12,7 +12,8 @@
 #define ALLOCATE_OBJ(type, objectType) \
     (type*)allocateObject(sizeof(type), objectType)
 
-// allocate object on the VM stack arena (used in C function calls from the VM)
+// allocate object on the heap, but don't GC it until return to VM
+// (used in C function calls from the VM)
 #define ALLOCATE_CSTACK_OBJ(type, objectType) \
     (type*)allocateCStackObject(sizeof(type), objectType)
 
@@ -53,8 +54,9 @@ static Obj *allocateCStackObject(size_t size, ObjType type) {
     vm.objects = object;
     object->isLinked = true;
 
-    if (vm.inited)
+    if (vm.inited) {
         vec_push(&vm.stackObjects, object);
+    }
 
     return object;
 }
@@ -64,6 +66,10 @@ static Obj *allocateCStackObject(size_t size, ObjType type) {
  * NOTE: length here is strlen(chars). Interns it right away.
  */
 static ObjString *allocateString(char *chars, int length, uint32_t hash) {
+    if (!vm.inited) {
+        fprintf(stderr, "allocateString before VM inited: %s\n", chars);
+        DBG_ASSERT(vm.inited);
+    }
     ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
     hideFromGC((Obj*)string);
     string->length = length;
@@ -99,6 +105,7 @@ uint32_t hashString(char *key, int length) {
 // NOTE: length here is strlen(chars)
 // XXX: Do not pass a static string here, it'll break when we try to free it.
 ObjString *takeString(char *chars, int length) {
+    DBG_ASSERT(strlen(chars) == length);
     uint32_t hash = hashString(chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (interned != NULL) return interned;
@@ -108,9 +115,10 @@ ObjString *takeString(char *chars, int length) {
 // use copy of `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
 ObjString *copyString(char *chars, int length) {
+    DBG_ASSERT(strlen(chars) >= length);
     // Copy the characters to the heap so the object can own it.
     uint32_t hash = hashString((char*)chars, length);
-    ObjString* interned = tableFindString(&vm.strings, chars, length, hash);
+    ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (interned != NULL) return interned;
 
     char *heapChars = ALLOCATE(char, length + 1);
@@ -123,6 +131,7 @@ ObjString *copyString(char *chars, int length) {
 // Always allocates a new string object that lives at least until return to
 // the VM loop. Used in C functions.
 ObjString *newStackString(char *chars, int len) {
+    DBG_ASSERT(strlen(chars) >= len);
     char *heapChars = ALLOCATE(char, len+1);
     memset(heapChars, 0, len+1);
     if (len > 0) memcpy(heapChars, chars, len);
@@ -135,12 +144,14 @@ ObjString *newStackString(char *chars, int len) {
 }
 
 ObjString *hiddenString(char *chars, int len) {
+    DBG_ASSERT(strlen(chars) >= len);
     ObjString *string = newString(chars, len);
     hideFromGC((Obj*)string);
     return string;
 }
 
 ObjString *newString(char *chars, int len) {
+    DBG_ASSERT(strlen(chars) >= len);
     char *heapChars = ALLOCATE(char, len+1);
     memset(heapChars, 0, len+1);
     if (len > 0) memcpy(heapChars, chars, len);
@@ -153,6 +164,7 @@ ObjString *newString(char *chars, int len) {
 }
 
 ObjString *internedString(char *chars, int length) {
+    DBG_ASSERT(strlen(chars) >= length);
     uint32_t hash = hashString((char*)chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (!interned) {
@@ -178,6 +190,7 @@ void pushString(ObjString *a, ObjString *b) {
 // pushing new chars to the buffer. Also, treat strings as mutable externally.
 // NOTE: length here is strlen(chars)
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
+    DBG_ASSERT(strlen(chars) >= lenToAdd);
     if (((Obj*)string)->isFrozen) {
         // FIXME: raise FrozenObjectError
         fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
@@ -215,7 +228,6 @@ void pushCStringFmt(ObjString *string, const char *format, ...) {
     int i = 0;
     for (i = 0; i < buflen; i++) {
         char *c = sbuf+i;
-        if (c == NULL) break;
         string->chars[string->length + i] = *c;
     }
     string->chars[string->length + i] = '\0';

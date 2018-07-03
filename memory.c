@@ -245,10 +245,13 @@ void freeObject(Obj *obj, bool unlink) {
         if (prev) {
             obj->prev->next = next;
             obj->prev = NULL;
+        } else {
+            GC_TRACE_DEBUG("  unlinked first object");
+            vm.objects = next;
         }
         obj->isLinked = false;
         if (next == NULL && prev == NULL) { // must be the only object
-            GC_TRACE_DEBUG("Unlinking last object p=%p", obj);
+            GC_TRACE_DEBUG("  unlinked last object");
             vm.objects = NULL;
         }
     }
@@ -259,6 +262,7 @@ void freeObject(Obj *obj, bool unlink) {
             // to stick around if only the bound method needs freeing
             GC_TRACE_DEBUG("Freeing bound method: p=%p", obj);
             FREE(ObjBoundMethod, obj);
+            memset(obj, 0, sizeof(ObjBoundMethod));
             break;
         }
         case OBJ_T_CLASS: {
@@ -305,7 +309,6 @@ void freeObject(Obj *obj, bool unlink) {
             freeTable(&instance->hiddenFields);
             GC_TRACE_DEBUG("Freeing ObjInstance: p=%p", obj);
             FREE(ObjInstance, obj);
-            /*memset(obj, 0, sizeof(ObjInstance));*/
             break;
         }
         case OBJ_T_INTERNAL: {
@@ -329,11 +332,10 @@ void freeObject(Obj *obj, bool unlink) {
             GC_TRACE_DEBUG("Freeing string chars: p=%p", string->chars);
             GC_TRACE_DEBUG("Freeing string chars: s=%s", string->chars);
             FREE_ARRAY(char, string->chars, string->length + 1);
-            /*memset(string->chars, 0, string->length+1);*/
             string->chars = NULL;
             GC_TRACE_DEBUG("Freeing ObjString: p=%p", obj);
             FREE(ObjString, obj);
-            /*memset(obj, 0, sizeof(ObjString));*/
+            memset(obj, 0, sizeof(ObjString));
             break;
         }
         default: {
@@ -448,7 +450,7 @@ void collectGarbage(void) {
     grayTable(&vm.strings);
     GC_TRACE_DEBUG("Marking compiler roots");
     grayCompilerRoots();
-    GC_TRACE_DEBUG("Marking VM init string");
+    GC_TRACE_DEBUG("Marking VM cached strings");
     grayObject((Obj*)vm.initString);
     grayObject((Obj*)vm.fileString);
     grayObject((Obj*)vm.dirString);
@@ -514,7 +516,7 @@ void collectGarbage(void) {
         }
         vec_push(&vvisited, object);
         if (!object->isDark && !object->noGC) {
-            // This object wasn't reached, so remove it from the list and free it.
+            // This object wasn't marked, so remove it from the list and free it.
             Obj *unreached = object;
             object = unreached->next;
             ASSERT(unreached->isLinked);

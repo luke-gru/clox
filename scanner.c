@@ -112,7 +112,7 @@ static Token makeToken(TokenType type) {
   token.lexeme = NULL; // only created on demand, see tokStr()
   token.line = current->line;
   if (CLOX_OPTION_T(debugTokens)) {
-      fprintf(stderr, "Tok: %s\n", tokTypeStr(type));
+      fprintf(stderr, "Tok: %s -> '%s'\n", tokTypeStr(type), tokStr(&token));
   }
   if (type == TOKEN_END_SCRIPT) {
       current->scriptEnded = true;
@@ -260,6 +260,9 @@ static Token doubleQuotedString() {
   tok.start = newBuf;
   tok.length = strlen(newBuf);
   tok.lexeme = newBuf;
+  if (CLOX_OPTION_T(debugTokens)) {
+      fprintf(stderr, "  after replacements: '%s'\n", newBuf);
+  }
   return tok;
 }
 
@@ -295,6 +298,9 @@ static Token singleQuotedString(bool isStatic) {
     tok.start = newBuf;
     tok.length = strlen(newBuf);
     tok.lexeme = newBuf;
+    if (CLOX_OPTION_T(debugTokens)) {
+        fprintf(stderr, "  after replacements: '%s'\n", newBuf);
+    }
     return tok;
 }
 

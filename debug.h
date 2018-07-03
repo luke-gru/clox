@@ -29,4 +29,11 @@ NORETURN extern void die(const char *fmt, ...);
     fprintf(stderr, "BUG [UNREACHABLE]: (%s:%d:%s)\n", __FILE__, __LINE__, __func__);\
     die(__VA_ARGS__);\
     } while (0)
+
+#ifndef NDEBUG
+#define DBG_ASSERT(expr) ASSERT(expr)
+#else
+#define DBG_ASSERT(expr) (void)0
+#endif
+
 #endif

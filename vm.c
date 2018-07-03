@@ -227,6 +227,7 @@ void initVM() {
     vm.lastValue = NULL;
     initTable(&vm.globals);
     initTable(&vm.strings);
+    vm.inited = true; // NOTE: VM has to be inited before calls to copyString
     vm.initString = copyString("init", 4);
     vm.fileString = copyString("__FILE__", 8);
     vm.dirString = copyString("__DIR__", 7);
@@ -245,7 +246,6 @@ void initVM() {
     runUntilReturn = false;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
-    vm.inited = true;
     defineGlobalVariables();
     resetStack();
     turnGCOn();
@@ -273,13 +273,13 @@ void freeVM() {
     returnedFromNativeErr = false;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
-    vm.inited = false;
     vec_deinit(&vm.stackObjects);
     freeObjects();
     vm.objects = NULL;
 
     vec_clear(&vm.v_ecs);
     vm.ec = NULL;
+    vm.inited = false;
 }
 
 

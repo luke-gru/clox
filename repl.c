@@ -66,6 +66,7 @@ static bool scanToEnd(void) {
 void scannerAddSrc(char *src) {
     ASSERT(src);
     ASSERT(scanner.source);
+    // TODO: use realloc to avoid leaking memory
     size_t newsz = strlen(scanner.source)+1+strlen(src);
     char *buf = calloc(newsz, 1);
     ASSERT_MEM(buf);
@@ -75,7 +76,7 @@ void scannerAddSrc(char *src) {
 }
 
 static void _resetScanner(void) {
-    initScanner(&scanner, "");
+    initScanner(&scanner, strdup(""));
 }
 
 NORETURN void repl(void) {
@@ -83,6 +84,9 @@ NORETURN void repl(void) {
     _resetScanner();
     initChunk(&rChunk);
     initVM();
+    // we want to evaluate unused expressions, like the statement `1+1`,
+    // because we print the last VM value after the user types in an
+    // expression or statement.
     compilerOpts.noRemoveUnusedExpressions = true;
 
     char *lines[50];
@@ -91,6 +95,9 @@ NORETURN void repl(void) {
     size_t size;
     int getres = -1;
     fprintf(stderr, "%s", prompt);
+    // NOTE: using getline() instead of fgets() so that we can save previous
+    // lines if the user types in a statement that takes multiple lines, like
+    // a class declaration or a for loop.
     while ((getres = getline(&line, &size, stdin)) != -1) {
         if (numLines == 0 && strcmp(line, "exit\n") == 0) {
             free(line);
@@ -159,7 +166,7 @@ NORETURN void repl(void) {
             numLines = 0;
             _resetScanner();
         } else {
-            fprintf(stderr, "(waiting for more input\n");
+            /*fprintf(stderr, "(waiting for more input)\n");*/
             // wait until more input
         }
         line = NULL;
