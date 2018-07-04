@@ -21,6 +21,7 @@ typedef struct CallFrame {
     // Native (C) function fields
     bool isCCall; // native call, callframe created for C (native) function call
     ObjNative *nativeFunc; // only if isCCall is true
+    int callLine;
 } CallFrame; // represents a local scope (block, function, etc)
 
 // Execution context for VM. When loading a script, a new context is created.
@@ -34,13 +35,13 @@ typedef struct VMExecContext {
     CallFrame frames[FRAMES_MAX];
     unsigned frameCount;
     Table roGlobals; // per-script readonly global vars
+    ObjString *filename;
+    Value *lastValue;
 } VMExecContext;
-
-typedef vec_t(VMExecContext) vec_VM_EC_t;
 
 typedef struct VM {
     VMExecContext *ec; // current execution context
-    vec_VM_EC_t v_ecs; // stack of execution contexts. Top of stack is current context.
+    vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
 
     Obj *objects; // linked list of heap objects
     ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
@@ -91,6 +92,7 @@ Value callVMMethod(
     ObjInstance *instance, Value callable,
     int argCount, Value *args
 );
+Value VMEval(const char *src, const char *filename, int lineno);
 void push(Value value); // push onto operand stack
 Value pop(); // pop top of operand stack
 void runtimeError(const char *format, ...);

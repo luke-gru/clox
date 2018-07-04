@@ -403,7 +403,7 @@ void collectGarbage(void) {
     if (CLOX_OPTION_T(traceGC)) printVMStack(stderr);
     // Mark stack roots up the stack for every execution context
     VMExecContext *ctx = NULL; int k = 0;
-    vec_foreach_ptr(&vm.v_ecs, ctx, k) {
+    vec_foreach(&vm.v_ecs, ctx, k) {
         grayTable(&ctx->roGlobals);
         for (Value *slot = ctx->stack; slot < ctx->stackTop; slot++) {
             grayValue(*slot);
@@ -424,7 +424,11 @@ void collectGarbage(void) {
     GC_TRACE_DEBUG("Marking VM frame functions");
     // gray active function closure objects
     ctx = NULL; k = 0;
-    vec_foreach_ptr(&vm.v_ecs, ctx, k) {
+    vec_foreach(&vm.v_ecs, ctx, k) {
+        grayObject((Obj*)ctx->filename);
+        if (ctx->lastValue) {
+            grayValue(*ctx->lastValue);
+        }
         for (int i = 0; i < ctx->frameCount; i++) {
             grayObject((Obj*)ctx->frames[i].closure);
         }

@@ -5,6 +5,7 @@
 #include "options.h"
 #include "runtime.h"
 #include "memory.h"
+#include "compiler.h"
 #include <setjmp.h>
 
 VM vm;
@@ -38,6 +39,7 @@ char *unredefinableGlobals[] = {
     "debugger",
     "loadScript",
     "requireScript",
+    "eval",
     "__FILE__",
     "__DIR__",
     "__LINE__",
@@ -58,11 +60,11 @@ static bool isUnredefinableGlobal(char *name) {
 
 static void defineNativeFunctions() {
     ObjString *clockName = copyString("clock", 5);
-    ObjNative *clockFn = newNative(clockName, runtimeNativeClock);
+    ObjNative *clockFn = newNative(clockName, lxClock);
     tableSet(&vm.globals, OBJ_VAL(clockName), OBJ_VAL(clockFn));
 
     ObjString *typeofName = copyString("typeof", 6);
-    ObjNative *typeofFn = newNative(typeofName, runtimeNativeTypeof);
+    ObjNative *typeofFn = newNative(typeofName, lxTypeof);
     tableSet(&vm.globals, OBJ_VAL(typeofName), OBJ_VAL(typeofFn));
 
     ObjString *loadScriptName = copyString("loadScript", 10);
@@ -76,6 +78,10 @@ static void defineNativeFunctions() {
     ObjString *debuggerName = copyString("debugger", 8);
     ObjNative *debuggerFn = newNative(debuggerName, lxDebugger);
     tableSet(&vm.globals, OBJ_VAL(debuggerName), OBJ_VAL(debuggerFn));
+
+    ObjString *evalName = copyString("eval", 4);
+    ObjNative *evalFn = newNative(evalName, lxEval);
+    tableSet(&vm.globals, OBJ_VAL(evalName), OBJ_VAL(evalFn));
 }
 
 // Builtin classes:
@@ -184,21 +190,24 @@ static bool cCallThrew = false;
 static bool returnedFromNativeErr = false;
 static bool runUntilReturn = false;
 
+static int curLine = 1;
+
 // Add and use a new execution context
 static inline void push_EC(void) {
-    VMExecContext ectx;
-    memset(&ectx, 0, sizeof(ectx));
-    initTable(&ectx.roGlobals);
-    vec_push(&vm.v_ecs, ectx);
-    vm.ec = &vec_last(&vm.v_ecs);
+    VMExecContext *ectx = ALLOCATE(VMExecContext, 1);
+    memset(ectx, 0, sizeof(*ectx));
+    initTable(&ectx->roGlobals);
+    vec_push(&vm.v_ecs, (void*)ectx);
+    vm.ec = ectx;
 }
 
 // Pop the current execution context and use the one created before
 // the current one.
 static inline void pop_EC(void) {
-    VMExecContext *ctx = &vec_pop(&vm.v_ecs);
+    VMExecContext *ctx = (VMExecContext*)vec_pop(&vm.v_ecs);
     freeTable(&ctx->roGlobals);
-    vm.ec = &vec_last(&vm.v_ecs);
+    FREE(VMExecContext, ctx);
+    vm.ec = (VMExecContext*)vec_last(&vm.v_ecs);
 }
 
 // reset (clear) value stack for current execution context
@@ -244,6 +253,7 @@ void initVM() {
     cCallThrew = false;
     returnedFromNativeErr = false;
     runUntilReturn = false;
+    curLine = 1;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
     defineGlobalVariables();
@@ -272,6 +282,7 @@ void freeVM() {
     cCallThrew = false;
     returnedFromNativeErr = false;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
+    curLine = 1;
 
     vec_deinit(&vm.stackObjects);
     freeObjects();
@@ -317,7 +328,8 @@ void push(Value value) {
 Value pop() {
     ASSERT(EC->stackTop > EC->stack);
     EC->stackTop--;
-    vm.lastValue = EC->stackTop;
+    EC->lastValue = EC->stackTop;
+    vm.lastValue = EC->lastValue;
     return *vm.lastValue;
 }
 
@@ -328,7 +340,7 @@ Value peek(unsigned n) {
 
 Value *getLastValue() {
     if (isOpStackEmpty()) {
-        return vm.lastValue;
+        return EC->lastValue;
     } else {
         return EC->stackTop-1;
     }
@@ -633,7 +645,9 @@ static void popFrame(void) {
 }
 
 static CallFrame *pushFrame(void) {
-    return &EC->frames[EC->frameCount++];
+    CallFrame *frame = &EC->frames[EC->frameCount++];
+    frame->callLine = curLine;
+    return frame;
 }
 
 static void pushNativeFrame(ObjNative *native) {
@@ -1060,7 +1074,7 @@ static InterpretResult run(bool doResetStack) {
 
       Chunk *ch = currentChunk();
       int byteCount = (int)(getFrame()->ip - ch->code);
-      int curLine = ch->lines[byteCount];
+      curLine = ch->lines[byteCount];
       int lastLine = -1;
       int ndepth = ch->ndepths[byteCount];
       int nwidth = ch->nwidths[byteCount];
@@ -1616,6 +1630,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     if (!EC) {
         return INTERPRET_UNINITIALIZED; // call initVM() first!
     }
+    EC->filename = newString(filename, strlen(filename));
     EC->frameCount = 0;
     // initialize top-level callframe (frameCount = 1)
     CallFrame *frame = pushFrame();
@@ -1637,6 +1652,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();
     push_EC();
+    EC->filename = newString(filename, strlen(filename));
     // initialize top-level callframe (frameCount = 1)
     CallFrame *frame = pushFrame();
     frame->start = 0;
@@ -1655,6 +1671,49 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     pop_EC();
     ASSERT(oldFrame == getFrame());
     return result;
+}
+
+Value VMEval(const char *src, const char *filename, int lineno) {
+    CallFrame *oldFrame = getFrame();
+    CompileErr err = COMPILE_ERR_NONE;
+    Chunk chunk;
+    initChunk(&chunk);
+    int oldOpts = compilerOpts.noRemoveUnusedExpressions;
+    compilerOpts.noRemoveUnusedExpressions = true;
+    push_EC();
+    resetStack();
+    int compile_res = compile_src(src, &chunk, &err);
+    compilerOpts.noRemoveUnusedExpressions = oldOpts;
+
+    if (compile_res != 0) {
+        // TODO: throw syntax error
+        pop_EC();
+        ASSERT(getFrame() == oldFrame);
+        freeChunk(&chunk);
+        return BOOL_VAL(false);
+    }
+    EC->filename = newString(filename, strlen(filename));
+    CallFrame *frame = pushFrame();
+    frame->start = 0;
+    frame->ip = chunk.code;
+    frame->slots = EC->stack;
+    ObjFunction *func = newFunction(&chunk);
+    hideFromGC((Obj*)func);
+    frame->closure = newClosure(func);
+    unhideFromGC((Obj*)func);
+    frame->isCCall = false;
+    frame->nativeFunc = NULL;
+
+    setupPerScriptROGlobals(filename);
+
+    InterpretResult result = run(false);
+    if (result != INTERPRET_OK) {
+        vm.hadError = false;
+    }
+    Value *ret = vm.lastValue;
+    pop_EC();
+    ASSERT(getFrame() == oldFrame);
+    return BOOL_VAL(result == INTERPRET_OK);
 }
 
 void setPrintBuf(ObjString *buf) {

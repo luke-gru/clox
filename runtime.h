@@ -14,11 +14,13 @@
 
 extern const char pathSeparator;
 
-Value runtimeNativeClock(int argCount, Value *args);
-Value runtimeNativeTypeof(int argCount, Value *args);
+// builtin (native) functions
+Value lxClock(int argCount, Value *args);
+Value lxTypeof(int argCount, Value *args);
 Value lxLoadScript(int argCount, Value *args);
 Value lxRequireScript(int argCount, Value *args);
 Value lxDebugger(int argCount, Value *args);
+Value lxEval(int argCount, Value *args);
 
 bool runtimeCheckArgs(int min, int max, int actual);
 

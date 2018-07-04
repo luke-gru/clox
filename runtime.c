@@ -24,12 +24,12 @@ static bool fileExists(char *fname) {
     return (stat(fname, &buffer) == 0);
 }
 
-Value runtimeNativeClock(int argCount, Value *args) {
+Value lxClock(int argCount, Value *args) {
     CHECK_ARGS("clock", 0, 0, argCount);
     return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
-Value runtimeNativeTypeof(int argCount, Value *args) {
+Value lxTypeof(int argCount, Value *args) {
     CHECK_ARGS("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
     return OBJ_VAL(newStackString(strType, strlen(strType)));
@@ -39,6 +39,17 @@ Value lxDebugger(int argCount, Value *args) {
     CHECK_ARGS("debugger", 0, 0, argCount);
     vm.debugger.awaitingPause = true;
     return NIL_VAL;
+}
+
+Value lxEval(int argCount, Value *args) {
+    CHECK_ARGS("eval", 1, 1, argCount);
+    Value src = *args;
+    CHECK_ARG_TYPE(src, VAL_T_OBJ, IS_STRING, 1);
+    char *csrc = AS_CSTRING(src);
+    if (strlen(csrc) == 0) {
+        return NIL_VAL;
+    }
+    return VMEval(csrc, "(eval)", 1);
 }
 
 static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoaded) {
@@ -85,6 +96,7 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
         CompileErr err = COMPILE_ERR_NONE;
         int compile_res = compile_file(pathbuf, &chunk, &err);
         if (compile_res != 0) {
+            // TODO: throw syntax error
             return BOOL_VAL(false);
         }
         ObjString *fpath = newString(pathbuf, strlen(pathbuf));

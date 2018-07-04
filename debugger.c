@@ -63,8 +63,8 @@ const char *debuggerUsage[] = {
     "delbr [FILE,]LINE  Delete a specific breakpoint",
     "next (n)           Step over and stop at next statement",
     "into (i)           Step into and stop at next statement",
-    /*"frames             View call frames",*/
-    /*"eval (e) EXPR      Evaluate expression",*/
+    "frames             View call frames",
+    "eval (e) EXPR      Evaluate expression",
     NULL
 };
 
@@ -98,8 +98,10 @@ static void deleteBreakpt(Debugger *dbg, char *file, int line) {
 }
 
 void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nwidth) {
-    fprintf(stdout, "Entered lox debugger\n");
-    dbg->awaitingPause = false;
+    if (dbg->awaitingPause) {
+        fprintf(stdout, "Entered lox debugger\n");
+        dbg->awaitingPause = false;
+    }
     vec_clear(&dbg->v_breaklvls);
     char buf[LINE_SZ+1] = { '\0' };
     fprintf(stdout, DBG_PROMPT);
@@ -134,6 +136,9 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
             deleteBreakpt(&vm.debugger, "", (int)lline);
             fprintf(stdout, "Successfully deleted breakpoint\n");
         } else if (strcmp(buf, "n") == 0 || strcmp(buf, "next") == 0) {
+            BreakLvl curLevel = { .ndepth = ndepth, .nwidth = nwidth };
+            vec_push(&dbg->v_breaklvls, curLevel);
+
             BreakLvl nextWidth = { .ndepth = ndepth, .nwidth = nwidth+1 };
             vec_push(&dbg->v_breaklvls, nextWidth);
             if (ndepth > 0) {
@@ -144,15 +149,46 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
             }
             return;
         } else if (strcmp(buf, "i") == 0 || strcmp(buf, "into") == 0) {
-            BreakLvl nextIn = { .ndepth = ndepth+1, .nwidth = 0 };
+            BreakLvl curLevel = { .ndepth = ndepth, .nwidth = nwidth };
+            vec_push(&dbg->v_breaklvls, curLevel);
+
+            BreakLvl nextIn2 = { .ndepth = ndepth+2, .nwidth = -1 };
+            vec_push(&dbg->v_breaklvls, nextIn2);
+            BreakLvl nextIn = { .ndepth = ndepth+1, .nwidth = -1 };
             vec_push(&dbg->v_breaklvls, nextIn);
             BreakLvl nextWidth = { .ndepth = ndepth, .nwidth = nwidth+1 };
             vec_push(&dbg->v_breaklvls, nextWidth);
             if (ndepth > 0) {
-                BreakLvl nextLoop = { .ndepth = ndepth, .nwidth = 0 };
+                BreakLvl nextLoop = { .ndepth = ndepth, .nwidth = -1 };
                 vec_push(&dbg->v_breaklvls, nextLoop);
             }
             return;
+        } else if (strcmp(buf, "frames") == 0) {
+            VMExecContext *ctx = NULL; int i = 0;
+            vec_foreach_rev(&vm.v_ecs, ctx, i) {
+                for (int j = ctx->frameCount-1; j >= 0; j--) {
+                    CallFrame *frame = &ctx->frames[j];
+                    if (frame->closure->function->name) {
+                        fprintf(stdout, "%s:%d <%s>\n",
+                            ctx->filename->chars,
+                            frame->callLine,
+                            frame->closure->function->name->chars);
+                    } else {
+                        fprintf(stdout, "%s:%d <%s>\n", ctx->filename->chars, 1,
+                            "script");
+                    }
+                }
+            }
+        } else if ((idx = strstr(buf, "e")) || (idx = strstr(buf, "eval"))) {
+            char *src;
+            if (idx[1] && idx[1] == 'v') { // eval
+                src = idx+5;
+            } else {
+                src = idx+2;
+            }
+            Value val = VMEval(src, "(eval)", 1);
+            printValue(stdout, val, true);
+            fprintf(stdout, "\n");
         } else {
             fprintf(stderr, "Unrecognized command: '%s'\n", buf);
             fprintf(stderr, "'help' for usage details\n");
