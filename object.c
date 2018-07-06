@@ -529,3 +529,58 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     inst->singletonKlass = meta;
     return meta;
 }
+
+bool is_obj_string_p(Obj *obj) {
+    return obj->type == OBJ_T_STRING;
+}
+bool is_value_string_p(Value val) {
+    return IS_STRING(val);
+}
+bool is_obj_function_p(Obj *obj) {
+    return obj->type == OBJ_T_FUNCTION;
+}
+bool is_value_function_p(Value val) {
+    return IS_FUNCTION(val);
+}
+bool is_obj_closure_p(Obj *obj) {
+    return obj->type == OBJ_T_CLOSURE;
+}
+bool is_value_closure_p(Value val) {
+    return IS_CLOSURE(val);
+}
+bool is_obj_native_function_p(Obj *obj) {
+    return obj->type == OBJ_T_NATIVE_FUNCTION;
+}
+bool is_value_native_function_p(Value val) {
+    return IS_NATIVE_FUNCTION(val);
+}
+bool is_obj_class_p(Obj *obj) {
+    return obj->type == OBJ_T_CLASS;
+}
+bool is_value_class_p(Value val) {
+    return IS_CLASS(val);
+}
+bool is_obj_instance_p(Obj *obj) {
+    return obj->type == OBJ_T_INSTANCE;
+}
+bool is_value_instance_p(Value val) {
+    return IS_INSTANCE(val);
+}
+bool is_obj_bound_method_p(Obj *obj) {
+    return obj->type == OBJ_T_BOUND_METHOD;
+}
+bool is_value_bound_method_p(Value val) {
+    return IS_BOUND_METHOD_FUNC(val);
+}
+bool is_obj_upvalue_p(Obj *obj) {
+    return obj->type == OBJ_T_UPVALUE;
+}
+bool is_value_upvalue_p(Value val) {
+    return IS_UPVALUE(val);
+}
+bool is_obj_internal_p(Obj *obj) {
+    return obj->type == OBJ_T_INTERNAL;
+}
+bool is_value_internal_p(Value val) {
+    return IS_INTERNAL(val);
+}

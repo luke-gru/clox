@@ -99,7 +99,8 @@ int main(int argc, char *argv[]) {
     if (ires != INTERPRET_OK) {
         freeVM();
         freeChunk(&chunk);
-        die("%s", "Interpreter runtime error\n");
+        // error message was already displayed
+        exit(1);
     }
 
     freeVM();

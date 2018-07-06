@@ -22,6 +22,7 @@ typedef struct CallFrame {
     bool isCCall; // native call, callframe created for C (native) function call
     ObjNative *nativeFunc; // only if isCCall is true
     int callLine;
+    ObjString *file; // full path of file the function is called from
 } CallFrame; // represents a local scope (block, function, etc)
 
 // Execution context for VM. When loading a script, a new context is created.

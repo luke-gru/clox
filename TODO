@@ -18,7 +18,7 @@ the syntax is different for them, like in $ruby.
 bytecode, and benchmark the lookup results
 
 * Get jump patching working better, and consolidate jumps []
-* Add eval() []
+* Add eval() [IN PROGRESS, NEEDS WORK]
 * Add string interpolation [DONE], needs better error handling still, and
 maybe recursive interpolations? This should work in theory with the way it's
 implemented, but it probably needs a few changes.

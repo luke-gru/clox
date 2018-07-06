@@ -39,6 +39,11 @@ typedef struct ValueArray {
 #define IS_NUMBER(value)  ((value).type == VAL_T_NUMBER)
 #define IS_OBJ(value)     ((value).type == VAL_T_OBJ)
 
+#define IS_BOOL_FUNC (is_bool_p)
+#define IS_NIL_FUNC (is_nil_p)
+#define IS_NUMBER_FUNC (is_number_p)
+#define IS_OBJ_FUNC (is_obj_p)
+
 #define AS_OBJ(value)     ((value).as.object)
 #define AS_BOOL(value)    ((value).as.boolean)
 #define AS_NUMBER(value)  ((value).as.number)
@@ -54,6 +59,13 @@ void initValueArray(ValueArray *array);
 void writeValueArray(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);
 void printValue(FILE *file, Value value, bool canCallMethods);
+
+// value type predicate function
+typedef bool (*value_type_p)(Value val);
+bool is_bool_p(Value);
+bool is_nil_p(Value);
+bool is_number_p(Value);
+bool is_obj_p(Value);
 
 typedef ObjString *(*newStringFunc)(char *chars, int length);
 ObjString *valueToString(Value value, newStringFunc fn);

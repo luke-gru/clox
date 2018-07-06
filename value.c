@@ -289,3 +289,16 @@ bool valEqual(Value a, Value b) {
         default: UNREACHABLE("");
     }
 }
+
+bool is_bool_p(Value val) {
+    return IS_BOOL(val);
+}
+bool is_nil_p(Value val) {
+    return IS_NIL(val);
+}
+bool is_number_p(Value val) {
+    return IS_NUMBER(val);
+}
+bool is_obj_p(Value val) {
+    return IS_OBJ(val);
+}

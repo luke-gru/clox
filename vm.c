@@ -442,9 +442,9 @@ void showUncaughtError(Value err) {
     Value bt = getProp(err, copyString("backtrace", 9));
     ASSERT(!IS_NIL(bt));
     int btSz = ARRAY_SIZE(bt);
-    fprintf(stderr, "Uncaught Error, class: '%s'\n", className);
+    fprintf(stderr, "Uncaught error, class: %s\n", className);
     if (msgStr) {
-        fprintf(stderr, "Message: '%s'\n", msgStr);
+        fprintf(stderr, "Message: \"%s\"\n", msgStr);
     } else {
         fprintf(stderr, "Message: none\n");
     }
@@ -464,20 +464,22 @@ void setBacktrace(Value err) {
     setProp(err, copyString("backtrace", 9), ret);
     for (int i = EC->frameCount - 1; i >= 0; i--) {
         CallFrame *frame = &EC->frames[i];
+        int line = frame->callLine;
+        ObjString *file = frame->file;
         ObjString *out = hiddenString("", 0);
         if (frame->isCCall) {
             ObjNative *nativeFunc = frame->nativeFunc;
-            pushCStringFmt(out, "native function %s()\n",
+            pushCStringFmt(out, "%s:%d in ", file->chars, line);
+            pushCStringFmt(out, "<%s (native)>\n",
                 nativeFunc->name->chars);
         } else {
             ObjFunction *function = frame->closure->function;
-            size_t instruction = frame->ip - function->chunk.code - 1;
-            pushCStringFmt(out, "[line %03d] in ", function->chunk.lines[instruction]);
+            pushCStringFmt(out, "%s:%d in ", file->chars, line);
             if (function->name == NULL) {
-                pushCString(out, "script\n", 7); // top-level
+                pushCString(out, "<script>\n", 9); // top-level
             } else {
                 char *fnName = function->name ? function->name->chars : "(anon)";
-                pushCStringFmt(out, "%s()\n", fnName);
+                pushCStringFmt(out, "<%s>\n", fnName);
             }
         }
         arrayPush(ret, OBJ_VAL(out));
@@ -647,6 +649,9 @@ static void popFrame(void) {
 static CallFrame *pushFrame(void) {
     CallFrame *frame = &EC->frames[EC->frameCount++];
     frame->callLine = curLine;
+    Value curFile;
+    ASSERT(vm.fileString);
+    frame->file = EC->filename;
     return frame;
 }
 
@@ -665,6 +670,7 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->slots = prevFrame->slots;
     newFrame->isCCall = true;
     newFrame->nativeFunc = native;
+    newFrame->file = EC->filename;
     inCCall = true;
 }
 

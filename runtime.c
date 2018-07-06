@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include "runtime.h"
 #include "object.h"
+#include "value.h"
 #include "memory.h"
 #include "debug.h"
 #include "compiler.h"
@@ -16,8 +17,15 @@ const char pathSeparator =
                             '/';
 #endif
 
-// TODO
-#define CHECK_ARG_TYPE(...)
+// ex: CHECK_ARG_TYPE(value, IS_BOOL_FUNC, "bool", 1);
+#define CHECK_ARG_TYPE(value, typechk_p, typename, argnum) check_arg_type(value, typechk_p, typename, argnum)
+
+static void check_arg_type(Value arg, value_type_p typechk_p, const char *typeExpect, int argnum) {
+    if (!typechk_p(arg)) {
+        const char *typeActual = typeOfVal(arg);
+        throwArgErrorFmt("Expected argument %d to be a %s, got: %s", argnum, typeExpect, typeActual);
+    }
+}
 
 static bool fileExists(char *fname) {
     struct stat buffer;
@@ -44,7 +52,7 @@ Value lxDebugger(int argCount, Value *args) {
 Value lxEval(int argCount, Value *args) {
     CHECK_ARGS("eval", 1, 1, argCount);
     Value src = *args;
-    CHECK_ARG_TYPE(src, VAL_T_OBJ, IS_STRING, 1);
+    CHECK_ARG_TYPE(src, IS_STRING_FUNC, "string", 1);
     char *csrc = AS_CSTRING(src);
     if (strlen(csrc) == 0) {
         return NIL_VAL;
@@ -114,14 +122,14 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
 Value lxRequireScript(int argCount, Value *args) {
     CHECK_ARGS("requireScript", 1, 1, argCount);
     Value fname = *args;
-    CHECK_ARG_TYPE(fname, VAL_T_OBJ, IS_STRING, 1);
+    CHECK_ARG_TYPE(fname, IS_STRING_FUNC, "string", 1);
     return loadScriptHelper(fname, "requireScript", true);
 }
 
 Value lxLoadScript(int argCount, Value *args) {
     CHECK_ARGS("loadScript", 1, 1, argCount);
     Value fname = *args;
-    CHECK_ARG_TYPE(fname, VAL_T_OBJ, IS_STRING, 1);
+    CHECK_ARG_TYPE(fname, IS_STRING_FUNC, "string", 1);
     return loadScriptHelper(fname, "loadScript", false);
 }
 
@@ -208,7 +216,7 @@ Value lxArrayIndexGet(int argCount, Value *args) {
     Value self = args[0];
     ASSERT(IS_AN_ARRAY(self));
     Value num = args[1];
-    CHECK_ARG_TYPE(num, VAL_T_NUMBER, 1);
+    CHECK_ARG_TYPE(num, IS_NUMBER_FUNC, "number", 1);
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     int idx = (int)AS_NUMBER(num);
     if (idx < 0) {
@@ -230,7 +238,7 @@ Value lxArrayIndexSet(int argCount, Value *args) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     Value num = args[1];
     Value rval = args[2];
-    CHECK_ARG_TYPE(num, VAL_T_NUMBER, 1);
+    CHECK_ARG_TYPE(num, IS_NUMBER_FUNC, "number", 1);
     Value internalObjVal;
     ASSERT(tableGet(&selfObj->hiddenFields, OBJ_VAL(copyString("ary", 3)), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));

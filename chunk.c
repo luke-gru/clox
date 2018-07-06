@@ -29,10 +29,10 @@ void freeIseq(Iseq *seq) {
     int idx = 0;
     while (in) {
         Insn *next = in->next;
-        memset(in, 0, sizeof(*in));
         // TODO: there's a memory corruption error here if I try
         // to free the memory for some reason. Need to investigate.
         /*free(in);*/
+        memset(in, 0, sizeof(*in));
         in = next;
         idx++;
     }
