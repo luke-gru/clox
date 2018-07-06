@@ -134,7 +134,6 @@ NORETURN void repl(void) {
             numLines = 0;
             _resetScanner();
             fprintf(stderr, "%s", prompt);
-            free(line);
             line = NULL;
             continue;
         }

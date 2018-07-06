@@ -6,8 +6,13 @@
 
 #define CHECK_ARGS(func, min, max, actual) do {\
     if (!runtimeCheckArgs(min, max, actual)) {\
-        throwArgErrorFmt("Error in %s, expected %d to %d args, got %d",\
-            func, min, max, actual);\
+        if (min == max) {\
+            throwArgErrorFmt("Error in %s, expected %d arg%s, got %d",\
+                func, min, max == 1 ? "" : "s", actual);\
+        } else {\
+            throwArgErrorFmt("Error in %s, expected %d to %d args, got %d",\
+                func, min, max, actual); \
+        }\
         return NIL_VAL;\
     }\
     } while (0)
