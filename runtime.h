@@ -29,18 +29,35 @@ Value lxEval(int argCount, Value *args);
 
 bool runtimeCheckArgs(int min, int max, int actual);
 
+// class Object
+Value lxObjectGetClass(int argCount, Value *args);
+
+// class Module
+Value lxModuleInit(int argCount, Value *args);
+
+// class Class
+Value lxClassInit(int argCount, Value *args);
+Value lxClassInclude(int argCount, Value *args);
+Value lxClassGetSuperclass(int argCount, Value *args);
+//Value lxClassAncestors(int argCount, Value *args);
+
+// class Array
 Value lxArrayInit(int argCount, Value *args);
 Value lxArrayPush(int argCount, Value *args);
 Value lxArrayToString(int argCount, Value *args);
 Value lxArrayIndexGet(int argCount, Value *args);
 Value lxArrayIndexSet(int argCount, Value *args);
 
+// class Map
 Value lxMapInit(int argCount, Value *args);
 Value lxMapIndexGet(int argCount, Value *args);
 Value lxMapIndexSet(int argCount, Value *args);
 Value lxMapKeys(int argCount, Value *args);
 Value lxMapValues(int argCount, Value *args);
 Value lxMapToString(int argCount, Value *args);
+
+// class File
+Value lxFileReadStatic(int argCount, Value *args);
 
 Value lxErrInit(int argCount, Value *args);
 #endif

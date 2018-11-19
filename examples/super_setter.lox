@@ -13,3 +13,7 @@ class B < A {
 
 var b = B();
 b.color = "red";
+
+__END__
+-- expect: --
+B color set: red

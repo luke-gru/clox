@@ -83,8 +83,6 @@ const char *opName(OpCode code) {
         return "OP_GETTER";
     case OP_SETTER:
         return "OP_SETTER";
-    case OP_CREATE_ARRAY:
-        return "OP_CREATE_ARRAY";
     case OP_PRINT:
         return "OP_PRINT";
     case OP_TRUE:
@@ -109,6 +107,8 @@ const char *opName(OpCode code) {
         return "OP_LOOP";
     case OP_CLASS:
         return "OP_CLASS";
+    case OP_MODULE:
+        return "OP_MODULE";
     case OP_SUBCLASS:
         return "OP_SUBCLASS";
     case OP_IN:
@@ -382,6 +382,7 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_GET_GLOBAL:
         case OP_SET_GLOBAL:
         case OP_CLASS:
+        case OP_MODULE:
         case OP_SUBCLASS:
         case OP_METHOD:
         case OP_CLASS_METHOD:
@@ -430,7 +431,6 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_POP:
         case OP_LEAVE:
         case OP_THROW:
-        case OP_CREATE_ARRAY:
         case OP_INDEX_GET:
         case OP_INDEX_SET:
         case OP_CLOSE_UPVALUE:
@@ -455,6 +455,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_GET_GLOBAL:
         case OP_SET_GLOBAL:
         case OP_CLASS:
+        case OP_MODULE:
         case OP_SUBCLASS:
         case OP_METHOD:
         case OP_CLASS_METHOD:
@@ -503,7 +504,6 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_POP:
         case OP_LEAVE:
         case OP_THROW:
-        case OP_CREATE_ARRAY:
         case OP_INDEX_GET:
         case OP_INDEX_SET:
         case OP_CLOSE_UPVALUE:

@@ -15,3 +15,12 @@ var c = "global c";
 print a;
 print b;
 print c;
+
+__END__
+-- expect: --
+inner a
+outer b
+global c
+global a
+global b
+global c

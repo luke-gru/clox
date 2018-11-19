@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <string.h>
 #include "runtime.h"
 #include "object.h"
 #include "value.h"
@@ -17,17 +19,44 @@ const char pathSeparator =
                             '/';
 #endif
 
-// ex: CHECK_ARG_TYPE(value, IS_BOOL_FUNC, "bool", 1);
-#define CHECK_ARG_TYPE(value, typechk_p, typename, argnum) check_arg_type(value, typechk_p, typename, argnum)
+// ex: CHECK_ARG_BUILTIN_TYPE(value, IS_BOOL_FUNC, "bool", 1);
+#define CHECK_ARG_BUILTIN_TYPE(value, typechk_p, typename, argnum) check_builtin_arg_type(value, typechk_p, typename, argnum)
+#define CHECK_ARG_IS_INSTANCE_OF(value, klass, argnum) check_arg_is_instance_of(value, klass, argnum)
+#define CHECK_ARG_IS_A(value, klass, argnum) check_arg_is_a(value, klass, argnum)
 
-static void check_arg_type(Value arg, value_type_p typechk_p, const char *typeExpect, int argnum) {
+static void check_builtin_arg_type(Value arg, value_type_p typechk_p, const char *typeExpect, int argnum) {
     if (!typechk_p(arg)) {
         const char *typeActual = typeOfVal(arg);
         throwArgErrorFmt("Expected argument %d to be a %s, got: %s", argnum, typeExpect, typeActual);
     }
 }
+static void check_arg_is_instance_of(Value arg, ObjClass *klass, int argnum) {
+    const char *typeExpect = klass->name->chars;
+    if (!is_value_instance_of_p(arg, klass)) {
+        const char *typeActual;
+        if (IS_INSTANCE(arg)) {
+            typeActual = AS_INSTANCE(arg)->klass->name->chars;
+        } else {
+            typeActual = typeOfVal(arg);
+        }
+        throwArgErrorFmt("Expected argument %d to be of exact class %s, got: %s", argnum, typeExpect, typeActual);
+    }
+}
+static void check_arg_is_a(Value arg, ObjClass *klass, int argnum) {
+    const char *typeExpect = klass->name->chars;
+    if (!is_value_a_p(arg, klass)) {
+        const char *typeActual;
+        if (IS_INSTANCE(arg)) {
+            typeActual = AS_INSTANCE(arg)->klass->name->chars;
+        } else {
+            typeActual = typeOfVal(arg);
+        }
+        throwArgErrorFmt("Expected argument %d to be of type %s, got: %s", argnum, typeExpect, typeActual);
+    }
+}
 
-static bool fileExists(char *fname) {
+// Does this file exist and is it readable?
+static bool fileReadable(char *fname) {
     struct stat buffer;
     return (stat(fname, &buffer) == 0);
 }
@@ -52,7 +81,7 @@ Value lxDebugger(int argCount, Value *args) {
 Value lxEval(int argCount, Value *args) {
     CHECK_ARGS("eval", 1, 1, argCount);
     Value src = *args;
-    CHECK_ARG_TYPE(src, IS_STRING_FUNC, "string", 1);
+    CHECK_ARG_BUILTIN_TYPE(src, IS_STRING_FUNC, "string", 1);
     char *csrc = AS_CSTRING(src);
     if (strlen(csrc) == 0) {
         return NIL_VAL;
@@ -84,11 +113,11 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
                     continue;
                 }
             }
-            if (dir[strlen(dir)-1] != pathSeparator) {
+            if (dir[strlen(dir)-1] != pathSeparator) { // add trailing '/'
                 strncat(pathbuf, &pathSeparator, 1);
             }
             strcat(pathbuf, cfile);
-            if (!fileExists(pathbuf)) {
+            if (!fileReadable(pathbuf)) {
                 continue;
             }
             fileFound = true;
@@ -122,14 +151,14 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
 Value lxRequireScript(int argCount, Value *args) {
     CHECK_ARGS("requireScript", 1, 1, argCount);
     Value fname = *args;
-    CHECK_ARG_TYPE(fname, IS_STRING_FUNC, "string", 1);
+    CHECK_ARG_BUILTIN_TYPE(fname, IS_STRING_FUNC, "string", 1);
     return loadScriptHelper(fname, "requireScript", true);
 }
 
 Value lxLoadScript(int argCount, Value *args) {
     CHECK_ARGS("loadScript", 1, 1, argCount);
     Value fname = *args;
-    CHECK_ARG_TYPE(fname, IS_STRING_FUNC, "string", 1);
+    CHECK_ARG_BUILTIN_TYPE(fname, IS_STRING_FUNC, "string", 1);
     return loadScriptHelper(fname, "loadScript", false);
 }
 
@@ -153,6 +182,78 @@ static void freeInternalAry(Obj *internalObj) {
     ASSERT(valAry);
     freeValueArray(valAry);
     FREE(ValueArray, valAry); // release the actual memory
+}
+
+// var o = Object(); print o._class;
+Value lxObjectGetClass(int argCount, Value *args) {
+    Value self = *args;
+    ObjClass *klass = AS_INSTANCE(self)->klass;
+    if (klass) {
+        return OBJ_VAL(klass);
+    } else {
+        return NIL_VAL;
+    }
+}
+
+// var m = Module("MyMod");
+Value lxModuleInit(int argCount, Value *args) {
+    // TODO: add to module map, and make sure module doesn't already exist, maybe
+    Value self = *args;
+    CHECK_ARGS("Module#init", 1, 2, argCount);
+    if (argCount == 1) { return self; }
+    Value name = args[1];
+    CHECK_ARG_BUILTIN_TYPE(name, IS_STRING_FUNC, "string", 1);
+    ObjModule *mod = AS_MODULE(self);
+    mod->name = AS_STRING(name);
+    return self;
+}
+
+// var c = Class("MyClass", Object);
+Value lxClassInit(int argCount, Value *args) {
+    Value self = *args;
+    CHECK_ARGS("Class#init", 1, 3, argCount);
+    if (argCount == 1) { return self; }
+    Value arg1 = args[1];
+    ObjString *name = NULL;
+    ObjClass *superClass = NULL;
+    if (IS_STRING(arg1)) {
+        name = AS_STRING(arg1);
+    } else if (IS_CLASS(arg1)) {
+        superClass = AS_CLASS(arg1);
+    } else {
+        throwArgErrorFmt("Expected argument 1 to be String or Class, got: %s", typeOfVal(arg1));
+    }
+    if (argCount == 3 && !superClass) {
+        CHECK_ARG_IS_INSTANCE_OF(args[2], lxClassClass, 2);
+        superClass = AS_CLASS(args[2]);
+    }
+    ObjClass *klass = AS_CLASS(self);
+    klass->name = name;
+    klass->superclass = superClass;
+    return self;
+}
+
+// ex: Object.include(Mod)
+Value lxClassInclude(int argCount, Value *args) {
+    CHECK_ARGS("Class#include", 2, 2, argCount);
+    Value self = args[0];
+    ObjClass *klass = AS_CLASS(self);
+    Value modVal = args[1];
+    CHECK_ARG_BUILTIN_TYPE(modVal, IS_MODULE_FUNC, "module", 1);
+    ObjModule *mod = AS_MODULE(modVal);
+    vec_push(&klass->v_includedMods, mod);
+    return modVal;
+}
+
+// ex: Object._superClass
+Value lxClassGetSuperclass(int argCount, Value *args) {
+    Value self = *args;
+    ObjClass *klass = AS_CLASS(self);
+    if (klass->superclass) {
+        return OBJ_VAL(klass->superclass);
+    } else {
+        return NIL_VAL;
+    }
 }
 
 // var a = Array();
@@ -216,7 +317,7 @@ Value lxArrayIndexGet(int argCount, Value *args) {
     Value self = args[0];
     ASSERT(IS_AN_ARRAY(self));
     Value num = args[1];
-    CHECK_ARG_TYPE(num, IS_NUMBER_FUNC, "number", 1);
+    CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     int idx = (int)AS_NUMBER(num);
     if (idx < 0) {
@@ -238,14 +339,14 @@ Value lxArrayIndexSet(int argCount, Value *args) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     Value num = args[1];
     Value rval = args[2];
-    CHECK_ARG_TYPE(num, IS_NUMBER_FUNC, "number", 1);
+    CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
     Value internalObjVal;
     ASSERT(tableGet(&selfObj->hiddenFields, OBJ_VAL(copyString("ary", 3)), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     int idx = (int)AS_NUMBER(num);
     if (idx < 0) {
-        // FIXME: throw error
+        // FIXME: throw error, or allow negative indices
         return NIL_VAL;
     }
 
@@ -257,9 +358,6 @@ Value lxArrayIndexSet(int argCount, Value *args) {
     }
     return rval;
 }
-
-// TODO
-#define CHECK_ARG_OBJ_TYPE(...)
 
 static void markInternalMap(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
@@ -298,14 +396,14 @@ Value lxMapInit(int argCount, Value *args) {
 
     if (argCount == 2) {
         Value ary = args[1];
-        CHECK_ARG_OBJ_TYPE(ary, lxAryClass, 1);
+        CHECK_ARG_IS_INSTANCE_OF(ary, lxAryClass, 1);
         ValueArray *aryInt = ARRAY_GETHIDDEN(ary);
         for (int i = 0; i < aryInt->count; i++) {
             Value el = aryInt->values[i];
             // FIXME: throw error
             ASSERT(IS_AN_ARRAY(el));
             if (ARRAY_SIZE(el) != 2) {
-                fprintf(stderr, "Wrong array size given, expected 2");
+                fprintf(stderr, "Wrong array size given, expected 2\n");
                 ASSERT(0);
             }
             Value mapKey = ARRAY_GET(el, 0);
@@ -418,7 +516,35 @@ Value lxErrInit(int argCount, Value *args) {
     return self;
 }
 
+static char fileReadBuf[4096];
+
+Value lxFileReadStatic(int argCount, Value *args) {
+    CHECK_ARGS("File.read", 2, 2, argCount);
+    Value fname = args[1];
+    CHECK_ARG_BUILTIN_TYPE(fname, IS_STRING_FUNC, "string", 1);
+    ObjString *fnameStr = AS_STRING(fname);
+    if (!fileReadable(fnameStr->chars)) {
+        if (errno == EACCES) {
+            throwArgErrorFmt("File '%s' not readable", fnameStr->chars);
+        } else {
+            throwArgErrorFmt("File '%s' not found", fnameStr->chars);
+        }
+        return NIL_VAL;
+    }
+    FILE *f = fopen(fnameStr->chars, "r");
+    if (!f) {
+        throwArgErrorFmt("Error reading File '%s': %s", fnameStr->chars, strerror(errno));
+        return NIL_VAL;
+    }
+    ObjString *ret = newString("", 0);
+    size_t nread;
+    while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
+        pushCString(ret, fileReadBuf, nread);
+    }
+    fclose(f);
+    return OBJ_VAL(ret);
+}
+
 bool runtimeCheckArgs(int min, int max, int actual) {
     return min <= actual && (max >= actual || max == -1);
 }
-

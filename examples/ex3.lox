@@ -5,3 +5,7 @@ b = 5;
 var c;
 c = (b = a);
 print a*b+c;
+
+__END__
+-- expect: --
+12.00

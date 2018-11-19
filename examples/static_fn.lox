@@ -15,3 +15,10 @@ print Math.me();
 Math.PI = 3.14;
 print Math.PI;
 print Math.pi();
+
+__END__
+-- expect: --
+9.00
+<class Math>
+3.14
+3.14

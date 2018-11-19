@@ -3,3 +3,7 @@ var a = 1;
   var a = a + 2;
   print a;
 }
+
+__END__
+-- expect: --
+3.00

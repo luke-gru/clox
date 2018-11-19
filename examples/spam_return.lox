@@ -2,3 +2,8 @@ fun ret() {
   return "HI";
   return "OMG";
 }
+print ret();
+
+__END__
+-- expect: --
+HI

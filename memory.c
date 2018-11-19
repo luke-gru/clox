@@ -273,8 +273,21 @@ void freeObject(Obj *obj, bool unlink) {
             freeTable(&klass->methods);
             freeTable(&klass->getters);
             freeTable(&klass->setters);
+            vec_deinit(&klass->v_includedMods);
             GC_TRACE_DEBUG("Freeing class: p=%p", obj);
             FREE(ObjClass, obj);
+            break;
+        }
+        case OBJ_T_MODULE: {
+            ObjModule *mod = (ObjModule*)obj;
+            GC_TRACE_DEBUG("Freeing class methods/getters/setters tables");
+            freeTable(&mod->fields);
+            freeTable(&mod->hiddenFields);
+            freeTable(&mod->methods);
+            freeTable(&mod->getters);
+            freeTable(&mod->setters);
+            GC_TRACE_DEBUG("Freeing module: p=%p", obj);
+            FREE(ObjModule, obj);
             break;
         }
         case OBJ_T_FUNCTION: {

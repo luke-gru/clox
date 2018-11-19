@@ -302,9 +302,26 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     initTable(&klass->methods);
     initTable(&klass->getters);
     initTable(&klass->setters);
+    vec_init(&klass->v_includedMods);
     klass->name = name;
     klass->superclass = superclass;
     return klass;
+}
+
+ObjModule *newModule(ObjString *name) {
+    ASSERT(name);
+    ObjModule *mod = ALLOCATE_OBJ(
+        ObjModule, OBJ_T_MODULE
+    );
+    mod->klass = lxModuleClass;
+    mod->singletonKlass = NULL;
+    initTable(&mod->fields);
+    initTable(&mod->hiddenFields);
+    initTable(&mod->methods);
+    initTable(&mod->getters);
+    initTable(&mod->setters);
+    mod->name = name;
+    return mod;
 }
 
 ObjInstance *newInstance(ObjClass *klass) {
@@ -356,8 +373,15 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
         klass = obj->singletonKlass;
     }
     Value method;
+    Value nameVal = OBJ_VAL(name);
     while (klass) {
-        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
+        ObjModule *mod = NULL; int i = 0;
+        vec_foreach_rev(&klass->v_includedMods, mod, i) {
+            if (tableGet(&mod->methods, nameVal, &method)) {
+                return AS_OBJ(method);
+            }
+        }
+        if (tableGet(&klass->methods, nameVal, &method)) {
             return AS_OBJ(method);
         }
         klass = klass->superclass;
@@ -365,9 +389,18 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     return NULL;
 }
 
-Obj *classFindClassMethod(ObjClass *obj, ObjString *name) {
+Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
     ObjClass *klass = classSingletonClass(obj);
     Value method;
+    // look up in singleton class hierarchy
+    while (klass) {
+        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
+            return AS_OBJ(method);
+        }
+        klass = klass->superclass;
+    }
+    // not found, look up in class `Class` instance methods, to Object
+    klass = lxClassClass;
     while (klass) {
         if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
@@ -519,6 +552,17 @@ ObjClass *classSingletonClass(ObjClass *klass) {
     return meta;
 }
 
+ObjClass *moduleSingletonClass(ObjModule *mod) {
+    if (mod->singletonKlass) {
+        return mod->singletonKlass;
+    }
+    ObjString *name = dupString(mod->name);
+    pushCString(name, " (meta)", 7);
+    ObjClass *meta = newClass(name, lxClassClass);
+    mod->singletonKlass = meta;
+    return meta;
+}
+
 ObjClass *instanceSingletonClass(ObjInstance *inst) {
     if (inst->singletonKlass) {
         return inst->singletonKlass;
@@ -560,6 +604,12 @@ bool is_obj_class_p(Obj *obj) {
 bool is_value_class_p(Value val) {
     return IS_CLASS(val);
 }
+bool is_obj_module_p(Obj *obj) {
+    return obj->type == OBJ_T_MODULE;
+}
+bool is_value_module_p(Value val) {
+    return IS_MODULE(val);
+}
 bool is_obj_instance_p(Obj *obj) {
     return obj->type == OBJ_T_INSTANCE;
 }
@@ -583,4 +633,17 @@ bool is_obj_internal_p(Obj *obj) {
 }
 bool is_value_internal_p(Value val) {
     return IS_INTERNAL(val);
+}
+
+bool is_obj_instance_of_p(Obj *obj, ObjClass *klass) {
+    return obj->type == OBJ_T_INSTANCE && ((ObjInstance*)obj)->klass == klass;
+}
+bool is_value_instance_of_p(Value val, ObjClass *klass) {
+    return IS_INSTANCE(val) && AS_INSTANCE(val)->klass == klass;
+}
+bool is_obj_a_p(Obj* obj, ObjClass *klass) {
+    return obj->type == OBJ_T_INSTANCE && instanceIsA(((ObjInstance*)obj), klass);
+}
+bool is_value_a_p(Value val, ObjClass *klass) {
+    return IS_INSTANCE(val) && instanceIsA(AS_INSTANCE(val), klass);
 }

@@ -6,3 +6,10 @@ print a;
 print false and true;
 print false or true;
 
+__END__
+-- expect: --
+1.00
+nil
+10.00
+false
+true

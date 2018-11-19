@@ -4,3 +4,7 @@ fun scope(a) {
 }
 
 scope("outer");
+
+__END__
+-- expect: --
+local

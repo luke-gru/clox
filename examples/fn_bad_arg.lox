@@ -1,1 +1,4 @@
 requireScript(1);
+
+__END__
+-- expect: ArgumentError --

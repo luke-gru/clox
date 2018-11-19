@@ -15,3 +15,8 @@ var circle = Circle(4);
 print circle.area; // Prints roughly "50.2655".
 circle.color = "red";
 print circle.mycolor;
+
+__END__
+-- expect: --
+50.2655
+color: red

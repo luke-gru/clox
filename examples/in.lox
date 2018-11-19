@@ -6,3 +6,10 @@ in(o) {
 
 print o.choo;
 print o.choo();
+
+__END__
+-- expect: --
+<class <instance Object> (meta)>
+<method #choo>
+<instance Object>
+choochoo

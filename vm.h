@@ -16,7 +16,7 @@ typedef struct CallFrame {
     ObjClosure *closure; // if call frame is from compiled code, this is set
     uint8_t *ip;
     int start; // starting instruction offset in parent (for throw/catch)
-    Value *slots;
+    Value *slots; // local variables and function arguments
 
     // Native (C) function fields
     bool isCCall; // native call, callframe created for C (native) function call
@@ -53,6 +53,7 @@ typedef struct VM {
     ObjString *fileString;
     ObjString *dirString;
     ObjString *printBuf;
+    bool printToStdout;
 
     // GC fields
     size_t bytesAllocated;
@@ -98,7 +99,7 @@ void push(Value value); // push onto operand stack
 Value pop(); // pop top of operand stack
 void runtimeError(const char *format, ...);
 
-void setPrintBuf(ObjString *buf); // `print` will output given strings to this buffer, if given
+void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given strings to this buffer, if given
 void unsetPrintBuf(void);
 
 NORETURN void repl(void);

@@ -9,3 +9,11 @@ if (a) {
 } else {
   print b;
 }
+
+__END__
+-- expect: --
+nil
+string
+string
+string
+string

@@ -445,7 +445,7 @@ static int test_native_typeof() {
                 "print typeof(MyPet);\n";
                 /*"print typeof([])\n""*/
     ObjString *buf = newString("", 0);
-    setPrintBuf(buf);
+    setPrintBuf(buf, false);
     interp(src, true);
     char *output = buf->chars;
     ASSERT(buf->chars);
@@ -485,7 +485,7 @@ cleanup:
 static int test_array_literal() {
     char *src = "var a = [1,2,3]; print a.toString(); a;";
     ObjString *buf = newString("", 0);
-    setPrintBuf(buf);
+    setPrintBuf(buf, false);
     interp(src, true);
     Value *val = getLastValue();
     ASSERT(val);
@@ -519,7 +519,7 @@ static int test_array_get_set() {
                 "a[0] = 400;\n"
                 "print a[0]; print a.toString();";
     ObjString *buf = newString("", 0);
-    setPrintBuf(buf);
+    setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
     const char *expected = "400.00\n"
@@ -535,7 +535,7 @@ static int test_print_nested_array(void) {
     char *src = "var a = [[4],1,2,3];\n"
                 "print a; print a.toString();";
     ObjString *buf = newString("", 0);
-    setPrintBuf(buf);
+    setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
     const char *expected = "[[4.00],1.00,2.00,3.00]\n"
@@ -552,7 +552,7 @@ static int test_print_map(void) {
     char *src = "var m = Map();\n"
                 "print m;";
     ObjString *buf = newString("", 0);
-    setPrintBuf(buf);
+    setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
     const char *expected = "{}\n";
@@ -578,7 +578,7 @@ static int test_closures_global_scope(void) {
                 "incr(); incr();\n"
                 "print i + 1;";
     ObjString *buf = newString("", 0);
-    setPrintBuf(buf);
+    setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "0.00\n1.00\n2.00\n3.00\n";
     T_ASSERT_STREQ(expected, buf->chars);
@@ -595,7 +595,7 @@ static int test_closures_env_saved(void) {
                 "print add10(20);\n"
                 "print add10(40);\n";
     ObjString *buf = newString("", 0);
-    setPrintBuf(buf);
+    setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "30.00\n50.00\n";
     T_ASSERT_STREQ(expected, buf->chars);
@@ -614,7 +614,7 @@ static int test_catch_thrown_errors_from_c_code(void) {
                 "  print \"caught\";\n"
                 "}";
     ObjString *buf = newString("", 0);
-    setPrintBuf(buf);
+    setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "caught\n";
     T_ASSERT_STREQ(expected, buf->chars);
@@ -633,7 +633,7 @@ static int test_map_keys_work_as_expected(void) {
                 "print m[10];\n"
                 "print m[\"10\"];\n";
     ObjString *buf = newString("", 0);
-    setPrintBuf(buf);
+    setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "9.00\n6.00\n";
     T_ASSERT_STREQ(expected, buf->chars);

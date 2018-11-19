@@ -1,2 +1,5 @@
 var ms = clock();
 print ms;
+
+__END__
+-- noexpect: --

@@ -25,3 +25,11 @@ try {
 }
 
 throw "error";
+
+__END__
+-- expect: RuntimeError --
+-- expect: --
+throwing
+hi
+caught hi
+caught Error: msg: uh oh

@@ -142,7 +142,7 @@ static Node *unary(void);
 static Node *call(void);
 static Node *primary(void);
 static Node *blockStmts(void);
-static Node *classBody(void);
+static Node *classOrModuleBody(const char *name);
 static Node *statement(void);
 static Node *printStatement(void);
 static Node *blockStatements(void);
@@ -220,15 +220,24 @@ static Node *declaration(void) {
         }
 
         consume(TOKEN_LEFT_BRACE, "Expected '{' after class name");
-        Node *body = classBody(); // block node
+        Node *body = classOrModuleBody("classBody"); // block node
         nodeAddChild(classNode, body);
         TRACE_END("declaration");
         return classNode;
     }
     if (match(TOKEN_MODULE)) {
-        // TODO
+        consume(TOKEN_IDENTIFIER, "Expected module name (identifier) after keyword 'module'");
+        Token nameTok = current->previous;
+        node_type_t modType = {
+            .type = NODE_STMT,
+            .kind = MODULE_STMT,
+        };
+        Node *modNode = createNode(modType, nameTok, NULL);
+        consume(TOKEN_LEFT_BRACE, "Expected '{' after module name");
+        Node *body = classOrModuleBody("moduleBody"); // block node
+        nodeAddChild(modNode, body);
         TRACE_END("declaration");
-        return NULL;
+        return modNode;
     }
     Node *ret = statement();
     TRACE_END("declaration");
@@ -466,7 +475,7 @@ static Node *statement() {
         nodeAddChild(inNode, expr);
         consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'in' expression");
         consume(TOKEN_LEFT_BRACE, "Expected '{' after 'in' expression");
-        Node *body = classBody();
+        Node *body = classOrModuleBody("inBody");
         nodeAddChild(inNode, body);
         TRACE_END("statement");
         return inNode;
@@ -524,8 +533,8 @@ static Node *expressionStatement() {
 }
 
 // '{' already parsed. Continue parsing up to and including closing '}'
-static Node *classBody() {
-    TRACE_START("classBody");
+static Node *classOrModuleBody(const char *debugName) {
+    TRACE_START(debugName);
     Token lbraceTok = current->previous;
     node_type_t nType = {
         .type = NODE_STMT,
@@ -549,14 +558,14 @@ static Node *classBody() {
         }
         nodeAddChild(stmtListNode, decl);
     }
-    consume(TOKEN_RIGHT_BRACE, "Expected '}' to end class body");
+    consume(TOKEN_RIGHT_BRACE, "Expected '}' to end class/module body");
     node_type_t blockType = {
         .type = NODE_STMT,
         .kind = BLOCK_STMT,
     };
     Node *block = createNode(blockType, lbraceTok, NULL);
     nodeAddChild(block, stmtListNode);
-    TRACE_END("classBody");
+    TRACE_END(debugName);
     return block;
 }
 

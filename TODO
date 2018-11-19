@@ -1,7 +1,9 @@
 TODO:
-* More language features to be close to my version of jlox []
+
+More language features to be close to my version of jlox
+
 * Saving/loading bytecode to disk []
-* Debugger support []
+* Debugger support [IN PROGRESS]
 * bytecode optimization pass [] (constant folding, jump consolidation, etc.)
 * simple JIT, maybe? []
 * different GC strategies, maybe support copying GC []
@@ -11,13 +13,12 @@ instance []
 * Add benchmark library/internals so I can benchmark/profile performance of the
 interpreter []
 * Make it so that global variables aren't accessible everywhere, or that
-the syntax is different for them, like in $ruby.
-* Allow operator overloading with opAdd, etc.
+the syntax is different for them, like in $ruby. []
+* Allow operator overloading with opAdd, etc. []
 
 * optimize array and string method lookup with an inline cache in the
-bytecode, and benchmark the lookup results
+bytecode, and benchmark the lookup results []
 
-* Get jump patching working better, and consolidate jumps []
 * Add eval() [IN PROGRESS, NEEDS WORK]
 * Add string interpolation [DONE], needs better error handling still, and
 maybe recursive interpolations? This should work in theory with the way it's
@@ -26,9 +27,16 @@ implemented, but it probably needs a few changes.
 * Add `foreach *el in item` syntax with iter() support
 * Add system() for running OS commands
 * Make error reporting and throwing/catching errors work across
-execution contexts []
-* Add default arguments
-* Add keyword arguments
-* Add splat arguments/parameters
+execution contexts (like eval) []
+* Add default arguments []
+* Add keyword arguments []
+* Add splat arguments/parameters []
+* Add File class [IN PROGRESS]
+* Allow arbitrary statements in classes []
+* Add modules like in jlox [PARTIAL]
+* Add PUTSELF instruction instead of using `this` as a sort of local variable
+* Add Object#dup, and Class#ancestors
+* Add '_class', '_superClass' properties to instance and class objects
 
 BUGS:
+super() bug in examples/super.lox

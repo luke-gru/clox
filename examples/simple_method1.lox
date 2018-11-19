@@ -3,3 +3,8 @@ class Train {
 }
 var t = Train();
 t.choo().choo();
+
+__END__
+-- expect: --
+choo
+choo

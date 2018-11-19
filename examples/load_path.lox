@@ -4,3 +4,15 @@ print requireScript("anon_fun.lox");
 print requireScript("anon_fun.lox");
 print __DIR__;
 print __FILE__;
+
+__END__
+-- expect: --
+[]
+File 'anon_fun.lox' not found (loadScript)
+false
+File 'anon_fun.lox' not found (requireScript)
+false
+File 'anon_fun.lox' not found (requireScript)
+false
+/home/luke/workspace/clox/examples
+/home/luke/workspace/clox/examples/load_path.lox

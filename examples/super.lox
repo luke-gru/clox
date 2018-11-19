@@ -44,3 +44,10 @@ class B < A {
 class C < B {}
 
 C().test(); // "A method"
+
+__END__
+-- expect: --
+red
+<instance Snake>
+my color: red
+A method

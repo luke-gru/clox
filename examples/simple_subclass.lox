@@ -4,4 +4,8 @@ class Train < Object {
   }
 }
 var t = Train("Red");
-t;
+print t;
+
+__END__
+-- expect: --
+<instance Train>

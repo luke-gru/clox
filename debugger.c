@@ -58,6 +58,7 @@ bool shouldEnterDebugger(Debugger *dbg, char *fname, int line, int lastLine,
 }
 
 const char *debuggerUsage[] = {
+    "help (h)           Show this menu",
     "continue (c)       Continue running the program",
     "setbr [FILE,]LINE  Set a breakpoint on a line",
     "delbr [FILE,]LINE  Delete a specific breakpoint",
@@ -108,7 +109,7 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
     char *idx = NULL;
     while (fgets(buf, LINE_SZ, stdin)) {
         buf[strlen(buf)-1] = '\0'; // strip newline
-        if (strcmp(buf, "help") == 0) {
+        if (strncmp(buf, "help", 4) == 0 || strncmp(buf, "h", 1) == 0) {
             const char **usageLine = debuggerUsage;
             for (; *usageLine; usageLine++) {
                 fprintf(stdout, "%s\n", *usageLine);
@@ -186,6 +187,7 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
             } else {
                 src = idx+2;
             }
+            fprintf(stderr, "Executing '%s'\n", src);
             Value val = VMEval(src, "(eval)", 1);
             printValue(stdout, val, true);
             fprintf(stdout, "\n");

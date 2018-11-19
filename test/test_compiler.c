@@ -224,18 +224,18 @@ int test_pop_assign_if_parent_stmt(void) {
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
     /*fprintf(stderr, "\n'%s'\n", cstring);*/
-    char *expected = "0000\t" "OP_CONSTANT\t"	"0001\t"	"'0.00'\n"
-                     "0002\t"	"OP_DEFINE_GLOBAL\t"	"0000\t"	"'i'\n"
-                     "0004\t"	"OP_GET_GLOBAL\t"	"0000\t"	"'i'\n"
+    char *expected = "0000\t" "OP_CONSTANT\t"	"0000\t"	"'0.00'\n"
+                     "0002\t"	"OP_DEFINE_GLOBAL\t"	"0001\t"	"'i'\n"
+                     "0004\t"	"OP_GET_GLOBAL\t"	"0001\t"	"'i'\n"
                      "0006\t"	"OP_CONSTANT\t"	"0002\t"	"'300.00'\n"
                      "0008\t"	"OP_LESS\n"
                      "0009\t"	"OP_JUMP_IF_FALSE\t"	"0014\t"	"(addr=0024)\n"
-                     "0011\t"	"OP_GET_GLOBAL\t"	"0000\t"	"'i'\n"
+                     "0011\t"	"OP_GET_GLOBAL\t"	"0001\t"	"'i'\n"
                      "0013\t"	"OP_PRINT\n"
-                     "0014\t"	"OP_GET_GLOBAL\t"	"0000\t"	"'i'\n"
+                     "0014\t"	"OP_GET_GLOBAL\t"	"0001\t"	"'i'\n"
                      "0016\t"	"OP_CONSTANT\t"	"0003\t"	"'1.00'\n"
                      "0018\t"	"OP_ADD\n"
-                     "0019\t"	"OP_SET_GLOBAL\t"	"0000\t"	"'i'\n"
+                     "0019\t"	"OP_SET_GLOBAL\t"	"0001\t"	"'i'\n"
                      "0021\t"	"OP_POP\n"
                      "0022\t"	"OP_LOOP\t"	  "  18\t"	"(addr=0004)\n"
                      "0024\t"	"OP_LEAVE\n";
@@ -278,8 +278,8 @@ int test_upvalues_in_functions(void) {
     ObjString *string = disassembleChunk(&chunk);
     char *cstring = string->chars;
     /*fprintf(stderr, "\n'%s'\n", cstring);*/
-    char *expected = "0000\t"	"OP_CONSTANT\t"       "0001\t"	"'1.00'\n"
-                     "0002\t"	"OP_DEFINE_GLOBAL\t"	"0000\t"	"'a'\n"
+    char *expected = "0000\t"	"OP_CONSTANT\t"       "0000\t"	"'1.00'\n"
+                     "0002\t"	"OP_DEFINE_GLOBAL\t"	"0001\t"	"'a'\n"
                      "0004\t"	"OP_CLOSURE\t"	      "0002\t"	"'<fun add>'\t"	"(upvals: 000)\n"
                      "0006\t"	"OP_SET_GLOBAL\t"	    "0003\t"	"'add'\n"
                      "0008\t"	"OP_LEAVE\n"

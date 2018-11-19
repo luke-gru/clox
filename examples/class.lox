@@ -38,3 +38,14 @@ class Cake {
 var chocCake = Cake("German chocolate");
 print chocCake.flavor;
 chocCake.taste(); // Prints "The German chocolate cake is delicious!".
+
+__END__
+-- expect: --
+<class Breakfast>
+<instance Breakfast>
+nil
+myprop
+Enjoy your breakfast, Luke.
+Crunch crunch crunch!
+German chocolate
+The German chocolate cake is delicious!

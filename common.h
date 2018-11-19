@@ -67,6 +67,7 @@ typedef enum {
 
     OP_CLASS, // class name is given as operand
     OP_SUBCLASS, // top of stack is superclass, operand is class name
+    OP_MODULE, // module name is given as operand
     OP_IN,
 
     OP_THROW,

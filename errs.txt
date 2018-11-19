@@ -1,0 +1,525 @@
+-- Running test_run_example_files --
+Opening file './examples/super.lox'
+Opening file './examples/super_setter.lox'
+Opening file './examples/simple_method1.lox'
+Opening file './examples/ex9.lox'
+Opening file './examples/class_inherit.lox'
+Opening file './examples/print_fn.lox'
+Opening file './examples/loop1.lox'
+Opening file './examples/fn_recursion.lox'
+Opening file './examples/ex4.lox'
+Opening file './examples/ex2.lox'
+Opening file './examples/ex6.lox'
+Opening file './examples/try_catch.lox'
+Tried to throw unthrowable value, must throw an instance
+[line 3] in throws()
+[line 7] in script
+Error during interpretation: (3)
+Opening file './examples/clock.lox'
+Opening file './examples/fib.lox'
+Opening file './examples/closure.lox'
+Opening file './examples/in.lox'
+Opening file './examples/fn_wrong_arity.lox'
+Uncaught error, class: ArgumentError
+Message: "Expected 2 arguments but got 3."
+Backtrace:
+fn_wrong_arity.lox:1 in <script>
+Error during interpretation: (3)
+Opening file './examples/ex3.lox'
+Opening file './examples/ex7.lox'
+Opening file './examples/fn_bad_arg.lox'
+Uncaught error, class: ArgumentError
+Message: "Expected argument 1 to be a string, got: number"
+Backtrace:
+fn_bad_arg.lox:1 in <requireScript (native)>
+fn_bad_arg.lox:1 in <script>
+Error during interpretation: (3)
+Opening file './examples/ex5.lox'
+Opening file './examples/anon_fun.lox'
+Opening file './examples/static_fn.lox'
+Opening file './examples/closure_vars.lox'
+Compiling file 'super.lox'...
+Running file 'super.lox'...
+red
+<instance Snake>
+my color: red
+A method
+Success
+Compiling file 'super_setter.lox'...
+Running file 'super_setter.lox'...
+B color set: red
+Success
+Compiling file 'simple_method1.lox'...
+Running file 'simple_method1.lox'...
+choo
+choo
+Success
+Compiling file 'ex9.lox'...
+Running file 'ex9.lox'...
+1
+2
+3
+4
+5
+6
+7
+Success
+Compiling file 'class_inherit.lox'...
+Running file 'class_inherit.lox'...
+Square (red)
+color: red
+Success
+Compiling file 'print_fn.lox'...
+Running file 'print_fn.lox'...
+<fun add>
+Success
+Compiling file 'loop1.lox'...
+Running file 'loop1.lox'...
+0
+[1.00,2.00,3.00]
+1
+[1.00,2.00,3.00]
+2
+[1.00,2.00,3.00]
+3
+[1.00,2.00,3.00]
+4
+[1.00,2.00,3.00]
+5
+[1.00,2.00,3.00]
+6
+[1.00,2.00,3.00]
+7
+[1.00,2.00,3.00]
+8
+[1.00,2.00,3.00]
+9
+[1.00,2.00,3.00]
+10
+[1.00,2.00,3.00]
+11
+[1.00,2.00,3.00]
+12
+[1.00,2.00,3.00]
+13
+[1.00,2.00,3.00]
+14
+[1.00,2.00,3.00]
+15
+[1.00,2.00,3.00]
+16
+[1.00,2.00,3.00]
+17
+[1.00,2.00,3.00]
+18
+[1.00,2.00,3.00]
+19
+[1.00,2.00,3.00]
+20
+[1.00,2.00,3.00]
+21
+[1.00,2.00,3.00]
+22
+[1.00,2.00,3.00]
+23
+[1.00,2.00,3.00]
+24
+[1.00,2.00,3.00]
+25
+[1.00,2.00,3.00]
+26
+[1.00,2.00,3.00]
+27
+[1.00,2.00,3.00]
+28
+[1.00,2.00,3.00]
+29
+[1.00,2.00,3.00]
+30
+[1.00,2.00,3.00]
+31
+[1.00,2.00,3.00]
+32
+[1.00,2.00,3.00]
+33
+[1.00,2.00,3.00]
+34
+[1.00,2.00,3.00]
+35
+[1.00,2.00,3.00]
+36
+[1.00,2.00,3.00]
+37
+[1.00,2.00,3.00]
+38
+[1.00,2.00,3.00]
+39
+[1.00,2.00,3.00]
+40
+[1.00,2.00,3.00]
+41
+[1.00,2.00,3.00]
+42
+[1.00,2.00,3.00]
+43
+[1.00,2.00,3.00]
+44
+[1.00,2.00,3.00]
+45
+[1.00,2.00,3.00]
+46
+[1.00,2.00,3.00]
+47
+[1.00,2.00,3.00]
+48
+[1.00,2.00,3.00]
+49
+[1.00,2.00,3.00]
+50
+[1.00,2.00,3.00]
+51
+[1.00,2.00,3.00]
+52
+[1.00,2.00,3.00]
+53
+[1.00,2.00,3.00]
+54
+[1.00,2.00,3.00]
+55
+[1.00,2.00,3.00]
+56
+[1.00,2.00,3.00]
+57
+[1.00,2.00,3.00]
+58
+[1.00,2.00,3.00]
+59
+[1.00,2.00,3.00]
+60
+[1.00,2.00,3.00]
+61
+[1.00,2.00,3.00]
+62
+[1.00,2.00,3.00]
+63
+[1.00,2.00,3.00]
+64
+[1.00,2.00,3.00]
+65
+[1.00,2.00,3.00]
+66
+[1.00,2.00,3.00]
+67
+[1.00,2.00,3.00]
+68
+[1.00,2.00,3.00]
+69
+[1.00,2.00,3.00]
+70
+[1.00,2.00,3.00]
+71
+[1.00,2.00,3.00]
+72
+[1.00,2.00,3.00]
+73
+[1.00,2.00,3.00]
+74
+[1.00,2.00,3.00]
+75
+[1.00,2.00,3.00]
+76
+[1.00,2.00,3.00]
+77
+[1.00,2.00,3.00]
+78
+[1.00,2.00,3.00]
+79
+[1.00,2.00,3.00]
+80
+[1.00,2.00,3.00]
+81
+[1.00,2.00,3.00]
+82
+[1.00,2.00,3.00]
+83
+[1.00,2.00,3.00]
+84
+[1.00,2.00,3.00]
+85
+[1.00,2.00,3.00]
+86
+[1.00,2.00,3.00]
+87
+[1.00,2.00,3.00]
+88
+[1.00,2.00,3.00]
+89
+[1.00,2.00,3.00]
+90
+[1.00,2.00,3.00]
+91
+[1.00,2.00,3.00]
+92
+[1.00,2.00,3.00]
+93
+[1.00,2.00,3.00]
+94
+[1.00,2.00,3.00]
+95
+[1.00,2.00,3.00]
+96
+[1.00,2.00,3.00]
+97
+[1.00,2.00,3.00]
+98
+[1.00,2.00,3.00]
+99
+[1.00,2.00,3.00]
+Success
+Compiling file 'fn_recursion.lox'...
+Running file 'fn_recursion.lox'...
+1
+2
+3
+Success
+Compiling file 'ex4.lox'...
+Running file 'ex4.lox'...
+inner a
+inner a
+global c
+global a
+global b
+global c
+Success
+Compiling file 'ex2.lox'...
+Running file 'ex2.lox'...
+3
+Success
+Compiling file 'ex6.lox'...
+Running file 'ex6.lox'...
+YAY1
+YAY2
+Success
+Compiling file 'try_catch.lox'...
+Running file 'try_catch.lox'...
+throwing
+Compiling file 'clock.lox'...
+Running file 'clock.lox'...
+0.00282
+Success
+Compiling file 'fib.lox'...
+Running file 'fib.lox'...
+0
+1
+1
+2
+3
+5
+8
+13
+21
+34
+55
+89
+144
+233
+377
+610
+987
+1597
+2584
+4181
+Success
+Compiling file 'closure.lox'...
+Running file 'closure.lox'...
+1
+2
+1
+2
+3
+Success
+Compiling file 'in.lox'...
+Running file 'in.lox'...
+<class <instance Object> (meta)>
+<method #choo>
+<instance Object>
+choochoo
+Success
+Compiling file 'fn_wrong_arity.lox'...
+Running file 'fn_wrong_arity.lox'...
+Compiling file 'ex3.lox'...
+Running file 'ex3.lox'...
+12
+Success
+Compiling file 'ex7.lox'...
+Running file 'ex7.lox'...
+nil
+string
+true
+string
+string
+Success
+Compiling file 'fn_bad_arg.lox'...
+Running file 'fn_bad_arg.lox'...
+Compiling file 'ex5.lox'...
+Running file 'ex5.lox'...
+3
+Success
+Compiling file 'anon_fun.lox'...
+Running file 'anon_fun.lox'...
+3
+callbacks:
+1
+2
+3
+called!
+Success
+Compiling file 'static_fn.lox'...
+Running file 'static_fn.lox'...
+9
+<class Math>
+3.14
+3.14
+Success
+Compiling file 'closure_vars.lox'...
+Running file 'closure_vars.lox'...
+global
+global
+Opening file './examples/ex8.lox'
+Opening file './examples/ex10.lox'
+Opening file './examples/ex1.lox'
+Opening file './examples/fun_param_shadow.lox'
+Opening file './examples/arrays.lox'
+Opening file './examples/class2.lox'
+Opening file './examples/catch.lox'
+Opening file './examples/class.lox'
+Opening file './examples/fn.lox'
+Opening file './examples/typeof.lox'
+Can't redeclare global variable 'Object'
+[line 5] in script
+Error during interpretation: (3)
+Opening file './examples/getters.lox'
+Opening file './examples/load_path.lox'
+File 'anon_fun.lox' not found (loadScript)
+File 'anon_fun.lox' not found (requireScript)
+File 'anon_fun.lox' not found (requireScript)
+Opening file './examples/simple_subclass.lox'
+Opening file './examples/spam_return.lox'
+Opening file './examples/point_closure.lox'
+[31mAssertion failed at test/test_examples.c:73 in test_run_example_files
+[0mblock
+Success
+Compiling file 'ex8.lox'...
+Running file 'ex8.lox'...
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+Success
+Compiling file 'ex10.lox'...
+Running file 'ex10.lox'...
+while test (1-7):
+1
+2
+3
+4
+5
+6
+7
+continue test: (1-7)
+1
+2
+3
+4
+5
+6
+7
+Success
+Compiling file 'ex1.lox'...
+Running file 'ex1.lox'...
+1
+nil
+10
+false
+true
+Success
+Compiling file 'fun_param_shadow.lox'...
+Running file 'fun_param_shadow.lox'...
+local
+Success
+Compiling file 'arrays.lox'...
+Running file 'arrays.lox'...
+[1.00,[2.00,[3.00,4.00]]]
+[1.00,[2.00,[3.00,4.00]]]
+Success
+Compiling file 'class2.lox'...
+Running file 'class2.lox'...
+<instance Foo>
+Success
+Compiling file 'catch.lox'...
+Running file 'catch.lox'...
+==CAUGHT==
+Expected 1 argument, got 4
+==/CAUGHT==
+Success
+Compiling file 'class.lox'...
+Running file 'class.lox'...
+<class Breakfast>
+<instance Breakfast>
+nil
+myprop
+Enjoy your breakfast, Luke.
+Crunch crunch crunch!
+German chocolate
+The German chocolate cake is delicious!
+Success
+Compiling file 'fn.lox'...
+Running file 'fn.lox'...
+11
+Hello, world
+Success
+Compiling file 'typeof.lox'...
+Running file 'typeof.lox'...
+number
+number
+string
+nil
+Compiling file 'getters.lox'...
+Running file 'getters.lox'...
+50.2655
+color: red
+Success
+Compiling file 'load_path.lox'...
+Running file 'load_path.lox'...
+[]
+false
+false
+false
+nil
+load_path.lox
+Success
+Compiling file 'simple_subclass.lox'...
+Running file 'simple_subclass.lox'...
+Success
+Compiling file 'spam_return.lox'...
+Running file 'spam_return.lox'...
+Success
+Compiling file 'point_closure.lox'...
+Running file 'point_closure.lox'...
+2
+unknown method y
+nil
+Success
+[32mAssertions passed: 35
+[31mAssertions failed: 1
+[32mTests passed:  0
+[33mTests skipped: 0
+[31mTests failed:  1
+[31m  ** Failed: test_run_example_files **
+[0m

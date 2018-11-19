@@ -2,9 +2,19 @@ print typeof(123.0);
 print typeof(123);
 print typeof("mystring");
 print typeof(nil);
-class Object { }
 print typeof(Object());
 print typeof(Object);
 fun func() { }
 print typeof(func);
 print typeof(typeof);
+
+__END__
+-- expect: --
+number
+number
+string
+nil
+instance
+class
+closure
+function

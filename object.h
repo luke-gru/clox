@@ -10,8 +10,9 @@ typedef enum ObjType {
   OBJ_T_NONE = 0,
   OBJ_T_STRING, // TODO: make strings instances
   OBJ_T_FUNCTION,
-  OBJ_T_CLASS,
   OBJ_T_INSTANCE,
+  OBJ_T_CLASS,
+  OBJ_T_MODULE,
   OBJ_T_NATIVE_FUNCTION,
   OBJ_T_BOUND_METHOD,
   OBJ_T_UPVALUE,
@@ -85,7 +86,7 @@ typedef struct ObjClosure {
   int upvalueCount; // always same as function->upvalueCount
 } ObjClosure;
 
-typedef Value (*NativeFn)(int argCount, Value* args);
+typedef Value (*NativeFn)(int argCount, Value *args);
 
 typedef struct ObjNative {
   Obj object;
@@ -93,30 +94,51 @@ typedef struct ObjNative {
   ObjString *name;
 } ObjNative;
 
-typedef struct ObjClass ObjClass;
+typedef struct ObjClass ObjClass; // fwd decl
+typedef struct ObjModule ObjModule; // fwd decl
 typedef struct ObjClass {
 
   // NOTE: same fields, in same order, as instance. Can be cast to an
   // instance.
   Obj object;
-  ObjClass *klass;
+  ObjClass *klass; // always lxClassClass
   ObjClass *singletonKlass;
   Table fields;
   Table hiddenFields;
 
   ObjString *name;
   ObjClass *superclass;
+  vec_void_t v_includedMods; // pointers to ObjModule
   Table methods;
   Table getters;
   Table setters;
 } ObjClass;
 
+typedef struct ObjModule {
+
+  // NOTE: same fields, in same order, as instance. Can be cast to an
+  // instance.
+  Obj object;
+  ObjClass *klass; // always lxModuleClass
+  ObjClass *singletonKlass;
+  Table fields;
+  Table hiddenFields;
+
+  ObjString *name;
+  Table methods;
+  Table getters;
+  Table setters;
+} ObjModule;
+
 extern ObjClass *lxObjClass;
 extern ObjClass *lxClassClass;
+extern ObjClass *lxModuleClass;
 extern ObjClass *lxAryClass;
 extern ObjClass *lxMapClass;
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
+extern ObjClass *lxFileClass;
+
 extern Value lxLoadPath;
 
 typedef struct ObjInstance {
@@ -138,6 +160,7 @@ typedef struct ObjBoundMethod {
 #define IS_CLOSURE(value)       (isObjType(value, OBJ_T_CLOSURE))
 #define IS_NATIVE_FUNCTION(value) (isObjType(value, OBJ_T_NATIVE_FUNCTION))
 #define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
+#define IS_MODULE(value)        (isObjType(value, OBJ_T_MODULE))
 #define IS_INSTANCE(value)      (isObjType(value, OBJ_T_INSTANCE))
 #define IS_UPVALUE(value)       (isObjType(value, OBJ_T_UPVALUE))
 #define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
@@ -153,6 +176,8 @@ typedef struct ObjBoundMethod {
 #define IS_NATIVE_FUNCTION_FUNC (is_value_native_function_p)
 #define IS_OBJ_CLASS_FUNC (is_obj_class_p)
 #define IS_CLASS_FUNC (is_value_class_p)
+#define IS_OBJ_MODULE_FUNC (is_obj_module_p)
+#define IS_MODULE_FUNC (is_value_module_p)
 #define IS_OBJ_INSTANCE_FUNC (is_obj_instance_p)
 #define IS_INSTANCE_FUNC (is_value_instance_p)
 #define IS_OBJ_BOUND_METHOD_FUNC (is_obj_bound_method_p)
@@ -161,6 +186,10 @@ typedef struct ObjBoundMethod {
 #define IS_UPVALUE_FUNC (is_value_upvalue_p)
 #define IS_OBJ_INTERNAL_FUNC (is_obj_internal_p)
 #define IS_INTERNAL_FUNC (is_value_internal_p)
+#define IS_OBJ_INSTANCE_OF_FUNC (is_obj_instance_of_p)
+#define IS_INSTANCE_OF_FUNC (is_value_instance_of_p)
+#define IS_OBJ_A_FUNC (is_obj_a_p)
+#define IS_A_FUNC (is_value_a_p)
 
 #define IS_A(value,klass)       (IS_INSTANCE(value) && instanceIsA(AS_INSTANCE(value), klass))
 
@@ -179,6 +208,7 @@ typedef struct ObjBoundMethod {
 #define AS_NATIVE_FUNCTION(value) ((ObjNative*)AS_OBJ(value))
 #define AS_BOUND_METHOD(value)  ((ObjBoundMethod*)AS_OBJ(value))
 #define AS_CLASS(value)         ((ObjClass*)AS_OBJ(value))
+#define AS_MODULE(value)        ((ObjModule*)AS_OBJ(value))
 #define AS_INSTANCE(value)      ((ObjInstance*)AS_OBJ(value))
 #define AS_INTERNAL(value)      ((ObjInternal*)AS_OBJ(value))
 
@@ -233,6 +263,7 @@ Value getProp(Value self, ObjString *propName);
 // Object creation functions
 ObjFunction *newFunction();
 ObjClass *newClass(ObjString *name, ObjClass *superclass);
+ObjModule *newModule(ObjString *name);
 ObjInstance *newInstance(ObjClass *klass);
 ObjNative *newNative(ObjString *name, NativeFn function);
 ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
@@ -245,9 +276,10 @@ void *internalGetData(ObjInternal *obj);
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
 bool instanceIsA(ObjInstance *inst, ObjClass *klass);
 bool isSubclass(ObjClass *subklass, ObjClass *superklass);
-Obj *classFindClassMethod(ObjClass *obj, ObjString *name);
+Obj *classFindStaticMethod(ObjClass *obj, ObjString *name);
 
 ObjClass *classSingletonClass(ObjClass *klass);
+ObjClass *moduleSingletonClass(ObjModule *mod);
 ObjClass *instanceSingletonClass(ObjInstance *instance);
 
 // Returns true if [value] is an object of type [type]. Do not call this
@@ -267,6 +299,8 @@ bool is_obj_native_function_p(Obj*);
 bool is_value_native_function_p(Value);
 bool is_obj_class_p(Obj*);
 bool is_value_class_p(Value);
+bool is_obj_module_p(Obj*);
+bool is_value_module_p(Value);
 bool is_obj_instance_p(Obj*);
 bool is_value_instance_p(Value);
 bool is_obj_bound_method_p(Obj*);
@@ -275,6 +309,11 @@ bool is_obj_upvalue_p(Obj*);
 bool is_value_upvalue_p(Value);
 bool is_obj_internal_p(Obj*);
 bool is_value_internal_p(Value);
+
+bool is_obj_instance_of_p(Obj*, ObjClass*);
+bool is_value_instance_of_p(Value, ObjClass*);
+bool is_obj_a_p(Obj*, ObjClass*);
+bool is_value_a_p(Value, ObjClass*);
 
 const char *typeOfObj(Obj *obj);
 

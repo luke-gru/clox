@@ -1,0 +1,15 @@
+module MyMod {
+  area() { return 50.00; }
+}
+
+class MyClass {
+}
+
+MyClass.include(MyMod);
+
+var c = MyClass();
+print c.area();
+
+__END__
+-- expect: --
+50.00

@@ -5,3 +5,8 @@ try {
   print e.message;
   print "==/CAUGHT==";
 }
+__END__
+-- expect: --
+==CAUGHT==
+Expected 1 argument, got 4
+==/CAUGHT==

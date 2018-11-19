@@ -87,10 +87,12 @@ static void defineNativeFunctions() {
 // Builtin classes:
 ObjClass *lxObjClass;
 ObjClass *lxClassClass;
+ObjClass *lxModuleClass;
 ObjClass *lxAryClass;
 ObjClass *lxMapClass;
 ObjClass *lxErrClass;
 ObjClass *lxArgErrClass;
+ObjClass *lxFileClass;
 Value lxLoadPath;
 
 static void defineNativeClasses() {
@@ -98,13 +100,37 @@ static void defineNativeClasses() {
     ObjString *objClassName = copyString("Object", 6);
     ObjClass *objClass = newClass(objClassName, NULL);
     tableSet(&vm.globals, OBJ_VAL(objClassName), OBJ_VAL(objClass));
+
+    ObjNative *objGetClassNat = newNative(copyString("_class", 6), lxObjectGetClass);
+    tableSet(&objClass->getters, OBJ_VAL(copyString("_class", 6)), OBJ_VAL(objGetClassNat));
     lxObjClass = objClass;
+
+    // class Module
+    ObjString *modClassName = copyString("Module", 6);
+    ObjClass *modClass = newClass(modClassName, objClass);
+    tableSet(&vm.globals, OBJ_VAL(modClassName), OBJ_VAL(modClass));
+    lxModuleClass = modClass;
 
     // class Class
     ObjString *classClassName = copyString("Class", 5);
     ObjClass *classClass = newClass(classClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(classClassName), OBJ_VAL(classClass));
     lxClassClass = classClass;
+
+    // restore `klass` property of above-created classes, since <class Class>
+    // is now created
+    objClass->klass = classClass;
+    modClass->klass = classClass;
+    classClass->klass = classClass;
+
+    ObjNative *classInitNat = newNative(copyString("init", 4), lxClassInit);
+    tableSet(&classClass->methods, OBJ_VAL(copyString("init", 4)), OBJ_VAL(classInitNat));
+
+    ObjNative *classIncludeNat = newNative(copyString("include", 7), lxClassInclude);
+    tableSet(&classClass->methods, OBJ_VAL(copyString("include", 7)), OBJ_VAL(classIncludeNat));
+
+    ObjNative *classGetSuperclassNat = newNative(copyString("_superClass", 11), lxClassGetSuperclass);
+    tableSet(&classClass->getters, OBJ_VAL(copyString("_superClass", 11)), OBJ_VAL(classGetSuperclassNat));
 
     // class Array
     ObjString *arrayClassName = copyString("Array", 5);
@@ -164,6 +190,16 @@ static void defineNativeClasses() {
     ObjClass *argErrClass = newClass(argErrClassName, errClass);
     tableSet(&vm.globals, OBJ_VAL(argErrClassName), OBJ_VAL(argErrClass));
     lxArgErrClass = argErrClass;
+
+    // class File
+    ObjString *fileClassName = copyString("File", 4);
+    ObjClass *fileClass = newClass(fileClassName, objClass);
+    tableSet(&vm.globals, OBJ_VAL(fileClassName), OBJ_VAL(fileClass));
+    ObjClass *fileClassStatic = classSingletonClass(fileClass);
+    lxFileClass = fileClass;
+
+    ObjNative *fileReadNat = newNative(copyString("read", 4), lxFileReadStatic);
+    tableSet(&fileClassStatic->methods, OBJ_VAL(copyString("read", 4)), OBJ_VAL(fileReadNat));
 }
 
 static void defineGlobalVariables() {
@@ -270,6 +306,7 @@ void freeVM() {
     vm.dirString = NULL;
     vm.hadError = false;
     vm.printBuf = NULL;
+    vm.printToStdout = true;
     vm.lastValue = NULL;
     vm.grayStack = NULL;
     vm.openUpvalues = NULL;
@@ -576,39 +613,72 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
 static void defineMethod(ObjString *name) {
     Value method = peek(0); // function
     ASSERT(IS_CLOSURE(method));
-    ASSERT(IS_CLASS(peek(1)));
-    ObjClass *klass = AS_CLASS(peek(1));
-    VM_DEBUG("defining method '%s' in class '%s'", name->chars, klass->name->chars);
-    ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
-    pop();
+    Value classOrMod = peek(1);
+    ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
+    if (IS_CLASS(classOrMod)) {
+        ObjClass *klass = AS_CLASS(classOrMod);
+        const char *klassName = klass->name ? klass->name->chars : "(anon)";
+        VM_DEBUG("defining method '%s' in class '%s'", name->chars, klassName);
+        ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
+    } else {
+        ObjModule *mod = AS_MODULE(classOrMod);
+        const char *modName = mod->name ? mod->name->chars : "(anon)";
+        VM_DEBUG("defining method '%s' in module '%s'", name->chars, modName);
+        ASSERT(tableSet(&mod->methods, OBJ_VAL(name), method));
+    }
+    pop(); // function
 }
-static void defineClassMethod(ObjString *name) {
+
+static void defineStaticMethod(ObjString *name) {
     Value method = peek(0); // function
     ASSERT(IS_CLOSURE(method));
-    ASSERT(IS_CLASS(peek(1)));
-    ObjClass *klass = AS_CLASS(peek(1));
-    ObjClass *singletonClass = classSingletonClass(klass);
-    VM_DEBUG("defining class method '%s#%s'", singletonClass->name->chars, name->chars);
+    Value classOrMod = peek(1);
+    ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
+    ObjClass *singletonClass = NULL;
+    if (IS_CLASS(classOrMod)) {
+        ObjClass *klass = AS_CLASS(classOrMod);
+        singletonClass = classSingletonClass(klass);
+    } else {
+        ObjModule *mod = AS_MODULE(classOrMod);
+        singletonClass = moduleSingletonClass(mod);
+    }
+    VM_DEBUG("defining static method '%s#%s'", singletonClass->name->chars, name->chars);
     ASSERT(tableSet(&singletonClass->methods, OBJ_VAL(name), method));
-    pop();
+    pop(); // function
 }
+
 static void defineGetter(ObjString *name) {
     Value method = peek(0); // function
     ASSERT(IS_CLOSURE(method));
-    ASSERT(IS_CLASS(peek(1)));
-    ObjClass *klass = AS_CLASS(peek(1));
-    VM_DEBUG("defining getter '%s'", name->chars);
-    ASSERT(tableSet(&klass->getters, OBJ_VAL(name), method));
-    pop();
+    Value classOrMod = peek(1);
+    ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
+    if (IS_CLASS(classOrMod)) {
+        ObjClass *klass = AS_CLASS(classOrMod);
+        VM_DEBUG("defining getter '%s'", name->chars);
+        ASSERT(tableSet(&klass->getters, OBJ_VAL(name), method));
+    } else {
+        ObjModule *mod = AS_MODULE(classOrMod);
+        VM_DEBUG("defining getter '%s'", name->chars);
+        ASSERT(tableSet(&mod->getters, OBJ_VAL(name), method));
+    }
+    pop(); // function
 }
+
 static void defineSetter(ObjString *name) {
     Value method = peek(0); // function
     ASSERT(IS_CLOSURE(method));
-    ASSERT(IS_CLASS(peek(1)));
-    ObjClass *klass = AS_CLASS(peek(1));
-    VM_DEBUG("defining setter '%s'", name->chars);
-    ASSERT(tableSet(&klass->setters, OBJ_VAL(name), method));
-    pop();
+    Value classOrMod = peek(1);
+    ASSERT(IS_CLASS(classOrMod));
+    if (IS_CLASS(classOrMod)) {
+        ObjClass *klass = AS_CLASS(classOrMod);
+        VM_DEBUG("defining setter '%s'", name->chars);
+        ASSERT(tableSet(&klass->setters, OBJ_VAL(name), method));
+    } else {
+        ObjModule *mod = AS_MODULE(classOrMod);
+        VM_DEBUG("defining setter '%s'", name->chars);
+        ASSERT(tableSet(&mod->setters, OBJ_VAL(name), method));
+    }
+    pop(); // function
 }
 
 // Call method on instance, args are NOT expected to be pushed on to stack by
@@ -646,10 +716,10 @@ static void popFrame(void) {
     ASSERT_VALID_STACK();
 }
 
-static CallFrame *pushFrame(void) {
+static CallFrame *pushFrame() {
     CallFrame *frame = &EC->frames[EC->frameCount++];
     frame->callLine = curLine;
-    Value curFile;
+    /*Value curFile;*/
     ASSERT(vm.fileString);
     frame->file = EC->filename;
     return frame;
@@ -677,6 +747,7 @@ static void pushNativeFrame(ObjNative *native) {
 // sets up VM/C call jumpbuf if not set
 static void captureNativeError(void) {
     if (!inCCall) {
+        VM_DEBUG("%s", "Setting VM/C error jump buffer");
         int jumpRes = setjmp(CCallJumpBuf);
         if (jumpRes == 0) { // jump is set, prepared to enter C land
             return;
@@ -705,7 +776,7 @@ static bool checkFunctionArity(ObjFunction *func, int argCount) {
 // includes the instance argument, ex: a method with no arguments will have an
 // argCount of 1. If the callable is a class, this function creates the
 // new instance and puts it in the proper spot in the stack. The return value
-// pushed to the stack. The caller is responsible for popping the arguments.
+// is pushed to the stack.
 static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     ObjClosure *closure = NULL;
     Value instanceVal;
@@ -715,14 +786,17 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
             EC->stackTop[-argCount - 1] = callable;
         }
     } else if (IS_CLASS(callable)) {
+        VM_DEBUG("%s", "calling callable class");
         ObjClass *klass = AS_CLASS(callable);
         ObjInstance *instance = newInstance(klass);
         instanceVal = OBJ_VAL(instance);
-        EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance
+        /*ASSERT(IS_CLASS(EC->stackTop[-argCount - 1])); this holds true if the # of args is correct for the function */
+        EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
         // Call the initializer, if there is one.
         Value initializer;
         Obj *init = instanceFindMethod(instance, vm.initString);
         if (init) {
+            VM_DEBUG("%s", "callable is initializer");
             initializer = OBJ_VAL(init);
             if (IS_NATIVE_FUNCTION(initializer)) {
                 captureNativeError();
@@ -744,17 +818,21 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
                 } else {
                     VM_DEBUG("native initializer returned");
                     popFrame();
+                    for (int i = 0; i <= argCount; i++) {
+                        pop();
+                    }
                     push(OBJ_VAL(instance));
                     return true;
                 }
             }
+            VM_DEBUG("calling non-native initializer with %d args", argCount);
             ASSERT(IS_CLOSURE(initializer));
             closure = AS_CLOSURE(initializer);
         } else if (argCount > 0) {
             throwArgErrorFmt("Expected 0 arguments (Object#init) but got %d.", argCount);
             return false;
         } else {
-            push(instanceVal);
+            //push(instanceVal);
             return true; // new instance is on the top of the stack
         }
     } else if (IS_BOUND_METHOD(callable)) {
@@ -805,6 +883,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
     // add frame
+    VM_DEBUG("%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
     frame->closure = closure;
     frame->ip = closure->function->chunk.code;
@@ -818,6 +897,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
 }
 
 
+/**
+ * see doCallCallable
+ */
 bool callCallable(Value callable, int argCount, bool isMethod) {
     int lenBefore = vm.stackObjects.length;
     bool ret = doCallCallable(callable, argCount, isMethod);
@@ -932,31 +1014,17 @@ void throwArgErrorFmt(const char *format, ...) {
 }
 
 void printVMStack(FILE *f) {
-    /*int frameNum = 0;*/
-    /*CallFrame *curFrame = &vm.frames[frameNum];*/
     if (EC->stackTop == EC->stack) {
         fprintf(f, "Stack: empty\n");
         return;
     }
     fprintf(f, "Stack (%d frames):\n", EC->frameCount);
-    /*for (int i = 0; i < vm.frameCount; i++) {*/
-        /*fprintf(f, "Frame %d slots: %p\n", i+1, vm.frames[i].slots);*/
-    /*}*/
     // print VM stack values from bottom of stack to top
     for (Value *slot = EC->stack; slot < EC->stackTop; slot++) {
         if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE)) {
             fprintf(stderr, "Broken object pointer: %p\n", AS_OBJ(*slot));
             ASSERT(0);
         }
-        /*if (frameNum < EC->frameCount) {*/
-            /*if (curFrame->slots+1 == slot || curFrame->slots == slot) {*/
-                /*fprintf(f, " |FRM %d| ", frameNum+1);*/
-                /*frameNum++;*/
-                /*if (frameNum < EC->frameCount) {*/
-                    /*curFrame = &EC->frames[frameNum];*/
-                /*}*/
-            /*}*/
-        /*}*/
         fprintf(f, "[ ");
         printValue(f, *slot, false);
         fprintf(f, " ]");
@@ -1193,15 +1261,16 @@ static InterpretResult run(bool doResetStack) {
       }
       case OP_PRINT: {
         Value val = pop();
+        if (!vm.printBuf || vm.printToStdout) {
+            printValue(stdout, val, true);
+            printf("\n");
+        }
         if (vm.printBuf) {
             ObjString *out = valueToString(val, hiddenString);
             pushCString(vm.printBuf, out->chars, strlen(out->chars));
             pushCString(vm.printBuf, "\n", 1);
             unhideFromGC((Obj*)out);
             freeObject((Obj*)out, true);
-        } else {
-            printValue(stdout, val, true);
-            printf("\n");
         }
         break;
       }
@@ -1272,7 +1341,7 @@ static InterpretResult run(bool doResetStack) {
       case OP_SET_LOCAL: {
           uint8_t slot = READ_BYTE();
           ASSERT(slot >= 0);
-          getFrame()->slots[slot] = peek(0);
+          getFrame()->slots[slot] = peek(0); // locals are popped at end of scope by VM
           break;
       }
       case OP_GET_LOCAL: {
@@ -1372,23 +1441,23 @@ static InterpretResult run(bool doResetStack) {
           ASSERT_VALID_STACK();
           break;
       }
-      case OP_INVOKE: {
+      case OP_INVOKE: { // invoke methods (includes static methods)
           Value methodName = READ_CONSTANT();
           ObjString *mname = AS_STRING(methodName);
           uint8_t numArgs = READ_BYTE();
           Value instanceVal = peek(numArgs);
           if (IS_INSTANCE(instanceVal)) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
-              ObjString *className = inst->klass->name;
               Obj *callable = instanceFindMethod(inst, mname);
               if (!callable) {
+                  ObjString *className = inst->klass->name;
                   // FIXME: throw error
                   UNREACHABLE("instance method '%s#%s' not found", className->chars, mname->chars);
               }
               callCallable(OBJ_VAL(callable), numArgs, true);
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
-              Obj *callable = classFindClassMethod(klass, mname);
+              Obj *callable = classFindStaticMethod(klass, mname);
               if (!callable) {
                   // FIXME: throw error
                   UNREACHABLE("class method '%s.%s' not found", klass->name->chars, mname->chars);
@@ -1396,6 +1465,7 @@ static InterpretResult run(bool doResetStack) {
               EC->stackTop[-numArgs-1] = instanceVal;
               callCallable(OBJ_VAL(callable), numArgs, true);
           }
+          // TODO: static module methods
           if (vm.hadError) {
               return INTERPRET_RUNTIME_ERROR;
           }
@@ -1425,7 +1495,7 @@ static InterpretResult run(bool doResetStack) {
       }
       // return from function/method
       case OP_RETURN: {
-          Value result = pop();
+          Value result = pop(); // pop from caller's frame
           ASSERT(!getFrame()->isCCall);
           Value *newTop = getFrame()->slots;
           closeUpvalues(getFrame()->slots);
@@ -1451,6 +1521,19 @@ static InterpretResult run(bool doResetStack) {
           }
           ObjClass *klass = newClass(AS_STRING(className), AS_CLASS(objClassVal));
           push(OBJ_VAL(klass));
+          break;
+      }
+      case OP_MODULE: { // add or re-open module
+          Value modName = READ_CONSTANT();
+          Value existingMod;
+          // FIXME: not perfect, if class is declared non-globally this won't
+          // detect it. Maybe a new op-code is needed for class re-opening.
+          if (tableGet(&vm.globals, modName, &existingMod) && IS_MODULE(existingMod)) {
+              push(existingMod);
+              break;
+          }
+          ObjModule *mod = newModule(AS_STRING(modName));
+          push(OBJ_VAL(mod));
           break;
       }
       case OP_SUBCLASS: { // add new class inheriting from an existing class
@@ -1479,15 +1562,15 @@ static InterpretResult run(bool doResetStack) {
           Value classOrInst = peek(0);
           ASSERT(IS_OBJ(classOrInst));
           if (IS_CLASS(classOrInst)) {
+              push(classOrInst); // so `this` , which is always slot[1], returns the object
           } else {
               ASSERT(IS_INSTANCE(classOrInst)); // FIXME: throw error if not instance
               ObjClass *klass = instanceSingletonClass(AS_INSTANCE(classOrInst));
-              pop();
               push(OBJ_VAL(klass));
           }
           break;
       }
-      case OP_METHOD: { // method definition
+      case OP_METHOD: { // method definition in class or module
           Value methodName = READ_CONSTANT();
           ObjString *methStr = AS_STRING(methodName);
           defineMethod(methStr);
@@ -1496,7 +1579,7 @@ static InterpretResult run(bool doResetStack) {
       case OP_CLASS_METHOD: { // method definition
           Value methodName = READ_CONSTANT();
           ObjString *methStr = AS_STRING(methodName);
-          defineClassMethod(methStr);
+          defineStaticMethod(methStr);
           break;
       }
       case OP_GETTER: { // getter method definition
@@ -1539,20 +1622,6 @@ static InterpretResult run(bool doResetStack) {
           pop(); // leave rval on stack
           pop();
           push(rval);
-          break;
-      }
-      case OP_CREATE_ARRAY: {
-          Value numElsVal = pop();
-          int numEls = (int)AS_NUMBER(numElsVal);
-          ASSERT(numEls >= 0);
-          callCallable(OBJ_VAL((Obj*)lxAryClass), numEls, false); // new array pushed to top of stack
-          Value ret = peek(0);
-          ASSERT(IS_T_ARRAY(ret));
-          ret = pop();
-          for (int i = 0; i < numEls; i++) {
-              pop();
-          }
-          push(ret);
           break;
       }
       case OP_INDEX_GET: {
@@ -1639,6 +1708,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     EC->filename = newString(filename, strlen(filename));
     EC->frameCount = 0;
     // initialize top-level callframe (frameCount = 1)
+    VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk->code;
@@ -1646,6 +1716,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     ObjFunction *func = newFunction(chunk);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
+    push(OBJ_VAL(frame->closure));
     frame->isCCall = false;
     frame->nativeFunc = NULL;
     setupPerScriptROGlobals(filename);
@@ -1659,7 +1730,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     CallFrame *oldFrame = getFrame();
     push_EC();
     EC->filename = newString(filename, strlen(filename));
-    // initialize top-level callframe (frameCount = 1)
+    VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk->code;
@@ -1667,6 +1738,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     ObjFunction *func = newFunction(chunk);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
+    push(OBJ_VAL(frame->closure));
     unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
@@ -1699,6 +1771,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
         return BOOL_VAL(false);
     }
     EC->filename = newString(filename, strlen(filename));
+    VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk.code;
@@ -1706,6 +1779,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
     ObjFunction *func = newFunction(&chunk);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
+    push(OBJ_VAL(frame->closure));
     unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
@@ -1716,16 +1790,17 @@ Value VMEval(const char *src, const char *filename, int lineno) {
     if (result != INTERPRET_OK) {
         vm.hadError = false;
     }
-    Value *ret = vm.lastValue;
     pop_EC();
     ASSERT(getFrame() == oldFrame);
     return BOOL_VAL(result == INTERPRET_OK);
 }
 
-void setPrintBuf(ObjString *buf) {
+void setPrintBuf(ObjString *buf, bool alsoStdout) {
     vm.printBuf = buf;
+    vm.printToStdout = alsoStdout;
 }
 
 void unsetPrintBuf(void) {
     vm.printBuf = NULL;
+    vm.printToStdout = true;
 }

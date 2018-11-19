@@ -6,6 +6,7 @@
 #include "object.h"
 #include "debug.h"
 #include "memory.h"
+#include "linenoise.h"
 
 Chunk rChunk;
 
@@ -84,6 +85,7 @@ NORETURN void repl(void) {
     _resetScanner();
     initChunk(&rChunk);
     initVM();
+    linenoiseHistorySetMaxLen(500);
     // we want to evaluate unused expressions, like the statement `1+1`,
     // because we print the last VM value after the user types in an
     // expression or statement.
@@ -91,28 +93,23 @@ NORETURN void repl(void) {
 
     char *lines[50];
     int numLines = 0;
-    char *line = NULL;
-    size_t size;
-    int getres = -1;
-    fprintf(stderr, "%s", prompt);
-    // NOTE: using getline() instead of fgets() so that we can save previous
-    // lines if the user types in a statement that takes multiple lines, like
-    // a class declaration or a for loop.
-    while ((getres = getline(&line, &size, stdin)) != -1) {
-        if (numLines == 0 && strcmp(line, "exit\n") == 0) {
+    const char *line = NULL;
+
+    while ((line = linenoise(prompt)) != NULL) { // NOTE: chomps newline
+        linenoiseHistoryAdd(line);
+        if (numLines == 0 && strcmp(line, "exit") == 0) {
             free(line);
             line = NULL;
             break;
         }
-        if (numLines == 0 && strcmp(line, "pstack\n") == 0) {
+        if (numLines == 0 && strcmp(line, "pstack") == 0) {
             printVMStack(stderr);
-            fprintf(stderr, "%s", prompt);
             free(line);
             line = NULL;
             continue;
         }
         // resets the VM, re-inits the code chunk
-        if (numLines == 0 && strcmp(line, "reset\n") == 0) {
+        if (numLines == 0 && strcmp(line, "reset") == 0) {
             fprintf(stderr, "Resetting VM... ");
             freeChunk(&rChunk); // re-initializes it too
             freeVM();
@@ -121,7 +118,6 @@ NORETURN void repl(void) {
             free(line);
             line = NULL;
             fprintf(stderr, "done.\n");
-            fprintf(stderr, "%s", prompt);
             continue;
         }
         ASSERT(line);
@@ -133,7 +129,6 @@ NORETURN void repl(void) {
             freeLines(lines, numLines);
             numLines = 0;
             _resetScanner();
-            fprintf(stderr, "%s", prompt);
             line = NULL;
             continue;
         }
@@ -142,7 +137,6 @@ NORETURN void repl(void) {
                 freeLines(lines, numLines);
                 numLines = 0;
                 _resetScanner();
-                fprintf(stderr, "%s", prompt);
                 line = NULL;
                 continue;
             }
@@ -168,7 +162,6 @@ NORETURN void repl(void) {
             // wait until more input
         }
         line = NULL;
-        fprintf(stderr, "%s", prompt);
     }
     exit(0);
 }

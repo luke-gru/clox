@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
             i+=incrOpt;
             continue;
         }
-        if (strcmp(argvp[i], "-i") == 0) {
+        if (strncmp(argvp[i], "-i", 2) == 0) {
             interactive = true;
             i+=1;
         } else {

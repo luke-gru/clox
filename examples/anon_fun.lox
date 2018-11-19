@@ -16,3 +16,12 @@ thrice(fun (a) {
 });
 
 fun(a) { print a; }("called!");
+
+__END__
+-- expect: --
+3.00
+callbacks:
+1.00
+2.00
+3.00
+called!

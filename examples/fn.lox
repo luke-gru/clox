@@ -6,3 +6,8 @@ var a = add(1, 10);
 var b = add("Hello", ", world");
 print a;
 print b;
+
+__END__
+-- expect: --
+11.00
+Hello, world

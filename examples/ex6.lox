@@ -9,3 +9,8 @@ if (a == 1) {
 } else {
   print "ERROR";
 }
+
+__END__
+-- expect: --
+YAY1
+YAY2

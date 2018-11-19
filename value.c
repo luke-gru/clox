@@ -91,6 +91,11 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
             char *klassName = klass->name->chars;
             fprintf(file, "<class %s>", klassName);
             return;
+        } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
+            ObjModule *mod = AS_MODULE(value);
+            char *modName = mod->name->chars;
+            fprintf(file, "<module %s>", modName);
+            return;
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
             ObjString *name = native->name;
@@ -193,6 +198,14 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             char *cbuf = calloc(strlen(klassName)+1+8, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<class %s>", klassName);
+            ret = stringConstructor(cbuf, strlen(cbuf));
+            free(cbuf);
+        } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
+            ObjModule *mod = AS_MODULE(value);
+            char *modName = mod->name->chars;
+            char *cbuf = calloc(strlen(modName)+1+9, 1);
+            ASSERT_MEM(cbuf);
+            sprintf(cbuf, "<module %s>", modName);
             ret = stringConstructor(cbuf, strlen(cbuf));
             free(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {

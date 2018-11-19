@@ -1,3 +1,7 @@
 var a = 1;
 var b = 2;
 print a + b;
+
+__END__
+-- expect: --
+3.00

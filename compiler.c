@@ -62,8 +62,8 @@ typedef struct Compiler {
   // scope (global scope)
   int scopeDepth;
   bool hadError;
-  bool emittedReturn; // has emitted at least 1 return for this function so far
-  vec_int_t emittedReturnDepths;
+  int currentScopeNum;
+  vec_int_t emittedReturnScopeNums;
 
   Iseq iseq; // Generated instructions for the function
   Table constTbl;
@@ -74,7 +74,9 @@ typedef struct ClassCompiler {
   struct ClassCompiler *enclosing;
   Token name;
   bool hasSuperclass;
+  bool isModule;
 } ClassCompiler;
+
 
 typedef enum {
     COMPILE_SCOPE_BLOCK = 1,
@@ -99,7 +101,7 @@ static const char *compileScopeName(CompileScopeType stype) {
 
 static Compiler *current = NULL;
 static Compiler *top = NULL;
-static ClassCompiler *currentClass = NULL;
+static ClassCompiler *currentClassOrModule = NULL;
 static bool inINBlock = false;
 static Token *curTok = NULL;
 static int loopStart = -1;
@@ -217,20 +219,17 @@ static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
 // blocks (`{}`) push new scopes
 static void pushScope(CompileScopeType stype) {
     current->scopeDepth++;
+    current->currentScopeNum++;
     COMP_TRACE("pushScope: %s", compileScopeName(stype));
 }
 
 static void namedVariable(Token name, VarOp getSet);
 
 static bool emittedReturnInScope(Compiler *comp) {
-    if (comp->emittedReturn) {
-        int idx = 0;
-        // NOTE: add 1 here because the explicit return would be in the block scope
-        // of the function, so it added a scopeDepth
-        vec_find(&comp->emittedReturnDepths, comp->scopeDepth+1, idx);
-        if (idx != -1) {
-            return true;
-        }
+    int idx = 0;
+    vec_find(&comp->emittedReturnScopeNums, comp->currentScopeNum, idx);
+    if (idx != -1) {
+        return true;
     }
     return false;
 }
@@ -251,8 +250,7 @@ static void emitReturn(Compiler *compiler) {
         emitOp0(OP_NIL);
         emitOp0(OP_RETURN);
     }
-    compiler->emittedReturn = true;
-    vec_push(&compiler->emittedReturnDepths, compiler->scopeDepth);
+    vec_push(&compiler->emittedReturnScopeNums, compiler->currentScopeNum);
 }
 
 static void emitCloseUpvalue(void) {
@@ -279,11 +277,11 @@ static void popScope(CompileScopeType stype) {
     if (stype == COMPILE_SCOPE_FUNCTION) {
         emitReturn(current);
     }
-    int idx = -1;
-    vec_find(&current->emittedReturnDepths, current->scopeDepth, idx);
-    if (idx != -1) {
-        vec_splice(&current->emittedReturnDepths, idx, 1);
-    }
+    /*int idx = -1;*/
+    /*vec_find(&current->emittedReturnDepths, current->scopeDepth, idx);*/
+    /*if (idx != -1) {*/
+        /*vec_splice(&current->emittedReturnDepths, idx, 1);*/
+    /*}*/
     current->scopeDepth--;
 }
 
@@ -652,7 +650,7 @@ static ObjFunction *endCompiler() {
     if (current->type == FUN_TYPE_TOP_LEVEL) {
         emitLeave();
     }
-    vec_deinit(&current->emittedReturnDepths);
+    vec_deinit(&current->emittedReturnScopeNums);
     ObjFunction *func = current->function;
     copyIseqToChunk(currentIseq(), currentChunk());
     freeTable(&current->constTbl);
@@ -851,15 +849,15 @@ static void initCompiler(
     COMP_TRACE("initCompiler");
     memset(compiler, 0, sizeof(*compiler));
     compiler->enclosing = current;
-    compiler->localCount = 0;
+    compiler->localCount = 0; // NOTE: below, this is increased to 1
     compiler->scopeDepth = scopeDepth;
     compiler->function = newFunction(chunk);
     initIseq(&compiler->iseq);
     hideFromGC((Obj*)compiler->function); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = ftype;
     compiler->hadError = false;
-    compiler->emittedReturn = false;
-    vec_init(&compiler->emittedReturnDepths);
+    compiler->currentScopeNum = 1;
+    vec_init(&compiler->emittedReturnScopeNums);
     initTable(&compiler->constTbl);
 
     current = compiler;
@@ -875,10 +873,10 @@ static void initCompiler(
     case FUN_TYPE_SETTER:
     case FUN_TYPE_METHOD:
     case FUN_TYPE_CLASS_METHOD: {
-        ASSERT(currentClass || inINBlock);
+        ASSERT(currentClassOrModule || inINBlock);
         char *className = "";
-        if (currentClass) {
-            className = tokStr(&currentClass->name);
+        if (currentClassOrModule) {
+            className = tokStr(&currentClassOrModule->name);
         }
         char *funcName = tokStr(fTok);
         size_t methodNameBuflen = strlen(className)+1+strlen(funcName)+1; // +1 for '.' in between
@@ -905,7 +903,7 @@ static void initCompiler(
     }
 
     // The first slot is always implicitly declared.
-    Local* local = &current->locals[current->localCount++];
+    Local *local = &current->locals[current->localCount++];
     local->depth = current->scopeDepth;
     local->isUpvalue = false;
     if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
@@ -960,9 +958,11 @@ static void emitClass(Node *n) {
     cComp.name = n->tok;
     Token *superClassTok = (Token*)nodeGetData(n);
     cComp.hasSuperclass = superClassTok != NULL;
-    cComp.enclosing = currentClass;
-    currentClass = &cComp;
+    cComp.isModule = false;
+    cComp.enclosing = currentClassOrModule;
+    currentClassOrModule = &cComp;
 
+    // TODO: add 'this' as upvalue or local var in class
     if (cComp.hasSuperclass) {
         pushScope(COMPILE_SCOPE_CLASS);
         // get the superclass
@@ -983,13 +983,41 @@ static void emitClass(Node *n) {
         popScope(COMPILE_SCOPE_CLASS);
     }
 
+    // define the local or global variable for the class itself
     if (current->scopeDepth == 0) {
         defineVariable(nameConstant, false);
     } else {
         uint8_t defineArg = declareVariable(&n->tok);
         defineVariable(defineArg, true);
     }
-    currentClass = cComp.enclosing;
+    currentClassOrModule = cComp.enclosing;
+}
+
+static void emitModule(Node *n) {
+    uint8_t nameConstant = identifierConstant(&n->tok);
+
+    ClassCompiler cComp;
+    memset(&cComp, 0, sizeof(cComp));
+    cComp.name = n->tok;
+    cComp.hasSuperclass = false;
+    cComp.isModule = true;
+    cComp.enclosing = currentClassOrModule;
+    currentClassOrModule = &cComp;
+
+    emitOp1(OP_MODULE, nameConstant);
+    pushScope(COMPILE_SCOPE_MODULE);
+    // TODO: add 'this' as upvalue or local var in module
+    emitChildren(n);
+    popScope(COMPILE_SCOPE_MODULE);
+
+    // define the local or global variable for the class itself
+    if (current->scopeDepth == 0) {
+        defineVariable(nameConstant, false);
+    } else {
+        uint8_t defineArg = declareVariable(&n->tok);
+        defineVariable(defineArg, true);
+    }
+    currentClassOrModule = cComp.enclosing;
 }
 
 static void emitIn(Node *n) {
@@ -1001,6 +1029,7 @@ static void emitIn(Node *n) {
     addLocal(syntheticToken("this"));
     emitNode(n->children->data[1]);
     popScope(COMPILE_SCOPE_IN);
+    emitOp0(OP_POP);
     inINBlock = oldIn;
 }
 
@@ -1040,9 +1069,9 @@ static void emitFunction(Node *n, FunctionType ftype) {
     }
 
     if (ftype != FUN_TYPE_ANON) {
-        if ((currentClass == NULL && !inINBlock) || ftype == FUN_TYPE_NAMED) { // regular function
+        if ((currentClassOrModule == NULL && !inINBlock) || ftype == FUN_TYPE_NAMED) { // regular function
             namedVariable(n->tok, VAR_SET);
-        } else {
+        } else { // method
             func->isMethod = true;
             switch (ftype) {
                 case FUN_TYPE_METHOD:
@@ -1058,7 +1087,8 @@ static void emitFunction(Node *n, FunctionType ftype) {
                 case FUN_TYPE_SETTER:
                     emitOp1(OP_SETTER, identifierConstant(&n->tok));
                     break;
-                default: UNREACHABLE("bug: invalid function type: %d\n", ftype);
+                default:
+                    UNREACHABLE("bug: invalid function type: %d\n", ftype);
             }
         }
     }
@@ -1159,9 +1189,9 @@ static void emitNode(Node *n) {
         return;
     }
     case ARRAY_EXPR: {
+        namedVariable(syntheticToken("Array"), VAR_GET);
         emitChildren(n);
-        emitConstant(NUMBER_VAL(n->children->length), CONST_T_NUMLIT);
-        emitOp0(OP_CREATE_ARRAY);
+        emitOp1(OP_CALL, (uint8_t)n->children->length);
         return;
     }
     case IF_STMT: {
@@ -1287,8 +1317,8 @@ static void emitNode(Node *n) {
         break;
     }
     case METHOD_STMT: {
-        if (currentClass == NULL && !inINBlock) {
-            error("Methods can only be declared in classes. Maybe forgot keyword 'fun'?");
+        if (currentClassOrModule == NULL && !inINBlock) {
+            error("Methods can only be declared in classes and modules. Maybe forgot keyword 'fun'?");
         } else {
             FunctionType ftype = FUN_TYPE_METHOD;
             if (strcmp(tokStr(&n->tok), "init") == 0) {
@@ -1299,8 +1329,8 @@ static void emitNode(Node *n) {
         break;
     }
     case CLASS_METHOD_STMT: {
-        if (currentClass == NULL && !inINBlock) {
-            error("Class methods can only be declared in classes.");
+        if (currentClassOrModule == NULL && !inINBlock) {
+            error("Static methods can only be declared in classes and modules.");
         } else {
             FunctionType ftype = FUN_TYPE_CLASS_METHOD;
             emitFunction(n, ftype);
@@ -1308,16 +1338,16 @@ static void emitNode(Node *n) {
         break;
     }
     case GETTER_STMT: {
-        if (currentClass == NULL && !inINBlock) {
-            error("Getter methods can only be declared in classes");
+        if (currentClassOrModule == NULL && !inINBlock) {
+            error("Getter methods can only be declared in classes and modules");
         } else {
             emitFunction(n, FUN_TYPE_GETTER);
         }
         break;
     }
     case SETTER_STMT: {
-        if (currentClass == NULL && !inINBlock) {
-            error("Setter methods can only be declared in classes");
+        if (currentClassOrModule == NULL && !inINBlock) {
+            error("Setter methods can only be declared in classes and modules");
         } else {
             emitFunction(n, FUN_TYPE_SETTER);
         }
@@ -1329,6 +1359,10 @@ static void emitNode(Node *n) {
     }
     case CLASS_STMT: {
         emitClass(n);
+        break;
+    }
+    case MODULE_STMT: {
+        emitModule(n);
         break;
     }
     case IN_STMT: {
@@ -1346,13 +1380,9 @@ static void emitNode(Node *n) {
         break;
     }
     case RETURN_STMT: {
-        if (current->emittedReturn) {
-            int idx = 0;
-            vec_find(&current->emittedReturnDepths, current->scopeDepth, idx);
-            if (idx != -1) {
-                COMP_TRACE("Skipping emitting explicit return");
-                break;
-            }
+        if (emittedReturnInScope(current)) {
+            COMP_TRACE("Skipping emitting explicit return");
+            break;
         }
 
         if (n->children->length > 0) {
@@ -1363,8 +1393,7 @@ static void emitNode(Node *n) {
             }
             emitOp0(OP_RETURN);
             COMP_TRACE("Emitting explicit return (children)");
-            current->emittedReturn = true;
-            vec_push(&current->emittedReturnDepths, current->scopeDepth);
+            vec_push(&current->emittedReturnScopeNums, current->currentScopeNum);
         } else {
             COMP_TRACE("Emitting explicit return (void)");
             emitReturn(current);
