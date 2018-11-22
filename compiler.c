@@ -244,7 +244,7 @@ static void emitReturn(Compiler *compiler) {
     }
     COMP_TRACE("Emitting return");
     if (compiler->type == FUN_TYPE_INIT) {
-        namedVariable(syntheticToken("this"), VAR_GET);
+        emitOp0(OP_GET_THIS);
         emitOp0(OP_RETURN);
     } else {
         emitOp0(OP_NIL);
@@ -277,11 +277,6 @@ static void popScope(CompileScopeType stype) {
     if (stype == COMPILE_SCOPE_FUNCTION) {
         emitReturn(current);
     }
-    /*int idx = -1;*/
-    /*vec_find(&current->emittedReturnDepths, current->scopeDepth, idx);*/
-    /*if (idx != -1) {*/
-        /*vec_splice(&current->emittedReturnDepths, idx, 1);*/
-    /*}*/
     current->scopeDepth--;
 }
 
@@ -902,16 +897,16 @@ static void initCompiler(
         UNREACHABLE("invalid function type %d", ftype);
     }
 
-    // The first slot is always implicitly declared.
+    // FIXME: The first local variable slot is always implicitly declared.
+    // It's no longer needed.
     Local *local = &current->locals[current->localCount++];
     local->depth = current->scopeDepth;
     local->isUpvalue = false;
     if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
             ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
             ftype == FUN_TYPE_CLASS_METHOD) {
-        // In a method, it holds the receiver, "this".
-        local->name.start = "this";
-        local->name.length = 4;
+        local->name.start = "";
+        local->name.length = 0;
     } else {
         // In a function, it holds the function, but cannot be referenced, so has
         // no name.
@@ -935,22 +930,6 @@ static void defineVariable(uint8_t arg, bool checkDecl) {
   }
 }
 
-/*static bool assignExprValueUnused(Node *assignNode) {*/
-    /*Node *parent = assignNode->parent;*/
-    /*NodeType nType = parent->type.type;*/
-    /*int nKind = parent->type.kind;*/
-    /*while (parent && nKind == GROUPING_EXPR) {*/
-        /*parent = parent->parent;*/
-        /*nType = parent->type.type;*/
-        /*nKind = parent->type.kind;*/
-    /*}*/
-    /*if (nType == NODE_STMT) {*/
-        /*return true;*/
-    /*} else {*/
-        /*return false;*/
-    /*}*/
-/*}*/
-
 static void emitClass(Node *n) {
     uint8_t nameConstant = identifierConstant(&n->tok);
     ClassCompiler cComp;
@@ -962,15 +941,10 @@ static void emitClass(Node *n) {
     cComp.enclosing = currentClassOrModule;
     currentClassOrModule = &cComp;
 
+    pushScope(COMPILE_SCOPE_CLASS);
     // TODO: add 'this' as upvalue or local var in class
     if (cComp.hasSuperclass) {
-        pushScope(COMPILE_SCOPE_CLASS);
-        // get the superclass
         namedVariable(*superClassTok, VAR_GET);
-        // Store the superclass in a local variable named "super".
-        Token superTok = syntheticToken("super");
-        addLocal(superTok);
-
         emitOp1(OP_SUBCLASS, nameConstant); // VM peeks the superclass and gets the class name
     } else {
         emitOp1(OP_CLASS, nameConstant); // VM gets the class name
@@ -978,10 +952,7 @@ static void emitClass(Node *n) {
 
     emitChildren(n); // block node with methods and other declarations
 
-    if (cComp.hasSuperclass) {
-        namedVariable(*superClassTok, VAR_GET); // this is popped to close the "super" upvalue
-        popScope(COMPILE_SCOPE_CLASS);
-    }
+    popScope(COMPILE_SCOPE_CLASS);
 
     // define the local or global variable for the class itself
     if (current->scopeDepth == 0) {
@@ -1006,7 +977,6 @@ static void emitModule(Node *n) {
 
     emitOp1(OP_MODULE, nameConstant);
     pushScope(COMPILE_SCOPE_MODULE);
-    // TODO: add 'this' as upvalue or local var in module
     emitChildren(n);
     popScope(COMPILE_SCOPE_MODULE);
 
@@ -1023,11 +993,10 @@ static void emitModule(Node *n) {
 static void emitIn(Node *n) {
     bool oldIn = inINBlock;
     emitNode(n->children->data[0]); // expression
-    emitOp0(OP_IN);
+    emitOp0(OP_IN); // sets vm.self properly
     inINBlock = true;
     pushScope(COMPILE_SCOPE_IN);
-    addLocal(syntheticToken("this"));
-    emitNode(n->children->data[1]);
+    emitNode(n->children->data[1]); // block
     popScope(COMPILE_SCOPE_IN);
     emitOp0(OP_POP);
     inINBlock = oldIn;
@@ -1386,8 +1355,9 @@ static void emitNode(Node *n) {
         }
 
         if (n->children->length > 0) {
+            // always return instance in init function
             if (current->type == FUN_TYPE_INIT) {
-                namedVariable(syntheticToken("this"), VAR_GET);
+                emitOp0(OP_GET_THIS);
             } else {
                 emitChildren(n);
             }
@@ -1401,12 +1371,10 @@ static void emitNode(Node *n) {
         break;
     }
     case THIS_EXPR: {
-        namedVariable(syntheticToken("this"), VAR_GET);
+        emitOp0(OP_GET_THIS);
         break;
     }
     case SUPER_EXPR: {
-        namedVariable(syntheticToken("super"), VAR_GET);
-        namedVariable(syntheticToken("this"), VAR_GET);
         Node *tokNode = vec_last(n->children);
         uint8_t methodNameArg = identifierConstant(&tokNode->tok);
         emitOp1(OP_GET_SUPER, methodNameArg);

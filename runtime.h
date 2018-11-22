@@ -31,6 +31,7 @@ bool runtimeCheckArgs(int min, int max, int actual);
 
 // class Object
 Value lxObjectGetClass(int argCount, Value *args);
+Value lxObjectGetObjectId(int argCount, Value *args);
 
 // class Module
 Value lxModuleInit(int argCount, Value *args);

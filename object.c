@@ -26,7 +26,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->isDark = true;
     object->isFrozen = false;
 
-    // prepend
+    // prepend new object to linked list
     object->next = vm.objects;
     if (vm.objects) {
         vm.objects->prev = object;
@@ -34,6 +34,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->prev = NULL;
     vm.objects = object;
     object->isLinked = true;
+    object->objectId = (size_t)object;
 
     return object;
 }
@@ -45,7 +46,7 @@ static Obj *allocateCStackObject(size_t size, ObjType type) {
     object->isDark = true;
     object->isFrozen = false;
 
-    // prepend
+    // prepend new object to linked list
     object->next = vm.objects;
     if (vm.objects) {
         vm.objects->prev = object;
@@ -53,6 +54,7 @@ static Obj *allocateCStackObject(size_t size, ObjType type) {
     object->prev = NULL;
     vm.objects = object;
     object->isLinked = true;
+    object->objectId = (size_t)object;
 
     if (vm.inited) {
         vec_push(&vm.stackObjects, object);

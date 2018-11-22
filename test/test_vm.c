@@ -464,24 +464,6 @@ cleanup:
     return 0;
 }
 
-static int test_unredefinable_global() {
-    char *src = "Object = nil;";
-    InterpretResult ires = interp(src, false);
-    T_ASSERT_EQ(INTERPRET_RUNTIME_ERROR, ires);
-cleanup:
-    freeVM();
-    return 0;
-}
-
-static int test_unredefinable_global2() {
-    char *src = "var Object;";
-    InterpretResult ires = interp(src, false);
-    T_ASSERT_EQ(INTERPRET_RUNTIME_ERROR, ires);
-cleanup:
-    freeVM();
-    return 0;
-}
-
 static int test_array_literal() {
     char *src = "var a = [1,2,3]; print a.toString(); a;";
     ObjString *buf = newString("", 0);
@@ -675,8 +657,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_short_circuit_and);
     RUN_TEST(test_short_circuit_or);
     RUN_TEST(test_native_typeof);
-    RUN_TEST(test_unredefinable_global);
-    RUN_TEST(test_unredefinable_global2);
     RUN_TEST(test_array_literal);
     RUN_TEST(test_while_loop_stack);
     RUN_TEST(test_array_get_set);

@@ -19,9 +19,9 @@ typedef enum {
     OP_NOT,
 
     OP_GET_LOCAL, // get local var, next byte is frame slot index
-    OP_SET_LOCAL, // set local var, next byte is frame slot index, value is stacktop
+    OP_SET_LOCAL, // set local var, next byte is frame slot index, value is on top of stack
     OP_GET_GLOBAL, // get global var, next byte is frame slot index
-    OP_SET_GLOBAL, // set global var, next byte is frame slot index, value is stacktop
+    OP_SET_GLOBAL, // set global var, next byte is frame slot index, value is on top of stack
     OP_DEFINE_GLOBAL, // define global var for first time
 
     OP_CLOSURE,
@@ -38,6 +38,7 @@ typedef enum {
 
     OP_CALL, // call function, arguments are on stack
     OP_INVOKE, // call regular method, instance and arguments are on stack
+    OP_GET_THIS,
     OP_GET_SUPER, // method lookup begins in superclass, class and instance are on stack
     OP_RETURN,
     OP_PRINT,
@@ -62,8 +63,6 @@ typedef enum {
     OP_JUMP_IF_FALSE_PEEK, // peeks value off top of stack, checks truthiness
     OP_JUMP_IF_TRUE_PEEK, // peeks value off top of stack, checks truthiness
     OP_LOOP,
-
-    OP_CREATE_ARRAY, // number of elements is at top of stack, elements are below it
 
     OP_CLASS, // class name is given as operand
     OP_SUBCLASS, // top of stack is superclass, operand is class name

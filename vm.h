@@ -25,28 +25,29 @@ typedef struct CallFrame {
     ObjString *file; // full path of file the function is called from
 } CallFrame; // represents a local scope (block, function, etc)
 
-// Execution context for VM. When loading a script, a new context is created.
-// When evaling, a new context is also created.
+// Execution context for VM. When loading a script, a new context is created,
+// when evaling a string, a new context is also created, etc.
 typedef struct VMExecContext {
-    Value stack[STACK_MAX]; // stack VM, this is the stack of operands
+    Value stack[STACK_MAX]; // stack VM, this is the stack (bottom) of operands
     Value *stackTop;
     // NOTE: the current callframe contains the closure, which contains the
     // function, which contains the chunk of bytecode for the current function
     // (or top-level)
     CallFrame frames[FRAMES_MAX];
     unsigned frameCount;
-    Table roGlobals; // per-script readonly global vars
+    Table roGlobals; // per-script readonly global vars (ex: __FILE__)
     ObjString *filename;
     Value *lastValue;
 } VMExecContext;
 
 typedef struct VM {
-    VMExecContext *ec; // current execution context
+    VMExecContext *ec; // current execution context of vm
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
 
     Obj *objects; // linked list of heap objects
     ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
     Value *lastValue;
+    Value *thisValue;
     Table globals; // global variables
     Table strings; // interned strings
     ObjString *initString;
@@ -105,6 +106,7 @@ void unsetPrintBuf(void);
 NORETURN void repl(void);
 void resetStack(); // reset operand stack
 int VMNumStackFrames(void);
+int VMNumCallFrames(void);
 void printVMStack(FILE *f);
 void setBacktrace(Value err);
 

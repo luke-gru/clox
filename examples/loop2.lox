@@ -1,0 +1,10 @@
+var i = 0;
+var a = [1,2,3];
+while (i < 500) {
+  print i;
+  print a;
+  i = i + 1;
+}
+
+__END__
+-- noexpect: --

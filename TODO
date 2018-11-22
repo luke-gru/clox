@@ -4,7 +4,7 @@ More language features to be close to my version of jlox
 
 * Saving/loading bytecode to disk []
 * Debugger support [IN PROGRESS]
-* bytecode optimization pass [] (constant folding, jump consolidation, etc.)
+* bytecode optimization pass [PARTIAL] (constant folding, jump consolidation, etc.)
 * simple JIT, maybe? []
 * different GC strategies, maybe support copying GC []
 
@@ -32,11 +32,10 @@ execution contexts (like eval) []
 * Add keyword arguments []
 * Add splat arguments/parameters []
 * Add File class [IN PROGRESS]
-* Allow arbitrary statements in classes []
 * Add modules like in jlox [PARTIAL]
-* Add PUTSELF instruction instead of using `this` as a sort of local variable
 * Add Object#dup, and Class#ancestors
-* Add '_class', '_superClass' properties to instance and class objects
+* Make strings instances, make them mutable, and static strings like in jlox
 
 BUGS:
-super() bug in examples/super.lox
+* super() bug in examples/super.lox
+* bug in recursive fn calls (ex: fib)

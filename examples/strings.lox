@@ -1,0 +1,7 @@
+var s = "string";
+var s2 = "string";
+/*print s.objectId; // FIXME: get to work */
+print s;
+
+__END__
+string

@@ -48,9 +48,9 @@ typedef struct ValueArray {
 #define AS_BOOL(value)    ((value).as.boolean)
 #define AS_NUMBER(value)  ((value).as.number)
 
-#define BOOL_VAL(value)   ((Value){ VAL_T_BOOL, { .boolean = value } })
+#define BOOL_VAL(b)   ((Value){ VAL_T_BOOL, { .boolean = b } })
 #define NIL_VAL           ((Value){ VAL_T_NIL, { .number = 0 } })
-#define NUMBER_VAL(value) ((Value){ VAL_T_NUMBER, { .number = value } })
+#define NUMBER_VAL(n) ((Value){ VAL_T_NUMBER, { .number = n } })
 #define OBJ_VAL(obj)      ((Value){ VAL_T_OBJ, { .object = (Obj*)obj } })
 
 #define OBJ_TYPE(value)   (AS_OBJ(value)->type)

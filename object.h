@@ -26,6 +26,7 @@ typedef struct Obj {
   // GC fields
   Obj *next;
   Obj *prev;
+  size_t objectId;
   bool isLinked; // is this object linked into vm.objects?
   bool isDark; // is this object marked?
   bool noGC; // don't collect this object

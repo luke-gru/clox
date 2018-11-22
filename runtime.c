@@ -184,7 +184,7 @@ static void freeInternalAry(Obj *internalObj) {
     FREE(ValueArray, valAry); // release the actual memory
 }
 
-// var o = Object(); print o._class;
+// ex: var o = Object(); print o._class;
 Value lxObjectGetClass(int argCount, Value *args) {
     Value self = *args;
     ObjClass *klass = AS_INSTANCE(self)->klass;
@@ -195,7 +195,13 @@ Value lxObjectGetClass(int argCount, Value *args) {
     }
 }
 
-// var m = Module("MyMod");
+Value lxObjectGetObjectId(int argCount, Value *args) {
+    Value self = *args;
+    size_t objId = AS_OBJ(self)->objectId;
+    return NUMBER_VAL((double)objId);
+}
+
+// ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
     // TODO: add to module map, and make sure module doesn't already exist, maybe
     Value self = *args;
@@ -208,7 +214,7 @@ Value lxModuleInit(int argCount, Value *args) {
     return self;
 }
 
-// var c = Class("MyClass", Object);
+// ex: var c = Class("MyClass", Object);
 Value lxClassInit(int argCount, Value *args) {
     Value self = *args;
     CHECK_ARGS("Class#init", 1, 3, argCount);
@@ -245,7 +251,7 @@ Value lxClassInclude(int argCount, Value *args) {
     return modVal;
 }
 
-// ex: Object._superClass
+// ex: print Object._superClass;
 Value lxClassGetSuperclass(int argCount, Value *args) {
     Value self = *args;
     ObjClass *klass = AS_CLASS(self);
@@ -256,7 +262,7 @@ Value lxClassGetSuperclass(int argCount, Value *args) {
     }
 }
 
-// var a = Array();
+// ex: var a = Array();
 Value lxArrayInit(int argCount, Value *args) {
     CHECK_ARGS("Array#init", 1, -1, argCount);
     Value self = *args;
@@ -274,7 +280,7 @@ Value lxArrayInit(int argCount, Value *args) {
     return self;
 }
 
-// a.push(1);
+// ex: a.push(1);
 Value lxArrayPush(int argCount, Value *args) {
     CHECK_ARGS("Array#push", 2, 2, argCount);
     Value self = args[0];
@@ -282,9 +288,10 @@ Value lxArrayPush(int argCount, Value *args) {
     return self;
 }
 
-// print a;
+// ex:
+//   print a;
 // OR
-// a.toString(); // => [1,2,3]
+//   a.toString(); // => [1,2,3]
 Value lxArrayToString(int argCount, Value *args) {
     CHECK_ARGS("Array#toString", 1, 1, argCount);
     Value self = *args;

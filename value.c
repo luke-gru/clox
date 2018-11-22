@@ -79,7 +79,8 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
                 }
                 ObjString *out = AS_STRING(stringVal);
                 fprintf(file, "%s", out->chars);
-                ASSERT(AS_OBJ(pop()) == AS_OBJ(stringVal));;
+                Value popped = pop();
+                ASSERT(AS_OBJ(popped) == AS_OBJ(stringVal));
             } else {
                 ObjClass *klass = inst->klass;
                 char *klassName = klass->name->chars;
@@ -183,6 +184,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
                     UNREACHABLE("error");
                 }
                 ret = AS_STRING(stringVal);
+                pop(); // stringVal
             } else {
                 ObjClass *klass = inst->klass;
                 char *klassName = klass->name->chars;
@@ -220,11 +222,12 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
         } else if (OBJ_TYPE(value) == OBJ_T_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
             ObjString *name;
-            if (bmethod->callable->type == OBJ_T_FUNCTION) {
-                name = ((ObjFunction*)(bmethod->callable))->name;
+            if (bmethod->callable->type == OBJ_T_CLOSURE) {
+                name = ((ObjClosure*)(bmethod->callable))->function->name;
             } else if (bmethod->callable->type == OBJ_T_NATIVE_FUNCTION) {
                 name = ((ObjNative*)(bmethod->callable))->name;
             } else {
+                fprintf(stderr, "Wrong obj type: %d\n", bmethod->callable->type);
                 UNREACHABLE("error");
             }
             char *nameStr = name->chars;

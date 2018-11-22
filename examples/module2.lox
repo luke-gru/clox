@@ -1,15 +1,13 @@
 module MyMod {
-  me() { return this; }
+  print this;
 }
 
 class MyClass {
+  print this;
+  this.include(MyMod);
 }
-
-MyClass.include(MyMod);
-
-var c = MyClass();
-print c.me();
 
 __END__
 -- expect: --
-<instance MyClass>
+<module MyMod>
+<class MyClass>

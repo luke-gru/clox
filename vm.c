@@ -29,11 +29,6 @@ static void vm_debug(const char *format, ...) {
 }
 
 char *unredefinableGlobals[] = {
-    "Object",
-    "Class",
-    "Array",
-    "Error",
-    "Map",
     "clock",
     "typeof",
     "debugger",
@@ -103,18 +98,24 @@ static void defineNativeClasses() {
 
     ObjNative *objGetClassNat = newNative(copyString("_class", 6), lxObjectGetClass);
     tableSet(&objClass->getters, OBJ_VAL(copyString("_class", 6)), OBJ_VAL(objGetClassNat));
+
+    ObjNative *objGetObjectIdNat = newNative(copyString("objectId", 8), lxObjectGetObjectId);
+    tableSet(&objClass->getters, OBJ_VAL(copyString("objectId", 8)), OBJ_VAL(objGetObjectIdNat));
+
     lxObjClass = objClass;
 
     // class Module
     ObjString *modClassName = copyString("Module", 6);
     ObjClass *modClass = newClass(modClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(modClassName), OBJ_VAL(modClass));
+
     lxModuleClass = modClass;
 
     // class Class
     ObjString *classClassName = copyString("Class", 5);
     ObjClass *classClass = newClass(classClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(classClassName), OBJ_VAL(classClass));
+
     lxClassClass = classClass;
 
     // restore `klass` property of above-created classes, since <class Class>
@@ -136,6 +137,7 @@ static void defineNativeClasses() {
     ObjString *arrayClassName = copyString("Array", 5);
     ObjClass *arrayClass = newClass(arrayClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(arrayClassName), OBJ_VAL(arrayClass));
+
     lxAryClass = arrayClass;
 
     ObjNative *aryInitNat = newNative(copyString("init", 4), lxArrayInit);
@@ -157,6 +159,7 @@ static void defineNativeClasses() {
     ObjString *mapClassName = copyString("Map", 3);
     ObjClass *mapClass = newClass(mapClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(mapClassName), OBJ_VAL(mapClass));
+
     lxMapClass = mapClass;
 
     ObjNative *mapInitNat = newNative(copyString("init", 4), lxMapInit);
@@ -181,6 +184,7 @@ static void defineNativeClasses() {
     ObjString *errClassName = copyString("Error", 5);
     ObjClass *errClass = newClass(errClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(errClassName), OBJ_VAL(errClass));
+
     lxErrClass = errClass;
 
     ObjNative *errInitNat = newNative(copyString("init", 4), lxErrInit);
@@ -189,6 +193,7 @@ static void defineNativeClasses() {
     ObjString *argErrClassName = copyString("ArgumentError", 13);
     ObjClass *argErrClass = newClass(argErrClassName, errClass);
     tableSet(&vm.globals, OBJ_VAL(argErrClassName), OBJ_VAL(argErrClass));
+
     lxArgErrClass = argErrClass;
 
     // class File
@@ -196,6 +201,7 @@ static void defineNativeClasses() {
     ObjClass *fileClass = newClass(fileClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(fileClassName), OBJ_VAL(fileClass));
     ObjClass *fileClassStatic = classSingletonClass(fileClass);
+
     lxFileClass = fileClass;
 
     ObjNative *fileReadNat = newNative(copyString("read", 4), lxFileReadStatic);
@@ -270,6 +276,7 @@ void initVM() {
     vec_init(&vm.loadedScripts);
 
     vm.lastValue = NULL;
+    vm.thisValue = NULL;
     initTable(&vm.globals);
     initTable(&vm.strings);
     vm.inited = true; // NOTE: VM has to be inited before calls to copyString
@@ -308,6 +315,7 @@ void freeVM() {
     vm.printBuf = NULL;
     vm.printToStdout = true;
     vm.lastValue = NULL;
+    vm.thisValue = NULL;
     vm.grayStack = NULL;
     vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
@@ -333,6 +341,10 @@ void freeVM() {
 
 int VMNumStackFrames() {
     return EC->stackTop - EC->stack;
+}
+
+int VMNumCallFrames() {
+    return (int)EC->frameCount;
 }
 
 bool VMLoadedScript(char *fname) {
@@ -375,6 +387,11 @@ Value peek(unsigned n) {
     return *(EC->stackTop-1-n);
 }
 
+static inline void setThis(unsigned n) {
+    ASSERT((EC->stackTop-n) > EC->stack);
+    vm.thisValue = (EC->stackTop-1-n);
+}
+
 Value *getLastValue() {
     if (isOpStackEmpty()) {
         return EC->lastValue;
@@ -383,15 +400,15 @@ Value *getLastValue() {
     }
 }
 
-static Value nilValue() {
+static inline Value nilValue() {
     return NIL_VAL;
 }
 
-static Value trueValue() {
+static inline Value trueValue() {
     return BOOL_VAL(true);
 }
 
-static Value falseValue() {
+static inline Value falseValue() {
     return BOOL_VAL(false);
 }
 
@@ -406,13 +423,14 @@ static bool isTruthy(Value val) {
     }
 }
 
-static bool canCmpValues(Value lhs, Value rhs) {
+static inline bool canCmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
     return (IS_NUMBER(lhs) && IS_NUMBER(rhs)) ||
         (IS_STRING(lhs) && IS_STRING(rhs));
 }
 
-static int cmpValues(Value lhs, Value rhs) {
-    if (lhs.type == VAL_T_NUMBER && rhs.type == VAL_T_NUMBER) {
+// returns -1, 0, 1, or -2 on error
+static int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
+    if (IS_NUMBER(lhs) && IS_NUMBER(rhs)) {
         double numA = AS_NUMBER(lhs);
         double numB = AS_NUMBER(rhs);
         if (numA == numB) {
@@ -425,8 +443,24 @@ static int cmpValues(Value lhs, Value rhs) {
     } else if (IS_STRING(lhs) && IS_STRING(rhs)) {
         return strcmp(AS_STRING(lhs)->chars, AS_STRING(rhs)->chars);
     }
+
     // TODO: error out
     return -2;
+}
+
+static bool isValueOpEqual(Value lhs, Value rhs) {
+    if (lhs.type != rhs.type) {
+        return false;
+    }
+    if (IS_OBJ(lhs)) { // 2 objects, same pointers to Obj are equal
+        return AS_OBJ(lhs) == AS_OBJ(rhs);
+    } else if (IS_NUMBER(lhs)) { // 2 numbers, same values are equal
+        return AS_NUMBER(lhs) == AS_NUMBER(rhs);
+    } else if (IS_NIL(lhs)) { // 2 nils, are equal
+        return true;
+    } else {
+        return false;
+    }
 }
 
 static inline CallFrame *getFrame() {
@@ -434,7 +468,7 @@ static inline CallFrame *getFrame() {
     return &EC->frames[EC->frameCount-1];
 }
 
-static Chunk *currentChunk() {
+static inline Chunk *currentChunk() {
     return &getFrame()->closure->function->chunk;
 }
 
@@ -524,15 +558,16 @@ void setBacktrace(Value err) {
     }
 }
 
-static bool isCallable(Value val) {
+static inline bool isCallable(Value val) {
     return IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
         IS_BOUND_METHOD(val) || IS_CLOSURE(val);
 }
 
-static bool isThrowable(Value val) {
+static inline bool isThrowable(Value val) {
     return IS_INSTANCE(val) && !IS_STRING(val);
 }
 
+// FIXME: use v_includedMods
 static bool lookupGetter(ObjInstance *obj, ObjString *propName, Value *ret) {
     ObjClass *klass = obj->klass;
     if (klass->singletonKlass != NULL) {
@@ -548,6 +583,7 @@ static bool lookupGetter(ObjInstance *obj, ObjString *propName, Value *ret) {
     return false;
 }
 
+// FIXME: use v_includedMods
 static bool lookupSetter(ObjInstance *obj, ObjString *propName, Value *ret) {
     ObjClass *klass = obj->klass;
     if (klass->singletonKlass != NULL) {
@@ -563,12 +599,17 @@ static bool lookupSetter(ObjInstance *obj, ObjString *propName, Value *ret) {
     return false;
 }
 
-static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName, Value *ret) {
+// FIXME: use v_includedMods
+static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
     if (klass == obj->klass && obj->singletonKlass) {
         klass = obj->singletonKlass;
     }
     Value key = OBJ_VAL(propName);
     while (klass) {
+        if ((!lookInGivenClass) && klass == obj->klass) {
+            klass = klass->superclass; // FIXME: work in modules
+            continue;
+        }
         if (tableGet(&klass->methods, key, ret)) {
             return true;
         }
@@ -591,7 +632,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
         } else {
             return pop();
         }
-    } else if (lookupMethod(obj, obj->klass, propName, &ret)) {
+    } else if (lookupMethod(obj, obj->klass, propName, &ret, true)) {
         ObjBoundMethod *bmethod = newBoundMethod(obj, AS_OBJ(ret));
         return OBJ_VAL(bmethod);
     } else {
@@ -682,7 +723,7 @@ static void defineSetter(ObjString *name) {
 }
 
 // Call method on instance, args are NOT expected to be pushed on to stack by
-// caller. `argCount` does not include the implicit instance argument.
+// caller, nor is the instance. `argCount` does not include the implicit instance argument.
 // Return value is pushed to stack and returned.
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
     VM_DEBUG("Calling VM method");
@@ -773,8 +814,8 @@ static bool checkFunctionArity(ObjFunction *func, int argCount) {
 }
 
 // Arguments are expected to be pushed on to stack by caller. Argcount
-// includes the instance argument, ex: a method with no arguments will have an
-// argCount of 1. If the callable is a class, this function creates the
+// does NOT include the instance argument, ex: a method with no arguments will have an
+// argCount of 0. If the callable is a class, this function creates the
 // new instance and puts it in the proper spot in the stack. The return value
 // is pushed to the stack.
 static bool doCallCallable(Value callable, int argCount, bool isMethod) {
@@ -806,6 +847,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
                 pushNativeFrame(nativeInit);
                 CallFrame *newFrame = getFrame();
                 nativeInit->function(argCount+1, EC->stackTop-argCount-1);
+                newFrame->slots = EC->stackTop-argCount-1;
                 if (returnedFromNativeErr) {
                     returnedFromNativeErr = false;
                     VM_DEBUG("native initializer returned from error");
@@ -817,10 +859,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
                     return false;
                 } else {
                     VM_DEBUG("native initializer returned");
+                    EC->stackTop = getFrame()->slots;
                     popFrame();
-                    for (int i = 0; i <= argCount; i++) {
-                        pop();
-                    }
                     push(OBJ_VAL(instance));
                     return true;
                 }
@@ -832,7 +872,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
             throwArgErrorFmt("Expected 0 arguments (Object#init) but got %d.", argCount);
             return false;
         } else {
-            //push(instanceVal);
             return true; // new instance is on the top of the stack
         }
     } else if (IS_BOUND_METHOD(callable)) {
@@ -843,13 +882,14 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         EC->stackTop[-argCount - 1] = instanceVal;
         return doCallCallable(OBJ_VAL(callable), argCount, true);
     } else if (IS_NATIVE_FUNCTION(callable)) {
-        VM_DEBUG("Calling native function with %d args", argCount);
+        VM_DEBUG("Calling native %s with %d args", isMethod ? "method" : "function", argCount);
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
         if (isMethod) argCount++;
         captureNativeError();
         pushNativeFrame(native);
         CallFrame *newFrame = getFrame();
         Value val = native->function(argCount, EC->stackTop-argCount);
+        newFrame->slots = EC->stackTop-argCount;
         if (returnedFromNativeErr) {
             VM_DEBUG("Returned from native function with error");
             returnedFromNativeErr = false;
@@ -861,6 +901,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
             return false;
         } else {
             VM_DEBUG("Returned from native function without error");
+            EC->stackTop = getFrame()->slots;
             popFrame();
             push(val);
         }
@@ -899,6 +940,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
 
 /**
  * see doCallCallable
+ * argCount does NOT include instance if `isMethod` is true
  */
 bool callCallable(Value callable, int argCount, bool isMethod) {
     int lenBefore = vm.stackObjects.length;
@@ -1013,17 +1055,25 @@ void throwArgErrorFmt(const char *format, ...) {
     throwError(err);
 }
 
+// FIXME: only prints VM operand stack for current execution context (EC)
 void printVMStack(FILE *f) {
     if (EC->stackTop == EC->stack) {
-        fprintf(f, "Stack: empty\n");
+        fprintf(f, "[DEBUG]: Stack: empty\n");
         return;
     }
-    fprintf(f, "Stack (%d frames):\n", EC->frameCount);
+    int ECNumCallFrames = VMNumCallFrames();
+    fprintf(f, "[DEBUG]: Stack (%d stack frames, %d call frames):\n", VMNumStackFrames(), ECNumCallFrames);
     // print VM stack values from bottom of stack to top
+    fprintf(f, "[DEBUG]: ");
+    int callFrameIdx = 0;
     for (Value *slot = EC->stack; slot < EC->stackTop; slot++) {
         if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE)) {
-            fprintf(stderr, "Broken object pointer: %p\n", AS_OBJ(*slot));
+            fprintf(stderr, "[DEBUG]: Broken object pointer: %p\n", AS_OBJ(*slot));
             ASSERT(0);
+        }
+        if (EC->frames[callFrameIdx].slots == slot) {
+            fprintf(f, "(CF %d)", callFrameIdx+1);
+            callFrameIdx++;
         }
         fprintf(f, "[ ");
         printValue(f, *slot, false);
@@ -1191,12 +1241,12 @@ static InterpretResult run(bool doResetStack) {
       case OP_LESS: {
         Value rhs = pop(); // rhs
         Value lhs = pop(); // lhs
-        if (!canCmpValues(lhs, rhs)) {
+        if (!canCmpValues(lhs, rhs, instruction)) {
             // FIXME: throw error
             runtimeError("Can only compare numbers and strings with <");
             return INTERPRET_RUNTIME_ERROR;
         }
-        if (cmpValues(lhs, rhs) == -1) {
+        if (cmpValues(lhs, rhs, instruction) == -1) {
             push(trueValue());
         } else {
             push(falseValue());
@@ -1204,13 +1254,13 @@ static InterpretResult run(bool doResetStack) {
         break;
       }
       case OP_GREATER: {
-        Value rhs = pop(); // rhs
-        Value lhs = pop(); // lhs
-        if (!canCmpValues(lhs, rhs)) {
+        Value rhs = pop();
+        Value lhs = pop();
+        if (!canCmpValues(lhs, rhs, instruction)) {
             runtimeError("Can only compare numbers and strings with >");
             return INTERPRET_RUNTIME_ERROR;
         }
-        if (cmpValues(lhs, rhs) == 1) {
+        if (cmpValues(lhs, rhs, instruction) == 1) {
             push(trueValue());
         } else {
             push(falseValue());
@@ -1218,13 +1268,9 @@ static InterpretResult run(bool doResetStack) {
         break;
       }
       case OP_EQUAL: {
-        Value rhs = pop(); // rhs
-        Value lhs = pop(); // lhs
-        if (!canCmpValues(lhs, rhs)) {
-            runtimeError("Can only compare numbers and strings with ==");
-            return INTERPRET_RUNTIME_ERROR;
-        }
-        if (cmpValues(lhs, rhs) == 0) {
+        Value rhs = pop();
+        Value lhs = pop();
+        if (isValueOpEqual(lhs, rhs)) {
             push(trueValue());
         } else {
             push(falseValue());
@@ -1232,13 +1278,13 @@ static InterpretResult run(bool doResetStack) {
         break;
       }
       case OP_GREATER_EQUAL: {
-          Value rhs = pop(); // rhs
-          Value lhs = pop(); // lhs
-        if (!canCmpValues(lhs, rhs)) {
+          Value rhs = pop();
+          Value lhs = pop();
+        if (!canCmpValues(lhs, rhs, instruction)) {
             runtimeError("Can only compare numbers");
             return INTERPRET_RUNTIME_ERROR;
         }
-        if (cmpValues(lhs, rhs) != -1) {
+        if (cmpValues(lhs, rhs, instruction) != -1) {
             push(trueValue());
         } else {
             push(falseValue());
@@ -1246,13 +1292,13 @@ static InterpretResult run(bool doResetStack) {
         break;
       }
       case OP_LESS_EQUAL: {
-          Value rhs = pop(); // rhs
-          Value lhs = pop(); // lhs
-        if (!canCmpValues(lhs, rhs)) {
+          Value rhs = pop();
+          Value lhs = pop();
+        if (!canCmpValues(lhs, rhs, instruction)) {
             runtimeError("Can only compare numbers");
             return INTERPRET_RUNTIME_ERROR;
         }
-        if (cmpValues(lhs, rhs) != 1) {
+        if (cmpValues(lhs, rhs, instruction) != 1) {
             push(trueValue());
         } else {
             push(falseValue());
@@ -1454,6 +1500,7 @@ static InterpretResult run(bool doResetStack) {
                   // FIXME: throw error
                   UNREACHABLE("instance method '%s#%s' not found", className->chars, mname->chars);
               }
+              setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true);
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
@@ -1463,6 +1510,7 @@ static InterpretResult run(bool doResetStack) {
                   UNREACHABLE("class method '%s.%s' not found", klass->name->chars, mname->chars);
               }
               EC->stackTop[-numArgs-1] = instanceVal;
+              setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true);
           }
           // TODO: static module methods
@@ -1472,24 +1520,28 @@ static InterpretResult run(bool doResetStack) {
           ASSERT_VALID_STACK();
           break;
       }
+      case OP_GET_THIS: {
+          ASSERT(vm.thisValue);
+          push(*vm.thisValue);
+          break;
+      }
       case OP_GET_SUPER: {
+          // FIXME: top of stack should contain class or module of the 'super' call
           Value methodName = READ_CONSTANT();
-          Value instanceVal = pop();
+          ASSERT(vm.thisValue);
+          Value instanceVal = *vm.thisValue;
           ASSERT(IS_INSTANCE(instanceVal)); // FIXME: get working for classes (singleton methods)
-          Value klassVal = peek(0);
-          ASSERT(IS_CLASS(klassVal));
-          ObjClass *klass = AS_CLASS(klassVal);
+          ObjClass *klass = AS_INSTANCE(instanceVal)->klass;
           Value method;
           bool found = lookupMethod(
               AS_INSTANCE(instanceVal), klass,
-              AS_STRING(methodName), &method);
+              AS_STRING(methodName), &method, false);
           if (!found) {
               // TODO: Raise error
               runtimeError("Could not find method");
               return INTERPRET_RUNTIME_ERROR;
           }
           ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method));
-          pop(); // classval
           push(OBJ_VAL(bmethod));
           break;
       }
@@ -1521,6 +1573,7 @@ static InterpretResult run(bool doResetStack) {
           }
           ObjClass *klass = newClass(AS_STRING(className), AS_CLASS(objClassVal));
           push(OBJ_VAL(klass));
+          setThis(0);
           break;
       }
       case OP_MODULE: { // add or re-open module
@@ -1534,6 +1587,7 @@ static InterpretResult run(bool doResetStack) {
           }
           ObjModule *mod = newModule(AS_STRING(modName));
           push(OBJ_VAL(mod));
+          setThis(0);
           break;
       }
       case OP_SUBCLASS: { // add new class inheriting from an existing class
@@ -1556,18 +1610,20 @@ static InterpretResult run(bool doResetStack) {
               AS_CLASS(superclass)
           );
           push(OBJ_VAL(klass));
+          setThis(0);
           break;
       }
       case OP_IN: {
-          Value classOrInst = peek(0);
+          Value classOrInst = pop();
           ASSERT(IS_OBJ(classOrInst));
-          if (IS_CLASS(classOrInst)) {
-              push(classOrInst); // so `this` , which is always slot[1], returns the object
+          if (IS_CLASS(classOrInst) || IS_MODULE(classOrInst)) {
+              push(classOrInst);
           } else {
               ASSERT(IS_INSTANCE(classOrInst)); // FIXME: throw error if not instance
               ObjClass *klass = instanceSingletonClass(AS_INSTANCE(classOrInst));
               push(OBJ_VAL(klass));
           }
+          setThis(0);
           break;
       }
       case OP_METHOD: { // method definition in class or module
@@ -1625,15 +1681,12 @@ static InterpretResult run(bool doResetStack) {
           break;
       }
       case OP_INDEX_GET: {
-          Value lval = peek(1);
+          Value lval = peek(1); // ex: Array object
           ASSERT(IS_INSTANCE(lval)); // TODO: handle error
           ObjInstance *instance = AS_INSTANCE(lval);
           Obj *method = instanceFindMethod(instance, copyString("indexGet", 8));
           ASSERT(method); // TODO: handle error
           callCallable(OBJ_VAL(method), 1, true);
-          Value ret = pop();
-          pop(); pop();
-          push(ret);
           break;
       }
       case OP_INDEX_SET: {
@@ -1643,9 +1696,6 @@ static InterpretResult run(bool doResetStack) {
           Obj *method = instanceFindMethod(instance, copyString("indexSet", 8));
           ASSERT(method); // TODO: handle error
           callCallable(OBJ_VAL(method), 2, true);
-          Value ret = pop();
-          pop(); pop(); pop();
-          push(ret);
           break;
       }
       case OP_THROW: {
@@ -1707,7 +1757,6 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     }
     EC->filename = newString(filename, strlen(filename));
     EC->frameCount = 0;
-    // initialize top-level callframe (frameCount = 1)
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
@@ -1716,7 +1765,6 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     ObjFunction *func = newFunction(chunk);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
-    push(OBJ_VAL(frame->closure));
     frame->isCCall = false;
     frame->nativeFunc = NULL;
     setupPerScriptROGlobals(filename);
@@ -1738,7 +1786,6 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     ObjFunction *func = newFunction(chunk);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
-    push(OBJ_VAL(frame->closure));
     unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
@@ -1779,7 +1826,6 @@ Value VMEval(const char *src, const char *filename, int lineno) {
     ObjFunction *func = newFunction(&chunk);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
-    push(OBJ_VAL(frame->closure));
     unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;

@@ -1,0 +1,24 @@
+print Object == Object;
+print Object == nil;
+print nil == Object;
+print nil == nil;
+print 1 == 2;
+print 3.2 == 3.3;
+print 3.3 == 3.3;
+print Object() == Object();
+var o = Object();
+print o == o;
+print "wow" == "wow";
+
+__END__
+-- expect: --
+true
+false
+false
+true
+false
+false
+true
+false
+true
+true
