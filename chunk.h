@@ -90,6 +90,7 @@ void iseqAddInsn(Iseq *seq, Insn *toAdd);
 bool iseqRmInsn(Iseq *seq, Insn *toRm);
 void freeIseq(Iseq *seq);
 int iseqAddConstant(Iseq *seq, Value value);
+size_t iseqInsnByteDiff(Insn *prev, Insn *after);
 int iseqAddCatchRow(
     Iseq *seq,
     int ifrom,

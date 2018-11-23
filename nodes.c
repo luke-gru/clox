@@ -57,6 +57,7 @@ static void freeChildNodeCb(Node *node, int idx) {
 void freeNode(Node *node, bool freeChildren) {
     if (freeChildren && node->children != NULL) {
         nodeForeachChild(node, freeChildNodeCb);
+        free(node->children);
     }
     free(node);
 }
@@ -464,6 +465,7 @@ static char *outputFunctionStmt(Node *n, int indentLevel) {
     ASSERT_MEM(params);
     Node *param = NULL; int j = 0;
     int len = params->length;
+    // TODO: show default arguments
     vec_foreach(params, param, j) {
         buf = strAdd(buf, tokStr(&param->tok));
         if (j != len-1) {

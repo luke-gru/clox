@@ -15,8 +15,8 @@
 // For outputting ObjFunction chunks when printing bytecode
 typedef vec_t(ObjFunction*) vec_funcp_t;
 
-void printDisassembledChunk(Chunk *chunk, const char *name);
-int  printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs);
+void printDisassembledChunk(FILE *f, Chunk *chunk, const char *name);
+int  printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *funcs);
 
 ObjString *disassembleChunk(Chunk *chunk);
 

@@ -87,6 +87,19 @@ bool iseqRmInsn(Iseq *seq, Insn *toRm) {
     return true;
 }
 
+size_t iseqInsnByteDiff(Insn *prev, Insn *after) {
+    ASSERT(after);
+    if (prev == after) return 0;
+    size_t diff = 0;
+    Insn *cur = after;
+    while (cur && cur != prev) {
+        diff += cur->numOperands+1;
+        cur = cur->prev;
+    }
+    if (cur) ASSERT(cur == prev);
+    return diff;
+}
+
 /**
  * Write 1 byte of bytecode operation/data to chunk. Chunk
  * grows automatically if no more space.

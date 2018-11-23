@@ -52,9 +52,11 @@ typedef struct ObjInternal {
   GCMarkFunc freeFunc;
 } ObjInternal;
 
+typedef struct sNode Node; // fwd decl
 typedef struct ObjFunction {
   Obj object;
-  int arity;
+  int arity; // number of required args
+  int numDefaultArgs; // number of optional default args
   int upvalueCount;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM, or serialized/loaded to/from disk.
@@ -62,6 +64,7 @@ typedef struct ObjFunction {
   ObjString *name;
   bool isMethod;
   bool isSingletonMethod;
+  Node *funcNode;
 } ObjFunction;
 
 typedef struct ObjUpvalue ObjUpvalue;
@@ -132,6 +135,7 @@ typedef struct ObjModule {
 } ObjModule;
 
 extern ObjClass *lxObjClass;
+//extern ObjClass *lxStringClass;
 extern ObjClass *lxClassClass;
 extern ObjClass *lxModuleClass;
 extern ObjClass *lxAryClass;
@@ -262,7 +266,7 @@ void  setProp(Value self, ObjString *propName, Value val);
 Value getProp(Value self, ObjString *propName);
 
 // Object creation functions
-ObjFunction *newFunction();
+ObjFunction *newFunction(Chunk *chunk, Node *funcNode);
 ObjClass *newClass(ObjString *name, ObjClass *superclass);
 ObjModule *newModule(ObjString *name);
 ObjInstance *newInstance(ObjClass *klass);

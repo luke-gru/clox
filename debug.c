@@ -183,8 +183,8 @@ void disassembleCatchTbl(ObjString *buf, CatchTable *tbl) {
 /**
  * Print all operations and operands to the console.
  */
-void printDisassembledChunk(Chunk *chunk, const char *name) {
-    printf("== %s ==\n", name);
+void printDisassembledChunk(FILE *f, Chunk *chunk, const char *name) {
+    fprintf(f, "== %s ==\n", name);
     vec_funcp_t funcs;
     vec_init(&funcs);
 
@@ -193,7 +193,7 @@ void printDisassembledChunk(Chunk *chunk, const char *name) {
     }
 
     for (int i = 0; i < chunk->count;) {
-        i = printDisassembledInstruction(chunk, i, &funcs);
+        i = printDisassembledInstruction(f, chunk, i, &funcs);
         if (i <= 0) {
             break;
         }
@@ -201,20 +201,20 @@ void printDisassembledChunk(Chunk *chunk, const char *name) {
     ObjFunction *func = NULL; int i = 0;
     vec_foreach(&funcs, func, i) {
         char *name = func->name ? func->name->chars : "(anon)";
-        printf("-- Function %s --\n", name);
-        printDisassembledChunk(&func->chunk, name);
-        printf("----\n");
+        fprintf(f, "-- Function %s --\n", name);
+        printDisassembledChunk(f, &func->chunk, name);
+        fprintf(f, "----\n");
     }
     vec_deinit(&funcs);
-    printf("== /%s ==\n", name);
+    fprintf(f, "== /%s ==\n", name);
 }
 
-static int printConstantInstruction(char *op, Chunk *chunk, int i) {
+static int printConstantInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
-    printf("%-16s %4" PRId8 " '", op, constantIdx);
+    fprintf(f, "%-16s %4" PRId8 " '", op, constantIdx);
     Value constant = getConstant(chunk, constantIdx);
-    printValue(stdout, constant,  false);
-    printf("'\n");
+    printValue(f, constant,  false);
+    fprintf(f, "'\n");
     return i+2;
 }
 // instruction has 1 operand, a constant slot index
@@ -234,13 +234,13 @@ static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-static int printLocalVarInstruction(char *op, Chunk *chunk, int i) {
+static int printLocalVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
-    printf("%-16s    [slot %" PRId8 "]\n", op, slotIdx);
+    fprintf(f, "%-16s    [slot %" PRId8 "]\n", op, slotIdx);
     return i+2;
 }
 
-static int printClosureInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+static int printClosureInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t funcConstIdx = chunk->code[i + 1];
     Value constant = getConstant(chunk, funcConstIdx);
     ASSERT(IS_FUNCTION(constant));
@@ -248,9 +248,9 @@ static int printClosureInstruction(char *op, Chunk *chunk, int i, vec_funcp_t *f
 
     addFunc(funcs, AS_FUNCTION(constant));
 
-    printf("%-16s %4" PRId8 " '", op, funcConstIdx);
-    printValue(stdout, constant, false);
-    printf("' (upvals: %d)\n", numUpvalues);
+    fprintf(f, "%-16s %4" PRId8 " '", op, funcConstIdx);
+    printValue(f, constant, false);
+    fprintf(f, "' (upvals: %d)\n", numUpvalues);
     return i+2+(numUpvalues*2);
 }
 
@@ -274,10 +274,10 @@ static int closureInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec
     return i+2+(numUpvalues*2);
 }
 
-static int printJumpInstruction(char *op, Chunk *chunk, int i) {
+static int printJumpInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t jumpOffset = chunk->code[i + 1];
     /*ASSERT(jumpOffset != 0); // should have been patched*/
-    printf("%-16s %04" PRId8 " (addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
+    fprintf(f, "%-16s %04" PRId8 " (addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
     return i+2;
 }
 
@@ -292,9 +292,9 @@ static int jumpInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-static int printLoopInstruction(char *op, Chunk *chunk, int i) {
+static int printLoopInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t loopOffset = chunk->code[i + 1];
-    printf("%-16s %4" PRId8 " (addr=%04" PRId8 ")\n", op, loopOffset, (i-loopOffset));
+    fprintf(f, "%-16s %4" PRId8 " (addr=%04" PRId8 ")\n", op, loopOffset, (i-loopOffset));
     return i+2;
 }
 
@@ -308,9 +308,9 @@ static int loopInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-static int printCallInstruction(char *op, Chunk *chunk, int i) {
+static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t numArgs = chunk->code[i + 1];
-    printf("%-16s    (argc=%04" PRId8 ")\n", op, numArgs);
+    fprintf(f, "%-16s    (argc=%04" PRId8 ")\n", op, numArgs);
     return i+2;
 }
 
@@ -324,12 +324,12 @@ static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-static int printInvokeInstruction(char *op, Chunk *chunk, int i) {
+static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t methodNameArg = chunk->code[i + 1];
     Value methodName = getConstant(chunk, methodNameArg);
     char *methodNameStr = AS_CSTRING(methodName);
     uint8_t numArgs = chunk->code[i+2];
-    printf("%-16s    ('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
+    fprintf(f, "%-16s    ('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
     return i+3;
 }
 
@@ -357,8 +357,8 @@ static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
 }
 
 // instruction has no operands
-static int printSimpleInstruction(char *op, int i) {
-    printf("%s\n", op);
+static int printSimpleInstruction(FILE *f, char *op, int i) {
+    fprintf(f, "%s\n", op);
     return i+1;
 }
 
@@ -369,13 +369,13 @@ static int simpleInstruction(ObjString *buf, char *op, int i) {
     return i+1;
 }
 
-int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
-    printf("%04d ", i);
+int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *funcs) {
+    fprintf(f, "%04d ", i);
     // same line as prev instruction
     if (i > 0 && chunk->lines[i] == chunk->lines[i - 1]) {
-        printf("   | ");
+        fprintf(f, "   | ");
     } else { // new line
-        printf("%4d ", chunk->lines[i]);
+        fprintf(f, "%4d ", chunk->lines[i]);
     }
     uint8_t byte = chunk->code[i];
     switch (byte) {
@@ -394,25 +394,25 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_PROP_SET:
         case OP_GET_THROWN:
         case OP_GET_SUPER:
-            return printConstantInstruction(opName(byte), chunk, i);
+            return printConstantInstruction(f, opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
         case OP_SET_UPVALUE:
         case OP_GET_UPVALUE:
-            return printLocalVarInstruction(opName(byte), chunk, i);
+            return printLocalVarInstruction(f, opName(byte), chunk, i);
         case OP_CLOSURE:
-            return printClosureInstruction(opName(byte), chunk, i, funcs);
+            return printClosureInstruction(f, opName(byte), chunk, i, funcs);
         case OP_JUMP:
         case OP_JUMP_IF_FALSE:
         case OP_JUMP_IF_FALSE_PEEK:
         case OP_JUMP_IF_TRUE_PEEK:
-            return printJumpInstruction(opName(byte), chunk, i);
+            return printJumpInstruction(f, opName(byte), chunk, i);
         case OP_LOOP:
-            return printLoopInstruction(opName(byte), chunk, i);
+            return printLoopInstruction(f, opName(byte), chunk, i);
         case OP_CALL:
-            return printCallInstruction(opName(byte), chunk, i);
+            return printCallInstruction(f, opName(byte), chunk, i);
         case OP_INVOKE:
-            return printInvokeInstruction(opName(byte), chunk, i);
+            return printInvokeInstruction(f, opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
         case OP_ADD:
@@ -438,9 +438,9 @@ int printDisassembledInstruction(Chunk *chunk, int i, vec_funcp_t *funcs) {
         case OP_CLOSE_UPVALUE:
         case OP_IN:
         case OP_GET_THIS:
-            return printSimpleInstruction(opName(byte), i);
+            return printSimpleInstruction(f, opName(byte), i);
         default:
-            printf("Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
+            fprintf(f, "Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
             return -1;
     }
 }

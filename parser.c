@@ -620,9 +620,17 @@ static Node *funDeclaration(ParseFunctionType fnType) {
             Token paramTok = current->previous;
             node_type_t nType = {
                 .type = NODE_OTHER,
-                .kind = PARAM_NODE,
+                .kind = PARAM_NODE_REGULAR,
             };
-            Node *n = createNode(nType, paramTok, NULL);
+            Node *n = NULL;
+            if (match(TOKEN_EQUAL)) {
+                nType.kind = PARAM_NODE_DEFAULT_ARG;
+                n = createNode(nType, paramTok, NULL);
+                Node *argExpr = expression();
+                nodeAddChild(n, argExpr);
+            } else {
+                n = createNode(nType, paramTok, NULL);
+            }
             vec_push(paramNodes, n);
             if (!match(TOKEN_COMMA)) {
                 break;

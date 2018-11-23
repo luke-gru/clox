@@ -6,6 +6,7 @@
 #include "runtime.h"
 #include "memory.h"
 #include "compiler.h"
+#include "nodes.h"
 #include <setjmp.h>
 
 VM vm;
@@ -81,6 +82,7 @@ static void defineNativeFunctions() {
 
 // Builtin classes:
 ObjClass *lxObjClass;
+/*ObjClass *lxStringClass;*/
 ObjClass *lxClassClass;
 ObjClass *lxModuleClass;
 ObjClass *lxAryClass;
@@ -804,10 +806,16 @@ static void captureNativeError(void) {
 }
 
 static bool checkFunctionArity(ObjFunction *func, int argCount) {
-    int arity = func->arity;
-    if (argCount != arity) {
-        throwArgErrorFmt("Expected %d arguments but got %d.",
-            arity, argCount);
+    int arityMin = func->arity;
+    int arityMax = arityMin + func->numDefaultArgs;
+    if (argCount < arityMin || argCount > arityMax) {
+        if (arityMin == arityMax) {
+            throwArgErrorFmt("Expected %d arguments but got %d.",
+                    arityMin, argCount);
+        } else {
+            throwArgErrorFmt("Expected %d-%d arguments but got %d.",
+                    arityMin, arityMax, argCount);
+        }
         return false;
     }
     return true;
@@ -918,16 +926,46 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     VM_DEBUG("doCallCallable found closure");
     // non-native function/method call
     ASSERT(closure);
-    bool arityOK = checkFunctionArity(closure->function, argCount);
+    ObjFunction *func = closure->function;
+    bool arityOK = checkFunctionArity(func, argCount);
     if (!arityOK) return false;
+
 
     int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
+
+    size_t funcOffset = 0;
+    int numDefaultArgsUsed = (func->arity + func->numDefaultArgs)-argCount;
+    int numDefaultArgsUnused = func->numDefaultArgs - numDefaultArgsUsed;
+    VM_DEBUG("num default args not used: %d", numDefaultArgsUnused);
+    if (numDefaultArgsUnused > 0) {
+        ASSERT(func->funcNode);
+        vec_nodep_t *params = (vec_nodep_t*)nodeGetData(func->funcNode);
+        ASSERT(params);
+        Node *param = NULL;
+        int pi = 0;
+        vec_foreach_rev(params, param, pi) {
+            if (param->type.kind == PARAM_NODE_DEFAULT_ARG) {
+                size_t offset = ((ParamNodeInfo*)param->data)->defaultArgIPOffset;
+                VM_DEBUG("default param found: offset=%d", (int)offset);
+                funcOffset += offset;
+                numDefaultArgsUnused--;
+                if (numDefaultArgsUnused == 0) break;
+            } else {
+                ASSERT(0);
+                break;
+            }
+        }
+    }
+
     // add frame
     VM_DEBUG("%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
+    if (funcOffset > 0) {
+        VM_DEBUG("Func offset due to optargs: %d", (int)funcOffset);
+    }
     frame->closure = closure;
-    frame->ip = closure->function->chunk.code;
+    frame->ip = closure->function->chunk.code + funcOffset;
     frame->start = parentStart;
     frame->isCCall = false;
     frame->nativeFunc = NULL;
@@ -1213,7 +1251,7 @@ static InterpretResult run(bool doResetStack) {
 #ifndef NDEBUG
     if (CLOX_OPTION_T(traceVMExecution)) {
         printVMStack(stderr);
-        printDisassembledInstruction(ch, (int)(getFrame()->ip - ch->code), NULL);
+        printDisassembledInstruction(stderr, ch, (int)(getFrame()->ip - ch->code), NULL);
     }
 #endif
 
@@ -1762,7 +1800,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(chunk);
+    ObjFunction *func = newFunction(chunk, NULL);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
     frame->isCCall = false;
@@ -1783,7 +1821,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stackTop-1;
-    ObjFunction *func = newFunction(chunk);
+    ObjFunction *func = newFunction(chunk, NULL);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
     unhideFromGC((Obj*)func);
@@ -1823,7 +1861,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
     frame->start = 0;
     frame->ip = chunk.code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(&chunk);
+    ObjFunction *func = newFunction(&chunk, NULL);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
     unhideFromGC((Obj*)func);

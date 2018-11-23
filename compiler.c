@@ -220,7 +220,7 @@ static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
 static void pushScope(CompileScopeType stype) {
     current->scopeDepth++;
     current->currentScopeNum++;
-    COMP_TRACE("pushScope: %s", compileScopeName(stype));
+    COMP_TRACE("pushScope: %s (num=%d)", compileScopeName(stype), current->currentScopeNum);
 }
 
 static void namedVariable(Token name, VarOp getSet);
@@ -263,7 +263,7 @@ static void emitCloseUpvalue(void) {
 }
 
 static void popScope(CompileScopeType stype) {
-    COMP_TRACE("popScope: %s", compileScopeName(stype));
+    COMP_TRACE("popScope: %s (num=%d)", compileScopeName(stype), current->currentScopeNum);
     while (current->localCount > 0 && current->locals[current->localCount - 1].depth >= current->scopeDepth) {
         if (current->locals[current->localCount - 1].isUpvalue) {
             COMP_TRACE("popScope closing upvalue");
@@ -275,9 +275,12 @@ static void popScope(CompileScopeType stype) {
         current->localCount--;
     }
     if (stype == COMPILE_SCOPE_FUNCTION) {
+        current->currentScopeNum++; // XXX: so emitReturn doesn't emit the return if it's already been emitted in the parent scope's (the block scope of the function)
         emitReturn(current);
+        current->currentScopeNum--;
     }
     current->scopeDepth--;
+    current->currentScopeNum--;
 }
 
 static Insn *emitBytes(uint8_t code, uint8_t op) {
@@ -846,7 +849,7 @@ static void initCompiler(
     compiler->enclosing = current;
     compiler->localCount = 0; // NOTE: below, this is increased to 1
     compiler->scopeDepth = scopeDepth;
-    compiler->function = newFunction(chunk);
+    compiler->function = newFunction(chunk, NULL);
     initIseq(&compiler->iseq);
     hideFromGC((Obj*)compiler->function); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = ftype;
@@ -1010,14 +1013,37 @@ static void emitFunction(Node *n, FunctionType ftype) {
     pushScope(COMPILE_SCOPE_FUNCTION); // this scope holds the local variable parameters
 
     ObjFunction *func = fCompiler.function;
+    func->funcNode = n;
 
     vec_nodep_t *params = (vec_nodep_t*)nodeGetData(n);
     ASSERT(params);
     Node *param = NULL; int i = 0;
     vec_foreach(params, param, i) {
-        uint8_t localSlot = declareVariable(&param->tok);
-        defineVariable(localSlot, true);
-        func->arity++;
+        if (param->type.kind == PARAM_NODE_REGULAR) {
+            uint8_t localSlot = declareVariable(&param->tok);
+            defineVariable(localSlot, true);
+            func->arity++;
+        }
+    }
+    i = 0;
+    // last optional argument gets pushed first so we can skip the local var set code if necessary,
+    // which is when the argument is given during the call.
+    vec_foreach(params, param, i) {
+        if (param->type.kind == PARAM_NODE_DEFAULT_ARG) {
+            uint8_t localSlot = declareVariable(&param->tok);
+            defineVariable(localSlot, true);
+            func->numDefaultArgs++;
+            Insn *insnBefore = currentIseq()->tail;
+            emitNode(vec_first(param->children)); // default arg
+            emitOp1(OP_SET_LOCAL, (uint8_t)localSlot);
+            Insn *insnAfter = currentIseq()->tail;
+            size_t codeDiff = iseqInsnByteDiff(insnBefore, insnAfter);
+            ParamNodeInfo *paramNodeInfo = calloc(sizeof(ParamNodeInfo), 1);
+            ASSERT_MEM(paramNodeInfo);
+            paramNodeInfo->defaultArgIPOffset = codeDiff;
+            ASSERT(param->data == NULL);
+            param->data = paramNodeInfo;
+        }
     }
     emitChildren(n); // the blockNode
     popScope(COMPILE_SCOPE_FUNCTION);
@@ -1350,7 +1376,7 @@ static void emitNode(Node *n) {
     }
     case RETURN_STMT: {
         if (emittedReturnInScope(current)) {
-            COMP_TRACE("Skipping emitting explicit return");
+            COMP_TRACE("Skipping emitting explicit return (%d)", current->currentScopeNum);
             break;
         }
 
@@ -1400,7 +1426,8 @@ static void emitNode(Node *n) {
             }
             emitOp2(OP_INVOKE, methodNameArg, (uint8_t)nArgs);
         } else {
-            emitNode(lhs);
+            emitNode(lhs); // the function itself
+            i = 0;
             vec_foreach(n->children, arg, i) {
                 if (i == 0) continue;
                 emitNode(arg);
@@ -1494,7 +1521,7 @@ int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     ObjFunction *prog = endCompiler();
     *chunk = prog->chunk; // copy
     if (CLOX_OPTION_T(debugBytecode)) {
-        printDisassembledChunk(chunk, "Bytecode:");
+        printDisassembledChunk(stderr, chunk, "Bytecode:");
     }
     if (mainCompiler.hadError) {
         *err = COMPILE_ERR_SEMANTICS;

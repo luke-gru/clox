@@ -249,15 +249,17 @@ void clearObjString(ObjString *string) {
     string->hash = hashString(string->chars, 0);
 }
 
-ObjFunction *newFunction(Chunk *chunk) {
+ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {
     ObjFunction *function = ALLOCATE_OBJ(
         ObjFunction, OBJ_T_FUNCTION
     );
 
     function->arity = 0;
+    function->numDefaultArgs = 0;
     function->upvalueCount = 0;
     function->name = NULL;
     function->isMethod = false;
+    function->funcNode = funcNode;
     if (chunk == NULL) {
         initChunk(&function->chunk);
     } else {

@@ -1,0 +1,31 @@
+fun fibonacci(n) {
+  if (n <= 1) { return n; }
+  return fibonacci(n - 2) + fibonacci(n - 1);
+}
+
+for (var i = 0; i < 20; i = i + 1) {
+  print fibonacci(i);
+}
+
+__END__
+-- noexpect: --
+0.00
+1.00
+1.00
+2.00
+3.00
+5.00
+8.00
+13.00
+21.00
+34.00
+55.00
+89.00
+144.00
+233.00
+377.00
+610.00
+987.00
+1597.00
+2584.00
+4181.00

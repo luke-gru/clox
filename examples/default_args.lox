@@ -1,0 +1,16 @@
+fun printMe(a, b = 2, c = 3) { print a; print b; print c; }
+printMe(1);
+printMe(1,5);
+printMe(1,5,10);
+
+
+__END__
+1.00
+2.00
+3.00
+1.00
+5.00
+3.00
+1.00
+5.00
+10.00

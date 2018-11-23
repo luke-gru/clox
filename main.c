@@ -7,6 +7,8 @@
 #include "runtime.h"
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
+#include <string.h>
 
 static void usage(int exitstatus) {
     fprintf(stdout, "Usage:\n"
@@ -80,11 +82,16 @@ int main(int argc, char *argv[]) {
         if (err == COMPILE_ERR_SYNTAX) {
             freeVM();
             freeChunk(&chunk);
-            die("%s", "Syntax error\n");
+            die("%s", "Syntax error");
         } else {
             freeVM();
             freeChunk(&chunk);
-            die("%s", "Compile error\n");
+            if (err == COMPILE_ERR_ERRNO) {
+                die("Compile error: %s", strerror(errno));
+            } else {
+                // error reported elsewhere, in compiler.c
+                die("%s", "Compile error");
+            }
         }
     }
 

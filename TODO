@@ -23,19 +23,18 @@ bytecode, and benchmark the lookup results []
 * Add string interpolation [DONE], needs better error handling still, and
 maybe recursive interpolations? This should work in theory with the way it's
 implemented, but it probably needs a few changes.
-* Add `in` block [IN PROGRESS]
+* Add `in` block [DONE]
 * Add `foreach *el in item` syntax with iter() support
 * Add system() for running OS commands
 * Make error reporting and throwing/catching errors work across
 execution contexts (like eval) []
-* Add default arguments []
+* Add default arguments [DONE]
 * Add keyword arguments []
 * Add splat arguments/parameters []
-* Add File class [IN PROGRESS]
+* Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
-* Add Object#dup, and Class#ancestors
-* Make strings instances, make them mutable, and static strings like in jlox
+* Add Object#dup, and Class#ancestors []
+* Make strings instances, make them mutable, and static strings like in jlox []
 
 BUGS:
 * super() bug in examples/super.lox
-* bug in recursive fn calls (ex: fib)
