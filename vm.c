@@ -135,6 +135,9 @@ static void defineNativeClasses() {
     ObjNative *classGetSuperclassNat = newNative(copyString("_superClass", 11), lxClassGetSuperclass);
     tableSet(&classClass->getters, OBJ_VAL(copyString("_superClass", 11)), OBJ_VAL(classGetSuperclassNat));
 
+    ObjNative *classGetNameNat = newNative(copyString("name", 4), lxClassGetName);
+    tableSet(&classClass->getters, OBJ_VAL(copyString("name", 4)), OBJ_VAL(classGetNameNat));
+
     // class Array
     ObjString *arrayClassName = copyString("Array", 5);
     ObjClass *arrayClass = newClass(arrayClassName, objClass);
@@ -233,6 +236,7 @@ static bool inCCall = false;
 static bool cCallThrew = false;
 static bool returnedFromNativeErr = false;
 static bool runUntilReturn = false;
+static int lastSplatNumArgs = -1;
 
 static int curLine = 1;
 
@@ -808,6 +812,7 @@ static void captureNativeError(void) {
 static bool checkFunctionArity(ObjFunction *func, int argCount) {
     int arityMin = func->arity;
     int arityMax = arityMin + func->numDefaultArgs;
+    if (func->hasRestArg) arityMax = 20; // TODO: make a #define
     if (argCount < arityMin || argCount > arityMax) {
         if (arityMin == arityMax) {
             throwArgErrorFmt("Expected %d arguments but got %d.",
@@ -930,29 +935,68 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     bool arityOK = checkFunctionArity(func, argCount);
     if (!arityOK) return false;
 
+    // default arg processing
+    int numDefaultArgsUsed = (func->arity + func->numDefaultArgs)-argCount;
+    if (numDefaultArgsUsed < 0) numDefaultArgsUsed = 0;
+    int numDefaultArgsUnused = func->numDefaultArgs - numDefaultArgsUsed;
+
+    for (int i = numDefaultArgsUsed; i > 0; i--) {
+        push(NIL_VAL);
+    }
+
+    // rest argument processing (splats)
+    bool hasRestArg = func->hasRestArg;
+    int numRestArgs = 0;
+    int argCountWithRestAry = argCount;
+    if (hasRestArg && argCount > (func->arity + func->numDefaultArgs)) {
+        numRestArgs = argCount - (func->arity + func->numDefaultArgs);
+        if (numRestArgs > 0) {
+            Value restAry = newArray();
+            for (int i = numRestArgs; i > 0; i--) {
+                Value arg = peek(i-1);
+                arrayPush(restAry, arg);
+                argCountWithRestAry--;
+            }
+            for (int i = numRestArgs; i > 0; i--) pop();
+            push(restAry);
+            argCountWithRestAry++;
+        }
+    // empty rest arg
+    } else if (hasRestArg) {
+        Value restAry = newArray();
+        push(restAry);
+        argCountWithRestAry++;
+    }
 
     int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
 
     size_t funcOffset = 0;
-    int numDefaultArgsUsed = (func->arity + func->numDefaultArgs)-argCount;
-    int numDefaultArgsUnused = func->numDefaultArgs - numDefaultArgsUsed;
-    VM_DEBUG("num default args not used: %d", numDefaultArgsUnused);
+    VM_DEBUG(
+        "arity: %d, defaultArgs: %d, defaultsUsed: %d\n"
+        "defaultsUnused: %d, numRestArgs: %d, argCount: %d",
+        func->arity, func->numDefaultArgs, numDefaultArgsUsed,
+        numDefaultArgsUnused, numRestArgs, argCount
+    );
+
+    // skip default argument code in function that's unused
     if (numDefaultArgsUnused > 0) {
         ASSERT(func->funcNode);
         vec_nodep_t *params = (vec_nodep_t*)nodeGetData(func->funcNode);
         ASSERT(params);
         Node *param = NULL;
         int pi = 0;
+        int unused = numDefaultArgsUnused;
         vec_foreach_rev(params, param, pi) {
+            if (param->type.kind == PARAM_NODE_SPLAT) continue;
             if (param->type.kind == PARAM_NODE_DEFAULT_ARG) {
                 size_t offset = ((ParamNodeInfo*)param->data)->defaultArgIPOffset;
                 VM_DEBUG("default param found: offset=%d", (int)offset);
                 funcOffset += offset;
-                numDefaultArgsUnused--;
-                if (numDefaultArgsUnused == 0) break;
+                unused--;
+                if (unused == 0) break;
             } else {
-                ASSERT(0);
+                ASSERT(0); // unreachable, default args should be last args, not including splats
                 break;
             }
         }
@@ -970,7 +1014,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     frame->isCCall = false;
     frame->nativeFunc = NULL;
     // +1 to include either the called function (for non-methods) or the receiver (for methods)
-    frame->slots = EC->stackTop - (argCount + 1);
+    frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1);
     // NOTE: the frame is popped on OP_RETURN
     return true;
 }
@@ -1513,6 +1557,9 @@ static InterpretResult run(bool doResetStack) {
       }
       case OP_CALL: {
           uint8_t numArgs = READ_BYTE();
+          if (lastSplatNumArgs > 0) {
+              numArgs += (lastSplatNumArgs-1);
+          }
           Value callableVal = peek(numArgs);
           if (!isCallable(callableVal)) {
               runtimeError("Tried to call uncallable object (type=%s)", typeOfVal(callableVal));
@@ -1523,12 +1570,16 @@ static InterpretResult run(bool doResetStack) {
               return INTERPRET_RUNTIME_ERROR;
           }
           ASSERT_VALID_STACK();
+          lastSplatNumArgs = -1;
           break;
       }
       case OP_INVOKE: { // invoke methods (includes static methods)
           Value methodName = READ_CONSTANT();
           ObjString *mname = AS_STRING(methodName);
           uint8_t numArgs = READ_BYTE();
+          if (lastSplatNumArgs > 0) {
+              numArgs += (lastSplatNumArgs-1);
+          }
           Value instanceVal = peek(numArgs);
           if (IS_INSTANCE(instanceVal)) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
@@ -1556,11 +1607,24 @@ static InterpretResult run(bool doResetStack) {
               return INTERPRET_RUNTIME_ERROR;
           }
           ASSERT_VALID_STACK();
+          lastSplatNumArgs = -1;
           break;
       }
       case OP_GET_THIS: {
           ASSERT(vm.thisValue);
           push(*vm.thisValue);
+          break;
+      }
+      case OP_SPLAT_ARRAY: {
+          Value ary = pop();
+          if (!IS_AN_ARRAY(ary)) {
+              runtimeError("splatted expression must be an array");
+              return INTERPRET_RUNTIME_ERROR;
+          }
+          lastSplatNumArgs = ARRAY_SIZE(ary);
+          for (int i = 0; i < lastSplatNumArgs; i++) {
+              push(ARRAY_GET(ary, i));
+          }
           break;
       }
       case OP_GET_SUPER: {
@@ -1575,7 +1639,6 @@ static InterpretResult run(bool doResetStack) {
               AS_INSTANCE(instanceVal), klass,
               AS_STRING(methodName), &method, false);
           if (!found) {
-              // TODO: Raise error
               runtimeError("Could not find method");
               return INTERPRET_RUNTIME_ERROR;
           }

@@ -649,7 +649,7 @@ char *outputASTString(Node *node, int indentLevel) {
                     return outputThisExpr(node, indentLevel);
                 case SUPER_EXPR:
                     return outputSuperExpr(node, indentLevel);
-                case SPLAT_CALL_EXPR:
+                case SPLAT_EXPR:
                     return outputSplatCallExpr(node, indentLevel);
                 case KEYWORD_ARG_EXPR:
                     return outputKeywordArgExpr(node, indentLevel);

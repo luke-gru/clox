@@ -57,6 +57,7 @@ typedef struct ObjFunction {
   Obj object;
   int arity; // number of required args
   int numDefaultArgs; // number of optional default args
+  bool hasRestArg;
   int upvalueCount;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM, or serialized/loaded to/from disk.

@@ -38,6 +38,7 @@ typedef enum {
 
     OP_CALL, // call function, arguments are on stack
     OP_INVOKE, // call regular method, instance and arguments are on stack
+    OP_SPLAT_ARRAY,
     OP_GET_THIS,
     OP_GET_SUPER, // method lookup begins in superclass, class and instance are on stack
     OP_RETURN,

@@ -73,6 +73,8 @@ const char *opName(OpCode code) {
         return "OP_CALL";
     case OP_INVOKE:
         return "OP_INVOKE";
+    case OP_SPLAT_ARRAY:
+        return "OP_SPLAT_ARRAY";
     case OP_GET_THIS:
         return "OP_GET_THIS";
     case OP_GET_SUPER:
@@ -438,6 +440,7 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_CLOSE_UPVALUE:
         case OP_IN:
         case OP_GET_THIS:
+        case OP_SPLAT_ARRAY:
             return printSimpleInstruction(f, opName(byte), i);
         default:
             fprintf(f, "Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
@@ -512,6 +515,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_CLOSE_UPVALUE:
         case OP_IN:
         case OP_GET_THIS:
+        case OP_SPLAT_ARRAY:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             ASSERT(0);

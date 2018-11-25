@@ -216,9 +216,14 @@ Value lxModuleInit(int argCount, Value *args) {
 
 // ex: var c = Class("MyClass", Object);
 Value lxClassInit(int argCount, Value *args) {
-    Value self = *args;
     CHECK_ARGS("Class#init", 1, 3, argCount);
-    if (argCount == 1) { return self; }
+    Value self = *args;
+    ObjClass *klass = AS_CLASS(self);
+    if (argCount == 1) {
+        klass->name = NULL;
+        klass->superclass = lxObjClass;
+        return self;
+    }
     Value arg1 = args[1];
     ObjString *name = NULL;
     ObjClass *superClass = NULL;
@@ -233,7 +238,6 @@ Value lxClassInit(int argCount, Value *args) {
         CHECK_ARG_IS_INSTANCE_OF(args[2], lxClassClass, 2);
         superClass = AS_CLASS(args[2]);
     }
-    ObjClass *klass = AS_CLASS(self);
     klass->name = name;
     klass->superclass = superClass;
     return self;
@@ -247,8 +251,24 @@ Value lxClassInclude(int argCount, Value *args) {
     Value modVal = args[1];
     CHECK_ARG_BUILTIN_TYPE(modVal, IS_MODULE_FUNC, "module", 1);
     ObjModule *mod = AS_MODULE(modVal);
-    vec_push(&klass->v_includedMods, mod);
+    int alreadyIncluded = -1;
+    vec_find(&klass->v_includedMods, mod, alreadyIncluded);
+    if (alreadyIncluded == -1) {
+        vec_push(&klass->v_includedMods, mod);
+    }
     return modVal;
+}
+
+Value lxClassGetName(int argCount, Value *args) {
+    CHECK_ARGS("Class#name", 1, 1, argCount);
+    Value self = args[0];
+    ObjClass *klass = AS_CLASS(self);
+    ObjString *origName = klass->name;
+    if (origName == NULL) {
+        return OBJ_VAL(newStackString("(anon)", 6));
+    } else {
+        return OBJ_VAL(dupString(origName));
+    }
 }
 
 // ex: print Object._superClass;

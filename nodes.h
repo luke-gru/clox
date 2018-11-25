@@ -25,7 +25,7 @@ typedef enum eExprType {
     PROP_SET_EXPR,
     THIS_EXPR,
     SUPER_EXPR,
-    SPLAT_CALL_EXPR,
+    SPLAT_EXPR,
     KEYWORD_ARG_EXPR,
 } ExprType;
 
@@ -46,7 +46,7 @@ static const char *exprTypeNames[] = {
     "PROP_SET_EXPR",
     "THIS_EXPR",
     "SUPER_EXPR",
-    "SPLAT_CALL_EXPR",
+    "SPLAT_EXPR",
     "KEYWORD_ARG_EXPR",
     NULL
 };
@@ -103,6 +103,7 @@ static const char *stmtTypeNames[] = {
 typedef enum eOtherType {
     PARAM_NODE_REGULAR = 1,
     PARAM_NODE_DEFAULT_ARG,
+    PARAM_NODE_SPLAT,
     TOKEN_NODE,
 } OtherType;
 

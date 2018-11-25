@@ -14,6 +14,7 @@ typedef struct sParser {
   Token current;
   Token previous;
   vec_tok_t peekBuf;
+  bool inCallExpr;
 } Parser;
 
 void initParser(Parser *p);

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdio.h>
+#include <setjmp.h>
 #include "parser.h"
 #include "options.h"
 #include "memory.h"
@@ -28,14 +29,17 @@ static void _trace_end(const char *name) {
 // global
 Parser parser;
 static Parser *current = NULL;
+static jmp_buf errJmpBuf;
 
 // initialize/reinitialize parser
 void initParser(Parser *p) {
     p->hadError = false;
     p->panicMode = false;
+    memset(&errJmpBuf, 0, sizeof(errJmpBuf));
     memset(&p->current, 0, sizeof(Token));
     memset(&p->previous, 0, sizeof(Token));
     vec_init(&p->peekBuf);
+    p->inCallExpr = false;
 }
 
 static void errorAt(Token *token, const char *message) {
@@ -54,6 +58,7 @@ static void errorAt(Token *token, const char *message) {
 
   fprintf(stderr, ": %s\n", message);
   current->hadError = true;
+  longjmp(errJmpBuf, 1);
 }
 
 static void error(const char *message) {
@@ -177,6 +182,13 @@ Node *parse(Parser *p) {
     Node *ret = createNode(nType, emptyTok(), NULL);
     advance(); // prime parser with parser.current
     TRACE_START("parse");
+    int jumpRes = setjmp(errJmpBuf);
+    if (jumpRes != 0) { // jumped, had error
+        ASSERT(current->panicMode);
+        current = oldCurrent;
+        TRACE_END("parse (error)");
+        return NULL;
+    }
     while (!isAtEnd()) {
         Node *stmt = declaration();
         ASSERT(stmt->type.type == NODE_STMT);
@@ -590,9 +602,21 @@ static Node *varDeclaration(void) {
 
 static Node *expression(void) {
     TRACE_START("expression");
-    Node *ret = assignment();
+    Node *splatCall = NULL;
+    if (current->inCallExpr && match(TOKEN_STAR)) {
+        node_type_t splatType = {
+            .type = NODE_EXPR,
+            .kind = SPLAT_EXPR
+        };
+        splatCall = createNode(splatType, current->previous, NULL);
+    }
+    Node *expr = assignment();
+    if (splatCall != NULL) {
+        nodeAddChild(splatCall, expr);
+        expr = splatCall;
+    }
     TRACE_END("expression");
-    return ret;
+    return expr;
 }
 
 static vec_nodep_t *createNodeVec(void) {
@@ -614,6 +638,8 @@ static Node *funDeclaration(ParseFunctionType fnType) {
         consume(TOKEN_EQUAL, "Expect '=' after setter method name");
     }
     vec_nodep_t *paramNodes = createNodeVec();
+    int numParams = 0;
+    int lastParamKind;
     if (fnType != FUNCTION_TYPE_GETTER) {
         consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");
         while (match(TOKEN_IDENTIFIER)) {
@@ -632,8 +658,30 @@ static Node *funDeclaration(ParseFunctionType fnType) {
                 n = createNode(nType, paramTok, NULL);
             }
             vec_push(paramNodes, n);
+            numParams++;
+            lastParamKind = nType.kind;
             if (!match(TOKEN_COMMA)) {
                 break;
+            }
+        }
+        if (match(TOKEN_STAR)) { // splat param, optional
+            consume(TOKEN_IDENTIFIER, "Expect splat parameter to have a name");
+            Token paramTok = current->previous;
+            node_type_t nType = {
+                .type = NODE_OTHER,
+                .kind = PARAM_NODE_SPLAT,
+            };
+            Node *n = createNode(nType, paramTok, NULL);
+            vec_push(paramNodes, n);
+            numParams++;
+            lastParamKind = nType.kind;
+            if (!check(TOKEN_RIGHT_PAREN)) {
+                errorAtCurrent("Expect ')' after rest parameter (must be final parameter)");
+            }
+        }
+        if (fnType == FUNCTION_TYPE_SETTER) {
+            if (numParams != 1 || lastParamKind != PARAM_NODE_REGULAR) {
+                errorAt(&current->previous, "Expect a single regular parameter for setter function");
             }
         }
         consume(TOKEN_RIGHT_PAREN, "Expect ')' after function parameters");
@@ -905,8 +953,10 @@ static Node *unary() {
 static Node *call() {
     TRACE_START("call");
     Node *expr = primary();
+    bool oldInCallExpr = current->inCallExpr;
     while (true) {
         if (match(TOKEN_LEFT_PAREN)) {
+            current->inCallExpr = true;
             TRACE_START("callActual");
             node_type_t callT = {
                 .type = NODE_EXPR,
@@ -960,6 +1010,7 @@ static Node *call() {
         }
     }
     TRACE_END("call");
+    current->inCallExpr = oldInCallExpr;
     return expr;
 }
 

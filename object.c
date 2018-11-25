@@ -256,6 +256,7 @@ ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {
 
     function->arity = 0;
     function->numDefaultArgs = 0;
+    function->hasRestArg = false;
     function->upvalueCount = 0;
     function->name = NULL;
     function->isMethod = false;

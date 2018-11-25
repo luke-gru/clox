@@ -1026,8 +1026,8 @@ static void emitFunction(Node *n, FunctionType ftype) {
         }
     }
     i = 0;
-    // last optional argument gets pushed first so we can skip the local var set code if necessary,
-    // which is when the argument is given during the call.
+    // optional arguments gets pushed in order so we can skip the local var set code when necessary
+    // (when the argument is given during the call).
     vec_foreach(params, param, i) {
         if (param->type.kind == PARAM_NODE_DEFAULT_ARG) {
             uint8_t localSlot = declareVariable(&param->tok);
@@ -1043,6 +1043,10 @@ static void emitFunction(Node *n, FunctionType ftype) {
             paramNodeInfo->defaultArgIPOffset = codeDiff;
             ASSERT(param->data == NULL);
             param->data = paramNodeInfo;
+        } else if (param->type.kind == PARAM_NODE_SPLAT) {
+            uint8_t localSlot = declareVariable(&param->tok);
+            defineVariable(localSlot, true);
+            func->hasRestArg = true;
         }
     }
     emitChildren(n); // the blockNode
@@ -1436,6 +1440,11 @@ static void emitNode(Node *n) {
         }
         break;
     }
+    case SPLAT_EXPR: {
+        emitChildren(n);
+        emitOp0(OP_SPLAT_ARRAY);
+        break;
+    }
     case TRY_STMT: {
         Iseq *iseq = currentIseq();
         vec_void_t vjumps;
@@ -1517,6 +1526,7 @@ int compile_src(char *src, Chunk *chunk, CompileErr *err) {
         *err = COMPILE_ERR_SYNTAX;
         return -1;
     }
+    ASSERT(program);
     emitNode(program);
     ObjFunction *prog = endCompiler();
     *chunk = prog->chunk; // copy
@@ -1553,8 +1563,8 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
     memset(buf, 0, st.st_size+1);
     res = (int)read(fd, buf, st.st_size);
     if (res == -1) {
-        free(buf);
         *err = COMPILE_ERR_ERRNO;
+        free(buf);
         return res;
     }
     res = compile_src(buf, chunk, err);
