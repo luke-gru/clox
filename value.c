@@ -301,7 +301,7 @@ bool valEqual(Value a, Value b) {
             }
             return aObj == bObj; // pointer equality
         }
-        case VAL_T_SENTINEL: return false;
+        case VAL_T_UNDEF: return false;
         default: UNREACHABLE("");
     }
 }

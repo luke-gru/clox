@@ -328,6 +328,7 @@ Token scanToken(void) {
     case '[': return makeToken(TOKEN_LEFT_BRACKET);
     case ']': return makeToken(TOKEN_RIGHT_BRACKET);
     case ';': return makeToken(TOKEN_SEMICOLON);
+    case ':': return makeToken(TOKEN_COLON);
     case ',': return makeToken(TOKEN_COMMA);
     case '.': return makeToken(TOKEN_DOT);
     case '-': return makeToken(TOKEN_MINUS);
@@ -433,6 +434,8 @@ const char *tokTypeStr(TokenType ttype) {
       return "PLUS";
     case TOKEN_SEMICOLON:
       return "SEMICOLON";
+    case TOKEN_COLON:
+      return "COLON";
     case TOKEN_SLASH:
       return "SLASH";
     case TOKEN_STAR:

@@ -26,7 +26,6 @@ typedef enum eExprType {
     THIS_EXPR,
     SUPER_EXPR,
     SPLAT_EXPR,
-    KEYWORD_ARG_EXPR,
 } ExprType;
 
 static const char *exprTypeNames[] = {
@@ -47,7 +46,6 @@ static const char *exprTypeNames[] = {
     "THIS_EXPR",
     "SUPER_EXPR",
     "SPLAT_EXPR",
-    "KEYWORD_ARG_EXPR",
     NULL
 };
 
@@ -75,6 +73,7 @@ typedef enum eStmtType {
     THROW_STMT,
     IN_STMT,
     STMTLIST_STMT,
+    KWARG_IN_CALL_STMT
 } StmtType;
 
 static const char *stmtTypeNames[] = {
@@ -97,6 +96,7 @@ static const char *stmtTypeNames[] = {
     "THROW_STMT",
     "IN_STMT",
     "STMTLIST_STMT",
+    "KWARG_IN_CALL_STMT",
     NULL
 };
 
@@ -104,7 +104,8 @@ typedef enum eOtherType {
     PARAM_NODE_REGULAR = 1,
     PARAM_NODE_DEFAULT_ARG,
     PARAM_NODE_SPLAT,
-    TOKEN_NODE,
+    PARAM_NODE_KWARG,
+    TOKEN_NODE
 } OtherType;
 
 typedef struct ParamNodeInfo {
@@ -127,7 +128,7 @@ typedef enum eLiteralType {
 
     // TODO: put somewhere else, these aren't literals
     SUPER_CALL,
-    SUPER_PROP,
+    SUPER_PROP
 } LiteralType;
 
 typedef struct sNodeType {

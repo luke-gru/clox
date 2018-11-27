@@ -14,7 +14,7 @@ typedef enum {
   VAL_T_NIL,
   VAL_T_NUMBER,
   VAL_T_OBJ, // includes strings/arrays
-  VAL_T_SENTINEL // used as an 'undefined' value type, for example as an undefined hash key
+  VAL_T_UNDEF // used as an 'undefined' value type, for example as an undefined hash key
 } ValueType;
 
 typedef struct Value {
@@ -38,6 +38,7 @@ typedef struct ValueArray {
 #define IS_NIL(value)     ((value).type == VAL_T_NIL)
 #define IS_NUMBER(value)  ((value).type == VAL_T_NUMBER)
 #define IS_OBJ(value)     ((value).type == VAL_T_OBJ)
+#define IS_UNDEF(value)   ((value).type == VAL_T_UNDEF)
 
 #define IS_BOOL_FUNC (is_bool_p)
 #define IS_NIL_FUNC (is_nil_p)
@@ -49,9 +50,10 @@ typedef struct ValueArray {
 #define AS_NUMBER(value)  ((value).as.number)
 
 #define BOOL_VAL(b)   ((Value){ VAL_T_BOOL, { .boolean = b } })
-#define NIL_VAL           ((Value){ VAL_T_NIL, { .number = 0 } })
+#define NIL_VAL       ((Value){ VAL_T_NIL, { .number = 0 } })
+#define UNDEF_VAL     ((Value){ VAL_T_UNDEF, { .number = -1 } })
 #define NUMBER_VAL(n) ((Value){ VAL_T_NUMBER, { .number = n } })
-#define OBJ_VAL(obj)      ((Value){ VAL_T_OBJ, { .object = (Obj*)obj } })
+#define OBJ_VAL(obj)  ((Value){ VAL_T_OBJ, { .object = (Obj*)obj } })
 
 #define OBJ_TYPE(value)   (AS_OBJ(value)->type)
 

@@ -24,13 +24,13 @@ bytecode, and benchmark the lookup results []
 maybe recursive interpolations? This should work in theory with the way it's
 implemented, but it probably needs a few changes.
 * Add `in` block [DONE]
-* Add `foreach *el in item` syntax with iter() support
+* Add `foreach el in item` syntax with iter() support
 * Add system() for running OS commands
 * Make error reporting and throwing/catching errors work across
 execution contexts (like eval) []
 * Add default arguments [DONE]
-* Add keyword arguments []
-* Add splat arguments/parameters []
+* Add keyword arguments [IN PROGRESS]
+* Add splat arguments/parameters [DONE]
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
 * Add Object#dup, and Class#ancestors []

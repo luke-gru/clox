@@ -4,6 +4,7 @@
 #include "common.h"
 #include "object.h"
 #include "chunk.h"
+#include "nodes.h"
 
 typedef enum {
     COMPILE_ERR_NONE = 1,
@@ -23,6 +24,15 @@ typedef enum {
     // implementation detail, top-level is compiled as if it was a function
     FUN_TYPE_TOP_LEVEL
 } FunctionType;
+
+#define MAX_KWARGS 8
+typedef struct CallInfo {
+    Token nameTok;
+    int argc;
+    int numKwargs;
+    bool usesSplat;
+    Token kwargNames[MAX_KWARGS];
+} CallInfo;
 
 typedef struct CompilerOpts {
     bool noOptimize; // default: false (optimize)

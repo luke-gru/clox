@@ -61,6 +61,7 @@ typedef enum {
 
     OP_JUMP,
     OP_JUMP_IF_FALSE, // pops value off top of stack, checks truthiness
+    OP_JUMP_IF_TRUE, // pops value off top of stack, checks truthiness
     OP_JUMP_IF_FALSE_PEEK, // peeks value off top of stack, checks truthiness
     OP_JUMP_IF_TRUE_PEEK, // peeks value off top of stack, checks truthiness
     OP_LOOP,
@@ -75,6 +76,8 @@ typedef enum {
 
     OP_INDEX_GET,
     OP_INDEX_SET,
+
+    OP_CHECK_KEYWORD,
 
     OP_LEAVE,
 } OpCode;

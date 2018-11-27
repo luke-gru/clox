@@ -257,6 +257,7 @@ ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {
     function->arity = 0;
     function->numDefaultArgs = 0;
     function->hasRestArg = false;
+    function->numKwargs = 0;
     function->upvalueCount = 0;
     function->name = NULL;
     function->isMethod = false;
@@ -477,14 +478,25 @@ void arrayPush(Value self, Value el) {
     writeValueArray(ary, el);
 }
 
-Value mapGet(Value mapVal, Value key) {
+Value newMap(void) {
+    ObjInstance *instance = newInstance(lxMapClass);
+    Value map = OBJ_VAL(instance);
+    lxMapInit(1, &map);
+    return map;
+}
+
+bool mapGet(Value mapVal, Value key, Value *ret) {
     Table *map = MAP_GETHIDDEN(mapVal);
-    Value ret;
-    if (tableGet(map, key, &ret)) {
-        return ret;
+    if (tableGet(map, key, ret)) {
+        return true;
     } else {
-        return NIL_VAL;
+        return false;
     }
+}
+
+void mapSet(Value mapVal, Value key, Value val) {
+    Table *map = MAP_GETHIDDEN(mapVal);
+    tableSet(map, key, val);
 }
 
 Value mapSize(Value mapVal) {
@@ -530,7 +542,7 @@ bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
 Value newError(ObjClass *errClass, ObjString *msg) {
     ASSERT(IS_SUBCLASS(errClass, lxErrClass));
     push(OBJ_VAL(msg)); // argument
-    callCallable(OBJ_VAL(errClass), 1, false);
+    callCallable(OBJ_VAL(errClass), 1, false, NULL);
     Value err = pop();
     ASSERT(IS_AN_ERROR(err));
     return err;

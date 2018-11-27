@@ -68,7 +68,9 @@ static void errorAtCurrent(const char *message) {
   errorAt(&current->current, message);
 }
 
-// takes into account peekbuffer, which scanToken() doesn't
+// takes into account peekbuffer, which scanToken() doesn't.
+// NOTE: if looking to peek forward for a token, call `peekTokN`
+// instead of this function.
 static Token nextToken() {
     if (current->peekBuf.length > 0) {
         Token val = vec_first(&current->peekBuf);
@@ -640,43 +642,66 @@ static Node *funDeclaration(ParseFunctionType fnType) {
     vec_nodep_t *paramNodes = createNodeVec();
     int numParams = 0;
     int lastParamKind;
+    bool inKwargs = false;
     if (fnType != FUNCTION_TYPE_GETTER) {
         consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");
-        while (match(TOKEN_IDENTIFIER)) {
-            Token paramTok = current->previous;
-            node_type_t nType = {
-                .type = NODE_OTHER,
-                .kind = PARAM_NODE_REGULAR,
-            };
-            Node *n = NULL;
-            if (match(TOKEN_EQUAL)) {
-                nType.kind = PARAM_NODE_DEFAULT_ARG;
-                n = createNode(nType, paramTok, NULL);
-                Node *argExpr = expression();
-                nodeAddChild(n, argExpr);
+        while (true) {
+            if (match(TOKEN_IDENTIFIER)) { // regular/default/kwarg param
+                Token paramTok = current->previous;
+                node_type_t nType = {
+                    .type = NODE_OTHER,
+                    .kind = PARAM_NODE_REGULAR,
+                };
+                Node *n = NULL;
+                if (match(TOKEN_EQUAL)) { // default argument
+                    if (inKwargs) {
+                        errorAtCurrent("keyword parameters need to be final parameters");
+                    }
+                    nType.kind = PARAM_NODE_DEFAULT_ARG;
+                    n = createNode(nType, paramTok, NULL);
+                    Node *argExpr = expression();
+                    nodeAddChild(n, argExpr);
+                } else if (match(TOKEN_COLON)) {
+                    if (!inKwargs) inKwargs = true;
+                    nType.kind = PARAM_NODE_KWARG;
+                    n = createNode(nType, paramTok, NULL);
+                    if (check(TOKEN_RIGHT_PAREN) || check(TOKEN_COMMA)) { // required keyword arg, no defaults
+                        // no children
+                    } else {
+                        Node *argExpr = expression();
+                        nodeAddChild(n, argExpr);
+                    }
+                } else {
+                    if (inKwargs) {
+                        errorAtCurrent("keyword parameters need to be final parameters");
+                    }
+                    n = createNode(nType, paramTok, NULL);
+                }
+                vec_push(paramNodes, n);
+                numParams++;
+                lastParamKind = nType.kind;
+                if (!match(TOKEN_COMMA)) {
+                    break;
+                }
+            } else if (match(TOKEN_STAR)) { // splat param
+                if (inKwargs) {
+                    errorAtCurrent("keyword parameters need to be final parameters");
+                }
+                consume(TOKEN_IDENTIFIER, "Expect splat parameter to have a name");
+                Token paramTok = current->previous;
+                node_type_t nType = {
+                    .type = NODE_OTHER,
+                    .kind = PARAM_NODE_SPLAT,
+                };
+                Node *n = createNode(nType, paramTok, NULL);
+                vec_push(paramNodes, n);
+                numParams++;
+                lastParamKind = nType.kind;
+                if (!check(TOKEN_RIGHT_PAREN)) {
+                    errorAtCurrent("Expect ')' after rest parameter (must be final parameter)");
+                }
             } else {
-                n = createNode(nType, paramTok, NULL);
-            }
-            vec_push(paramNodes, n);
-            numParams++;
-            lastParamKind = nType.kind;
-            if (!match(TOKEN_COMMA)) {
                 break;
-            }
-        }
-        if (match(TOKEN_STAR)) { // splat param, optional
-            consume(TOKEN_IDENTIFIER, "Expect splat parameter to have a name");
-            Token paramTok = current->previous;
-            node_type_t nType = {
-                .type = NODE_OTHER,
-                .kind = PARAM_NODE_SPLAT,
-            };
-            Node *n = createNode(nType, paramTok, NULL);
-            vec_push(paramNodes, n);
-            numParams++;
-            lastParamKind = nType.kind;
-            if (!check(TOKEN_RIGHT_PAREN)) {
-                errorAtCurrent("Expect ')' after rest parameter (must be final parameter)");
             }
         }
         if (fnType == FUNCTION_TYPE_SETTER) {
@@ -954,6 +979,7 @@ static Node *call() {
     TRACE_START("call");
     Node *expr = primary();
     bool oldInCallExpr = current->inCallExpr;
+    Token lhsTok = current->previous;
     while (true) {
         if (match(TOKEN_LEFT_PAREN)) {
             current->inCallExpr = true;
@@ -962,16 +988,34 @@ static Node *call() {
                 .type = NODE_EXPR,
                 .kind = CALL_EXPR,
             };
-            Token lparenTok = current->previous;
-            Node *callNode = createNode(callT, lparenTok, NULL);
+            Node *callNode = createNode(callT, lhsTok, NULL);
             nodeAddChild(callNode, expr);
             expr = callNode;
             if (match(TOKEN_RIGHT_PAREN)) {
                 // no args
             } else {
+                bool inKwargs = false;
                 while (true) {
-                    Node *argExpr = expression();
-                    nodeAddChild(callNode, argExpr);
+                    if (check(TOKEN_IDENTIFIER) && peekTokN(1).type == TOKEN_COLON) { // kwargs
+                        consume(TOKEN_IDENTIFIER, "Expected ident"); // ident
+                        Token kwargTok = current->previous;
+                        consume(TOKEN_COLON, "Expected colon"); // colon
+                        Node *kwargVal = expression();
+                        if (!inKwargs) inKwargs = true;
+                        node_type_t kwargT = {
+                            .type = NODE_STMT,
+                            .kind = KWARG_IN_CALL_STMT
+                        };
+                        Node *kwargNode = createNode(kwargT, kwargTok, NULL);
+                        nodeAddChild(kwargNode, kwargVal);
+                        nodeAddChild(callNode, kwargNode);
+                    } else {
+                        if (inKwargs) {
+                            errorAtCurrent("Cannot have a regular argument after a keyword argument");
+                        }
+                        Node *argExpr = expression();
+                        nodeAddChild(callNode, argExpr);
+                    }
                     if (!match(TOKEN_COMMA)) {
                         break;
                     }

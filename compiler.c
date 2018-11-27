@@ -119,6 +119,7 @@ typedef enum {
     CONST_T_NUMLIT = 1,
     CONST_T_STRLIT,
     CONST_T_CODE,
+    CONST_T_CALLINFO
 } ConstType;
 
 static void compiler_trace_debug(const char *fmt, ...) {
@@ -1028,6 +1029,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
     i = 0;
     // optional arguments gets pushed in order so we can skip the local var set code when necessary
     // (when the argument is given during the call).
+    int numParams = params->length;
     vec_foreach(params, param, i) {
         if (param->type.kind == PARAM_NODE_DEFAULT_ARG) {
             uint8_t localSlot = declareVariable(&param->tok);
@@ -1047,6 +1049,18 @@ static void emitFunction(Node *n, FunctionType ftype) {
             uint8_t localSlot = declareVariable(&param->tok);
             defineVariable(localSlot, true);
             func->hasRestArg = true;
+        } else if (param->type.kind == PARAM_NODE_KWARG) {
+            uint8_t localSlot = declareVariable(&param->tok);
+            defineVariable(localSlot, true);
+            emitOp2(OP_CHECK_KEYWORD,
+                localSlot /* slot of keyword argument */,
+                numParams+1 /* slot of keyword map */
+            );
+            func->numKwargs++;
+            Insn *ifJumpStart = emitJump(OP_JUMP_IF_TRUE);
+            emitChildren(param);
+            emitOp1(OP_SET_LOCAL, localSlot);
+            patchJump(ifJumpStart, -1, NULL);
         }
     }
     emitChildren(n); // the blockNode
@@ -1421,6 +1435,8 @@ static void emitNode(Node *n) {
         Node *arg = NULL;
         int i = 0;
         Node *lhs = vec_first(n->children);
+        int argc = n->children->length; // num regular arguments
+        int numKwargs = 0;
         if (nodeKind(lhs) == PROP_ACCESS_EXPR) {
             emitChildren(lhs); // the instance
             uint8_t methodNameArg = identifierConstant(&lhs->tok);
@@ -1434,15 +1450,37 @@ static void emitNode(Node *n) {
             i = 0;
             vec_foreach(n->children, arg, i) {
                 if (i == 0) continue;
+                if (arg->type.kind == KWARG_IN_CALL_STMT) {
+                    argc--;
+                    numKwargs++;
+                }
                 emitNode(arg);
             }
-            emitOp1(OP_CALL, (uint8_t)nArgs);
+            CallInfo *callInfoData = calloc(sizeof(CallInfo), 1);
+            ASSERT_MEM(callInfoData);
+            callInfoData->nameTok = n->tok;
+            callInfoData->argc = argc;
+            callInfoData->numKwargs = numKwargs;
+            i = 0; int idx = 0;
+            vec_foreach(n->children, arg, i) {
+                if (arg->type.kind == KWARG_IN_CALL_STMT) {
+                    callInfoData->kwargNames[idx] = arg->tok;
+                    idx++;
+                }
+            }
+            ObjInternal *callInfoObj = newInternalObject(callInfoData, NULL, NULL);
+            uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
+            emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);
         }
         break;
     }
     case SPLAT_EXPR: {
         emitChildren(n);
         emitOp0(OP_SPLAT_ARRAY);
+        break;
+    }
+    case KWARG_IN_CALL_STMT: {
+        emitChildren(n);
         break;
     }
     case TRY_STMT: {

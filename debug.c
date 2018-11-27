@@ -6,6 +6,7 @@
 #include "object.h"
 #include "value.h"
 #include "memory.h"
+#include "compiler.h"
 #include "vm.h"
 
 NORETURN void die(const char *fmt, ...) {
@@ -101,6 +102,8 @@ const char *opName(OpCode code) {
         return "OP_POP";
     case OP_JUMP_IF_FALSE:
         return "OP_JUMP_IF_FALSE";
+    case OP_JUMP_IF_TRUE:
+        return "OP_JUMP_IF_TRUE";
     case OP_JUMP_IF_FALSE_PEEK:
         return "OP_JUMP_IF_FALSE_P";
     case OP_JUMP_IF_TRUE_PEEK:
@@ -125,6 +128,8 @@ const char *opName(OpCode code) {
         return "OP_INDEX_GET";
     case OP_INDEX_SET:
         return "OP_INDEX_SET";
+    case OP_CHECK_KEYWORD:
+        return "OP_CHECK_KEYWORD";
     case OP_LEAVE:
         return "OP_LEAVE";
     default:
@@ -312,8 +317,18 @@ static int loopInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
 
 static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t numArgs = chunk->code[i + 1];
-    fprintf(f, "%-16s    (argc=%04" PRId8 ")\n", op, numArgs);
-    return i+2;
+    (void)numArgs; // unused
+    uint8_t constantSlot = chunk->code[i + 2];
+    Value callInfoVal = getConstant(chunk, constantSlot);
+    ASSERT(IS_INTERNAL(callInfoVal));
+    ObjInternal *obj = AS_INTERNAL(callInfoVal);
+    CallInfo *callInfo = internalGetData(obj);
+    ASSERT(callInfo);
+    fprintf(f, "%-16s    (name=%s, argc=%d, kwargs=%d, splat=%d)\n",
+        op, tokStr(&callInfo->nameTok), callInfo->argc,
+        callInfo->numKwargs, callInfo->usesSplat ? 1 : 0
+    );
+    return i+3;
 }
 
 static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
@@ -345,6 +360,20 @@ static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     sprintf(cbuf, "%s\t('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
     free(cbuf);
+    return i+3;
+}
+
+static int printCheckKeywordInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+    uint8_t kwargSlot = chunk->code[i+1];
+    uint8_t kwargMapSlot = chunk->code[i+2];
+    fprintf(f, "%-16s    kwslot=%d mapslot=%d\n", op, kwargSlot, kwargMapSlot);
+    return i+3;
+}
+
+static int checkKeywordInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    /*uint8_t kwargMapSlot = chunk->code[i + 1];*/
+    /*uint8_t kwargSlot = chunk->code[i+2];*/
+    // FIXME:
     return i+3;
 }
 
@@ -406,6 +435,7 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
             return printClosureInstruction(f, opName(byte), chunk, i, funcs);
         case OP_JUMP:
         case OP_JUMP_IF_FALSE:
+        case OP_JUMP_IF_TRUE:
         case OP_JUMP_IF_FALSE_PEEK:
         case OP_JUMP_IF_TRUE_PEEK:
             return printJumpInstruction(f, opName(byte), chunk, i);
@@ -415,6 +445,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
             return printCallInstruction(f, opName(byte), chunk, i);
         case OP_INVOKE:
             return printInvokeInstruction(f, opName(byte), chunk, i);
+        case OP_CHECK_KEYWORD:
+            return printCheckKeywordInstruction(f, opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
         case OP_ADD:
@@ -481,6 +513,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             return closureInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_JUMP:
         case OP_JUMP_IF_FALSE:
+        case OP_JUMP_IF_TRUE:
         case OP_JUMP_IF_FALSE_PEEK:
         case OP_JUMP_IF_TRUE_PEEK:
             return jumpInstruction(buf, opName(byte), chunk, i);
@@ -490,6 +523,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             return callInstruction(buf, opName(byte), chunk, i);
         case OP_INVOKE:
             return invokeInstruction(buf, opName(byte), chunk, i);
+        case OP_CHECK_KEYWORD:
+            return checkKeywordInstruction(buf, opName(byte), chunk, i);
         case OP_NEGATE:
         case OP_RETURN:
         case OP_ADD:

@@ -11,6 +11,8 @@
 #define STACK_MAX 256
 #define FRAMES_MAX 64
 
+typedef struct CallInfo CallInfo;
+
 typedef struct CallFrame {
     // Non-native function fields
     ObjClosure *closure; // if call frame is from compiled code, this is set
@@ -112,6 +114,6 @@ void setBacktrace(Value err);
 
 void throwError(Value err);
 void throwArgErrorFmt(const char *format, ...);
-bool callCallable(Value callable, int argCount, bool isMethod);
+bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
 
 #endif

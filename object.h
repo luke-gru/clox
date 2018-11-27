@@ -58,6 +58,7 @@ typedef struct ObjFunction {
   int arity; // number of required args
   int numDefaultArgs; // number of optional default args
   bool hasRestArg;
+  int numKwargs;
   int upvalueCount;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM, or serialized/loaded to/from disk.
@@ -224,11 +225,11 @@ typedef struct ObjBoundMethod {
 
 #define LXARRAY_FOREACH(ary, el, idx) \
     for (idx = 0; idx < ARRAY_SIZE(ary) && \
-        (el = ARRAY_GET(ary, idx)).type != VAL_T_SENTINEL; idx++)
+        (el = ARRAY_GET(ary, idx)).type != VAL_T_UNDEF; idx++)
 
-#define MAP_GET(value, valkey)   (mapGet(value, valKey))
-#define MAP_SIZE(value)          (mapSize(value))
-#define MAP_GETHIDDEN(value)     (mapGetHidden(value))
+#define MAP_GET(mapVal, valKey, pval)   (mapGet(mapVal, valKey, pval))
+#define MAP_SIZE(mapVal)          (mapSize(mapVal))
+#define MAP_GETHIDDEN(mapVal)     (mapGetHidden(mapVal))
 
 typedef ObjString *(*newStringFunc)(char *chars, int length);
 // String creation functions
@@ -257,11 +258,14 @@ void        arrayPush(Value aryVal, Value el);
 ValueArray *arrayGetHidden(Value aryVal);
 Value       newArray(void);
 
+
 Value       newError(ObjClass *errClass, ObjString *msg);
 
-Value       mapGet(Value mapVal, Value key);
-Value       mapSize(Value mapVal);
-Table      *mapGetHidden(Value mapVal);
+Value       newMap(void);
+bool        mapGet(Value map, Value key, Value *val);
+void        mapSet(Value map, Value key, Value val);
+Value       mapSize(Value map);
+Table      *mapGetHidden(Value map);
 
 void  setProp(Value self, ObjString *propName, Value val);
 Value getProp(Value self, ObjString *propName);

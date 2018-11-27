@@ -739,7 +739,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
         push(args[i]);
     }
     VM_DEBUG("call begin");
-    callCallable(callable, argCount, true); // pushes return value to stack
+    callCallable(callable, argCount, true, NULL); // pushes return value to stack
     if (IS_CLOSURE(callable)) {
         bool oldRunUntilReturn = runUntilReturn;
         runUntilReturn = true;
@@ -811,7 +811,7 @@ static void captureNativeError(void) {
 
 static bool checkFunctionArity(ObjFunction *func, int argCount) {
     int arityMin = func->arity;
-    int arityMax = arityMin + func->numDefaultArgs;
+    int arityMax = arityMin + func->numDefaultArgs + func->numKwargs;
     if (func->hasRestArg) arityMax = 20; // TODO: make a #define
     if (argCount < arityMin || argCount > arityMax) {
         if (arityMin == arityMax) {
@@ -831,7 +831,7 @@ static bool checkFunctionArity(ObjFunction *func, int argCount) {
 // argCount of 0. If the callable is a class, this function creates the
 // new instance and puts it in the proper spot in the stack. The return value
 // is pushed to the stack.
-static bool doCallCallable(Value callable, int argCount, bool isMethod) {
+static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo *callInfo) {
     ObjClosure *closure = NULL;
     Value instanceVal;
     if (IS_CLOSURE(callable)) {
@@ -893,7 +893,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         Obj *callable = bmethod->callable; // native function or user-defined function (ObjClosure)
         instanceVal = bmethod->receiver;
         EC->stackTop[-argCount - 1] = instanceVal;
-        return doCallCallable(OBJ_VAL(callable), argCount, true);
+        return doCallCallable(OBJ_VAL(callable), argCount, true, callInfo);
     } else if (IS_NATIVE_FUNCTION(callable)) {
         VM_DEBUG("Calling native %s with %d args", isMethod ? "method" : "function", argCount);
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
@@ -935,6 +935,32 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     bool arityOK = checkFunctionArity(func, argCount);
     if (!arityOK) return false;
 
+    vec_nodep_t *params = (vec_nodep_t*)nodeGetData(func->funcNode);
+    ASSERT(params);
+
+    Value kwargsMap = NIL_VAL;
+    // keyword arg processing
+    if (func->numKwargs > 0 && callInfo) {
+        kwargsMap = newMap();
+        Node *param = NULL;
+        int pi = 0;
+        vec_foreach_rev(params, param, pi) {
+            if (param->type.kind == PARAM_NODE_KWARG) {
+                char *kwname = tokStr(&param->tok);
+                ObjString *kwStr = copyString(kwname, strlen(kwname));
+                for (int i = 0; i < callInfo->numKwargs; i++) {
+                    // keyword argument given, is on stack, we pop it off
+                    if (strcmp(kwname, tokStr(callInfo->kwargNames+i)) == 0) {
+                        mapSet(kwargsMap, OBJ_VAL(kwStr), pop());
+                    } else {
+                        // keyword argument not given, we need to add UNDEF_VAL to
+                        // stack later
+                    }
+                }
+            }
+        }
+    }
+
     // default arg processing
     int numDefaultArgsUsed = (func->arity + func->numDefaultArgs)-argCount;
     if (numDefaultArgsUsed < 0) numDefaultArgsUsed = 0;
@@ -968,6 +994,26 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
         argCountWithRestAry++;
     }
 
+    int numKwargsNotGiven = 0;
+    if (func->numKwargs > 0 && callInfo) {
+        Node *param = NULL;
+        int pi = 0;
+        vec_foreach(params, param, pi) {
+            if (param->type.kind == PARAM_NODE_KWARG) {
+                char *kwname = tokStr(&param->tok);
+                ObjString *kwStr = copyString(kwname, strlen(kwname));
+                Value val;
+                if (MAP_GET(kwargsMap, OBJ_VAL(kwStr), &val)) {
+                    push(val);
+                } else {
+                    push(UNDEF_VAL);
+                    numKwargsNotGiven++;
+                }
+            }
+        }
+        push(kwargsMap);
+    }
+
     int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
     ASSERT(parentStart >= 0);
 
@@ -982,8 +1028,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     // skip default argument code in function that's unused
     if (numDefaultArgsUnused > 0) {
         ASSERT(func->funcNode);
-        vec_nodep_t *params = (vec_nodep_t*)nodeGetData(func->funcNode);
-        ASSERT(params);
         Node *param = NULL;
         int pi = 0;
         int unused = numDefaultArgsUnused;
@@ -1014,7 +1058,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
     frame->isCCall = false;
     frame->nativeFunc = NULL;
     // +1 to include either the called function (for non-methods) or the receiver (for methods)
-    frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1);
+    frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1) -
+        (func->numKwargs > 0 ? numKwargsNotGiven+1 : 0);
     // NOTE: the frame is popped on OP_RETURN
     return true;
 }
@@ -1024,9 +1069,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod) {
  * see doCallCallable
  * argCount does NOT include instance if `isMethod` is true
  */
-bool callCallable(Value callable, int argCount, bool isMethod) {
+bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     int lenBefore = vm.stackObjects.length;
-    bool ret = doCallCallable(callable, argCount, isMethod);
+    bool ret = doCallCallable(callable, argCount, isMethod, info);
     int lenAfter = vm.stackObjects.length;
 
     // allow collection of stack-created objects if they're not rooted now
@@ -1264,7 +1309,7 @@ static InterpretResult run(bool doResetStack) {
           if (!callable) {\
               UNREACHABLE("method not found");\
           }\
-          callCallable(OBJ_VAL(callable), 1, true);\
+          callCallable(OBJ_VAL(callable), 1, true, NULL);\
       } else {\
         UNREACHABLE("bug in binary op");\
       }\
@@ -1523,6 +1568,15 @@ static InterpretResult run(bool doResetStack) {
           }
           break;
       }
+      case OP_JUMP_IF_TRUE: {
+          Value cond = pop();
+          uint8_t ipOffset = READ_BYTE();
+          if (isTruthy(cond)) {
+              ASSERT(ipOffset > 0);
+              getFrame()->ip += (ipOffset-1);
+          }
+          break;
+      }
       case OP_JUMP_IF_FALSE_PEEK: {
           Value cond = peek(0);
           uint8_t ipOffset = READ_BYTE();
@@ -1565,7 +1619,9 @@ static InterpretResult run(bool doResetStack) {
               runtimeError("Tried to call uncallable object (type=%s)", typeOfVal(callableVal));
               return INTERPRET_RUNTIME_ERROR;
           }
-          callCallable(callableVal, numArgs, false);
+          Value callInfoVal = READ_CONSTANT();
+          CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
+          callCallable(callableVal, numArgs, false, callInfo);
           if (vm.hadError) {
               return INTERPRET_RUNTIME_ERROR;
           }
@@ -1573,10 +1629,25 @@ static InterpretResult run(bool doResetStack) {
           lastSplatNumArgs = -1;
           break;
       }
+      case OP_CHECK_KEYWORD: {
+        Value kwMap = peek(0);
+        ASSERT(IS_T_MAP(kwMap));
+        uint8_t kwSlot = READ_BYTE();
+        uint8_t mapSlot = READ_BYTE();
+        (void)mapSlot; // unused
+        if (IS_UNDEF(getFrame()->slots[kwSlot])) {
+            push(BOOL_VAL(false));
+        } else {
+            push(BOOL_VAL(true));
+        }
+        break;
+      }
       case OP_INVOKE: { // invoke methods (includes static methods)
           Value methodName = READ_CONSTANT();
           ObjString *mname = AS_STRING(methodName);
           uint8_t numArgs = READ_BYTE();
+          /*Value callInfoVal = READ_CONSTANT(); TODO*/
+          CallInfo *callInfo = NULL; // TODO
           if (lastSplatNumArgs > 0) {
               numArgs += (lastSplatNumArgs-1);
           }
@@ -1590,7 +1661,7 @@ static InterpretResult run(bool doResetStack) {
                   UNREACHABLE("instance method '%s#%s' not found", className->chars, mname->chars);
               }
               setThis(numArgs);
-              callCallable(OBJ_VAL(callable), numArgs, true);
+              callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);
@@ -1600,7 +1671,7 @@ static InterpretResult run(bool doResetStack) {
               }
               EC->stackTop[-numArgs-1] = instanceVal;
               setThis(numArgs);
-              callCallable(OBJ_VAL(callable), numArgs, true);
+              callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
           }
           // TODO: static module methods
           if (vm.hadError) {
@@ -1787,7 +1858,7 @@ static InterpretResult run(bool doResetStack) {
           ObjInstance *instance = AS_INSTANCE(lval);
           Obj *method = instanceFindMethod(instance, copyString("indexGet", 8));
           ASSERT(method); // TODO: handle error
-          callCallable(OBJ_VAL(method), 1, true);
+          callCallable(OBJ_VAL(method), 1, true, NULL);
           break;
       }
       case OP_INDEX_SET: {
@@ -1796,7 +1867,7 @@ static InterpretResult run(bool doResetStack) {
           ObjInstance *instance = AS_INSTANCE(lval);
           Obj *method = instanceFindMethod(instance, copyString("indexSet", 8));
           ASSERT(method); // TODO: handle error
-          callCallable(OBJ_VAL(method), 2, true);
+          callCallable(OBJ_VAL(method), 2, true, NULL);
           break;
       }
       case OP_THROW: {

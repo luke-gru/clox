@@ -1,0 +1,18 @@
+fun printMsg(msg: "hi") {
+  print(msg);
+}
+printMsg(msg: "wow");
+printMsg(msg: nil);
+printMsg();
+printMsg();
+printMsg(msg: "wow");
+printMsg(msg: nil);
+
+__END__
+-- expect: --
+wow
+nil
+hi
+hi
+wow
+nil

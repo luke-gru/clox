@@ -264,10 +264,6 @@ static char *outputSplatCallExpr(Node *n, int indentLevel) {
     return ""; // TODO
 }
 
-static char *outputKeywordArgExpr(Node *n, int indentLevel) {
-    return ""; // TODO
-}
-
 static char *outputExpressionStmt(Node *n, int indentLevel) {
     char *pre = "";
     if (astDetailLevel > 1) {
@@ -651,8 +647,6 @@ char *outputASTString(Node *node, int indentLevel) {
                     return outputSuperExpr(node, indentLevel);
                 case SPLAT_EXPR:
                     return outputSplatCallExpr(node, indentLevel);
-                case KEYWORD_ARG_EXPR:
-                    return outputKeywordArgExpr(node, indentLevel);
                 default:
                     UNREACHABLE("invalid expr node kind: %d", node->type.kind);
             }
@@ -699,6 +693,8 @@ char *outputASTString(Node *node, int indentLevel) {
                     return outputInStmt(node, indentLevel);
                 case STMTLIST_STMT:
                     return outputStmtlistStmt(node, indentLevel);
+                case KWARG_IN_CALL_STMT:
+                    // TODO:
                 default:
                     UNREACHABLE("invalid stmt node kind: %d", node->type.kind);
             }
