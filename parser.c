@@ -287,6 +287,39 @@ static Node *statement() {
         TRACE_END("statement");
         return block;
     }
+    if (match(TOKEN_FOREACH)) {
+        Token foreachTok = current->previous;
+        node_type_t foreachT = {
+            .type = NODE_STMT,
+            .kind = FOREACH_STMT
+        };
+        Node *foreachNode = createNode(foreachT, foreachTok, NULL);
+        consume(TOKEN_LEFT_PAREN, "Expect '(' after keyword 'foreach'");
+        node_type_t varTokT = {
+            .type = NODE_OTHER,
+            .kind = TOKEN_NODE
+        };
+        while (match(TOKEN_IDENTIFIER)) {
+            Token varTok = current->previous;
+            Node *varNode = createNode(varTokT, varTok, NULL);
+            nodeAddChild(foreachNode, varNode);
+            if (match(TOKEN_IN)) {
+                break;
+            } else if (match(TOKEN_COMMA)) { // continue
+            } else {
+                errorAtCurrent("Unexpected token in foreach statement");
+            }
+        }
+        nodeAddChild(foreachNode, expression());
+        consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'foreach' statement variables");
+        consume(TOKEN_LEFT_BRACE, "Expect '{' after 'foreach' statement variables");
+        Token lbraceTok = current->previous;
+        Node *foreachStmtList = blockStatements();
+        Node *foreachBlock = wrapStmtsInBlock(foreachStmtList, lbraceTok);
+        nodeAddChild(foreachNode, foreachBlock);
+        TRACE_END("statement");
+        return foreachNode;
+    }
     if (match(TOKEN_IF)) {
         Token ifTok = current->previous;
         consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'if'");

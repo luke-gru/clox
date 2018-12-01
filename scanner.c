@@ -42,6 +42,7 @@ static Keyword keywords[] = {
   {"continue",   8, TOKEN_CONTINUE},
   {"break",   5, TOKEN_BREAK},
   {"in",      2, TOKEN_IN},
+  {"foreach", 7, TOKEN_FOREACH},
   {"__END__",   7, TOKEN_END_SCRIPT},
   // Sentinel to mark the end of the array.
   {NULL,      0, TOKEN_EOF}
@@ -484,6 +485,14 @@ const char *tokTypeStr(TokenType ttype) {
       return "VAR";
     case TOKEN_WHILE:
       return "WHILE";
+    case TOKEN_IN:
+      return "IN";
+    case TOKEN_BREAK:
+      return "BREAK";
+    case TOKEN_FOREACH:
+      return "FOREACH";
+    case TOKEN_CONTINUE:
+      return "CONTINUE";
     case TOKEN_END_SCRIPT:
       return "__END__";
     case TOKEN_ERROR:

@@ -8,6 +8,13 @@ printMsg();
 printMsg(msg: "wow");
 printMsg(msg: nil);
 
+fun greet(name, greeting: "Why hello") {
+  print("${greeting}, ${name}");
+}
+
+greet("Luke");
+greet("Luke", greeting: "Yo");
+
 __END__
 -- expect: --
 wow
@@ -16,3 +23,5 @@ hi
 hi
 wow
 nil
+Why hello, Luke
+Yo, Luke

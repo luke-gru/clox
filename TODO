@@ -38,3 +38,4 @@ execution contexts (like eval) []
 
 BUGS:
 * super() bug in examples/super.lox
+* Fix nil.toString() bugs
