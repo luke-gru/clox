@@ -16,6 +16,7 @@ char *boolOptNames[] = {
     "traceGC",
     "traceCompiler",
     "disableBcodeOptimizer",
+    "disableGC",
     "parseOnly",
     "compileOnly",
     NULL,
@@ -44,6 +45,7 @@ void initOptions(void) {
     options.parseOnly = false;
     options.compileOnly = false;
     options.disableBcodeOptimizer = false;
+    options.disableGC = false;
 
     options.initialLoadPath = "";
     options.initialScript = "";
@@ -158,6 +160,10 @@ int parseOption(char **argv, int i) {
     if (strcmp(argv[i], "--disable-bopt") == 0) {
         SET_OPTION(disableBcodeOptimizer, true);
         compilerOpts.noOptimize = true;
+        return 1;
+    }
+    if (strcmp(argv[i], "--disable-GC") == 0) {
+        SET_OPTION(disableGC, true);
         return 1;
     }
 

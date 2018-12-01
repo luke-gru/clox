@@ -25,16 +25,22 @@
 static void gc_trace_mark(Obj *obj) {
     if (!CLOX_OPTION_T(traceGC)) return;
     fprintf(stderr, "[GC]: marking object at %p, ", obj);
-    fprintf(stderr, "value => ");
-    printValue(stderr, OBJ_VAL(obj), false);
+    if (obj->type != OBJ_T_UPVALUE) {
+        fprintf(stderr, "value => ");
+        printValue(stderr, OBJ_VAL(obj), false);
+    }
     fprintf(stderr, "\n");
 }
 
 static void gc_trace_free(Obj *obj) {
     if (!CLOX_OPTION_T(traceGC)) return;
     fprintf(stderr, "[GC]: freeing object at %p, ", obj);
-    fprintf(stderr, "type => %s, value => ", typeOfObj(obj));
-    printValue(stderr, OBJ_VAL(obj), false);
+    if (obj->type == OBJ_T_UPVALUE) {
+        fprintf(stderr, "type => upvalue");
+    } else {
+        fprintf(stderr, "type => %s, value => ", typeOfObj(obj));
+        printValue(stderr, OBJ_VAL(obj), false);
+    }
     fprintf(stderr, "\n");
 }
 
@@ -65,7 +71,7 @@ static bool GCOn = true;
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START("reallocate");
     if (newSize > 0) {
-        ASSERT(!inGC);
+        ASSERT(!inGC); // if we're in GC phase we can't allocate memory
     }
     vm.bytesAllocated += (newSize - oldSize);
 
@@ -213,6 +219,10 @@ void freeObject(Obj *obj, bool unlink) {
     if (obj->type == OBJ_T_NONE) {
         return; // already freed
     }
+    if (vm.keepInternedObjects && obj->isInterned) {
+        GC_TRACE_DEBUG("Skipping GC of interned string: (p=%p, pc=%p, s='%s'", obj, ((ObjString*)obj)->chars, ((ObjString*)obj)->chars);
+        return;
+    }
 
     ASSERT(!obj->noGC);
     TRACE_GC_FUNC_START("freeObject");
@@ -329,6 +339,9 @@ void freeObject(Obj *obj, bool unlink) {
             if (internal->freeFunc) {
                 GC_TRACE_DEBUG("Freeing internal object's references: p=%p, datap=%p", internal, internal->data);
                 internal->freeFunc(obj);
+            } else if (internal->data) {
+                GC_TRACE_DEBUG("Freeing internal object data: p=%p", internal->data);
+                free(internal->data);
             }
             GC_TRACE_DEBUG("Freeing internal object: p=%p", internal);
             FREE(ObjInternal, internal);
@@ -341,9 +354,10 @@ void freeObject(Obj *obj, bool unlink) {
         }
         case OBJ_T_STRING: {
             ObjString *string = (ObjString*)obj;
+            /*DBG_ASSERT(!((Obj*)string)->isInterned);*/
             ASSERT(string->chars);
             GC_TRACE_DEBUG("Freeing string chars: p=%p", string->chars);
-            GC_TRACE_DEBUG("Freeing string chars: s=%s", string->chars);
+            GC_TRACE_DEBUG("Freeing string chars: s='%s'", string->chars);
             FREE_ARRAY(char, string->chars, string->length + 1);
             string->chars = NULL;
             GC_TRACE_DEBUG("Freeing ObjString: p=%p", obj);
@@ -400,12 +414,12 @@ void unhideFromGC(Obj *obj) {
 // single-phase mark and sweep
 // TODO: divide work up into mark and sweep phases to limit GC pauses
 void collectGarbage(void) {
-    if (!GCOn) {
+    if (!GCOn || CLOX_OPTION_T(disableGC)) {
         GC_TRACE_DEBUG("GC run skipped (GC OFF)");
         return;
     }
     if (inGC) {
-        fprintf(stderr, "GC tried to start during a GC run?\n");
+        fprintf(stderr, "[BUG]: GC tried to start during a GC run?\n");
         ASSERT(0);
     }
     inGC = true;

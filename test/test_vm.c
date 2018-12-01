@@ -8,7 +8,7 @@
 static InterpretResult interp(char *src, bool expectSuccess) {
     CompileErr cerr = COMPILE_ERR_NONE;
     InterpretResult ires = INTERPRET_OK;
-    initVM();
+    if (!vm.inited) initVM();
 
     Chunk chunk;
     initChunk(&chunk);
@@ -444,7 +444,8 @@ static int test_native_typeof() {
                 "print typeof(\"str\");\n"
                 "print typeof(MyPet);\n";
                 /*"print typeof([])\n""*/
-    ObjString *buf = newString("", 0);
+    initVM();
+    ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
     char *output = buf->chars;
@@ -466,7 +467,8 @@ cleanup:
 
 static int test_array_literal() {
     char *src = "var a = [1,2,3]; print a.toString(); a;";
-    ObjString *buf = newString("", 0);
+    initVM();
+    ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
     Value *val = getLastValue();
@@ -500,7 +502,8 @@ static int test_array_get_set() {
     char *src = "var a = [1,2,3];\n"
                 "a[0] = 400;\n"
                 "print a[0]; print a.toString();";
-    ObjString *buf = newString("", 0);
+    initVM();
+    ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
@@ -516,7 +519,8 @@ cleanup:
 static int test_print_nested_array(void) {
     char *src = "var a = [[4],1,2,3];\n"
                 "print a; print a.toString();";
-    ObjString *buf = newString("", 0);
+    initVM();
+    ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
@@ -533,7 +537,8 @@ cleanup:
 static int test_print_map(void) {
     char *src = "var m = Map();\n"
                 "print m;";
-    ObjString *buf = newString("", 0);
+    initVM();
+    ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
@@ -559,7 +564,8 @@ static int test_closures_global_scope(void) {
                 "print i;\n"
                 "incr(); incr();\n"
                 "print i + 1;";
-    ObjString *buf = newString("", 0);
+    initVM();
+    ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "0.00\n1.00\n2.00\n3.00\n";
@@ -576,7 +582,8 @@ static int test_closures_env_saved(void) {
                 "var add10 = adder(i);\n"
                 "print add10(20);\n"
                 "print add10(40);\n";
-    ObjString *buf = newString("", 0);
+    initVM();
+    ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "30.00\n50.00\n";
@@ -595,7 +602,8 @@ static int test_catch_thrown_errors_from_c_code(void) {
                 "}catch (Error e) {\n"
                 "  print \"caught\";\n"
                 "}";
-    ObjString *buf = newString("", 0);
+    initVM();
+    ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "caught\n";
@@ -614,7 +622,8 @@ static int test_map_keys_work_as_expected(void) {
                 "m[10] = 9;\n"
                 "print m[10];\n"
                 "print m[\"10\"];\n";
-    ObjString *buf = newString("", 0);
+    initVM();
+    ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "9.00\n6.00\n";

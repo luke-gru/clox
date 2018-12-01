@@ -136,7 +136,7 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
             // TODO: throw syntax error
             return BOOL_VAL(false);
         }
-        ObjString *fpath = newString(pathbuf, strlen(pathbuf));
+        ObjString *fpath = copyString(pathbuf, strlen(pathbuf));
         if (checkLoaded) {
             vec_push(&vm.loadedScripts, OBJ_VAL(fpath));
         }
@@ -563,7 +563,7 @@ Value lxFileReadStatic(int argCount, Value *args) {
         throwArgErrorFmt("Error reading File '%s': %s", fnameStr->chars, strerror(errno));
         return NIL_VAL;
     }
-    ObjString *ret = newString("", 0);
+    ObjString *ret = copyString("", 0);
     size_t nread;
     while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
         pushCString(ret, fileReadBuf, nread);

@@ -2,8 +2,14 @@ var a = 3;
 eval("print a;");
 eval("var b = 4;");
 print b;
+try {
+  eval("throw Error('hi');");
+} catch(Error) {
+  print('Caught error');
+}
 
 __END__
 -- expect: --
 3.00
 4.00
+Caught error

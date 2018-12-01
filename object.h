@@ -30,6 +30,7 @@ typedef struct Obj {
   bool isLinked; // is this object linked into vm.objects?
   bool isDark; // is this object marked?
   bool noGC; // don't collect this object
+  bool isInterned; // right now only strings are interned, into vm.strings list
 
   // Other fields
   bool isFrozen;
@@ -40,6 +41,7 @@ typedef struct ObjString {
   int length;
   char *chars;
   uint32_t hash;
+  bool isStatic;
 } ObjString;
 
 typedef void (*GCMarkFunc)(Obj *obj);
@@ -235,9 +237,9 @@ typedef ObjString *(*newStringFunc)(char *chars, int length);
 // String creation functions
 ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
 ObjString *copyString(char *chars, int length); // copies provided memory. Object lives on lox heap.
+ObjString *nonVMString(char *chars, int length);
 ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
-ObjString *newString(char *chars, int length); // always creates new string in vm.objects
-void pushString(ObjString *a, ObjString *b); // always creates new string in vm.objects
+void pushString(ObjString *a, ObjString *b);
 ObjString *newStackString(char *chars, int length); // Used in native C functions. Object first lives in VM arena, conceptually.
 ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
 ObjString *dupString(ObjString *string);

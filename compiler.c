@@ -685,8 +685,8 @@ static uint8_t makeConstant(Value value, ConstType ctype) {
 
 // Add constant to constant pool from the token's lexeme, return index to it
 static uint8_t identifierConstant(Token* name) {
-    ASSERT(vm.inited);
-    return makeConstant(OBJ_VAL(copyString(name->start, name->length)),
+    DBG_ASSERT(vm.inited);
+    return makeConstant(OBJ_VAL(hiddenString(name->start, name->length)),
         CONST_T_STRLIT);
 }
 
@@ -863,7 +863,7 @@ static void initCompiler(
 
     switch (ftype) {
     case FUN_TYPE_NAMED:
-        current->function->name = copyString(
+        current->function->name = hiddenString(
             tokStr(fTok), strlen(tokStr(fTok))
         );
         break;
@@ -888,7 +888,7 @@ static void initCompiler(
         }
         strncat(methodNameBuf, sep, 1);
         strcat(methodNameBuf, funcName);
-        ObjString *methodName = copyString(methodNameBuf, strlen(methodNameBuf));
+        ObjString *methodName = hiddenString(methodNameBuf, strlen(methodNameBuf));
         current->function->name = methodName;
         free(methodNameBuf);
         break;
@@ -1184,10 +1184,11 @@ static void emitNode(Node *n) {
             emitConstant(NUMBER_VAL(d), CONST_T_NUMLIT);
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
-            emitConstant(OBJ_VAL(copyString(name->start+1, name->length-2)), CONST_T_STRLIT);
+            ObjString *str = hiddenString(name->start+1, name->length-2);
+            emitConstant(OBJ_VAL(str), CONST_T_STRLIT);
         } else if (n->tok.type == TOKEN_STRING_STATIC) {
             Token *name = &n->tok;
-            ObjString *str = copyString(name->start+2, name->length-3);
+            ObjString *str = hiddenString(name->start+2, name->length-3);
             objFreeze((Obj*)str);
             emitConstant(OBJ_VAL(str), CONST_T_STRLIT);
         } else if (n->tok.type == TOKEN_TRUE) {
@@ -1202,9 +1203,18 @@ static void emitNode(Node *n) {
         return;
     }
     case ARRAY_EXPR: {
-        namedVariable(syntheticToken("Array"), VAR_GET);
+        Token arrayTok = syntheticToken("Array");
+        namedVariable(arrayTok, VAR_GET);
         emitChildren(n);
-        emitOp1(OP_CALL, (uint8_t)n->children->length);
+        CallInfo *callInfoData = calloc(sizeof(CallInfo), 1);
+        ASSERT_MEM(callInfoData);
+        callInfoData->nameTok = arrayTok;
+        callInfoData->argc = n->children->length;
+        callInfoData->numKwargs = 0;
+        ObjInternal *callInfoObj = newInternalObject(callInfoData, NULL, NULL);
+        hideFromGC((Obj*)callInfoObj);
+        uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
+        emitOp2(OP_CALL, (uint8_t)n->children->length, callInfoConstSlot);
         return;
     }
     case IF_STMT: {
@@ -1444,6 +1454,7 @@ static void emitNode(Node *n) {
                 if (i == 0) continue;
                 emitNode(arg);
             }
+            // TODO: use callInfoData like for OP_CALL
             emitOp2(OP_INVOKE, methodNameArg, (uint8_t)nArgs);
         } else {
             emitNode(lhs); // the function itself
@@ -1469,6 +1480,7 @@ static void emitNode(Node *n) {
                 }
             }
             ObjInternal *callInfoObj = newInternalObject(callInfoData, NULL, NULL);
+            hideFromGC((Obj*)callInfoObj);
             uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
             emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);
         }
@@ -1498,7 +1510,7 @@ static void emitNode(Node *n) {
                 if (i == 0) continue; // already emitted
                 int itarget = iseq->byteCount;
                 Token classTok = vec_first(catchStmt->children)->tok;
-                ObjString *className = copyString(tokStr(&classTok), strlen(tokStr(&classTok)));
+                ObjString *className = hiddenString(tokStr(&classTok), strlen(tokStr(&classTok)));
                 double catchTblIdx = (double)iseqAddCatchRow(
                     iseq, ifrom, ito,
                     itarget, OBJ_VAL(className)

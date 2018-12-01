@@ -320,6 +320,7 @@ static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     (void)numArgs; // unused
     uint8_t constantSlot = chunk->code[i + 2];
     Value callInfoVal = getConstant(chunk, constantSlot);
+    /*fprintf(f, "typeof=%s\n", typeOfVal(callInfoVal));*/
     ASSERT(IS_INTERNAL(callInfoVal));
     ObjInternal *obj = AS_INTERNAL(callInfoVal);
     CallInfo *callInfo = internalGetData(obj);
@@ -331,14 +332,15 @@ static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     return i+3;
 }
 
+// TODO: make it like printCallInstruction
 static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
-    char *cbuf = calloc(strlen(op)+1+13, 1);
+    char *cbuf = calloc(strlen(op)+1+10, 1);
     ASSERT_MEM(cbuf);
     uint8_t numArgs = chunk->code[i + 1];
-    sprintf(cbuf, "%s\t(argc=%04" PRId8 ")\n", op, numArgs);
+    sprintf(cbuf, "%s\t(argc=%d)\n", op, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
     free(cbuf);
-    return i+2;
+    return i+3;
 }
 
 static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i) {

@@ -20,11 +20,13 @@
 extern VM vm;
 
 static Obj *allocateObject(size_t size, ObjType type) {
+    ASSERT(vm.inited);
     Obj *object = (Obj*)reallocate(NULL, 0, size);
     ASSERT(type > OBJ_T_NONE);
     object->type = type;
     object->isDark = true;
     object->isFrozen = false;
+    object->isInterned = false;
 
     // prepend new object to linked list
     object->next = vm.objects;
@@ -40,11 +42,13 @@ static Obj *allocateObject(size_t size, ObjType type) {
 }
 
 static Obj *allocateCStackObject(size_t size, ObjType type) {
+    ASSERT(vm.inited);
     Obj *object = (Obj*)reallocate(NULL, 0, size);
     ASSERT(type > OBJ_T_NONE);
     object->type = type;
     object->isDark = true;
     object->isFrozen = false;
+    object->isInterned = false;
 
     // prepend new object to linked list
     object->next = vm.objects;
@@ -73,13 +77,9 @@ static ObjString *allocateString(char *chars, int length, uint32_t hash) {
         DBG_ASSERT(vm.inited);
     }
     ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
-    hideFromGC((Obj*)string);
     string->length = length;
     string->chars = chars;
     string->hash = hash;
-    tableSet(&vm.strings, OBJ_VAL(string), NIL_VAL);
-    objFreeze((Obj*)string);
-    unhideFromGC((Obj*)string);
     return string;
 }
 
@@ -109,8 +109,6 @@ uint32_t hashString(char *key, int length) {
 ObjString *takeString(char *chars, int length) {
     DBG_ASSERT(strlen(chars) == length);
     uint32_t hash = hashString(chars, length);
-    ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
-    if (interned != NULL) return interned;
     return allocateString(chars, length, hash);
 }
 
@@ -120,14 +118,29 @@ ObjString *copyString(char *chars, int length) {
     DBG_ASSERT(strlen(chars) >= length);
     // Copy the characters to the heap so the object can own it.
     uint32_t hash = hashString((char*)chars, length);
-    ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
-    if (interned != NULL) return interned;
 
     char *heapChars = ALLOCATE(char, length + 1);
     memcpy(heapChars, chars, length);
     heapChars[length] = '\0';
 
     return allocateString(heapChars, length, hash);
+}
+
+/**
+ * For use when VM isn't yet initialized. Object isn't linked into vm.objects
+ * GC object pool.
+ */
+ObjString *nonVMString(char *chars, int len) {
+    DBG_ASSERT(strlen(chars) >= len);
+    char *heapChars = ALLOCATE(char, len+1);
+    memset(heapChars, 0, len+1);
+    if (len > 0) memcpy(heapChars, chars, len);
+    heapChars[len] = '\0';
+    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
+    string->length = len;
+    string->chars = heapChars;
+    string->hash = hashString(string->chars, len);
+    return string;
 }
 
 // Always allocates a new string object that lives at least until return to
@@ -147,38 +160,28 @@ ObjString *newStackString(char *chars, int len) {
 
 ObjString *hiddenString(char *chars, int len) {
     DBG_ASSERT(strlen(chars) >= len);
-    ObjString *string = newString(chars, len);
+    ObjString *string = copyString(chars, len);
     hideFromGC((Obj*)string);
     return string;
 }
 
-ObjString *newString(char *chars, int len) {
-    DBG_ASSERT(strlen(chars) >= len);
-    char *heapChars = ALLOCATE(char, len+1);
-    memset(heapChars, 0, len+1);
-    if (len > 0) memcpy(heapChars, chars, len);
-    heapChars[len] = '\0';
-    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
-    string->length = len;
-    string->chars = heapChars;
-    string->hash = hashString(string->chars, len);
-    return string;
-}
 
 ObjString *internedString(char *chars, int length) {
     DBG_ASSERT(strlen(chars) >= length);
-    uint32_t hash = hashString((char*)chars, length);
+    uint32_t hash = hashString(chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (!interned) {
-        fprintf(stderr, "Expected string to be interned: '%s'\n", chars);
-        UNREACHABLE("string not interned!");
+        interned = copyString(chars, length);
+        tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL);
+        ((Obj*)interned)->isInterned = true;
+        objFreeze((Obj*)interned);
     }
     return interned;
 }
 
 ObjString *dupString(ObjString *string) {
     ASSERT(string);
-    return newString(string->chars, string->length);
+    return copyString(string->chars, string->length);
 }
 
 void pushString(ObjString *a, ObjString *b) {
@@ -426,6 +429,8 @@ const char *typeOfObj(Obj *obj) {
         return "string";
     case OBJ_T_CLASS:
         return "class";
+    case OBJ_T_MODULE:
+        return "module";
     case OBJ_T_INSTANCE:
         return "instance";
     case OBJ_T_FUNCTION:
@@ -436,6 +441,8 @@ const char *typeOfObj(Obj *obj) {
         return "internal";
     case OBJ_T_CLOSURE:
         return "closure";
+    case OBJ_T_UPVALUE:
+        return "upvalue";
     default: {
         UNREACHABLE("Unknown object type: (%d)\n", obj->type);
     }
@@ -460,7 +467,7 @@ ValueArray *arrayGetHidden(Value aryVal) {
     ASSERT(IS_AN_ARRAY(aryVal));
     ObjInstance *inst = AS_INSTANCE(aryVal);
     Value internalObjVal;
-    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(copyString("ary", 3)), &internalObjVal));
+    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(internedString("ary", 3)), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     return ary;
@@ -508,7 +515,7 @@ Table *mapGetHidden(Value mapVal) {
     ASSERT(IS_A_MAP(mapVal));
     ObjInstance *inst = AS_INSTANCE(mapVal);
     Value internalObjVal;
-    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(copyString("map", 3)), &internalObjVal));
+    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(internedString("map", 3)), &internalObjVal));
     Table *map = (Table*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(map);
     return map;
@@ -584,7 +591,7 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     if (inst->singletonKlass) {
         return inst->singletonKlass;
     }
-    ObjString *name = valueToString(OBJ_VAL(inst), newString);
+    ObjString *name = valueToString(OBJ_VAL(inst), copyString);
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, inst->klass);
     inst->singletonKlass = meta;

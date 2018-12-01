@@ -23,7 +23,7 @@ static void fullGC(void) {
 
 int test_string_collected(void) {
     initVM();
-    ObjString *string = newString("", 0);
+    ObjString *string = copyString("", 0);
     T_ASSERT(isLinkedObject((Obj*)string));
     fullGC();
     T_ASSERT_EQ(false, isLinkedObject((Obj*)string));
@@ -34,7 +34,7 @@ cleanup:
 
 int test_hiding_keeps_gc_from_reclaiming(void) {
     initVM();
-    ObjString *string = newString("hidden", 6);
+    ObjString *string = copyString("hidden", 6);
     T_ASSERT(isLinkedObject((Obj*)string));
     hideFromGC((Obj*)string);
     fullGC();

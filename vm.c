@@ -13,8 +13,10 @@ VM vm;
 
 #ifndef NDEBUG
 #define VM_DEBUG(...) vm_debug(__VA_ARGS__)
+#define VM_WARN(...) vm_warn(__VA_ARGS__)
 #else
 #define VM_DEBUG(...) (void(0))
+#define VM_WARN(...) (void(0))
 #endif
 
 #define EC (vm.ec)
@@ -24,6 +26,14 @@ static void vm_debug(const char *format, ...) {
     va_list ap;
     va_start(ap, format);
     fprintf(stderr, "[VM]: ");
+    vfprintf(stderr, format, ap);
+    va_end(ap);
+    fprintf(stderr, "\n");
+}
+static void vm_warn(const char *format, ...) {
+    va_list ap;
+    va_start(ap, format);
+    fprintf(stderr, "[Warning]: ");
     vfprintf(stderr, format, ap);
     va_end(ap);
     fprintf(stderr, "\n");
@@ -55,27 +65,27 @@ static bool isUnredefinableGlobal(char *name) {
 }
 
 static void defineNativeFunctions() {
-    ObjString *clockName = copyString("clock", 5);
+    ObjString *clockName = internedString("clock", 5);
     ObjNative *clockFn = newNative(clockName, lxClock);
     tableSet(&vm.globals, OBJ_VAL(clockName), OBJ_VAL(clockFn));
 
-    ObjString *typeofName = copyString("typeof", 6);
+    ObjString *typeofName = internedString("typeof", 6);
     ObjNative *typeofFn = newNative(typeofName, lxTypeof);
     tableSet(&vm.globals, OBJ_VAL(typeofName), OBJ_VAL(typeofFn));
 
-    ObjString *loadScriptName = copyString("loadScript", 10);
+    ObjString *loadScriptName = internedString("loadScript", 10);
     ObjNative *loadScriptFn = newNative(loadScriptName, lxLoadScript);
     tableSet(&vm.globals, OBJ_VAL(loadScriptName), OBJ_VAL(loadScriptFn));
 
-    ObjString *reqScriptName = copyString("requireScript", 13);
+    ObjString *reqScriptName = internedString("requireScript", 13);
     ObjNative *reqScriptFn = newNative(reqScriptName, lxRequireScript);
     tableSet(&vm.globals, OBJ_VAL(reqScriptName), OBJ_VAL(reqScriptFn));
 
-    ObjString *debuggerName = copyString("debugger", 8);
+    ObjString *debuggerName = internedString("debugger", 8);
     ObjNative *debuggerFn = newNative(debuggerName, lxDebugger);
     tableSet(&vm.globals, OBJ_VAL(debuggerName), OBJ_VAL(debuggerFn));
 
-    ObjString *evalName = copyString("eval", 4);
+    ObjString *evalName = internedString("eval", 4);
     ObjNative *evalFn = newNative(evalName, lxEval);
     tableSet(&vm.globals, OBJ_VAL(evalName), OBJ_VAL(evalFn));
 }
@@ -94,27 +104,27 @@ Value lxLoadPath;
 
 static void defineNativeClasses() {
     // class Object
-    ObjString *objClassName = copyString("Object", 6);
+    ObjString *objClassName = internedString("Object", 6);
     ObjClass *objClass = newClass(objClassName, NULL);
     tableSet(&vm.globals, OBJ_VAL(objClassName), OBJ_VAL(objClass));
 
-    ObjNative *objGetClassNat = newNative(copyString("_class", 6), lxObjectGetClass);
-    tableSet(&objClass->getters, OBJ_VAL(copyString("_class", 6)), OBJ_VAL(objGetClassNat));
+    ObjNative *objGetClassNat = newNative(internedString("_class", 6), lxObjectGetClass);
+    tableSet(&objClass->getters, OBJ_VAL(internedString("_class", 6)), OBJ_VAL(objGetClassNat));
 
-    ObjNative *objGetObjectIdNat = newNative(copyString("objectId", 8), lxObjectGetObjectId);
-    tableSet(&objClass->getters, OBJ_VAL(copyString("objectId", 8)), OBJ_VAL(objGetObjectIdNat));
+    ObjNative *objGetObjectIdNat = newNative(internedString("objectId", 8), lxObjectGetObjectId);
+    tableSet(&objClass->getters, OBJ_VAL(internedString("objectId", 8)), OBJ_VAL(objGetObjectIdNat));
 
     lxObjClass = objClass;
 
     // class Module
-    ObjString *modClassName = copyString("Module", 6);
+    ObjString *modClassName = internedString("Module", 6);
     ObjClass *modClass = newClass(modClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(modClassName), OBJ_VAL(modClass));
 
     lxModuleClass = modClass;
 
     // class Class
-    ObjString *classClassName = copyString("Class", 5);
+    ObjString *classClassName = internedString("Class", 5);
     ObjClass *classClass = newClass(classClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(classClassName), OBJ_VAL(classClass));
 
@@ -126,96 +136,96 @@ static void defineNativeClasses() {
     modClass->klass = classClass;
     classClass->klass = classClass;
 
-    ObjNative *classInitNat = newNative(copyString("init", 4), lxClassInit);
-    tableSet(&classClass->methods, OBJ_VAL(copyString("init", 4)), OBJ_VAL(classInitNat));
+    ObjNative *classInitNat = newNative(internedString("init", 4), lxClassInit);
+    tableSet(&classClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(classInitNat));
 
-    ObjNative *classIncludeNat = newNative(copyString("include", 7), lxClassInclude);
-    tableSet(&classClass->methods, OBJ_VAL(copyString("include", 7)), OBJ_VAL(classIncludeNat));
+    ObjNative *classIncludeNat = newNative(internedString("include", 7), lxClassInclude);
+    tableSet(&classClass->methods, OBJ_VAL(internedString("include", 7)), OBJ_VAL(classIncludeNat));
 
-    ObjNative *classGetSuperclassNat = newNative(copyString("_superClass", 11), lxClassGetSuperclass);
-    tableSet(&classClass->getters, OBJ_VAL(copyString("_superClass", 11)), OBJ_VAL(classGetSuperclassNat));
+    ObjNative *classGetSuperclassNat = newNative(internedString("_superClass", 11), lxClassGetSuperclass);
+    tableSet(&classClass->getters, OBJ_VAL(internedString("_superClass", 11)), OBJ_VAL(classGetSuperclassNat));
 
-    ObjNative *classGetNameNat = newNative(copyString("name", 4), lxClassGetName);
-    tableSet(&classClass->getters, OBJ_VAL(copyString("name", 4)), OBJ_VAL(classGetNameNat));
+    ObjNative *classGetNameNat = newNative(internedString("name", 4), lxClassGetName);
+    tableSet(&classClass->getters, OBJ_VAL(internedString("name", 4)), OBJ_VAL(classGetNameNat));
 
     // class Array
-    ObjString *arrayClassName = copyString("Array", 5);
+    ObjString *arrayClassName = internedString("Array", 5);
     ObjClass *arrayClass = newClass(arrayClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(arrayClassName), OBJ_VAL(arrayClass));
 
     lxAryClass = arrayClass;
 
-    ObjNative *aryInitNat = newNative(copyString("init", 4), lxArrayInit);
-    tableSet(&arrayClass->methods, OBJ_VAL(copyString("init", 4)), OBJ_VAL(aryInitNat));
+    ObjNative *aryInitNat = newNative(internedString("init", 4), lxArrayInit);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(aryInitNat));
 
-    ObjNative *aryPushNat = newNative(copyString("push", 4), lxArrayPush);
-    tableSet(&arrayClass->methods, OBJ_VAL(copyString("push", 4)), OBJ_VAL(aryPushNat));
+    ObjNative *aryPushNat = newNative(internedString("push", 4), lxArrayPush);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(aryPushNat));
 
-    ObjNative *aryIdxGetNat = newNative(copyString("indexGet", 8), lxArrayIndexGet);
-    tableSet(&arrayClass->methods, OBJ_VAL(copyString("indexGet", 8)), OBJ_VAL(aryIdxGetNat));
+    ObjNative *aryIdxGetNat = newNative(internedString("indexGet", 8), lxArrayIndexGet);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("indexGet", 8)), OBJ_VAL(aryIdxGetNat));
 
-    ObjNative *aryIdxSetNat = newNative(copyString("indexSet", 8), lxArrayIndexSet);
-    tableSet(&arrayClass->methods, OBJ_VAL(copyString("indexSet", 8)), OBJ_VAL(aryIdxSetNat));
+    ObjNative *aryIdxSetNat = newNative(internedString("indexSet", 8), lxArrayIndexSet);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("indexSet", 8)), OBJ_VAL(aryIdxSetNat));
 
-    ObjNative *aryToStringNat = newNative(copyString("toString", 8), lxArrayToString);
-    tableSet(&arrayClass->methods, OBJ_VAL(copyString("toString", 8)), OBJ_VAL(aryToStringNat));
+    ObjNative *aryToStringNat = newNative(internedString("toString", 8), lxArrayToString);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(aryToStringNat));
 
     // class Map
-    ObjString *mapClassName = copyString("Map", 3);
+    ObjString *mapClassName = internedString("Map", 3);
     ObjClass *mapClass = newClass(mapClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(mapClassName), OBJ_VAL(mapClass));
 
     lxMapClass = mapClass;
 
-    ObjNative *mapInitNat = newNative(copyString("init", 4), lxMapInit);
-    tableSet(&mapClass->methods, OBJ_VAL(copyString("init", 4)), OBJ_VAL(mapInitNat));
+    ObjNative *mapInitNat = newNative(internedString("init", 4), lxMapInit);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(mapInitNat));
 
-    ObjNative *mapIdxGetNat = newNative(copyString("indexGet", 8), lxMapIndexGet);
-    tableSet(&mapClass->methods, OBJ_VAL(copyString("indexGet", 8)), OBJ_VAL(mapIdxGetNat));
+    ObjNative *mapIdxGetNat = newNative(internedString("indexGet", 8), lxMapIndexGet);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("indexGet", 8)), OBJ_VAL(mapIdxGetNat));
 
-    ObjNative *mapIdxSetNat = newNative(copyString("indexSet", 8), lxMapIndexSet);
-    tableSet(&mapClass->methods, OBJ_VAL(copyString("indexSet", 8)), OBJ_VAL(mapIdxSetNat));
+    ObjNative *mapIdxSetNat = newNative(internedString("indexSet", 8), lxMapIndexSet);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("indexSet", 8)), OBJ_VAL(mapIdxSetNat));
 
-    ObjNative *mapKeysNat = newNative(copyString("keys", 4), lxMapKeys);
-    tableSet(&mapClass->methods, OBJ_VAL(copyString("keys", 4)), OBJ_VAL(mapKeysNat));
+    ObjNative *mapKeysNat = newNative(internedString("keys", 4), lxMapKeys);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("keys", 4)), OBJ_VAL(mapKeysNat));
 
-    ObjNative *mapValuesNat = newNative(copyString("values", 6), lxMapValues);
-    tableSet(&mapClass->methods, OBJ_VAL(copyString("values", 6)), OBJ_VAL(mapValuesNat));
+    ObjNative *mapValuesNat = newNative(internedString("values", 6), lxMapValues);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("values", 6)), OBJ_VAL(mapValuesNat));
 
-    ObjNative *mapToStringNat = newNative(copyString("toString", 8), lxMapToString);
-    tableSet(&mapClass->methods, OBJ_VAL(copyString("toString", 8)), OBJ_VAL(mapToStringNat));
+    ObjNative *mapToStringNat = newNative(internedString("toString", 8), lxMapToString);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(mapToStringNat));
 
     // class Error
-    ObjString *errClassName = copyString("Error", 5);
+    ObjString *errClassName = internedString("Error", 5);
     ObjClass *errClass = newClass(errClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(errClassName), OBJ_VAL(errClass));
 
     lxErrClass = errClass;
 
-    ObjNative *errInitNat = newNative(copyString("init", 4), lxErrInit);
-    tableSet(&errClass->methods, OBJ_VAL(copyString("init", 4)), OBJ_VAL(errInitNat));
+    ObjNative *errInitNat = newNative(internedString("init", 4), lxErrInit);
+    tableSet(&errClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(errInitNat));
 
-    ObjString *argErrClassName = copyString("ArgumentError", 13);
+    ObjString *argErrClassName = internedString("ArgumentError", 13);
     ObjClass *argErrClass = newClass(argErrClassName, errClass);
     tableSet(&vm.globals, OBJ_VAL(argErrClassName), OBJ_VAL(argErrClass));
 
     lxArgErrClass = argErrClass;
 
     // class File
-    ObjString *fileClassName = copyString("File", 4);
+    ObjString *fileClassName = internedString("File", 4);
     ObjClass *fileClass = newClass(fileClassName, objClass);
     tableSet(&vm.globals, OBJ_VAL(fileClassName), OBJ_VAL(fileClass));
     ObjClass *fileClassStatic = classSingletonClass(fileClass);
 
     lxFileClass = fileClass;
 
-    ObjNative *fileReadNat = newNative(copyString("read", 4), lxFileReadStatic);
-    tableSet(&fileClassStatic->methods, OBJ_VAL(copyString("read", 4)), OBJ_VAL(fileReadNat));
+    ObjNative *fileReadNat = newNative(internedString("read", 4), lxFileReadStatic);
+    tableSet(&fileClassStatic->methods, OBJ_VAL(internedString("read", 4)), OBJ_VAL(fileReadNat));
 }
 
 static void defineGlobalVariables() {
     lxLoadPath = newArray();
-    ObjString *loadPathStr = copyString("loadPath", 8);
+    ObjString *loadPathStr = internedString("loadPath", 8);
     tableSet(&vm.globals, OBJ_VAL(loadPathStr), lxLoadPath);
     // populate load path from -L option given to commandline
     char *lpath = GET_OPTION(initialLoadPath);
@@ -223,7 +233,7 @@ static void defineGlobalVariables() {
         char *beg = lpath;
         char *end = NULL;
         while ((end = strchr(beg, ':'))) {
-            ObjString *str = newString(beg, end - beg);
+            ObjString *str = copyString(beg, end - beg);
             arrayPush(lxLoadPath, OBJ_VAL(str));
             beg = end+1;
         }
@@ -245,13 +255,14 @@ static inline void push_EC(void) {
     VMExecContext *ectx = ALLOCATE(VMExecContext, 1);
     memset(ectx, 0, sizeof(*ectx));
     initTable(&ectx->roGlobals);
-    vec_push(&vm.v_ecs, (void*)ectx);
+    vec_push(&vm.v_ecs, ectx);
     vm.ec = ectx;
 }
 
 // Pop the current execution context and use the one created before
 // the current one.
 static inline void pop_EC(void) {
+    ASSERT(vm.v_ecs.length > 0);
     VMExecContext *ctx = (VMExecContext*)vec_pop(&vm.v_ecs);
     freeTable(&ctx->roGlobals);
     FREE(VMExecContext, ctx);
@@ -267,6 +278,11 @@ void resetStack() {
 #define FIRST_GC_THRESHHOLD (1024*1024)
 
 void initVM() {
+    if (vm.inited) {
+        VM_WARN("initVM: VM already initialized");
+        return;
+    }
+    VM_DEBUG("initVM() start");
     turnGCOff();
     vec_init(&vm.v_ecs);
     push_EC();
@@ -284,11 +300,12 @@ void initVM() {
     vm.lastValue = NULL;
     vm.thisValue = NULL;
     initTable(&vm.globals);
-    initTable(&vm.strings);
-    vm.inited = true; // NOTE: VM has to be inited before calls to copyString
-    vm.initString = copyString("init", 4);
-    vm.fileString = copyString("__FILE__", 8);
-    vm.dirString = copyString("__DIR__", 7);
+    vm.keepInternedObjects = true;
+    initTable(&vm.strings); // interned strings
+    vm.inited = true; // NOTE: VM has to be inited before creation of strings
+    vm.initString = internedString("init", 4);
+    vm.fileString = internedString("__FILE__", 8);
+    vm.dirString = internedString("__DIR__", 7);
     defineNativeFunctions();
     defineNativeClasses();
     vec_init(&vm.hiddenObjs);
@@ -308,10 +325,15 @@ void initVM() {
     defineGlobalVariables();
     resetStack();
     turnGCOn();
+    VM_DEBUG("initVM() end");
 }
 
 void freeVM() {
-    if (!vm.inited) return;
+    if (!vm.inited) {
+        VM_WARN("freeVM: VM not yet initialized");
+        return;
+    }
+    VM_DEBUG("freeVM() start");
     freeTable(&vm.globals);
     freeTable(&vm.strings);
     vm.initString = NULL;
@@ -336,12 +358,14 @@ void freeVM() {
     curLine = 1;
 
     vec_deinit(&vm.stackObjects);
+    vm.keepInternedObjects = false;
     freeObjects();
     vm.objects = NULL;
 
     vec_clear(&vm.v_ecs);
     vm.ec = NULL;
     vm.inited = false;
+    VM_DEBUG("freeVM() end");
 }
 
 
@@ -354,7 +378,7 @@ int VMNumCallFrames() {
 }
 
 bool VMLoadedScript(char *fname) {
-    ASSERT(vm.inited);
+    DBG_ASSERT(vm.inited);
     Value *loaded = NULL; int i = 0;
     vec_foreach_ptr(&vm.loadedScripts, loaded, i) {
         if (strcmp(fname, AS_CSTRING(*loaded)) == 0) {
@@ -511,12 +535,12 @@ void runtimeError(const char* format, ...) {
 
 void showUncaughtError(Value err) {
     char *className = AS_INSTANCE(err)->klass->name->chars;
-    Value msg = getProp(err, copyString("message", 7));
+    Value msg = getProp(err, internedString("message", 7));
     char *msgStr = NULL;
     if (!IS_NIL(msg)) {
         msgStr = AS_CSTRING(msg);
     }
-    Value bt = getProp(err, copyString("backtrace", 9));
+    Value bt = getProp(err, internedString("backtrace", 9));
     ASSERT(!IS_NIL(bt));
     int btSz = ARRAY_SIZE(bt);
     fprintf(stderr, "Uncaught error, class: %s\n", className);
@@ -538,7 +562,7 @@ void showUncaughtError(Value err) {
 void setBacktrace(Value err) {
     /*ASSERT(IS_AN_ERROR(err));*/
     Value ret = newArray();
-    setProp(err, copyString("backtrace", 9), ret);
+    setProp(err, internedString("backtrace", 9), ret);
     for (int i = EC->frameCount - 1; i >= 0; i--) {
         CallFrame *frame = &EC->frames[i];
         int line = frame->callLine;
@@ -756,6 +780,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
 
 
 static void popFrame(void) {
+    DBG_ASSERT(vm.inited);
     ASSERT(EC->frameCount >= 1);
     VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
     EC->frameCount--;
@@ -764,6 +789,7 @@ static void popFrame(void) {
 }
 
 static CallFrame *pushFrame() {
+    DBG_ASSERT(vm.inited);
     CallFrame *frame = &EC->frames[EC->frameCount++];
     frame->callLine = curLine;
     /*Value curFile;*/
@@ -773,6 +799,7 @@ static CallFrame *pushFrame() {
 }
 
 static void pushNativeFrame(ObjNative *native) {
+    DBG_ASSERT(vm.inited);
     ASSERT(native);
     VM_DEBUG("Pushing native callframe for %s", native->name->chars);
     if (EC->frameCount == FRAMES_MAX) {
@@ -1070,6 +1097,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
  * argCount does NOT include instance if `isMethod` is true
  */
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
+    DBG_ASSERT(vm.inited);
     int lenBefore = vm.stackObjects.length;
     bool ret = doCallCallable(callable, argCount, isMethod, info);
     int lenAfter = vm.stackObjects.length;
@@ -1087,7 +1115,7 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
 
 /**
  * When thrown (OP_THROW), find any surrounding try { } catch { } block with
- * the proper class
+ * the proper class. TODO: find catch locations across execution contexts
  */
 static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowFound) {
     CatchTable *tbl = currentChunk()->catchTbl;
@@ -1113,12 +1141,14 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
                 // found target catch
                 *ipOut = currentChunk()->code + row->itarget;
                 *rowFound = row;
+                VM_DEBUG("Catch jump location found");
                 return true;
             }
         }
         row = row->next;
     }
 
+    VM_DEBUG("Catch jump location NOT found");
     return false;
 }
 
@@ -1139,7 +1169,7 @@ static CatchTable *getCatchTableRow(int idx) {
 void throwError(Value self) {
     ASSERT(vm.inited);
     vm.lastErrorThrown = self;
-    if (IS_NIL(getProp(self, copyString("backtrace", 9)))) {
+    if (IS_NIL(getProp(self, internedString("backtrace", 9)))) {
         setBacktrace(self);
     }
     if (inCCall) {
@@ -1174,7 +1204,7 @@ void throwArgErrorFmt(const char *format, ...) {
     char *cbuf = ALLOCATE(char, len+1);
     strncpy(cbuf, sbuf, len);
     cbuf[len] = '\0';
-    ObjString *buf = newString(cbuf, len);
+    ObjString *buf = takeString(cbuf, len);
     hideFromGC((Obj*)buf);
     Value err = newError(lxArgErrClass, buf);
     vm.lastErrorThrown = err;
@@ -1266,13 +1296,13 @@ static void closeUpvalues(Value *last) {
 static ObjString *methodNameForBinop(OpCode code) {
     switch (code) {
     case OP_ADD:
-        return copyString("opAdd", 5);
+        return internedString("opAdd", 5);
     case OP_SUBTRACT:
-        return copyString("opDiff", 6);
+        return internedString("opDiff", 6);
     case OP_MULTIPLY:
-        return copyString("opMul", 5);
+        return internedString("opMul", 5);
     case OP_DIVIDE:
-        return copyString("opDiv", 5);
+        return internedString("opDiv", 5);
     default:
         return NULL;
     }
@@ -1734,7 +1764,7 @@ static InterpretResult run(bool doResetStack) {
       case OP_CLASS: { // add or re-open class
           Value className = READ_CONSTANT();
           Value objClassVal;
-          ASSERT(tableGet(&vm.globals, OBJ_VAL(copyString("Object", 6)), &objClassVal));
+          ASSERT(tableGet(&vm.globals, OBJ_VAL(internedString("Object", 6)), &objClassVal));
           ASSERT(IS_CLASS(objClassVal));
           Value existingClass;
           // FIXME: not perfect, if class is declared non-globally this won't
@@ -1856,7 +1886,7 @@ static InterpretResult run(bool doResetStack) {
           Value lval = peek(1); // ex: Array object
           ASSERT(IS_INSTANCE(lval)); // TODO: handle error
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethod(instance, copyString("indexGet", 8));
+          Obj *method = instanceFindMethod(instance, internedString("indexGet", 8));
           ASSERT(method); // TODO: handle error
           callCallable(OBJ_VAL(method), 1, true, NULL);
           break;
@@ -1865,7 +1895,7 @@ static InterpretResult run(bool doResetStack) {
           Value lval = peek(2);
           ASSERT(IS_INSTANCE(lval)); // TODO: handle error
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethod(instance, copyString("indexSet", 8));
+          Obj *method = instanceFindMethod(instance, internedString("indexSet", 8));
           ASSERT(method); // TODO: handle error
           callCallable(OBJ_VAL(method), 2, true, NULL);
           break;
@@ -1909,17 +1939,19 @@ static InterpretResult run(bool doResetStack) {
 }
 
 static void setupPerScriptROGlobals(char *filename) {
-    ObjString *file = newString(filename, strlen(filename));
+    VM_DEBUG("Setting up per-script RO globals");
+    ObjString *file = copyString(filename, strlen(filename));
     tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), OBJ_VAL(file));
 
     if (filename[0] == pathSeparator) {
         char *lastSep = rindex(filename, pathSeparator);
         int len = lastSep - filename;
-        ObjString *dir = newString(filename, len);
+        ObjString *dir = copyString(filename, len);
         tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), OBJ_VAL(dir));
     } else {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), NIL_VAL);
     }
+    VM_DEBUG("/Setting up per-script RO globals");
 }
 
 InterpretResult interpret(Chunk *chunk, char *filename) {
@@ -1927,7 +1959,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     if (!EC) {
         return INTERPRET_UNINITIALIZED; // call initVM() first!
     }
-    EC->filename = newString(filename, strlen(filename));
+    EC->filename = copyString(filename, strlen(filename));
     EC->frameCount = 0;
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
@@ -1949,7 +1981,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();
     push_EC();
-    EC->filename = newString(filename, strlen(filename));
+    EC->filename = copyString(filename, strlen(filename));
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
@@ -1989,7 +2021,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
         freeChunk(&chunk);
         return BOOL_VAL(false);
     }
-    EC->filename = newString(filename, strlen(filename));
+    EC->filename = copyString(filename, strlen(filename));
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
@@ -2010,15 +2042,18 @@ Value VMEval(const char *src, const char *filename, int lineno) {
     }
     pop_EC();
     ASSERT(getFrame() == oldFrame);
+    VM_DEBUG("eval finished");
     return BOOL_VAL(result == INTERPRET_OK);
 }
 
 void setPrintBuf(ObjString *buf, bool alsoStdout) {
+    DBG_ASSERT(vm.inited);
     vm.printBuf = buf;
     vm.printToStdout = alsoStdout;
 }
 
 void unsetPrintBuf(void) {
+    DBG_ASSERT(vm.inited);
     vm.printBuf = NULL;
     vm.printToStdout = true;
 }

@@ -1,3 +1,6 @@
-foreach (a in [1,2,3]) {
-  print a;
-}
+//foreach (a in [1,2,3]) {
+//  print a;
+//}
+
+__END__
+-- noexpect: --
