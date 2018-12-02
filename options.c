@@ -105,7 +105,7 @@ int parseOption(char **argv, int i) {
             SET_OPTION(initialLoadPath, path);
             return 2;
         } else {
-            fprintf(stderr, "[WARN]: Load path not given, ignoring. Example: -L $HOME/workspace");
+            fprintf(stderr, "[WARN]: Load path not given, ignoring. Example: -L $HOME/workspace\n");
             return 1;
         }
     }
@@ -115,7 +115,7 @@ int parseOption(char **argv, int i) {
             SET_OPTION(initialScript, argv[i+1]);
             return 2;
         } else {
-            fprintf(stderr, "[WARN]: Path to script file not given with -f flag");
+            fprintf(stderr, "[WARN]: Path to script file not given with -f flag\n");
             return 1;
         }
     }

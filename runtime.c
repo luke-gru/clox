@@ -69,7 +69,7 @@ Value lxClock(int argCount, Value *args) {
 Value lxTypeof(int argCount, Value *args) {
     CHECK_ARGS("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
-    return OBJ_VAL(newStackString(strType, strlen(strType)));
+    return newStringInstance(copyString(strType, strlen(strType)));
 }
 
 Value lxDebugger(int argCount, Value *args) {
@@ -81,8 +81,8 @@ Value lxDebugger(int argCount, Value *args) {
 Value lxEval(int argCount, Value *args) {
     CHECK_ARGS("eval", 1, 1, argCount);
     Value src = *args;
-    CHECK_ARG_BUILTIN_TYPE(src, IS_STRING_FUNC, "string", 1);
-    char *csrc = AS_CSTRING(src);
+    CHECK_ARG_IS_A(src, lxStringClass, 1);
+    char *csrc = VAL_TO_STRING(src)->chars;
     if (strlen(csrc) == 0) {
         return NIL_VAL;
     }
@@ -208,9 +208,10 @@ Value lxModuleInit(int argCount, Value *args) {
     CHECK_ARGS("Module#init", 1, 2, argCount);
     if (argCount == 1) { return self; }
     Value name = args[1];
-    CHECK_ARG_BUILTIN_TYPE(name, IS_STRING_FUNC, "string", 1);
+    CHECK_ARG_IS_A(name, lxStringClass, 1);
     ObjModule *mod = AS_MODULE(self);
-    mod->name = AS_STRING(name);
+    Value nameStr = dupStringInstance(name);
+    mod->name = VAL_TO_STRING(nameStr);
     return self;
 }
 
@@ -227,8 +228,8 @@ Value lxClassInit(int argCount, Value *args) {
     Value arg1 = args[1];
     ObjString *name = NULL;
     ObjClass *superClass = NULL;
-    if (IS_STRING(arg1)) {
-        name = AS_STRING(arg1);
+    if (IS_A_STRING(arg1)) {
+        name = VAL_TO_STRING(dupStringInstance(arg1));
     } else if (IS_CLASS(arg1)) {
         superClass = AS_CLASS(arg1);
     } else {
@@ -265,9 +266,9 @@ Value lxClassGetName(int argCount, Value *args) {
     ObjClass *klass = AS_CLASS(self);
     ObjString *origName = klass->name;
     if (origName == NULL) {
-        return OBJ_VAL(newStackString("(anon)", 6));
+        return newStringInstance(copyString("(anon)", 6));
     } else {
-        return OBJ_VAL(dupString(origName));
+        return newStringInstance(dupString(origName));
     }
 }
 
@@ -307,6 +308,7 @@ Value lxStringToString(int argCount, Value *args) {
     return *args;
 }
 
+// ex: print("hi " + "there");
 Value lxStringOpAdd(int argCount, Value *args) {
     CHECK_ARGS("String#opAdd", 2, 2, argCount);
     Value self = *args;
@@ -317,6 +319,17 @@ Value lxStringOpAdd(int argCount, Value *args) {
     ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
     pushString(lhsBuf, rhsBuf);
     return ret;
+}
+
+Value lxStringPush(int argCount, Value *args) {
+    // FIXME: check if frozen
+    CHECK_ARGS("String#push", 2, 2, argCount);
+    Value rhs = args[1];
+    CHECK_ARG_IS_A(rhs, lxStringClass, 1);
+    ObjString *lhsBuf = STRING_GETHIDDEN(*args);
+    ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
+    pushString(lhsBuf, rhsBuf);
+    return *args;
 }
 
 // ex: var a = Array();
@@ -339,6 +352,7 @@ Value lxArrayInit(int argCount, Value *args) {
 
 // ex: a.push(1);
 Value lxArrayPush(int argCount, Value *args) {
+    // FIXME: check if frozen
     CHECK_ARGS("Array#push", 2, 2, argCount);
     Value self = args[0];
     arrayPush(self, args[1]);
@@ -354,25 +368,26 @@ Value lxArrayToString(int argCount, Value *args) {
     Value self = *args;
     ASSERT(IS_AN_ARRAY(self));
     Obj* selfObj = AS_OBJ(self);
-    ObjString *ret = newStackString("[", 1);
+    Value ret = newStringInstance(copyString("[", 1));
+    ObjString *bufRet = STRING_GETHIDDEN(ret);
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     for (int i = 0; i < ary->count; i++) {
         Value elVal = ary->values[i];
         if (IS_OBJ(elVal) && (AS_OBJ(elVal) == selfObj)) {
-            pushCString(ret, "[...]", 5);
+            pushCString(bufRet, "[...]", 5);
             continue;
         }
         if (IS_OBJ(elVal)) {
             ASSERT(AS_OBJ(elVal)->type > OBJ_T_NONE);
         }
-        ObjString *buf = valueToString(elVal, newStackString);
-        pushCString(ret, buf->chars, strlen(buf->chars));
+        ObjString *buf = valueToString(elVal, copyString);
+        pushCString(bufRet, buf->chars, strlen(buf->chars));
         if (i < (ary->count-1)) {
-            pushCString(ret, ",", 1);
+            pushCString(bufRet, ",", 1);
         }
     }
-    pushCString(ret, "]", 1);
-    return OBJ_VAL(ret);
+    pushCString(bufRet, "]", 1);
+    return ret;
 }
 
 
@@ -485,34 +500,35 @@ Value lxMapToString(int argCount, Value *args) {
     Value self = args[0];
     Obj *selfObj = AS_OBJ(self);
     ASSERT(IS_A_MAP(self));
-    ObjString *ret = newStackString("{", 1);
+    Value ret = newStringInstance(copyString("{", 1));
+    ObjString *bufRet = STRING_GETHIDDEN(ret);
     Table *map = MAP_GETHIDDEN(self);
     Entry e; int idx = 0;
     int sz = map->count; int i = 0;
     TABLE_FOREACH(map, e, idx) {
         if (IS_OBJ(e.key) && AS_OBJ(e.key) == selfObj) {
-            pushCString(ret, "{...}", 5);
+            pushCString(bufRet, "{...}", 5);
         } else {
-            ObjString *keyS = valueToString(e.key, newStackString);
-            pushCString(ret, keyS->chars, strlen(keyS->chars));
+            ObjString *keyS = valueToString(e.key, copyString);
+            pushCString(bufRet, keyS->chars, strlen(keyS->chars));
         }
-        pushCString(ret, " => ", 4);
+        pushCString(bufRet, " => ", 4);
         if (IS_OBJ(e.value) && AS_OBJ(e.value) == selfObj) {
-            pushCString(ret, "{...}", 5);
+            pushCString(bufRet, "{...}", 5);
         } else {
-            ObjString *valS = valueToString(e.value, newStackString);
-            pushCString(ret, valS->chars, strlen(valS->chars));
+            ObjString *valS = valueToString(e.value, copyString);
+            pushCString(bufRet, valS->chars, strlen(valS->chars));
         }
 
         if (i < (sz-1)) {
-            pushCString(ret, ", ", 2);
+            pushCString(bufRet, ", ", 2);
         }
         i++;
     }
 
-    pushCString(ret, "}", 1);
+    pushCString(bufRet, "}", 1);
 
-    return OBJ_VAL(ret);
+    return ret;
 }
 
 Value lxMapIndexGet(int argCount, Value *args) {
@@ -585,8 +601,8 @@ static char fileReadBuf[4096];
 Value lxFileReadStatic(int argCount, Value *args) {
     CHECK_ARGS("File.read", 2, 2, argCount);
     Value fname = args[1];
-    CHECK_ARG_BUILTIN_TYPE(fname, IS_STRING_FUNC, "string", 1);
-    ObjString *fnameStr = AS_STRING(fname);
+    CHECK_ARG_IS_A(fname, lxStringClass, 1);
+    ObjString *fnameStr = VAL_TO_STRING(fname);
     if (!fileReadable(fnameStr->chars)) {
         if (errno == EACCES) {
             throwArgErrorFmt("File '%s' not readable", fnameStr->chars);
@@ -600,13 +616,14 @@ Value lxFileReadStatic(int argCount, Value *args) {
         throwArgErrorFmt("Error reading File '%s': %s", fnameStr->chars, strerror(errno));
         return NIL_VAL;
     }
-    ObjString *ret = copyString("", 0);
+    ObjString *retBuf = copyString("", 0);
+    Value ret = newStringInstance(retBuf);
     size_t nread;
     while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
-        pushCString(ret, fileReadBuf, nread);
+        pushCString(retBuf, fileReadBuf, nread);
     }
     fclose(f);
-    return OBJ_VAL(ret);
+    return ret;
 }
 
 bool runtimeCheckArgs(int min, int max, int actual) {

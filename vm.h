@@ -13,6 +13,8 @@
 
 typedef struct CallInfo CallInfo;
 
+extern bool inCCall;
+
 typedef struct CallFrame {
     // Non-native function fields
     ObjClosure *closure; // if call frame is from compiled code, this is set

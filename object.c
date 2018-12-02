@@ -12,11 +12,6 @@
 #define ALLOCATE_OBJ(type, objectType) \
     (type*)allocateObject(sizeof(type), objectType)
 
-// allocate object on the heap, but don't GC it until return to VM
-// (used in C function calls from the VM)
-#define ALLOCATE_CSTACK_OBJ(type, objectType) \
-    (type*)allocateCStackObject(sizeof(type), objectType)
-
 extern VM vm;
 
 static Obj *allocateObject(size_t size, ObjType type) {
@@ -38,29 +33,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->isLinked = true;
     object->objectId = (size_t)object;
 
-    return object;
-}
-
-static Obj *allocateCStackObject(size_t size, ObjType type) {
-    ASSERT(vm.inited);
-    Obj *object = (Obj*)reallocate(NULL, 0, size);
-    ASSERT(type > OBJ_T_NONE);
-    object->type = type;
-    object->isDark = true;
-    object->isFrozen = false;
-    object->isInterned = false;
-
-    // prepend new object to linked list
-    object->next = vm.objects;
-    if (vm.objects) {
-        vm.objects->prev = object;
-    }
-    object->prev = NULL;
-    vm.objects = object;
-    object->isLinked = true;
-    object->objectId = (size_t)object;
-
-    if (vm.inited) {
+    if (inCCall) {
         vec_push(&vm.stackObjects, object);
     }
 
@@ -74,7 +47,7 @@ static Obj *allocateCStackObject(size_t size, ObjType type) {
 static ObjString *allocateString(char *chars, int length, uint32_t hash) {
     if (!vm.inited) {
         fprintf(stderr, "allocateString before VM inited: %s\n", chars);
-        DBG_ASSERT(vm.inited);
+        ASSERT(vm.inited);
     }
     ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
     string->length = length;
@@ -124,38 +97,6 @@ ObjString *copyString(char *chars, int length) {
     heapChars[length] = '\0';
 
     return allocateString(heapChars, length, hash);
-}
-
-/**
- * For use when VM isn't yet initialized. Object isn't linked into vm.objects
- * GC object pool.
- */
-ObjString *nonVMString(char *chars, int len) {
-    DBG_ASSERT(strlen(chars) >= len);
-    char *heapChars = ALLOCATE(char, len+1);
-    memset(heapChars, 0, len+1);
-    if (len > 0) memcpy(heapChars, chars, len);
-    heapChars[len] = '\0';
-    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
-    string->length = len;
-    string->chars = heapChars;
-    string->hash = hashString(string->chars, len);
-    return string;
-}
-
-// Always allocates a new string object that lives at least until return to
-// the VM loop. Used in C functions.
-ObjString *newStackString(char *chars, int len) {
-    DBG_ASSERT(strlen(chars) >= len);
-    char *heapChars = ALLOCATE(char, len+1);
-    memset(heapChars, 0, len+1);
-    if (len > 0) memcpy(heapChars, chars, len);
-    heapChars[len] = '\0';
-    ObjString *string = ALLOCATE_CSTACK_OBJ(ObjString, OBJ_T_STRING);
-    string->length = len;
-    string->chars = heapChars;
-    string->hash = hashString(string->chars, len);
-    return string;
 }
 
 ObjString *hiddenString(char *chars, int len) {
@@ -335,7 +276,7 @@ ObjModule *newModule(ObjString *name) {
 
 ObjInstance *newInstance(ObjClass *klass) {
     ASSERT(klass);
-    ObjInstance *obj = ALLOCATE_CSTACK_OBJ(
+    ObjInstance *obj = ALLOCATE_OBJ(
         ObjInstance, OBJ_T_INSTANCE
     );
     obj->klass = klass;
@@ -367,7 +308,7 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
 }
 
 ObjInternal *newInternalObject(void *data, GCMarkFunc markFunc, GCFreeFunc freeFunc) {
-    ObjInternal *obj = ALLOCATE_CSTACK_OBJ(
+    ObjInternal *obj = ALLOCATE_OBJ(
         ObjInternal, OBJ_T_INTERNAL
     );
     obj->data = data;
@@ -480,16 +421,21 @@ Value newArray(void) {
     return ary;
 }
 
+// duplicates a string instance
 Value dupStringInstance(Value instance) {
-    ASSERT(IS_T_STRING(instance));
+    ObjString *buf = STRING_GETHIDDEN(instance);
+    return newStringInstance(dupString(buf));
+}
+
+// creates a new string instance, using `buf` as underlying storage
+Value newStringInstance(ObjString *buf) {
+    ASSERT(buf);
     ObjInstance *ret = newInstance(lxStringClass);
     Value retVal = OBJ_VAL(ret);
-    ObjString *buf = STRING_GETHIDDEN(instance);
-    ObjString *newBuf = dupString(buf);
-    Value newBufVal = OBJ_VAL(newBuf);
     Value args[2];
+    Value bufVal = OBJ_VAL(buf);
     args[0] = retVal;
-    args[1] = newBufVal;
+    args[1] = bufVal;
     lxStringInit(2, args);
     return retVal;
 }
@@ -568,9 +514,9 @@ bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
     return instKlass != NULL;
 }
 
-Value newError(ObjClass *errClass, ObjString *msg) {
+Value newError(ObjClass *errClass, Value msg) {
     ASSERT(IS_SUBCLASS(errClass, lxErrClass));
-    push(OBJ_VAL(msg)); // argument
+    push(msg); // argument
     callCallable(OBJ_VAL(errClass), 1, false, NULL);
     Value err = pop();
     ASSERT(IS_AN_ERROR(err));

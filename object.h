@@ -243,16 +243,15 @@ typedef ObjString *(*newStringFunc)(char *chars, int length);
 // String creation functions
 ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
 ObjString *copyString(char *chars, int length); // copies provided memory. Object lives on lox heap.
-ObjString *nonVMString(char *chars, int length);
 ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
-void pushString(ObjString *a, ObjString *b);
-ObjString *newStackString(char *chars, int length); // Used in native C functions. Object first lives in VM arena, conceptually.
 ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
 ObjString *dupString(ObjString *string);
+void pushString(ObjString *a, ObjString *b);
+void clearObjString(ObjString *str);
 
 Value dupStringInstance(Value instance);
+Value newStringInstance(ObjString *buf);
 
-void clearObjString(ObjString *str);
 
 void objFreeze(Obj*);
 
@@ -269,7 +268,7 @@ ValueArray *arrayGetHidden(Value aryVal);
 Value       newArray(void);
 
 
-Value       newError(ObjClass *errClass, ObjString *msg);
+Value       newError(ObjClass *errClass, Value msg);
 
 Value       newMap(void);
 bool        mapGet(Value map, Value key, Value *val);

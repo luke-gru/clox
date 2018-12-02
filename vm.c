@@ -150,6 +150,9 @@ static void defineNativeClasses() {
     ObjNative *stringOpAddNat = newNative(internedString("opAdd", 5), lxStringOpAdd);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("opAdd", 5)), OBJ_VAL(stringOpAddNat));
 
+    ObjNative *stringPushNat = newNative(internedString("push", 4), lxStringPush);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(stringPushNat));
+
     lxStringClass = stringClass;
 
     // class Class
@@ -259,7 +262,7 @@ static void defineGlobalVariables() {
 
 
 static jmp_buf CCallJumpBuf;
-static bool inCCall = false;
+bool inCCall;
 static bool cCallThrew = false;
 static bool returnedFromNativeErr = false;
 static bool runUntilReturn = false;
@@ -555,7 +558,7 @@ void showUncaughtError(Value err) {
     Value msg = getProp(err, internedString("message", 7));
     char *msgStr = NULL;
     if (!IS_NIL(msg)) {
-        msgStr = AS_CSTRING(msg);
+        msgStr = VAL_TO_STRING(msg)->chars;
     }
     Value bt = getProp(err, internedString("backtrace", 9));
     ASSERT(!IS_NIL(bt));
@@ -568,7 +571,7 @@ void showUncaughtError(Value err) {
     }
     fprintf(stderr, "Backtrace:\n");
     for (int i = 0; i < btSz; i++) {
-        fprintf(stderr, "%s", AS_CSTRING(ARRAY_GET(bt, i)));
+        fprintf(stderr, "%s", VAL_TO_STRING(ARRAY_GET(bt, i))->chars);
     }
 
     vm.hadError = true;
@@ -580,28 +583,30 @@ void setBacktrace(Value err) {
     /*ASSERT(IS_AN_ERROR(err));*/
     Value ret = newArray();
     setProp(err, internedString("backtrace", 9), ret);
+    // TODO: go over all execution contexts
     for (int i = EC->frameCount - 1; i >= 0; i--) {
         CallFrame *frame = &EC->frames[i];
         int line = frame->callLine;
         ObjString *file = frame->file;
-        ObjString *out = hiddenString("", 0);
+        ObjString *outBuf = hiddenString("", 0);
+        Value out = newStringInstance(outBuf);
         if (frame->isCCall) {
             ObjNative *nativeFunc = frame->nativeFunc;
-            pushCStringFmt(out, "%s:%d in ", file->chars, line);
-            pushCStringFmt(out, "<%s (native)>\n",
+            pushCStringFmt(outBuf, "%s:%d in ", file->chars, line);
+            pushCStringFmt(outBuf, "<%s (native)>\n",
                 nativeFunc->name->chars);
         } else {
             ObjFunction *function = frame->closure->function;
-            pushCStringFmt(out, "%s:%d in ", file->chars, line);
+            pushCStringFmt(outBuf, "%s:%d in ", file->chars, line);
             if (function->name == NULL) {
-                pushCString(out, "<script>\n", 9); // top-level
+                pushCString(outBuf, "<script>\n", 9); // top-level
             } else {
                 char *fnName = function->name ? function->name->chars : "(anon)";
-                pushCStringFmt(out, "<%s>\n", fnName);
+                pushCStringFmt(outBuf, "<%s>\n", fnName);
             }
         }
-        arrayPush(ret, OBJ_VAL(out));
-        unhideFromGC((Obj*)out);
+        arrayPush(ret, out);
+        unhideFromGC((Obj*)outBuf);
     }
 }
 
@@ -1223,7 +1228,8 @@ void throwArgErrorFmt(const char *format, ...) {
     cbuf[len] = '\0';
     ObjString *buf = takeString(cbuf, len);
     hideFromGC((Obj*)buf);
-    Value err = newError(lxArgErrClass, buf);
+    Value msg = newStringInstance(buf);
+    Value err = newError(lxArgErrClass, msg);
     vm.lastErrorThrown = err;
     unhideFromGC((Obj*)buf);
     throwError(err);

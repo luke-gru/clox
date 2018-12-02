@@ -47,6 +47,7 @@ Value lxClassGetName(int argCount, Value *args);
 Value lxStringInit(int argCount, Value *args);
 Value lxStringToString(int argCount, Value *args);
 Value lxStringOpAdd(int argCount, Value *args);
+Value lxStringPush(int argCount, Value *args);
 
 // class Array
 Value lxArrayInit(int argCount, Value *args);
