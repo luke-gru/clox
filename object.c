@@ -480,6 +480,20 @@ Value newArray(void) {
     return ary;
 }
 
+Value dupStringInstance(Value instance) {
+    ASSERT(IS_T_STRING(instance));
+    ObjInstance *ret = newInstance(lxStringClass);
+    Value retVal = OBJ_VAL(ret);
+    ObjString *buf = STRING_GETHIDDEN(instance);
+    ObjString *newBuf = dupString(buf);
+    Value newBufVal = OBJ_VAL(newBuf);
+    Value args[2];
+    args[0] = retVal;
+    args[1] = newBufVal;
+    lxStringInit(2, args);
+    return retVal;
+}
+
 void arrayPush(Value self, Value el) {
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     writeValueArray(ary, el);
@@ -519,6 +533,14 @@ Table *mapGetHidden(Value mapVal) {
     Table *map = (Table*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(map);
     return map;
+}
+
+ObjString *stringGetHidden(Value instance) {
+    ASSERT(IS_A_STRING(instance));
+    ObjInstance *inst = AS_INSTANCE(instance);
+    Value stringVal;
+    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(internedString("buf", 3)), &stringVal));
+    return (ObjString*)AS_OBJ(stringVal);
 }
 
 Value getProp(Value self, ObjString *propName) {

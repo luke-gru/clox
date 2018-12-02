@@ -168,12 +168,12 @@ ObjString *tableFindString(Table *table, const char* chars, int length,
         Entry *entry = &table->entries[index];
 
         if (entry->key.type == VAL_T_UNDEF) return NULL;
-        if (IS_STRING(entry->key)) {
-            ObjString *stringKey = AS_STRING(entry->key);
+        if (IS_STRING(entry->key) || IS_T_STRING(entry->key)) {
+            ObjString *stringKey = VAL_TO_STRING(entry->key);
             if (stringKey->length == length &&
                     memcmp(stringKey->chars, chars, length) == 0) {
                 // We found it.
-                return (ObjString*)AS_OBJ(entry->key);
+                return stringKey;
             }
         }
 

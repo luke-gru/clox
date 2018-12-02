@@ -70,14 +70,14 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
             return;
         } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE) {
             ObjInstance *inst = AS_INSTANCE(value);
-            Obj *callable = instanceFindMethod(inst, copyString("toString", 8));
+            Obj *callable = instanceFindMethod(inst, internedString("toString", 8));
             if (callable && vm.inited && canCallMethods) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL);
-                if (!IS_STRING(stringVal)) {
+                if (!IS_STRING(stringVal) && !IS_T_STRING(stringVal)) {
                     runtimeError("TypeError, toString() returned non-string");
                     return;
                 }
-                ObjString *out = AS_STRING(stringVal);
+                ObjString *out = VAL_TO_STRING(stringVal);
                 fprintf(file, "%s", out->chars);
                 Value popped = pop();
                 ASSERT(AS_OBJ(popped) == AS_OBJ(stringVal));
@@ -131,7 +131,7 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
     UNREACHABLE("BUG");
 }
 
-// returns an ObjString hidden from the GC
+// returns a new ObjString
 ObjString *valueToString(Value value, newStringFunc stringConstructor) {
     ASSERT(stringConstructor != takeString); // should copy the constructed c string
     ObjString *ret = NULL;
@@ -176,14 +176,14 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             }
         } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE) {
             ObjInstance *inst = AS_INSTANCE(value);
-            Obj *toString = instanceFindMethod(inst, copyString("toString", 8));
+            Obj *toString = instanceFindMethod(inst, internedString("toString", 8));
             if (toString && vm.inited) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL);
-                if (!IS_STRING(stringVal)) {
+                if (!IS_STRING(stringVal) && !IS_T_STRING(stringVal)) {
                     runtimeError("TypeError, toString() returned non-string");
                     UNREACHABLE("error");
                 }
-                ret = AS_STRING(stringVal);
+                ret = VAL_TO_STRING(stringVal);
                 pop(); // stringVal
             } else {
                 ObjClass *klass = inst->klass;
@@ -259,8 +259,8 @@ const char *typeOfVal(Value val) {
 
 uint32_t valHash(Value val) {
     if (IS_OBJ(val)) {
-        if (IS_STRING(val)) {
-            ObjString *string = AS_STRING(val);
+        if (IS_STRING(val) || IS_T_STRING(val)) {
+            ObjString *string = VAL_TO_STRING(val);
             return hashString(string->chars, string->length);
         } else {
             char buf[20] = {'\0'};
@@ -282,8 +282,13 @@ uint32_t valHash(Value val) {
     }
 }
 
+static bool isCompatibleTypes(Value a, Value b) {
+    return ((IS_STRING(a) && IS_T_STRING(b)) ||
+            (IS_T_STRING(a) && IS_STRING(b)));
+}
+
 bool valEqual(Value a, Value b) {
-    if (a.type != a.type) return false;
+    if (a.type != a.type && !isCompatibleTypes(a, b)) return false;
     switch (a.type) {
         case VAL_T_BOOL:
             return AS_BOOL(a) == AS_BOOL(b);
@@ -294,10 +299,9 @@ bool valEqual(Value a, Value b) {
         case VAL_T_OBJ: {
             Obj *aObj = AS_OBJ(a);
             Obj *bObj = AS_OBJ(b);
-            if (aObj->type != bObj->type) return false;
-            if (IS_STRING(a)) {
-                return strcmp(AS_STRING(a)->chars,
-                        AS_STRING(b)->chars) == 0;
+            if (IS_STRING(a) || IS_T_STRING(a)) {
+                return strcmp(VAL_TO_STRING(a)->chars,
+                        VAL_TO_STRING(b)->chars) == 0;
             }
             return aObj == bObj; // pointer equality
         }

@@ -74,6 +74,8 @@ const char *opName(OpCode code) {
         return "OP_CALL";
     case OP_INVOKE:
         return "OP_INVOKE";
+    case OP_STRING:
+        return "OP_STRING";
     case OP_SPLAT_ARRAY:
         return "OP_SPLAT_ARRAY";
     case OP_GET_THIS:
@@ -239,6 +241,29 @@ static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     pushCString(buf, cbuf, strlen(cbuf));
     free(cbuf);
     return i+2;
+}
+
+static int printStringInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+    uint8_t constantIdx = chunk->code[i + 1];
+    uint8_t isStatic = chunk->code[i + 2];
+    fprintf(f, "%-16s %4d '", op, constantIdx);
+    Value constant = getConstant(chunk, constantIdx);
+    printValue(f, constant,  false);
+    fprintf(f, "' (static=%u)\n", isStatic);
+    return i+3;
+}
+
+static int stringInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    uint8_t constantIdx = chunk->code[i + 1];
+    uint8_t isStatic = chunk->code[i + 2];
+    Value constant = getConstant(chunk, constantIdx);
+    ObjString *constantStr = AS_STRING(constant);
+    char *constantCStr = constantStr->chars;
+    char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+20, 1);
+    sprintf(cbuf, "%s\t%4d\t'%s' (static=%d)\n", op, constantIdx, constantCStr, isStatic);
+    pushCString(buf, cbuf, strlen(cbuf));
+    free(cbuf);
+    return i+3;
 }
 
 static int printLocalVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
@@ -428,6 +453,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_GET_THROWN:
         case OP_GET_SUPER:
             return printConstantInstruction(f, opName(byte), chunk, i);
+        case OP_STRING:
+            return printStringInstruction(f, opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
         case OP_SET_UPVALUE:
@@ -506,6 +533,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_GET_THROWN:
         case OP_GET_SUPER:
             return constantInstruction(buf, opName(byte), chunk, i);
+        case OP_STRING:
+            return stringInstruction(buf, opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
         case OP_SET_UPVALUE:

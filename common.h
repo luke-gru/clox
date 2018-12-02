@@ -44,6 +44,8 @@ typedef enum {
     OP_RETURN,
     OP_PRINT,
 
+    OP_STRING,
+
     OP_TRUE,
     OP_FALSE,
     OP_NIL,

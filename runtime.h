@@ -43,6 +43,11 @@ Value lxClassGetSuperclass(int argCount, Value *args);
 Value lxClassGetName(int argCount, Value *args);
 //Value lxClassAncestors(int argCount, Value *args);
 
+// class String
+Value lxStringInit(int argCount, Value *args);
+Value lxStringToString(int argCount, Value *args);
+Value lxStringOpAdd(int argCount, Value *args);
+
 // class Array
 Value lxArrayInit(int argCount, Value *args);
 Value lxArrayPush(int argCount, Value *args);

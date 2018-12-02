@@ -92,7 +92,7 @@ static void defineNativeFunctions() {
 
 // Builtin classes:
 ObjClass *lxObjClass;
-/*ObjClass *lxStringClass;*/
+ObjClass *lxStringClass;
 ObjClass *lxClassClass;
 ObjClass *lxModuleClass;
 ObjClass *lxAryClass;
@@ -136,6 +136,23 @@ static void defineNativeClasses() {
     modClass->klass = classClass;
     classClass->klass = classClass;
 
+    // class String
+    ObjString *stringClassName = internedString("String", 6);
+    ObjClass *stringClass = newClass(stringClassName, objClass);
+    tableSet(&vm.globals, OBJ_VAL(stringClassName), OBJ_VAL(stringClass));
+
+    ObjNative *stringInitNat = newNative(internedString("init", 4), lxStringInit);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(stringInitNat));
+
+    ObjNative *stringtoStringNat = newNative(internedString("toString", 8), lxStringToString);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(stringtoStringNat));
+
+    ObjNative *stringOpAddNat = newNative(internedString("opAdd", 5), lxStringOpAdd);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("opAdd", 5)), OBJ_VAL(stringOpAddNat));
+
+    lxStringClass = stringClass;
+
+    // class Class
     ObjNative *classInitNat = newNative(internedString("init", 4), lxClassInit);
     tableSet(&classClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(classInitNat));
 
@@ -1336,12 +1353,12 @@ static InterpretResult run(bool doResetStack) {
           if (methodName) {\
             callable = instanceFindMethod(inst, methodName);\
           }\
-          if (!callable) {\
+          if (!callable) /* FIXME */ {\
               UNREACHABLE("method not found");\
           }\
           callCallable(OBJ_VAL(callable), 1, true, NULL);\
       } else {\
-        UNREACHABLE("bug in binary op");\
+        UNREACHABLE("bug in binary op, lhs=%s, rhs=%s", typeOfVal(a), typeOfVal(b));\
       }\
     } while (0)
 
@@ -1651,6 +1668,15 @@ static InterpretResult run(bool doResetStack) {
           }
           Value callInfoVal = READ_CONSTANT();
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
+          // ex: String("hi"), "hi" already evaluates to a string instance, so we just
+          // return that.
+          if (numArgs == 1 && strcmp(tokStr(&callInfo->nameTok), "String") == 0) {
+              Value strVal = pop();
+              pop();
+              push(strVal);
+              lastSplatNumArgs = -1;
+              break;
+          }
           callCallable(callableVal, numArgs, false, callInfo);
           if (vm.hadError) {
               return INTERPRET_RUNTIME_ERROR;
@@ -1920,6 +1946,19 @@ static InterpretResult run(bool doResetStack) {
           }
           ASSERT(isThrowable(tblRow->lastThrownValue));
           push(tblRow->lastThrownValue);
+          break;
+      }
+      case OP_STRING: {
+          Value strLit = READ_CONSTANT();
+          ASSERT(IS_STRING(strLit));
+          uint8_t isStatic = READ_BYTE();
+          push(OBJ_VAL(lxStringClass));
+          push(strLit);
+          bool ret = callCallable(peek(1), 1, false, NULL);
+          ASSERT(ret); // the string instance is pushed to top of stack
+          if (isStatic == 1) {
+              objFreeze(AS_OBJ(peek(0)));
+          }
           break;
       }
       // exit interpreter

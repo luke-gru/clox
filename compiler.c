@@ -1182,15 +1182,18 @@ static void emitNode(Node *n) {
             // TODO: handle error condition
             double d = strtod(tokStr(&n->tok), NULL);
             emitConstant(NUMBER_VAL(d), CONST_T_NUMLIT);
+        // non-static string
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
             ObjString *str = hiddenString(name->start+1, name->length-2);
-            emitConstant(OBJ_VAL(str), CONST_T_STRLIT);
+            uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
+            emitOp2(OP_STRING, strSlot, 0);
+        // static string
         } else if (n->tok.type == TOKEN_STRING_STATIC) {
             Token *name = &n->tok;
             ObjString *str = hiddenString(name->start+2, name->length-3);
-            objFreeze((Obj*)str);
-            emitConstant(OBJ_VAL(str), CONST_T_STRLIT);
+            uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
+            emitOp2(OP_STRING, strSlot, 1);
         } else if (n->tok.type == TOKEN_TRUE) {
             emitOp0(OP_TRUE);
         } else if (n->tok.type == TOKEN_FALSE) {

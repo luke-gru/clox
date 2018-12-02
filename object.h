@@ -139,7 +139,7 @@ typedef struct ObjModule {
 } ObjModule;
 
 extern ObjClass *lxObjClass;
-//extern ObjClass *lxStringClass;
+extern ObjClass *lxStringClass;
 extern ObjClass *lxClassClass;
 extern ObjClass *lxModuleClass;
 extern ObjClass *lxAryClass;
@@ -206,11 +206,15 @@ typedef struct ObjBoundMethod {
 #define IS_T_ARRAY(value)       (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxAryClass)
 #define IS_A_MAP(value)         (IS_A(value, lxMapClass))
 #define IS_T_MAP(value)         (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxMapClass)
+#define IS_A_STRING(value)      (IS_A(value, lxStringClass))
+#define IS_T_STRING(value)      (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxStringClass)
 #define IS_AN_ERROR(value)      (IS_A(value, lxErrClass))
 
 #define IS_SUBCLASS(subklass,superklass) (isSubclass(subklass,superklass))
 
 #define AS_STRING(value)        ((ObjString*)AS_OBJ(value))
+#define INSTANCE_AS_CSTRING(value) (STRING_GETHIDDEN(value)->chars)
+#define VAL_TO_STRING(value)    (IS_T_STRING(value) ? STRING_GETHIDDEN(value) : AS_STRING(value))
 #define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
 #define AS_FUNCTION(value)      ((ObjFunction*)AS_OBJ(value))
 #define AS_CLOSURE(value)       ((ObjClosure*)AS_OBJ(value))
@@ -233,6 +237,8 @@ typedef struct ObjBoundMethod {
 #define MAP_SIZE(mapVal)          (mapSize(mapVal))
 #define MAP_GETHIDDEN(mapVal)     (mapGetHidden(mapVal))
 
+#define STRING_GETHIDDEN(stringVal) (stringGetHidden(stringVal))
+
 typedef ObjString *(*newStringFunc)(char *chars, int length);
 // String creation functions
 ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
@@ -243,6 +249,8 @@ void pushString(ObjString *a, ObjString *b);
 ObjString *newStackString(char *chars, int length); // Used in native C functions. Object first lives in VM arena, conceptually.
 ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
 ObjString *dupString(ObjString *string);
+
+Value dupStringInstance(Value instance);
 
 void clearObjString(ObjString *str);
 
@@ -269,8 +277,12 @@ void        mapSet(Value map, Value key, Value val);
 Value       mapSize(Value map);
 Table      *mapGetHidden(Value map);
 
+ObjString *stringGetHidden(Value instance);
+
 void  setProp(Value self, ObjString *propName, Value val);
 Value getProp(Value self, ObjString *propName);
+
+Value getHiddenProp(Value self, ObjString *propName);
 
 // Object creation functions
 ObjFunction *newFunction(Chunk *chunk, Node *funcNode);

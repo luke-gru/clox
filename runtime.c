@@ -282,6 +282,43 @@ Value lxClassGetSuperclass(int argCount, Value *args) {
     }
 }
 
+Value lxStringInit(int argCount, Value *args) {
+    CHECK_ARGS("String#init", 1, 2, argCount);
+    Value self = *args;
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (argCount == 2) {
+        Value internalStrVal = args[1];
+        if (IS_T_STRING(internalStrVal)) {
+            *args = internalStrVal;
+            return internalStrVal;
+        }
+        ASSERT(IS_STRING(internalStrVal));
+        tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
+        unhideFromGC(AS_OBJ(internalStrVal));
+    } else {
+        Value internalStrVal = OBJ_VAL(copyString("", 0));
+        tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
+    }
+    return self;
+}
+
+Value lxStringToString(int argCount, Value *args) {
+    CHECK_ARGS("String#toString", 1, 1, argCount);
+    return *args;
+}
+
+Value lxStringOpAdd(int argCount, Value *args) {
+    CHECK_ARGS("String#opAdd", 2, 2, argCount);
+    Value self = *args;
+    Value rhs = args[1];
+    Value ret = dupStringInstance(self);
+    ObjString *lhsBuf = STRING_GETHIDDEN(ret);
+    ASSERT(IS_T_STRING(rhs)); // TODO: throw error
+    ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
+    pushString(lhsBuf, rhsBuf);
+    return ret;
+}
+
 // ex: var a = Array();
 Value lxArrayInit(int argCount, Value *args) {
     CHECK_ARGS("Array#init", 1, -1, argCount);
@@ -292,7 +329,7 @@ Value lxArrayInit(int argCount, Value *args) {
     ValueArray *ary = ALLOCATE(ValueArray, 1);
     initValueArray(ary);
     internalObj->data = ary;
-    tableSet(&selfObj->hiddenFields, OBJ_VAL(copyString("ary", 3)), OBJ_VAL(internalObj));
+    tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), OBJ_VAL(internalObj));
     for (int i = 1; i < argCount; i++) {
         writeValueArray(ary, args[i]);
     }
@@ -368,7 +405,7 @@ Value lxArrayIndexSet(int argCount, Value *args) {
     Value rval = args[2];
     CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
     Value internalObjVal;
-    ASSERT(tableGet(&selfObj->hiddenFields, OBJ_VAL(copyString("ary", 3)), &internalObjVal));
+    ASSERT(tableGet(&selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     int idx = (int)AS_NUMBER(num);
@@ -415,7 +452,7 @@ Value lxMapInit(int argCount, Value *args) {
     initTable(map);
     internalMap->data = map;
     tableSet(&selfObj->hiddenFields, OBJ_VAL(
-        copyString("map", 3)), OBJ_VAL(internalMap));
+        internedString("map", 3)), OBJ_VAL(internalMap));
 
     if (argCount == 1) {
         return self;
@@ -539,7 +576,7 @@ Value lxErrInit(int argCount, Value *args) {
     } else {
         msg = NIL_VAL;
     }
-    setProp(self, copyString("message", 7), msg);
+    setProp(self, internedString("message", 7), msg);
     return self;
 }
 
