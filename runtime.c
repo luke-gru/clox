@@ -204,8 +204,28 @@ Value lxObjectGetObjectId(int argCount, Value *args) {
     return NUMBER_VAL((double)objId);
 }
 
+// Creates a new object, with the same properties and hidden fields
+// var o = Object(); var o2 = o.dup();
+Value lxObjectDup(int argCount, Value *args) {
+    CHECK_ARGS("Object#dup", 1, 1, argCount);
+    Value self = *args;
+    ASSERT(IS_INSTANCE(self)); // TODO: what about dup for classes/modules?
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjInstance *newObj = newInstance(selfObj->klass);
+    Entry e; int idx = 0;
+    TABLE_FOREACH(&selfObj->fields, e, idx) {
+        tableSet(&newObj->fields, e.key, e.value);
+    }
+    idx = 0;
+    TABLE_FOREACH(&selfObj->hiddenFields, e, idx) {
+        tableSet(&newObj->hiddenFields, e.key, e.value);
+    }
+    return OBJ_VAL(newObj);
+}
+
 // ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
+    // TODO: call super
     // TODO: add to module map, and make sure module doesn't already exist, maybe
     Value self = *args;
     CHECK_ARGS("Module#init", 1, 2, argCount);
@@ -220,6 +240,7 @@ Value lxModuleInit(int argCount, Value *args) {
 
 // ex: var c = Class("MyClass", Object);
 Value lxClassInit(int argCount, Value *args) {
+    // TODO: call super
     CHECK_ARGS("Class#init", 1, 3, argCount);
     Value self = *args;
     ObjClass *klass = AS_CLASS(self);
@@ -291,6 +312,7 @@ Value lxClassGetSuperclass(int argCount, Value *args) {
 // ex: var s = "string";
 // ex: var s2 = String("string");
 Value lxStringInit(int argCount, Value *args) {
+    // TODO: call super?
     CHECK_ARGS("String#init", 1, 2, argCount);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
@@ -322,12 +344,13 @@ Value lxStringOpAdd(int argCount, Value *args) {
     Value rhs = args[1];
     Value ret = dupStringInstance(self);
     ObjString *lhsBuf = STRING_GETHIDDEN(ret);
-    ASSERT(IS_T_STRING(rhs)); // TODO: throw error or coerce into String
+    ASSERT(IS_A_STRING(rhs)); // TODO: throw error or coerce into String
     ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
     pushString(lhsBuf, rhsBuf);
     return ret;
 }
 
+// var s = "hey"; s.push(" there!"); => "hey there!"
 Value lxStringPush(int argCount, Value *args) {
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
@@ -343,8 +366,20 @@ Value lxStringPush(int argCount, Value *args) {
     return *args;
 }
 
+// var s = "hey"; var s2 = s.dup(); s.push(" again");
+// print s;  => "hey"
+// print s2; => "hey again"
+Value lxStringDup(int argCount, Value *args) {
+    Value ret = lxObjectDup(argCount, args);
+    ObjInstance *retInst = AS_INSTANCE(ret);
+    ObjString *buf = STRING_GETHIDDEN(ret);
+    tableSet(&retInst->hiddenFields, OBJ_VAL(internedString("buf", 3)), OBJ_VAL(dupString(buf)));
+    return ret;
+}
+
 // ex: var a = Array();
 Value lxArrayInit(int argCount, Value *args) {
+    // TODO: call super?
     CHECK_ARGS("Array#init", 1, -1, argCount);
     Value self = *args;
     ASSERT(IS_AN_ARRAY(self));
@@ -473,6 +508,7 @@ static void freeInternalMap(Obj *internalObj) {
 }
 
 Value lxMapInit(int argCount, Value *args) {
+    // TODO: call super?
     CHECK_ARGS("Map#init", 1, -1, argCount);
     Value self = args[0];
     ASSERT(IS_A_MAP(self));
@@ -604,6 +640,7 @@ Value lxMapValues(int argCount, Value *args) {
 }
 
 Value lxErrInit(int argCount, Value *args) {
+    // TODO: call super?
     CHECK_ARGS("Error#init", 1, 2, argCount);
     Value self = args[0];
     ASSERT(IS_AN_ERROR(self));

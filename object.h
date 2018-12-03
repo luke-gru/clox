@@ -8,7 +8,7 @@
 
 typedef enum ObjType {
   OBJ_T_NONE = 0,
-  OBJ_T_STRING, // TODO: make strings instances
+  OBJ_T_STRING,
   OBJ_T_FUNCTION,
   OBJ_T_INSTANCE,
   OBJ_T_CLASS,

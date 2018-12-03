@@ -28,10 +28,13 @@ execution contexts (like eval) []
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
 * Add Object#dup, and Class#ancestors []
+* Add GC stress option []
+* Add GC.stats []
+* add multiple var declaration, setters for array returns
 
 BUGS:
 * super() bug in examples/super.lox
 * Fix nil.toString() bugs
 * Throw proper errors when can't find instance/static methods in VM
-* throwing an error in eval() means it can't be caught outside the context
 * Catch blocks mess up stack
+* Allow throwing strings?

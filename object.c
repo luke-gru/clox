@@ -278,6 +278,7 @@ ObjModule *newModule(ObjString *name) {
     return mod;
 }
 
+// allocates a new instance object, doesn't call its constructor
 ObjInstance *newInstance(ObjClass *klass) {
     ASSERT(klass);
     ObjInstance *obj = ALLOCATE_OBJ(

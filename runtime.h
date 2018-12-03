@@ -32,6 +32,7 @@ bool runtimeCheckArgs(int min, int max, int actual);
 // class Object
 Value lxObjectGetClass(int argCount, Value *args);
 Value lxObjectGetObjectId(int argCount, Value *args);
+Value lxObjectDup(int argCount, Value *args);
 
 // class Module
 Value lxModuleInit(int argCount, Value *args);
@@ -48,6 +49,7 @@ Value lxStringInit(int argCount, Value *args);
 Value lxStringToString(int argCount, Value *args);
 Value lxStringOpAdd(int argCount, Value *args);
 Value lxStringPush(int argCount, Value *args);
+Value lxStringDup(int argCount, Value *args);
 
 // class Array
 Value lxArrayInit(int argCount, Value *args);

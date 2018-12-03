@@ -34,7 +34,7 @@ void tableEachEntry(Table *table, TableEntryCb func);
   if ((tbl)->count > 0)\
     for ((idx) = 0;\
          (((idx) < (tbl)->capacityMask+1) &&\
-         (entry = tbl->entries[idx]).key.type != 555); (idx)++)\
+         (entry = (tbl)->entries[idx]).key.type != 555); (idx)++)\
         if (entry.key.type == VAL_T_UNDEF) { continue; } else
 
 ObjString *tableFindString(Table* table, const char* chars, int length,

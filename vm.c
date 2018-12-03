@@ -110,6 +110,9 @@ static void defineNativeClasses() {
     ObjClass *objClass = newClass(objClassName, NULL);
     tableSet(&vm.globals, OBJ_VAL(objClassName), OBJ_VAL(objClass));
 
+    ObjNative *objDupNat = newNative(internedString("dup", 3), lxObjectDup);
+    tableSet(&objClass->methods, OBJ_VAL(internedString("dup", 3)), OBJ_VAL(objDupNat));
+
     ObjNative *objGetClassNat = newNative(internedString("_class", 6), lxObjectGetClass);
     tableSet(&objClass->getters, OBJ_VAL(internedString("_class", 6)), OBJ_VAL(objGetClassNat));
 
@@ -154,6 +157,9 @@ static void defineNativeClasses() {
 
     ObjNative *stringPushNat = newNative(internedString("push", 4), lxStringPush);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(stringPushNat));
+
+    ObjNative *stringDupNat = newNative(internedString("dup", 3), lxStringDup);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("dup", 3)), OBJ_VAL(stringDupNat));
 
     lxStringClass = stringClass;
 
@@ -481,6 +487,7 @@ static bool isTruthy(Value val) {
     switch (val.type) {
     case VAL_T_NIL: return false;
     case VAL_T_BOOL: return AS_BOOL(val);
+    case VAL_T_UNDEF: UNREACHABLE("undefined value found?");
     default:
         // all other values are truthy
         return true;
@@ -1158,16 +1165,13 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     for (int i = lenBefore; i < lenAfter; i++) {
         (void)vec_pop(&vm.stackObjects);
     }
-    // FIXME: this assertion was causing errors when we threw an error from C
-    // code. We need to clean up the stackobjects in this case.
-    /*ASSERT(lenBefore == vm.stackObjects.length);*/
 
     return ret;
 }
 
 /**
  * When thrown (OP_THROW), find any surrounding try { } catch { } block with
- * the proper class. TODO: find catch locations across execution contexts
+ * the proper class.
  */
 static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowFound) {
     CatchTable *tbl = currentChunk()->catchTbl;
@@ -1179,16 +1183,16 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
         VM_DEBUG("framecount: %d, num ECs: %d", EC->frameCount, vm.v_ecs.length);
         if (row == NULL) { // pop a call frame
             VM_DEBUG("row null");
-            if (vm.v_ecs.length == 0) {
+            if (vm.v_ecs.length == 0 || (vm.v_ecs.length == 1 && EC->frameCount == 1)) {
                 return false;
             }
-            if (EC->frameCount <= 1) {
+            if (EC->frameCount == 1) { // there's at least 1 more context to go through
                 pop_EC();
                 poppedEC = true;
                 ASSERT(EC->stackTop > getFrame()->slots);
                 row = currentChunk()->catchTbl;
                 continue;
-            } else {
+            } else { // more frames in this context to go through
                 ASSERT(EC->frameCount > 1);
                 currentIpOff = getFrame()->start;
                 ASSERT(EC->stackTop > getFrame()->slots);
@@ -1238,6 +1242,7 @@ static CatchTable *getCatchTableRow(int idx) {
 }
 
 void throwError(Value self) {
+    VM_DEBUG("throwing error");
     ASSERT(vm.inited);
     ASSERT(IS_INSTANCE(self));
     vm.lastErrorThrown = self;
@@ -1467,9 +1472,8 @@ static InterpretResult run(bool doResetStack) {
       case OP_NEGATE: {
         Value val = pop();
         if (!IS_NUMBER(val)) {
-            // FIXME: throw error
-            diePrintBacktrace("Can only negate numbers");
-            return INTERPRET_RUNTIME_ERROR;
+            throwErrorFmt(lxTypeErrClass, "Can only negate numbers, type=%s", typeOfVal(val));
+            break;
         }
         push(NUMBER_VAL(-AS_NUMBER(val)));
         break;
@@ -1478,9 +1482,10 @@ static InterpretResult run(bool doResetStack) {
         Value rhs = pop(); // rhs
         Value lhs = pop(); // lhs
         if (!canCmpValues(lhs, rhs, instruction)) {
-            // FIXME: throw error
-            diePrintBacktrace("Can only compare numbers and strings with <");
-            return INTERPRET_RUNTIME_ERROR;
+            throwErrorFmt(lxTypeErrClass,
+                "Can only compare numbers and strings with '<', lhs=%s, rhs=%s",
+                typeOfVal(lhs), typeOfVal(rhs));
+            break;
         }
         if (cmpValues(lhs, rhs, instruction) == -1) {
             push(trueValue());
@@ -1493,8 +1498,10 @@ static InterpretResult run(bool doResetStack) {
         Value rhs = pop();
         Value lhs = pop();
         if (!canCmpValues(lhs, rhs, instruction)) {
-            diePrintBacktrace("Can only compare numbers and strings with >");
-            return INTERPRET_RUNTIME_ERROR;
+            throwErrorFmt(lxTypeErrClass,
+                "Can only compare numbers and strings with '>', lhs=%s, rhs=%s",
+                typeOfVal(lhs), typeOfVal(rhs));
+            break;
         }
         if (cmpValues(lhs, rhs, instruction) == 1) {
             push(trueValue());
@@ -1504,42 +1511,46 @@ static InterpretResult run(bool doResetStack) {
         break;
       }
       case OP_EQUAL: {
-        Value rhs = pop();
-        Value lhs = pop();
-        if (isValueOpEqual(lhs, rhs)) {
-            push(trueValue());
-        } else {
-            push(falseValue());
-        }
-        break;
+          Value rhs = pop();
+          Value lhs = pop();
+          if (isValueOpEqual(lhs, rhs)) {
+              push(trueValue());
+          } else {
+              push(falseValue());
+          }
+          break;
       }
       case OP_GREATER_EQUAL: {
           Value rhs = pop();
           Value lhs = pop();
-        if (!canCmpValues(lhs, rhs, instruction)) {
-            diePrintBacktrace("Can only compare numbers and strings with >=");
-            return INTERPRET_RUNTIME_ERROR;
-        }
-        if (cmpValues(lhs, rhs, instruction) != -1) {
-            push(trueValue());
-        } else {
-            push(falseValue());
-        }
-        break;
+          if (!canCmpValues(lhs, rhs, instruction)) {
+              throwErrorFmt(lxTypeErrClass,
+                  "Can only compare numbers and strings with '>=', lhs=%s, rhs=%s",
+                   typeOfVal(lhs), typeOfVal(rhs));
+              break;
+          }
+          if (cmpValues(lhs, rhs, instruction) != -1) {
+              push(trueValue());
+          } else {
+              push(falseValue());
+          }
+          break;
       }
       case OP_LESS_EQUAL: {
           Value rhs = pop();
           Value lhs = pop();
-        if (!canCmpValues(lhs, rhs, instruction)) {
-            diePrintBacktrace("Can only compare numbers and strings with <=");
-            return INTERPRET_RUNTIME_ERROR;
-        }
-        if (cmpValues(lhs, rhs, instruction) != 1) {
-            push(trueValue());
-        } else {
-            push(falseValue());
-        }
-        break;
+          if (!canCmpValues(lhs, rhs, instruction)) {
+              throwErrorFmt(lxTypeErrClass,
+                  "Can only compare numbers and strings with '<=', lhs=%s, rhs=%s",
+                   typeOfVal(lhs), typeOfVal(rhs));
+              break;
+          }
+          if (cmpValues(lhs, rhs, instruction) != 1) {
+              push(trueValue());
+          } else {
+              push(falseValue());
+          }
+          break;
       }
       case OP_PRINT: {
         Value val = pop();
@@ -1556,17 +1567,17 @@ static InterpretResult run(bool doResetStack) {
         break;
       }
       case OP_DEFINE_GLOBAL: {
-        Value varName = READ_CONSTANT();
-        char *name = AS_CSTRING(varName);
-        if (isUnredefinableGlobal(name)) {
-            pop();
-            throwErrorFmt(lxNameErrClass, "Can't redeclare global variable '%s'", name);
-            break;
-        }
-        Value val = peek(0);
-        tableSet(&vm.globals, varName, val);
-        pop();
-        break;
+          Value varName = READ_CONSTANT();
+          char *name = AS_CSTRING(varName);
+          if (isUnredefinableGlobal(name)) {
+              pop();
+              throwErrorFmt(lxNameErrClass, "Can't redeclare global variable '%s'", name);
+              break;
+          }
+          Value val = peek(0);
+          tableSet(&vm.globals, varName, val);
+          pop();
+          break;
       }
       case OP_GET_GLOBAL: {
         Value varName = READ_CONSTANT();
@@ -1911,7 +1922,6 @@ static InterpretResult run(bool doResetStack) {
       }
       case OP_IN: {
           Value classOrInst = pop();
-          ASSERT(IS_OBJ(classOrInst));
           if (IS_CLASS(classOrInst) || IS_MODULE(classOrInst)) {
               push(classOrInst);
           } else {
@@ -1954,7 +1964,7 @@ static InterpretResult run(bool doResetStack) {
           ObjString *propStr = AS_STRING(propName);
           ASSERT(propStr && propStr->chars);
           Value instance = peek(0);
-          if (!IS_INSTANCE(instance) && !IS_CLASS(instance) && !IS_MODULE(instance)) {
+          if (!IS_INSTANCE_LIKE(instance)) {
               pop();
               throwErrorFmt(lxTypeErrClass, "Tried to access property '%s' of non-instance (type: %s)", propStr->chars, typeOfVal(instance));
               break;
@@ -1968,7 +1978,7 @@ static InterpretResult run(bool doResetStack) {
           ObjString *propStr = AS_STRING(propName);
           Value rval = peek(0);
           Value instance = peek(1);
-          if (!IS_INSTANCE(instance) && !IS_CLASS(instance) && !IS_MODULE(instance)) {
+          if (!IS_INSTANCE_LIKE(instance)) {
               pop(); pop();
               throwErrorFmt(lxTypeErrClass, "Tried to set property '%s' of non-instance", propStr->chars);
               break;
@@ -1981,7 +1991,7 @@ static InterpretResult run(bool doResetStack) {
       }
       case OP_INDEX_GET: {
           Value lval = peek(1); // ex: Array object
-          ASSERT(IS_INSTANCE(lval)); // TODO: handle error
+          ASSERT(IS_INSTANCE(lval)); // TODO: handle error, and allow classes/modules
           ObjInstance *instance = AS_INSTANCE(lval);
           Obj *method = instanceFindMethod(instance, internedString("indexGet", 8));
           ASSERT(method); // FIXME: handle method not found
@@ -1990,7 +2000,7 @@ static InterpretResult run(bool doResetStack) {
       }
       case OP_INDEX_SET: {
           Value lval = peek(2);
-          ASSERT(IS_INSTANCE(lval)); // TODO: handle error, throw TypeError
+          ASSERT(IS_INSTANCE(lval)); // TODO: handle error, throw TypeError, allow classes/modules
           ObjInstance *instance = AS_INSTANCE(lval);
           Obj *method = instanceFindMethod(instance, internedString("indexSet", 8));
           ASSERT(method); // FIXME: handle method not found
