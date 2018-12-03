@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <time.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -89,6 +90,30 @@ Value lxEval(int argCount, Value *args) {
         return NIL_VAL;
     }
     return VMEval(csrc, "(eval)", 1);
+}
+
+static void runCallableInNewThread(void *arg) {
+    ObjClosure *closure = arg;
+}
+
+Value lxNewThread(int argCount, Value *args) {
+    CHECK_ARGS("newThread", 1, 1, argCount);
+    Value closure = *args;
+    CHECK_ARG_BUILTIN_TYPE(closure, IS_CLOSURE_FUNC, "closure", 1);
+    ObjClosure *func = AS_CLOSURE(closure);
+    pthread_t tnew;
+    if (pthread_create(&tnew, NULL, runCallableInNewThread, func)) {
+        return NUMBER_VAL((unsigned long)tnew);
+    } else {
+        return NIL_VAL;
+    }
+}
+
+Value lxJoinThread(int argCount, Value *args) {
+    CHECK_ARGS("joinThread", 1, 1, argCount);
+    Value tidNum = *args;
+    CHECK_ARG_BUILTIN_TYPE(tidNum, IS_NUMBER_FUNC, "number", 1);
+    double num = AS_NUMBER(tidNum);
 }
 
 static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoaded) {

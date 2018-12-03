@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <setjmp.h>
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
@@ -7,7 +8,6 @@
 #include "memory.h"
 #include "compiler.h"
 #include "nodes.h"
-#include <setjmp.h>
 
 VM vm;
 
@@ -1148,9 +1148,6 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     for (int i = lenBefore; i < lenAfter; i++) {
         (void)vec_pop(&vm.stackObjects);
     }
-    // FIXME: this assertion was causing errors when we threw an error from C
-    // code. We need to clean up the stackobjects in this case.
-    /*ASSERT(lenBefore == vm.stackObjects.length);*/
 
     return ret;
 }
