@@ -45,7 +45,9 @@ void initOptions(void) {
     options.parseOnly = false;
     options.compileOnly = false;
     options.disableBcodeOptimizer = false;
+
     options.disableGC = false;
+    options.stressGC = false;
 
     options.initialLoadPath = "";
     options.initialScript = "";
@@ -164,6 +166,10 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "--disable-GC") == 0) {
         SET_OPTION(disableGC, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--stress-GC") == 0) {
+        SET_OPTION(stressGC, true);
         return 1;
     }
 

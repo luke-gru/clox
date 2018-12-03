@@ -225,7 +225,7 @@ Value lxObjectDup(int argCount, Value *args) {
 
 // ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
-    // TODO: call super
+    // TODO: call super?
     // TODO: add to module map, and make sure module doesn't already exist, maybe
     Value self = *args;
     CHECK_ARGS("Module#init", 1, 2, argCount);
@@ -240,7 +240,7 @@ Value lxModuleInit(int argCount, Value *args) {
 
 // ex: var c = Class("MyClass", Object);
 Value lxClassInit(int argCount, Value *args) {
-    // TODO: call super
+    // TODO: call super?
     CHECK_ARGS("Class#init", 1, 3, argCount);
     Value self = *args;
     ObjClass *klass = AS_CLASS(self);

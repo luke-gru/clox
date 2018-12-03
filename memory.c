@@ -75,7 +75,9 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     }
     vm.bytesAllocated += (newSize - oldSize);
 
-    if (vm.bytesAllocated > vm.nextGCThreshhold && newSize > oldSize) {
+    if (CLOX_OPTION_T(stressGC) && newSize > 0) {
+        collectGarbage();
+    } else if (vm.bytesAllocated > vm.nextGCThreshhold && newSize > oldSize) {
         collectGarbage();
     }
 

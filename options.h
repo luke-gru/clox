@@ -15,6 +15,7 @@ typedef struct sCloxOptions {
     bool traceCompiler;
     bool disableBcodeOptimizer;
     bool disableGC;
+    bool stressGC;
 
     bool compileOnly;
     bool parseOnly;
