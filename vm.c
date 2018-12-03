@@ -574,6 +574,7 @@ void diePrintBacktrace(const char *format, ...) {
 
 void showUncaughtError(Value err) {
     char *className = AS_INSTANCE(err)->klass->name->chars;
+    if (!className) { className = "(anon)"; }
     Value msg = getProp(err, internedString("message", 7));
     char *msgStr = NULL;
     if (!IS_NIL(msg)) {
@@ -599,33 +600,38 @@ void showUncaughtError(Value err) {
 
 // every new error value, when thrown, gets its backtrace set first
 void setBacktrace(Value err) {
-    /*ASSERT(IS_AN_ERROR(err));*/
+    ASSERT(IS_AN_ERROR(err));
     Value ret = newArray();
     setProp(err, internedString("backtrace", 9), ret);
-    // TODO: go over all execution contexts
-    for (int i = EC->frameCount - 1; i >= 0; i--) {
-        CallFrame *frame = &EC->frames[i];
-        int line = frame->callLine;
-        ObjString *file = frame->file;
-        ObjString *outBuf = hiddenString("", 0);
-        Value out = newStringInstance(outBuf);
-        if (frame->isCCall) {
-            ObjNative *nativeFunc = frame->nativeFunc;
-            pushCStringFmt(outBuf, "%s:%d in ", file->chars, line);
-            pushCStringFmt(outBuf, "<%s (native)>\n",
-                nativeFunc->name->chars);
-        } else {
-            ObjFunction *function = frame->closure->function;
-            pushCStringFmt(outBuf, "%s:%d in ", file->chars, line);
-            if (function->name == NULL) {
-                pushCString(outBuf, "<script>\n", 9); // top-level
+    int numECs = vm.v_ecs.length;
+    VMExecContext *ctx;
+    for (int i = numECs-1; i >= 0; i--) {
+        ctx = vm.v_ecs.data[i];
+        DBG_ASSERT(ctx);
+        for (int j = ctx->frameCount - 1; j >= 0; j--) {
+            CallFrame *frame = &ctx->frames[j];
+            int line = frame->callLine;
+            ObjString *file = frame->file;
+            ObjString *outBuf = hiddenString("", 0);
+            Value out = newStringInstance(outBuf);
+            if (frame->isCCall) {
+                ObjNative *nativeFunc = frame->nativeFunc;
+                pushCStringFmt(outBuf, "%s:%d in ", file->chars, line);
+                pushCStringFmt(outBuf, "<%s (native)>\n",
+                        nativeFunc->name->chars);
             } else {
-                char *fnName = function->name ? function->name->chars : "(anon)";
-                pushCStringFmt(outBuf, "<%s>\n", fnName);
+                ObjFunction *function = frame->closure->function;
+                pushCStringFmt(outBuf, "%s:%d in ", file->chars, line);
+                if (function->name == NULL) {
+                    pushCString(outBuf, "<script>\n", 9); // top-level
+                } else {
+                    char *fnName = function->name ? function->name->chars : "(anon)";
+                    pushCStringFmt(outBuf, "<%s>\n", fnName);
+                }
             }
+            arrayPush(ret, out);
+            unhideFromGC((Obj*)outBuf);
         }
-        arrayPush(ret, out);
-        unhideFromGC((Obj*)outBuf);
     }
 }
 
@@ -831,6 +837,10 @@ static void popFrame(void) {
 
 static CallFrame *pushFrame() {
     DBG_ASSERT(vm.inited);
+    if (EC->frameCount >= FRAMES_MAX) {
+        throwErrorFmt(lxErrClass, "Stackoverflow, max number of call frames (%d)", FRAMES_MAX);
+        return NULL;
+    }
     CallFrame *frame = &EC->frames[EC->frameCount++];
     frame->callLine = curLine;
     /*Value curFile;*/
@@ -1163,23 +1173,42 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
     CatchTable *tbl = currentChunk()->catchTbl;
     CatchTable *row = tbl;
     int currentIpOff = (int)(getFrame()->ip - currentChunk()->code);
-    while (row || EC->frameCount > 1) {
+    bool poppedEC;
+    VM_DEBUG("findthrowjumploc");
+    while (row || EC->frameCount >= 1) {
+        VM_DEBUG("framecount: %d, num ECs: %d", EC->frameCount, vm.v_ecs.length);
         if (row == NULL) { // pop a call frame
-            ASSERT(EC->frameCount > 1);
-            currentIpOff = getFrame()->start;
-            ASSERT(EC->stackTop > getFrame()->slots);
-            EC->stackTop = getFrame()->slots;
-            popFrame();
-            row = currentChunk()->catchTbl;
-            continue;
+            VM_DEBUG("row null");
+            if (vm.v_ecs.length == 0) {
+                return false;
+            }
+            if (EC->frameCount <= 1) {
+                pop_EC();
+                poppedEC = true;
+                ASSERT(EC->stackTop > getFrame()->slots);
+                row = currentChunk()->catchTbl;
+                continue;
+            } else {
+                ASSERT(EC->frameCount > 1);
+                currentIpOff = getFrame()->start;
+                ASSERT(EC->stackTop > getFrame()->slots);
+                EC->stackTop = getFrame()->slots;
+                popFrame();
+                VM_DEBUG("frame popped");
+                row = currentChunk()->catchTbl;
+                continue;
+            }
         }
         Value klassFound;
         if (!tableGet(&vm.globals, row->catchVal, &klassFound)) {
+            VM_DEBUG("a class not found for row, next row");
             row = row->next;
             continue;
         }
+        VM_DEBUG("a class found for row");
         if (IS_SUBCLASS(klass, AS_CLASS(klassFound))) {
-            if (currentIpOff > row->ifrom && currentIpOff <= row->ito) {
+            VM_DEBUG("good class found for row");
+            if (poppedEC || (currentIpOff > row->ifrom && currentIpOff <= row->ito)) {
                 // found target catch
                 *ipOut = currentChunk()->code + row->itarget;
                 *rowFound = row;
@@ -2060,6 +2089,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();
     push_EC();
+    VMExecContext *ectx = EC;
     EC->filename = copyString(filename, strlen(filename));
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
@@ -2076,7 +2106,9 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     setupPerScriptROGlobals(filename);
 
     InterpretResult result = run(false);
-    pop_EC();
+    // `EC != ectx` if an error occured in the script, and propagated out
+    // due to being caught in a calling script or never being caught.
+    if (EC == ectx) pop_EC();
     ASSERT(oldFrame == getFrame());
     return result;
 }
@@ -2089,6 +2121,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
     compilerOpts.noRemoveUnusedExpressions = true;
     push_EC();
+    VMExecContext *ectx = EC;
     resetStack();
     int compile_res = compile_src(src, &chunk, &err);
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
@@ -2117,11 +2150,13 @@ Value VMEval(const char *src, const char *filename, int lineno) {
 
     InterpretResult result = run(false);
     if (result != INTERPRET_OK) {
-        vm.hadError = false;
+        vm.hadError = true;
     }
-    pop_EC();
-    ASSERT(getFrame() == oldFrame);
     VM_DEBUG("eval finished");
+    // `EC != ectx` if an error occured in the eval, and propagated out
+    // due to being caught in a surrounding context or never being caught.
+    if (EC == ectx) pop_EC();
+    ASSERT(getFrame() == oldFrame);
     return BOOL_VAL(result == INTERPRET_OK);
 }
 
