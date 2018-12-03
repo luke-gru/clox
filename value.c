@@ -68,13 +68,13 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
                 fprintf(file, "<fun %s>", func->name->chars);
             }
             return;
-        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE) {
+        } else if (IS_INSTANCE(value)) {
             ObjInstance *inst = AS_INSTANCE(value);
             Obj *callable = instanceFindMethod(inst, internedString("toString", 8));
             if (callable && vm.inited && canCallMethods) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL);
-                if (!IS_STRING(stringVal) && !IS_T_STRING(stringVal)) {
-                    runtimeError("TypeError, toString() returned non-string");
+                if (!IS_A_STRING(stringVal)) {
+                    diePrintBacktrace("TypeError, toString() returned non-string");
                     return;
                 }
                 ObjString *out = VAL_TO_STRING(stringVal);
@@ -179,8 +179,8 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             Obj *toString = instanceFindMethod(inst, internedString("toString", 8));
             if (toString && vm.inited) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL);
-                if (!IS_STRING(stringVal) && !IS_T_STRING(stringVal)) {
-                    runtimeError("TypeError, toString() returned non-string");
+                if (!IS_A_STRING(stringVal)) {
+                    diePrintBacktrace("TypeError, toString() returned non-string");
                     UNREACHABLE("error");
                 }
                 ret = VAL_TO_STRING(stringVal);
@@ -259,7 +259,7 @@ const char *typeOfVal(Value val) {
 
 uint32_t valHash(Value val) {
     if (IS_OBJ(val)) {
-        if (IS_STRING(val) || IS_T_STRING(val)) {
+        if (IS_STRING(val) || IS_A_STRING(val)) {
             ObjString *string = VAL_TO_STRING(val);
             return hashString(string->chars, string->length);
         } else {
@@ -283,8 +283,8 @@ uint32_t valHash(Value val) {
 }
 
 static bool isCompatibleTypes(Value a, Value b) {
-    return ((IS_STRING(a) && IS_T_STRING(b)) ||
-            (IS_T_STRING(a) && IS_STRING(b)));
+    return ((IS_STRING(a) && IS_A_STRING(b)) ||
+            (IS_A_STRING(a) && IS_STRING(b)));
 }
 
 bool valEqual(Value a, Value b) {
@@ -299,7 +299,7 @@ bool valEqual(Value a, Value b) {
         case VAL_T_OBJ: {
             Obj *aObj = AS_OBJ(a);
             Obj *bObj = AS_OBJ(b);
-            if (IS_STRING(a) || IS_T_STRING(a)) {
+            if (IS_STRING(a) || IS_A_STRING(a)) {
                 return strcmp(VAL_TO_STRING(a)->chars,
                         VAL_TO_STRING(b)->chars) == 0;
             }

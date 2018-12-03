@@ -71,7 +71,6 @@ typedef struct VM {
     // control returns to the VM, these are popped. Stack objects aren't
     // collected during GC.
     vec_void_t stackObjects;
-    bool keepInternedObjects;
 
     Value lastErrorThrown;
     vec_val_t loadedScripts;
@@ -103,7 +102,7 @@ Value callVMMethod(
 Value VMEval(const char *src, const char *filename, int lineno);
 void push(Value value); // push onto operand stack
 Value pop(); // pop top of operand stack
-void runtimeError(const char *format, ...);
+void diePrintBacktrace(const char *format, ...);
 
 void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given strings to this buffer, if given
 void unsetPrintBuf(void);
@@ -115,8 +114,10 @@ int VMNumCallFrames(void);
 void printVMStack(FILE *f);
 void setBacktrace(Value err);
 
+void throwErrorFmt(ObjClass *klass, const char *format, ...);
+#define throwArgErrorFmt(format, ...) throwErrorFmt(lxArgErrClass, format, __VA_ARGS__)
 void throwError(Value err);
-void throwArgErrorFmt(const char *format, ...);
+
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
 
 #endif

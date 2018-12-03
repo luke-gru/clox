@@ -357,7 +357,7 @@ static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     return i+3;
 }
 
-// TODO: make it like printCallInstruction
+// TODO: make it like printCallInstruction (show callInfo)
 static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     char *cbuf = calloc(strlen(op)+1+10, 1);
     ASSERT_MEM(cbuf);
@@ -368,15 +368,17 @@ static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+3;
 }
 
+// OTDO: show callInfo
 static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t methodNameArg = chunk->code[i + 1];
     Value methodName = getConstant(chunk, methodNameArg);
     char *methodNameStr = AS_CSTRING(methodName);
     uint8_t numArgs = chunk->code[i+2];
     fprintf(f, "%-16s    ('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
-    return i+3;
+    return i+4;
 }
 
+// TODO: show callInfo
 static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t methodNameArg = chunk->code[i + 1];
     Value methodName = getConstant(chunk, methodNameArg);
@@ -387,7 +389,7 @@ static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     sprintf(cbuf, "%s\t('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
     free(cbuf);
-    return i+3;
+    return i+4;
 }
 
 static int printCheckKeywordInstruction(FILE *f, char *op, Chunk *chunk, int i) {

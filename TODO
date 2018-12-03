@@ -8,34 +8,30 @@ More language features to be close to my version of jlox
 * simple JIT, maybe? []
 * different GC strategies, maybe support copying GC []
 
-* get rid of calls to runtimeError(), or get it to actually throw an error
-instance []
+* get rid of calls to diePrintBacktrace(), or get it to actually throw an error
+instance [IN PROGRESS]
 * Add benchmark library/internals so I can benchmark/profile performance of the
 interpreter []
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in $ruby. []
-* Allow operator overloading with opAdd, etc. []
 
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results []
 
 * Add eval() [IN PROGRESS, NEEDS WORK]
-* Add string interpolation [DONE], needs better error handling still, and
-maybe recursive interpolations? This should work in theory with the way it's
-implemented, but it probably needs a few changes.
-* Add `in` block [DONE]
-* Add `foreach el in item` syntax with iter() support
-* Add system() for running OS commands
+* Add `foreach el in item` syntax with iter() support []
+* Add system() for running OS commands []
+* Add fork() []
+* Add threads with libpthread []
 * Make error reporting and throwing/catching errors work across
 execution contexts (like eval) []
-* Add default arguments [DONE]
-* Add keyword arguments [IN PROGRESS]
-* Add splat arguments/parameters [DONE]
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
 * Add Object#dup, and Class#ancestors []
-* Make strings instances, make them mutable, and static strings like in jlox []
 
 BUGS:
 * super() bug in examples/super.lox
 * Fix nil.toString() bugs
+* Throw proper errors when can't find instance/static methods in VM
+* throwing an error in eval() means it can't be caught outside the context
+* Catch blocks mess up stack

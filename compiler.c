@@ -419,6 +419,10 @@ static Value foldConstant(Iseq *seq, Insn *cur, Insn *bin, Insn *ain) {
         case OP_MULTIPLY:
             return NUMBER_VAL(aNum * bNum);
         case OP_DIVIDE:
+            if (bNum == 0.00) {
+                fprintf(stderr, "[Warning]: Divide by 0 found on line %d during constant folding\n", bin->lineno);
+                return UNDEF_VAL;
+            }
             return NUMBER_VAL(aNum / bNum);
         default:
             UNREACHABLE("bug");
@@ -546,7 +550,7 @@ static bool isPop(Insn *insns) {
 
 static void optimizeIseq(Iseq *iseq) {
     COMP_TRACE("OptimizeIseq");
-    Insn *cur = iseq->insns;
+    Insn *cur = iseq->insns; // first insn
     Insn *prev = NULL;
     Insn *prevp = NULL;
     int idx = 0;
@@ -560,6 +564,11 @@ static void optimizeIseq(Iseq *iseq) {
                 if (isNumConstOp(prev) && isNumConstOp(prevp)) {
                     COMP_TRACE("constant folding candidate found");
                     Value newVal = foldConstant(iseq, cur, prev, prevp);
+                    if (IS_UNDEF(newVal)) { // such as divide by 0
+                        cur = cur->next;
+                        idx++;
+                        continue;
+                    }
                     changeConstant(iseq, prevp->operands[0], newVal);
                     iseqRmInsn(iseq, cur);
                     iseqRmInsn(iseq, prev);
@@ -1455,10 +1464,28 @@ static void emitNode(Node *n) {
             uint8_t methodNameArg = identifierConstant(&lhs->tok);
             vec_foreach(n->children, arg, i) {
                 if (i == 0) continue;
+                if (arg->type.kind == KWARG_IN_CALL_STMT) {
+                    argc--;
+                    numKwargs++;
+                }
                 emitNode(arg);
             }
-            // TODO: use callInfoData like for OP_CALL
-            emitOp2(OP_INVOKE, methodNameArg, (uint8_t)nArgs);
+            CallInfo *callInfoData = calloc(sizeof(CallInfo), 1);
+            ASSERT_MEM(callInfoData);
+            callInfoData->nameTok = n->tok;
+            callInfoData->argc = argc;
+            callInfoData->numKwargs = numKwargs;
+            i = 0; int idx = 0;
+            vec_foreach(n->children, arg, i) {
+                if (arg->type.kind == KWARG_IN_CALL_STMT) {
+                    callInfoData->kwargNames[idx] = arg->tok;
+                    idx++;
+                }
+            }
+            ObjInternal *callInfoObj = newInternalObject(callInfoData, NULL, NULL);
+            hideFromGC((Obj*)callInfoObj);
+            uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
+            emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
         } else {
             emitNode(lhs); // the function itself
             i = 0;
@@ -1519,7 +1546,7 @@ static void emitNode(Node *n) {
                     itarget, OBJ_VAL(className)
                 );
                 pushScope(COMPILE_SCOPE_BLOCK);
-                // given variable expression to bind to (Ex: (catch Error `err`))
+                // given variable expression to bind to (Ex: (catch Error err))
                 if (catchStmt->children->length > 2) {
                     uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblIdx), CONST_T_NUMLIT);
                     emitOp1(OP_GET_THROWN, getThrownArg);
@@ -1529,6 +1556,9 @@ static void emitNode(Node *n) {
                 }
                 emitNode(vec_last(catchStmt->children)); // catch block
                 ASSERT(iseq == currentIseq());
+                if (catchStmt->children->length > 2) {
+                    emitOp0(OP_POP); // pop the bound error variable
+                }
                 Insn *jumpStart = emitJump(OP_JUMP); // jump to end of try statement
                 vec_push(&vjumps, jumpStart);
                 popScope(COMPILE_SCOPE_BLOCK);

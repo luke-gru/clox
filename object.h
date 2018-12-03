@@ -30,7 +30,6 @@ typedef struct Obj {
   bool isLinked; // is this object linked into vm.objects?
   bool isDark; // is this object marked?
   bool noGC; // don't collect this object
-  bool isInterned; // right now only strings are interned, into vm.strings list
 
   // Other fields
   bool isFrozen;
@@ -146,6 +145,8 @@ extern ObjClass *lxAryClass;
 extern ObjClass *lxMapClass;
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
+extern ObjClass *lxTypeErrClass;
+extern ObjClass *lxNameErrClass;
 extern ObjClass *lxFileClass;
 
 extern Value lxLoadPath;
@@ -171,12 +172,11 @@ typedef struct ObjBoundMethod {
 #define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
 #define IS_MODULE(value)        (isObjType(value, OBJ_T_MODULE))
 #define IS_INSTANCE(value)      (isObjType(value, OBJ_T_INSTANCE))
+#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_CLASS(value) || IS_MODULE(value))
 #define IS_UPVALUE(value)       (isObjType(value, OBJ_T_UPVALUE))
 #define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
 #define IS_INTERNAL(value)      (isObjType(value, OBJ_T_INTERNAL))
 
-#define IS_OBJ_STRING_FUNC (is_obj_string_p)
-#define IS_STRING_FUNC (is_value_string_p)
 #define IS_OBJ_FUNCTION_FUNC (is_obj_function_p)
 #define IS_FUNCTION_FUNC (is_value_function_p)
 #define IS_OBJ_CLOSURE_FUNC (is_obj_closure_p)
@@ -213,9 +213,9 @@ typedef struct ObjBoundMethod {
 #define IS_SUBCLASS(subklass,superklass) (isSubclass(subklass,superklass))
 
 #define AS_STRING(value)        ((ObjString*)AS_OBJ(value))
+#define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
 #define INSTANCE_AS_CSTRING(value) (STRING_GETHIDDEN(value)->chars)
 #define VAL_TO_STRING(value)    (IS_T_STRING(value) ? STRING_GETHIDDEN(value) : AS_STRING(value))
-#define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
 #define AS_FUNCTION(value)      ((ObjFunction*)AS_OBJ(value))
 #define AS_CLOSURE(value)       ((ObjClosure*)AS_OBJ(value))
 #define AS_NATIVE_FUNCTION(value) ((ObjNative*)AS_OBJ(value))
@@ -252,8 +252,8 @@ void clearObjString(ObjString *str);
 Value dupStringInstance(Value instance);
 Value newStringInstance(ObjString *buf);
 
-
 void objFreeze(Obj*);
+bool isFrozen(Obj*);
 
 // NOTE: don't call pushCString on a string value that's a key to a map! The
 // hash value changes and the map won't be able to index it anymore.
@@ -312,8 +312,6 @@ static inline bool isObjType(Value value, ObjType type) {
 }
 
 typedef bool (*obj_type_p)(Obj*);
-bool is_obj_string_p(Obj*);
-bool is_value_string_p(Value);
 bool is_obj_function_p(Obj*);
 bool is_value_function_p(Value);
 bool is_obj_closure_p(Obj*);

@@ -13,6 +13,7 @@
     (type*)allocateObject(sizeof(type), objectType)
 
 extern VM vm;
+extern bool inCCall;
 
 static Obj *allocateObject(size_t size, ObjType type) {
     ASSERT(vm.inited);
@@ -21,7 +22,6 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->type = type;
     object->isDark = true;
     object->isFrozen = false;
-    object->isInterned = false;
 
     // prepend new object to linked list
     object->next = vm.objects;
@@ -59,6 +59,11 @@ static ObjString *allocateString(char *chars, int length, uint32_t hash) {
 void objFreeze(Obj *obj) {
     ASSERT(obj);
     obj->isFrozen = true;
+}
+
+bool isFrozen(Obj *obj) {
+    ASSERT(obj);
+    return obj->isFrozen;
 }
 
 uint32_t hashString(char *key, int length) {
@@ -114,7 +119,6 @@ ObjString *internedString(char *chars, int length) {
     if (!interned) {
         interned = copyString(chars, length);
         tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL);
-        ((Obj*)interned)->isInterned = true;
         objFreeze((Obj*)interned);
     }
     return interned;
@@ -233,11 +237,11 @@ ObjClosure *newClosure(ObjFunction *func) {
 }
 
 ObjUpvalue *newUpvalue(Value *slot) {
-  ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_T_UPVALUE);
-  upvalue->closed = NIL_VAL;
-  upvalue->value = slot;
-  upvalue->next = NULL; // it's the caller's responsibility to link it
-  return upvalue;
+    ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_T_UPVALUE);
+    upvalue->closed = NIL_VAL;
+    upvalue->value = slot;
+    upvalue->next = NULL; // it's the caller's responsibility to link it
+    return upvalue;
 }
 
 ObjClass *newClass(ObjString *name, ObjClass *superclass) {
@@ -516,6 +520,7 @@ bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
 
 Value newError(ObjClass *errClass, Value msg) {
     ASSERT(IS_SUBCLASS(errClass, lxErrClass));
+    push(OBJ_VAL(errClass));
     push(msg); // argument
     callCallable(OBJ_VAL(errClass), 1, false, NULL);
     Value err = pop();
@@ -566,12 +571,6 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     return meta;
 }
 
-bool is_obj_string_p(Obj *obj) {
-    return obj->type == OBJ_T_STRING;
-}
-bool is_value_string_p(Value val) {
-    return IS_STRING(val);
-}
 bool is_obj_function_p(Obj *obj) {
     return obj->type == OBJ_T_FUNCTION;
 }

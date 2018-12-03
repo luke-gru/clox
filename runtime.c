@@ -35,7 +35,8 @@ static void check_arg_is_instance_of(Value arg, ObjClass *klass, int argnum) {
     if (!is_value_instance_of_p(arg, klass)) {
         const char *typeActual;
         if (IS_INSTANCE(arg)) {
-            typeActual = AS_INSTANCE(arg)->klass->name->chars;
+            ObjString *className = AS_INSTANCE(arg)->klass->name;
+            typeActual = className ? className->chars : "(anon)";
         } else {
             typeActual = typeOfVal(arg);
         }
@@ -47,7 +48,8 @@ static void check_arg_is_a(Value arg, ObjClass *klass, int argnum) {
     if (!is_value_a_p(arg, klass)) {
         const char *typeActual;
         if (IS_INSTANCE(arg)) {
-            typeActual = AS_INSTANCE(arg)->klass->name->chars;
+            ObjString *className = AS_INSTANCE(arg)->klass->name;
+            typeActual = className ? className->chars : "(anon)";
         } else {
             typeActual = typeOfVal(arg);
         }
@@ -151,14 +153,14 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
 Value lxRequireScript(int argCount, Value *args) {
     CHECK_ARGS("requireScript", 1, 1, argCount);
     Value fname = *args;
-    CHECK_ARG_BUILTIN_TYPE(fname, IS_STRING_FUNC, "string", 1);
+    CHECK_ARG_IS_A(fname, lxStringClass, 1);
     return loadScriptHelper(fname, "requireScript", true);
 }
 
 Value lxLoadScript(int argCount, Value *args) {
     CHECK_ARGS("loadScript", 1, 1, argCount);
     Value fname = *args;
-    CHECK_ARG_BUILTIN_TYPE(fname, IS_STRING_FUNC, "string", 1);
+    CHECK_ARG_IS_A(fname, lxStringClass, 1);
     return loadScriptHelper(fname, "loadScript", false);
 }
 
@@ -195,6 +197,7 @@ Value lxObjectGetClass(int argCount, Value *args) {
     }
 }
 
+// ex: print o.objectId
 Value lxObjectGetObjectId(int argCount, Value *args) {
     Value self = *args;
     size_t objId = AS_OBJ(self)->objectId;
@@ -260,6 +263,8 @@ Value lxClassInclude(int argCount, Value *args) {
     return modVal;
 }
 
+// Returns a copy of the class's name as a String
+// ex: print Object.name
 Value lxClassGetName(int argCount, Value *args) {
     CHECK_ARGS("Class#name", 1, 1, argCount);
     Value self = args[0];
@@ -283,6 +288,8 @@ Value lxClassGetSuperclass(int argCount, Value *args) {
     }
 }
 
+// ex: var s = "string";
+// ex: var s2 = String("string");
 Value lxStringInit(int argCount, Value *args) {
     CHECK_ARGS("String#init", 1, 2, argCount);
     Value self = *args;
@@ -315,15 +322,19 @@ Value lxStringOpAdd(int argCount, Value *args) {
     Value rhs = args[1];
     Value ret = dupStringInstance(self);
     ObjString *lhsBuf = STRING_GETHIDDEN(ret);
-    ASSERT(IS_T_STRING(rhs)); // TODO: throw error
+    ASSERT(IS_T_STRING(rhs)); // TODO: throw error or coerce into String
     ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
     pushString(lhsBuf, rhsBuf);
     return ret;
 }
 
 Value lxStringPush(int argCount, Value *args) {
-    // FIXME: check if frozen
+    Value self = *args;
+    ObjInstance *selfObj = AS_INSTANCE(self);
     CHECK_ARGS("String#push", 2, 2, argCount);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot mutate");
+    }
     Value rhs = args[1];
     CHECK_ARG_IS_A(rhs, lxStringClass, 1);
     ObjString *lhsBuf = STRING_GETHIDDEN(*args);
@@ -352,9 +363,12 @@ Value lxArrayInit(int argCount, Value *args) {
 
 // ex: a.push(1);
 Value lxArrayPush(int argCount, Value *args) {
-    // FIXME: check if frozen
     CHECK_ARGS("Array#push", 2, 2, argCount);
     Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
     arrayPush(self, args[1]);
     return self;
 }
@@ -419,6 +433,9 @@ Value lxArrayIndexSet(int argCount, Value *args) {
     Value num = args[1];
     Value rval = args[2];
     CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
     Value internalObjVal;
     ASSERT(tableGet(&selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
@@ -549,6 +566,10 @@ Value lxMapIndexSet(int argCount, Value *args) {
     CHECK_ARGS("Map#indexSet", 3, 3, argCount);
     Value self = args[0];
     ASSERT(IS_A_MAP(self));
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot mutate");
+    }
     Table *map = MAP_GETHIDDEN(self);
     Value key = args[1];
     Value val = args[2];

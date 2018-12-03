@@ -15,6 +15,19 @@ fun greet(name, greeting: "Why hello") {
 greet("Luke");
 greet("Luke", greeting: "Yo");
 
+class Greeter {
+  init(name) {
+    this.name = name;
+  }
+  greet(greeting: "Hi") {
+    print "${greeting}, ${this.name}";
+  }
+}
+
+var g = Greeter("Gracy");
+g.greet(greeting: "HI BABY");
+g.greet();
+
 __END__
 -- expect: --
 wow
@@ -25,3 +38,5 @@ wow
 nil
 Why hello, Luke
 Yo, Luke
+HI BABY, Gracy
+Hi, Gracy

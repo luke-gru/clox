@@ -12,7 +12,7 @@
 
 static void usage(int exitstatus) {
     fprintf(stdout, "Usage:\n"
-        "clox -f FILE [-DDEBUG_PARSER] [-DTRACE_PARSER_CALLS] [-DTRACE_VM_EXECUTION]\n"
+        "clox [-f FILE] [OPTIONS]\n"
     );
     exit(exitstatus);
 }

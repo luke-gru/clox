@@ -1,0 +1,12 @@
+var S = "STR";
+try {
+  class LOL < S { }
+} catch (TypeError e) {
+  print e.message;
+  print e._class.name; // this is printing the wrong thing
+}
+
+__END__
+-- expect: --
+Class LOL tried to inherit from non-class
+TypeError

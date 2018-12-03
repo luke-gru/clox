@@ -219,10 +219,6 @@ void freeObject(Obj *obj, bool unlink) {
     if (obj->type == OBJ_T_NONE) {
         return; // already freed
     }
-    if (vm.keepInternedObjects && obj->isInterned) {
-        GC_TRACE_DEBUG("Skipping GC of interned string: (p=%p, pc=%p, s='%s'", obj, ((ObjString*)obj)->chars, ((ObjString*)obj)->chars);
-        return;
-    }
 
     ASSERT(!obj->noGC);
     TRACE_GC_FUNC_START("freeObject");

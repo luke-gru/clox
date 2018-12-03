@@ -197,12 +197,6 @@ int iseqAddCatchRow(
 }
 
 int iseqAddConstant(Iseq *seq, Value value) {
-    if (IS_OBJ(value)) {
-        hideFromGC(AS_OBJ(value));
-    }
     writeValueArray(&seq->constants, value);
-    if (IS_OBJ(value)) {
-        unhideFromGC(AS_OBJ(value));
-    }
     return seq->constants.count - 1;
 }
