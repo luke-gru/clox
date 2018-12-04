@@ -20,7 +20,7 @@ bytecode, and benchmark the lookup results []
 
 * Add `foreach el in item` syntax with iter() support []
 * Add system() for running OS commands []
-* Add fork() and waitpid() []
+* Add fork() and waitpid() [DONE]
 * Add threads with libpthread []
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
@@ -35,3 +35,7 @@ BUGS:
 * Throw proper errors when can't find instance/static methods in VM
 * Catch blocks mess up operand stack
 * Allow throwing strings?
+* Make throwing exceptions based on a tag stack, like Ruby. This allows
+catching errors from the VM or code code and choosing to handle or propagate
+them in C code (a C API).
+* examples/3.clox messed up

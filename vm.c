@@ -442,11 +442,17 @@ void freeVM() {
 
 
 int VMNumStackFrames() {
-    return EC->stackTop - EC->stack;
+    VMExecContext *firstEC = vec_first(&vm.v_ecs);
+    return EC->stackTop - firstEC->stack;
 }
 
 int VMNumCallFrames() {
-    return (int)EC->frameCount;
+    int ret = 0;
+    VMExecContext *ec; int i = 0;
+    vec_foreach(&vm.v_ecs, ec, i) {
+        ret += ec->frameCount;
+    }
+    return ret;
 }
 
 bool VMLoadedScript(char *fname) {
@@ -1316,27 +1322,31 @@ void throwErrorFmt(ObjClass *klass, const char *format, ...) {
 
 // FIXME: only prints VM operand stack for current execution context (EC)
 void printVMStack(FILE *f) {
-    if (EC->stackTop == EC->stack) {
+    if (EC->stackTop == EC->stack && vm.v_ecs.length == 1) {
         fprintf(f, "[DEBUG]: Stack: empty\n");
         return;
     }
-    int ECNumCallFrames = VMNumCallFrames();
-    fprintf(f, "[DEBUG]: Stack (%d stack frames, %d call frames):\n", VMNumStackFrames(), ECNumCallFrames);
+    VMExecContext *ec = NULL; int i = 0;
+    int numCallFrames = VMNumCallFrames();
+    int numStackFrames = VMNumStackFrames();
+    fprintf(f, "[DEBUG]: Stack (%d stack frames, %d call frames):\n", numStackFrames, numCallFrames);
     // print VM stack values from bottom of stack to top
     fprintf(f, "[DEBUG]: ");
     int callFrameIdx = 0;
-    for (Value *slot = EC->stack; slot < EC->stackTop; slot++) {
-        if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE)) {
-            fprintf(stderr, "[DEBUG]: Broken object pointer: %p\n", AS_OBJ(*slot));
-            ASSERT(0);
+    vec_foreach(&vm.v_ecs, ec, i) {
+        for (Value *slot = ec->stack; slot < ec->stackTop; slot++) {
+            if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE)) {
+                fprintf(stderr, "[DEBUG]: Broken object pointer: %p\n", AS_OBJ(*slot));
+                ASSERT(0);
+            }
+            if (ec->frames[callFrameIdx].slots == slot) {
+                fprintf(f, "(CF %d)", callFrameIdx+1);
+                callFrameIdx++;
+            }
+            fprintf(f, "[ ");
+            printValue(f, *slot, false);
+            fprintf(f, " ]");
         }
-        if (EC->frames[callFrameIdx].slots == slot) {
-            fprintf(f, "(CF %d)", callFrameIdx+1);
-            callFrameIdx++;
-        }
-        fprintf(f, "[ ");
-        printValue(f, *slot, false);
-        fprintf(f, " ]");
     }
     fprintf(f, "\n");
 }
