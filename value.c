@@ -310,6 +310,11 @@ bool valEqual(Value a, Value b) {
     }
 }
 
+bool isCallable(Value val) {
+    return IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
+        IS_BOUND_METHOD(val) || IS_CLOSURE(val);
+}
+
 bool is_bool_p(Value val) {
     return IS_BOOL(val);
 }

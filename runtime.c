@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <errno.h>
 #include <string.h>
 #include "runtime.h"
@@ -89,6 +91,62 @@ Value lxEval(int argCount, Value *args) {
         return NIL_VAL;
     }
     return VMEval(csrc, "(eval)", 1);
+}
+
+Value lxFork(int argCount, Value *args) {
+    CHECK_ARGS("fork", 0, 1, argCount);
+    Value func;
+    if (argCount == 1) {
+        func = *args;
+        if (!isCallable(func)) {
+            throwArgErrorFmt("Expected argument 1 to be callable, is: %s", typeOfVal(func));
+        }
+    }
+    pid_t pid = fork();
+    if (pid < 0) { // error, should throw?
+        return NUMBER_VAL(-1);
+    }
+    if (pid) { // in parent
+        return NUMBER_VAL(pid);
+    } else { // in child
+        if (argCount == 1) {
+            callCallable(func, 0, false, NULL);
+            stopVM(0);
+        }
+        return NIL_VAL;
+    }
+}
+
+Value lxWaitpid(int argCount, Value *args) {
+    CHECK_ARGS("waitpid", 1, 1, argCount);
+    Value pidVal = *args;
+    pid_t childpid = (pid_t)AS_NUMBER(pidVal);
+    int wstatus;
+    // TODO: allow wait flags
+    pid_t wret = waitpid(childpid, &wstatus, 0);
+    if (wret == -1) { // error, should throw?
+        return NUMBER_VAL(-1);
+    }
+    return pidVal;
+}
+
+Value lxSleep(int argCount, Value *args) {
+    CHECK_ARGS("sleep", 1, 1, argCount);
+    Value nsecs = *args;
+    CHECK_ARG_BUILTIN_TYPE(nsecs, IS_NUMBER_FUNC, "number", 1);
+    int secs = (int)AS_NUMBER(nsecs);
+    if (secs > 0) {
+        sleep(secs); // NOTE: could be interrupted by signal handler
+    }
+    return NIL_VAL;
+}
+
+Value lxExit(int argCount, Value *args) {
+    CHECK_ARGS("exit", 1, 1, argCount);
+    Value status = *args;
+    CHECK_ARG_BUILTIN_TYPE(status, IS_NUMBER_FUNC, "number", 1);
+    stopVM((int)AS_NUMBER(status));
+    return NIL_VAL; // not reached
 }
 
 static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoaded) {

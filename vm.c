@@ -21,6 +21,8 @@ VM vm;
 
 #define EC (vm.ec)
 
+static int vmRunLvl = 0;
+
 static void vm_debug(const char *format, ...) {
     if (!CLOX_OPTION_T(debugVM)) return;
     va_list ap;
@@ -88,6 +90,22 @@ static void defineNativeFunctions() {
     ObjString *evalName = internedString("eval", 4);
     ObjNative *evalFn = newNative(evalName, lxEval);
     tableSet(&vm.globals, OBJ_VAL(evalName), OBJ_VAL(evalFn));
+
+    ObjString *forkName = internedString("fork", 4);
+    ObjNative *forkFn = newNative(forkName, lxFork);
+    tableSet(&vm.globals, OBJ_VAL(forkName), OBJ_VAL(forkFn));
+
+    ObjString *waitpidName = internedString("waitpid", 7);
+    ObjNative *waitpidFn = newNative(waitpidName, lxWaitpid);
+    tableSet(&vm.globals, OBJ_VAL(waitpidName), OBJ_VAL(waitpidFn));
+
+    ObjString *sleepName = internedString("sleep", 5);
+    ObjNative *sleepFn = newNative(sleepName, lxSleep);
+    tableSet(&vm.globals, OBJ_VAL(sleepName), OBJ_VAL(sleepFn));
+
+    ObjString *exitName = internedString("exit", 4);
+    ObjNative *exitFn = newNative(exitName, lxExit);
+    tableSet(&vm.globals, OBJ_VAL(exitName), OBJ_VAL(exitFn));
 }
 
 // Builtin classes:
@@ -291,6 +309,9 @@ static bool returnedFromNativeErr = false;
 static bool runUntilReturn = false;
 static int lastSplatNumArgs = -1;
 
+static jmp_buf rootVMLoopJumpBuf;
+static bool rootVMLoopJumpBufSet = false;
+
 static int curLine = 1;
 
 // Add and use a new execution context
@@ -338,6 +359,7 @@ void initVM() {
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
     vm.openUpvalues = NULL;
+    vm.printBuf = NULL;
     vec_init(&vm.loadedScripts);
 
     vm.lastValue = NULL;
@@ -345,6 +367,7 @@ void initVM() {
     initTable(&vm.globals);
     initTable(&vm.strings); // interned strings
     vm.inited = true; // NOTE: VM has to be inited before creation of strings
+    vm.exited = false;
     vm.initString = internedString("init", 4);
     vm.fileString = internedString("__FILE__", 8);
     vm.dirString = internedString("__DIR__", 7);
@@ -364,6 +387,9 @@ void initVM() {
     curLine = 1;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
+    memset(&rootVMLoopJumpBuf, 0, sizeof(rootVMLoopJumpBuf));
+    rootVMLoopJumpBufSet = false;
+
     defineGlobalVariables();
     resetStack();
     turnGCOn();
@@ -371,6 +397,7 @@ void initVM() {
 }
 
 void freeVM() {
+    /*fprintf(stderr, "VM run level: %d\n", vmRunLvl);*/
     if (!vm.inited) {
         VM_WARN("freeVM: VM not yet initialized");
         return;
@@ -399,6 +426,9 @@ void freeVM() {
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
     curLine = 1;
 
+    memset(&rootVMLoopJumpBuf, 0, sizeof(rootVMLoopJumpBuf));
+    rootVMLoopJumpBufSet = false;
+
     vec_deinit(&vm.stackObjects);
     freeObjects();
     vm.objects = NULL;
@@ -406,6 +436,7 @@ void freeVM() {
     vec_clear(&vm.v_ecs);
     vm.ec = NULL;
     vm.inited = false;
+    vm.exited = false;
     VM_DEBUG("freeVM() end");
 }
 
@@ -642,11 +673,6 @@ void setBacktrace(Value err) {
     }
 }
 
-static inline bool isCallable(Value val) {
-    return IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
-        IS_BOUND_METHOD(val) || IS_CLOSURE(val);
-}
-
 static inline bool isThrowable(Value val) {
     return IS_INSTANCE(val) && !IS_A_STRING(val);
 }
@@ -702,7 +728,7 @@ static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName,
     return false;
 }
 
-static InterpretResult run(bool);
+static InterpretResult vm_run(bool);
 
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
@@ -818,12 +844,6 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     }
     VM_DEBUG("call begin");
     callCallable(callable, argCount, true, NULL); // pushes return value to stack
-    if (IS_CLOSURE(callable)) {
-        bool oldRunUntilReturn = runUntilReturn;
-        runUntilReturn = true;
-        run(false); // actually run the function
-        runUntilReturn = oldRunUntilReturn;
-    }
     VM_DEBUG("call end");
     if (vm.hadError) {
         return NIL_VAL;
@@ -1147,6 +1167,10 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1) -
         (func->numKwargs > 0 ? numKwargsNotGiven+1 : 0);
     // NOTE: the frame is popped on OP_RETURN
+    bool oldRunUntilReturn = runUntilReturn;
+    runUntilReturn = true;
+    vm_run(false); // actually run the function until return
+    runUntilReturn = oldRunUntilReturn;
     return true;
 }
 
@@ -1389,7 +1413,15 @@ static ObjString *methodNameForBinop(OpCode code) {
 /**
  * Run the VM's instructions.
  */
-static InterpretResult run(bool doResetStack) {
+static InterpretResult vm_run(bool doResetStack) {
+    if (!rootVMLoopJumpBufSet) {
+        int jumpRes = setjmp(rootVMLoopJumpBuf);
+        rootVMLoopJumpBufSet = true;
+        if (jumpRes == 0) { // jump is set
+        } else { // longjmp here from OP_LEAVE
+            return INTERPRET_OK;
+        }
+    }
     if (CLOX_OPTION_T(parseOnly) || CLOX_OPTION_T(compileOnly)) {
         return INTERPRET_OK;
     }
@@ -1429,9 +1461,16 @@ static InterpretResult run(bool doResetStack) {
       }\
     } while (0)
 
+  vmRunLvl++;
+  /*fprintf(stderr, "VM run level: %d\n", vmRunLvl);*/
   for (;;) {
       if (vm.hadError) {
+          vmRunLvl--;
           return INTERPRET_RUNTIME_ERROR;
+      }
+      if (vm.exited) {
+          vmRunLvl--;
+          return INTERPRET_OK;
       }
       if (EC->stackTop < EC->stack) {
           ASSERT(0);
@@ -1560,6 +1599,7 @@ static InterpretResult run(bool doResetStack) {
         }
         if (vm.printBuf) {
             ObjString *out = valueToString(val, hiddenString);
+            ASSERT(out);
             pushCString(vm.printBuf, out->chars, strlen(out->chars));
             pushCString(vm.printBuf, "\n", 1);
             unhideFromGC((Obj*)out);
@@ -1755,6 +1795,7 @@ static InterpretResult run(bool doResetStack) {
           }
           callCallable(callableVal, numArgs, false, callInfo);
           if (vm.hadError) {
+              vmRunLvl--;
               return INTERPRET_RUNTIME_ERROR;
           }
           ASSERT_VALID_STACK();
@@ -1812,6 +1853,7 @@ static InterpretResult run(bool doResetStack) {
           }
           // TODO: static module methods
           if (vm.hadError) {
+              vmRunLvl--;
               return INTERPRET_RUNTIME_ERROR;
           }
           ASSERT_VALID_STACK();
@@ -1848,6 +1890,7 @@ static InterpretResult run(bool doResetStack) {
               AS_STRING(methodName), &method, false);
           if (!found) {
               diePrintBacktrace("Could not find method"); // FIXME
+              vmRunLvl--;
               return INTERPRET_RUNTIME_ERROR;
           }
           ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method));
@@ -1864,7 +1907,10 @@ static InterpretResult run(bool doResetStack) {
           EC->stackTop = newTop;
           push(result);
           if (runUntilReturn) {
+              vmRunLvl--;
               return INTERPRET_OK;
+          } else {
+              ASSERT(0);
           }
           break;
       }
@@ -2043,15 +2089,23 @@ static InterpretResult run(bool doResetStack) {
           break;
       }
       // exit interpreter
-      case OP_LEAVE:
+      case OP_LEAVE: {
+          vm.exited = true;
           if (doResetStack) resetStack();
+          vmRunLvl--;
+          if (vmRunLvl > 0) {
+              longjmp(rootVMLoopJumpBuf, 1);
+          }
           return INTERPRET_OK;
+      }
       default:
           diePrintBacktrace("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
+          vmRunLvl--;
           return INTERPRET_RUNTIME_ERROR;
     }
   }
 
+  vmRunLvl--;
   return INTERPRET_RUNTIME_ERROR;
 #undef READ_BYTE
 #undef READ_CONSTANT
@@ -2091,7 +2145,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     frame->nativeFunc = NULL;
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = run(true);
+    InterpretResult result = vm_run(true);
     return result;
 }
 
@@ -2115,7 +2169,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
 
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = run(false);
+    InterpretResult result = vm_run(false);
     // `EC != ectx` if an error occured in the script, and propagated out
     // due to being caught in a calling script or never being caught.
     if (EC == ectx) pop_EC();
@@ -2158,7 +2212,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
 
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = run(false);
+    InterpretResult result = vm_run(false);
     if (result != INTERPRET_OK) {
         vm.hadError = true;
     }
@@ -2180,4 +2234,9 @@ void unsetPrintBuf(void) {
     DBG_ASSERT(vm.inited);
     vm.printBuf = NULL;
     vm.printToStdout = true;
+}
+
+NORETURN void stopVM(int status) {
+    freeVM();
+    exit(status);
 }

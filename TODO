@@ -18,23 +18,20 @@ the syntax is different for them, like in $ruby. []
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results []
 
-* Add eval() [IN PROGRESS, NEEDS WORK]
 * Add `foreach el in item` syntax with iter() support []
 * Add system() for running OS commands []
-* Add fork() []
+* Add fork() and waitpid() []
 * Add threads with libpthread []
-* Make error reporting and throwing/catching errors work across
-execution contexts (like eval) []
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
-* Add Object#dup, and Class#ancestors []
-* Add GC stress option []
+* Add Class#ancestors []
 * Add GC.stats []
 * add multiple var declaration, setters for array returns
+* Make nil, true, false instances?
 
 BUGS:
 * super() bug in examples/super.lox
 * Fix nil.toString() bugs
 * Throw proper errors when can't find instance/static methods in VM
-* Catch blocks mess up stack
+* Catch blocks mess up operand stack
 * Allow throwing strings?

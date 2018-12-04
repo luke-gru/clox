@@ -79,6 +79,7 @@ typedef struct VM {
 
     bool inited;
     bool hadError;
+    bool exited;
 } VM; // singleton
 
 extern VM vm;
@@ -119,5 +120,7 @@ void throwErrorFmt(ObjClass *klass, const char *format, ...);
 void throwError(Value err);
 
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
+
+NORETURN void stopVM(int status);
 
 #endif

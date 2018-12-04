@@ -268,11 +268,11 @@ cleanup:
 }
 
 static int test_throw_catch1(void) {
-    char *src = "class MyError { }\n"
+    char *src = "class MyError < Error { }\n"
                 "try {\n"
-                "print \"throwing\";\n"
-                "throw MyError();\n"
-                "print \"shouldn't get here!!\";\n"
+                "  print \"throwing\";\n"
+                "  throw MyError();\n"
+                "  print \"shouldn't get here!!\";\n"
                 "} catch (MyError e) {\n"
                 "  print e;\n"
                 "  e;\n"
@@ -286,8 +286,8 @@ cleanup:
 }
 
 static int test_throw_catch2(void) {
-    char *src = "class MyError { }\n"
-                "class MyError2 { }\n"
+    char *src = "class MyError < Error { }\n"
+                "class MyError2 < Error { }\n"
                 "try {\n"
                 "  print \"throwing\";\n"
                 "  throw MyError();\n"
@@ -309,7 +309,7 @@ cleanup:
 }
 
 static int test_throw_catch_across_function_boundaries(void) {
-    char *src = "class MyError { }\n"
+    char *src = "class MyError < Error { }\n"
                 "fun doThrow() {\n"
                 "  throw MyError();\n"
                 "}\n"
@@ -329,7 +329,7 @@ cleanup:
 }
 
 static int test_throw_catch_across_function_boundaries2(void) {
-    char *src = "class MyError { }\n"
+    char *src = "class MyError < Error { }\n"
                 "fun doThrow() {\n"
                 "  throw MyError();\n"
                 "}\n"
@@ -348,12 +348,12 @@ cleanup:
 }
 
 static int test_throw_catch_across_function_boundaries3(void) {
-    char *src = "class MyError { }\n"
+    char *src = "class MyError < Error { }\n"
                 "fun doThrow() {\n"
                 "  throw MyError();\n"
                 "}\n"
                 "try {\n"
-                "print nil;\n"
+                "  print nil;\n"
                 "} catch (MyError e) {\n"
                 "  print e;\n"
                 "  e;\n"
@@ -599,7 +599,7 @@ cleanup:
 static int test_catch_thrown_errors_from_c_code(void) {
     char *src = "try {\n"
                 "  var m = Map(1, 2, 3, 4, 5);\n" // invalid constructor call
-                "}catch (Error e) {\n"
+                "} catch (Error e) {\n"
                 "  print \"caught\";\n"
                 "}";
     initVM();
@@ -638,6 +638,7 @@ int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     compilerOpts.noRemoveUnusedExpressions = true;
     INIT_TESTS();
+    REGISTER_T_ASSERT_ON_FAIL(freeVM);
     RUN_TEST(test_addition);
     RUN_TEST(test_subtraction);
     RUN_TEST(test_negation);

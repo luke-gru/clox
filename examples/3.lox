@@ -1,0 +1,11 @@
+class MyError < Error { }
+fun doThrow() {
+  throw MyError();
+}
+try {
+  print nil;
+} catch (MyError e) {
+  print e;
+  e;
+}
+doThrow();

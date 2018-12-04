@@ -38,6 +38,9 @@ static vec_str_t *vtests_skip;
 static jmp_buf jmploc;
 bool jmpset = false;
 
+typedef void (*t_func_on_fail_cb)(void);
+static t_func_on_fail_cb assertion_failure_cb = NULL;
+
 static inline void INIT_TESTS(void) {
     assertions_passed = 0;
     assertions_failed = 0;
@@ -59,6 +62,7 @@ static inline void END_TESTS(void) {
         fprintf(stdout, "%s  ** Failed: %s **\n", KRED, failed_testfn);
     }
     fprintf(stdout, "%s", KNRM);
+    assertion_failure_cb = NULL;
     if (tests_failed > 0) {
         exit(1);
     } else {
@@ -79,7 +83,7 @@ static inline void FAIL_ASSERT(const char *file, int line, const char *func) {
     LOG_ERR("%s", KNRM);
     assertions_failed++;
     if (jmpset) {
-        longjmp(jmploc, 1);
+        longjmp(jmploc, 1); // skip next assertions in function, jump to next test
     }
 }
 
@@ -137,6 +141,9 @@ static inline void _RUN_TEST(int (*test_fn)(void), const char *fnname) {
         }
     } else if (jmpres > 0) { // assertion failure caused jump
         vec_push(&vtests_failed, (char*)fnname);
+        if (assertion_failure_cb) {
+            assertion_failure_cb();
+        }
         tests_failed++;
     }
     jmpset = false;
@@ -198,9 +205,15 @@ static inline bool t_assert_valprinteq(char *expected, Value val) {
     return t_assert_streq(expected, valOut->chars);
 }
 
+static void t_assert_register_on_fail(t_func_on_fail_cb cb) {
+    assertion_failure_cb = cb;
+}
+
 #define T_ASSERT(expr) ((expr) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 #define T_ASSERT_EQ(expr1,expr2) ((expr1==expr2) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 #define T_ASSERT_STREQ(str1,str2) (t_assert_streq(str1, str2) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 #define T_ASSERT_VALPRINTEQ(str,value) (t_assert_valprinteq(str, value) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
+
+#define REGISTER_T_ASSERT_ON_FAIL(func) t_assert_register_on_fail(func)
 
 #endif

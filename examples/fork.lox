@@ -1,0 +1,37 @@
+var pid = fork();
+if (pid) {
+  print "in parent";
+  print "waiting for child...";
+  waitpid(pid);
+  print "child ended";
+} else {
+  print "in child, sleeping for 3 seconds";
+  sleep(3);
+  exit(0);
+}
+
+print "round 2";
+
+pid = fork(fun() {
+  print "in child, sleeping for 3 seconds";
+  sleep(3);
+});
+if (pid) {
+  print "in parent";
+  print "waiting for child...";
+  waitpid(pid);
+  print "child ended";
+} else {
+  print "BUG";
+}
+
+__END__
+in parent
+waiting for child...
+in child, sleeping for 3 seconds
+child ended
+round 2
+in parent
+waiting for child...
+in child, sleeping for 3 seconds
+child ended

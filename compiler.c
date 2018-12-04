@@ -1556,9 +1556,9 @@ static void emitNode(Node *n) {
                 }
                 emitNode(vec_last(catchStmt->children)); // catch block
                 ASSERT(iseq == currentIseq());
-                if (catchStmt->children->length > 2) {
-                    emitOp0(OP_POP); // pop the bound error variable
-                }
+                /*if (catchStmt->children->length > 2) {*/
+                    /*emitOp0(OP_POP); // pop the bound error variable*/
+                /*}*/
                 // don't emit a jump at the end of the final catch statement
                 if (i < n->children->length-1) {
                     Insn *jumpStart = emitJump(OP_JUMP); // jump to end of try statement
