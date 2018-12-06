@@ -1296,6 +1296,27 @@ static void emitNode(Node *n) {
         loopStart = oldLoopStart;
         break;
     }
+    case FOREACH_STMT: {
+        pushScope(COMPILE_SCOPE_BLOCK);
+        int numVars = n->children->length - 2;
+        ASSERT(numVars == 1); // FIXME: for now
+        Token varName = n->children->data[0]->tok;
+        uint8_t varSlot = declareVariable(&varName);
+        // iterator expression
+        emitNode(n->children->data[1]);
+
+        emitOp0(OP_ITER); // push iterator value to stack
+        int beforeIterNext = currentIseq()->byteCount+2;
+        emitOp0(OP_ITER_NEXT);
+        Insn *iterDone = emitJump(OP_JUMP_IF_FALSE_PEEK); // TODO: op_jump_if_undef?
+        emitOp1(OP_SET_LOCAL, varSlot);
+        emitNode(n->children->data[2]); // foreach block
+        emitLoop(beforeIterNext);
+        popScope(COMPILE_SCOPE_BLOCK);
+        patchJump(iterDone, -1, NULL);
+        emitOp0(OP_POP); // pop last iterator value
+        break;
+    }
     case BREAK_STMT: {
         if (loopStart == -1) {
             error("'break' can only be used in loops ('while' or 'for' loops)");

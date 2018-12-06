@@ -301,6 +301,21 @@ static void defineGlobalVariables() {
     }
 }
 
+static bool isIterable(Value val) {
+    return IS_AN_ARRAY(val); // TODO: extend definition of iterables
+}
+
+static bool isIterator(Value val) {
+    return true; //IS_AN_ITERATOR(val);
+}
+
+Value iteratorNext(Value iterator) {
+    return NIL_VAL;
+}
+
+Value createIterator(Value iterable) {
+    return NIL_VAL;
+}
 
 static jmp_buf CCallJumpBuf;
 bool inCCall;
@@ -1922,6 +1937,20 @@ static InterpretResult vm_run(bool doResetStack) {
           } else {
               ASSERT(0);
           }
+          break;
+      }
+      case OP_ITER: {
+          Value iterable = peek(0);
+          ASSERT(isIterable(iterable)); // FIXME: throw TypeError
+          Value iterator = createIterator(iterable);
+          pop();
+          push(iterator);
+          break;
+      }
+      case OP_ITER_NEXT: {
+          Value iterator = peek(0);
+          ASSERT(isIterator(iterator)); // FIXME: throw TypeError
+          push(iteratorNext(iterator));
           break;
       }
       case OP_CLASS: { // add or re-open class

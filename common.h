@@ -45,6 +45,8 @@ typedef enum {
     OP_PRINT,
 
     OP_STRING,
+    OP_ITER,
+    OP_ITER_NEXT,
 
     OP_TRUE,
     OP_FALSE,

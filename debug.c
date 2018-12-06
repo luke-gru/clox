@@ -135,6 +135,10 @@ const char *opName(OpCode code) {
         return "OP_INDEX_SET";
     case OP_CHECK_KEYWORD:
         return "OP_CHECK_KEYWORD";
+    case OP_ITER:
+        return "OP_ITER";
+    case OP_ITER_NEXT:
+        return "OP_ITER_NEXT";
     case OP_LEAVE:
         return "OP_LEAVE";
     default:
@@ -507,6 +511,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_IN:
         case OP_GET_THIS:
         case OP_SPLAT_ARRAY:
+        case OP_ITER:
+        case OP_ITER_NEXT:
             return printSimpleInstruction(f, opName(byte), i);
         default:
             fprintf(f, "Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
@@ -587,6 +593,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_IN:
         case OP_GET_THIS:
         case OP_SPLAT_ARRAY:
+        case OP_ITER:
+        case OP_ITER_NEXT:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             ASSERT(0);
