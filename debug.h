@@ -17,6 +17,7 @@ typedef vec_t(ObjFunction*) vec_funcp_t;
 
 void printDisassembledChunk(FILE *f, Chunk *chunk, const char *name);
 int  printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *funcs);
+void printBacktrace(void);
 
 ObjString *disassembleChunk(Chunk *chunk);
 

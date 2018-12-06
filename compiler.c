@@ -18,7 +18,7 @@
 #include "vm.h"
 
 #ifdef NDEBUG
-#define COMP_TRACE(...) (void(0))
+#define COMP_TRACE(...) (void)0
 #else
 #define COMP_TRACE(...) compiler_trace_debug(__VA_ARGS__)
 #endif

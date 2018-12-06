@@ -15,8 +15,8 @@ VM vm;
 #define VM_DEBUG(...) vm_debug(__VA_ARGS__)
 #define VM_WARN(...) vm_warn(__VA_ARGS__)
 #else
-#define VM_DEBUG(...) (void(0))
-#define VM_WARN(...) (void(0))
+#define VM_DEBUG(...) (void)0
+#define VM_WARN(...) (void)0
 #endif
 
 #define EC (vm.ec)

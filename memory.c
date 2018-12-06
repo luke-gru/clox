@@ -9,11 +9,11 @@
 #include "options.h"
 
 #ifdef NDEBUG
-#define GC_TRACE_MARK(obj) (void(0))
-#define GC_TRACE_FREE(obj) (void(0))
-#define GC_TRACE_DEBUG(...) (void(0))
-#define TRACE_GC_FUNC_START(func) (void(0))
-#define TRACE_GC_FUNC_END(func)   (void(0))
+#define GC_TRACE_MARK(obj) (void)0
+#define GC_TRACE_FREE(obj) (void)0
+#define GC_TRACE_DEBUG(...) (void)0
+#define TRACE_GC_FUNC_START(func) (void)0
+#define TRACE_GC_FUNC_END(func)   (void)0
 #else
 #define GC_TRACE_MARK(obj) gc_trace_mark(obj)
 #define GC_TRACE_FREE(obj) gc_trace_free(obj)
