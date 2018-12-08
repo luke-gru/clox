@@ -70,6 +70,10 @@ Value lxMapKeys(int argCount, Value *args);
 Value lxMapValues(int argCount, Value *args);
 Value lxMapToString(int argCount, Value *args);
 
+// class Iterator
+Value lxIteratorInit(int argCount, Value *args);
+Value lxIteratorNext(int argCount, Value *args);
+
 // class File
 Value lxFileReadStatic(int argCount, Value *args);
 

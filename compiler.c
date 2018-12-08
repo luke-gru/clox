@@ -1310,11 +1310,13 @@ static void emitNode(Node *n) {
         emitOp0(OP_ITER_NEXT);
         Insn *iterDone = emitJump(OP_JUMP_IF_FALSE_PEEK); // TODO: op_jump_if_undef?
         emitOp1(OP_SET_LOCAL, varSlot);
+        emitOp0(OP_POP); // pop the iterator value
         emitNode(n->children->data[2]); // foreach block
         emitLoop(beforeIterNext);
         popScope(COMPILE_SCOPE_BLOCK);
         patchJump(iterDone, -1, NULL);
         emitOp0(OP_POP); // pop last iterator value
+        emitOp0(OP_POP); // pop the iterator
         break;
     }
     case BREAK_STMT: {

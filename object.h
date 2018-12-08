@@ -8,9 +8,9 @@
 
 typedef enum ObjType {
   OBJ_T_NONE = 0,
-  OBJ_T_STRING,
+  OBJ_T_STRING, // internal string value. Strings in lox are instances
   OBJ_T_FUNCTION,
-  OBJ_T_INSTANCE,
+  OBJ_T_INSTANCE, // includes Strings, Arrays, Maps
   OBJ_T_CLASS,
   OBJ_T_MODULE,
   OBJ_T_NATIVE_FUNCTION,
@@ -143,6 +143,7 @@ extern ObjClass *lxClassClass;
 extern ObjClass *lxModuleClass;
 extern ObjClass *lxAryClass;
 extern ObjClass *lxMapClass;
+extern ObjClass *lxIteratorClass;
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
 extern ObjClass *lxTypeErrClass;

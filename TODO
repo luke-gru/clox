@@ -18,7 +18,7 @@ the syntax is different for them, like in $ruby. []
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results []
 
-* Add `foreach el in item` syntax with iter() support []
+* Add `foreach el in item` syntax with iter() support [PARTIAL], no iter() support
 * Add system() for running OS commands []
 * Add fork() and waitpid() [DONE]
 * Add threads with libpthread []
@@ -26,16 +26,16 @@ bytecode, and benchmark the lookup results []
 * Add modules like in jlox [PARTIAL]
 * Add Class#ancestors []
 * Add GC.stats []
-* add multiple var declaration, setters for array returns
-* Make nil, true, false instances?
+* add multiple var declaration, setters for array returns []
+* Make nil, true, false instances? []
 
 BUGS:
 * super() bug in examples/super.lox
-* Fix nil.toString() bugs
+* Fix nil.toString() bugs, perhaps with String() conversion
 * Throw proper errors when can't find instance/static methods in VM
 * Catch blocks mess up operand stack
 * Allow throwing strings?
 * Make throwing exceptions based on a tag stack, like Ruby. This allows
 catching errors from the VM or code code and choosing to handle or propagate
 them in C code (a C API).
-* examples/3.clox messed up
+* examples/3.clox messed up (throw/catch)

@@ -180,7 +180,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             if (toString && vm.inited) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL);
                 if (!IS_A_STRING(stringVal)) {
-                    diePrintBacktrace("TypeError, toString() returned non-string");
+                    diePrintBacktrace("TypeError, toString() returned non-string"); // FIXME
                     UNREACHABLE("error");
                 }
                 ret = VAL_TO_STRING(stringVal);

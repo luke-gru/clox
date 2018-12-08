@@ -376,14 +376,19 @@ Value lxStringInit(int argCount, Value *args) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (argCount == 2) {
         Value internalStrVal = args[1];
-        if (IS_T_STRING(internalStrVal)) {
-            *args = internalStrVal;
-            return internalStrVal;
+        if (IS_T_STRING(internalStrVal)) { // lox string given, copy the buffer
+            ObjString *orig = STRING_GETHIDDEN(internalStrVal);
+            ObjString *new = dupString(orig);
+            internalStrVal = OBJ_VAL(new);
+        }
+        if (!IS_STRING(internalStrVal)) { // string instance
+            ObjString *str = valueToString(internalStrVal, hiddenString);
+            internalStrVal = OBJ_VAL(str);
         }
         ASSERT(IS_STRING(internalStrVal));
         tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
         unhideFromGC(AS_OBJ(internalStrVal));
-    } else {
+    } else { // empty string
         Value internalStrVal = OBJ_VAL(copyString("", 0));
         tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
     }
@@ -695,6 +700,79 @@ Value lxMapValues(int argCount, Value *args) {
         arrayPush(ary, entry.value);
     }
     return ary;
+}
+
+typedef struct Iterator {
+    int index;
+    ObjInstance *instance;
+} Iterator;
+
+static void markInternalIter(Obj *internalObj) {
+    ASSERT(internalObj->type == OBJ_T_INTERNAL);
+    ObjInternal *internal = (ObjInternal*)internalObj;
+    ASSERT(internal);
+    ObjInstance *instance = ((Iterator*)internal->data)->instance;
+    ASSERT(instance);
+    blackenObject((Obj*)instance);
+}
+
+static void freeInternalIter(Obj *internalObj) {
+    ASSERT(internalObj->type == OBJ_T_INTERNAL);
+    ObjInternal *internal = (ObjInternal*)internalObj;
+    ASSERT(internal);
+    ObjInstance *instance = ((Iterator*)internal->data)->instance;
+    ASSERT(instance);
+    freeObject((Obj*)instance, true); // release the actual memory
+    free(internal->data); // free the Iterator struct
+}
+
+Value lxIteratorInit(int argCount, Value *args) {
+    CHECK_ARGS("Iterator#init", 2, 2, argCount);
+    Value self = args[0];
+    Value iterable = args[1];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    Iterator *iter = calloc(sizeof(Iterator), 1);
+    ASSERT_MEM(iter);
+    iter->index = -1;
+    iter->instance = AS_INSTANCE(iterable);
+    ObjInternal *internalIter = newInternalObject(
+        iter, markInternalIter, freeInternalIter
+    );
+    tableSet(&selfObj->hiddenFields,
+            OBJ_VAL(internedString("iter", 4)),
+            OBJ_VAL(internalIter));
+    return self;
+}
+
+Value lxIteratorNext(int argCount, Value *args) {
+    CHECK_ARGS("Iterator#next", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    Value internalIter;
+    ASSERT(tableGet(&selfObj->hiddenFields,
+            OBJ_VAL(internedString("iter", 4)),
+            &internalIter));
+    ObjInternal *internalObj = AS_INTERNAL(internalIter);
+    Iterator *iter = internalGetData(internalObj);
+    ASSERT(iter);
+    ObjInstance *iterableObj = iter->instance;
+    Value iterable = OBJ_VAL(iterableObj);
+    if (IS_AN_ARRAY(iterable)) {
+        int nextIdx = ++(iter->index);
+        if (nextIdx >= ARRAY_SIZE(iterable)) {
+            return NIL_VAL;
+        } else {
+            Value ret = ARRAY_GET(iterable, nextIdx);
+            if (IS_UNDEF(ret)) {
+                ASSERT(0);
+                ret = NIL_VAL;
+            }
+            return ret;
+        }
+    } else {
+        UNREACHABLE("bug"); // TODO: support other types
+    }
+    UNREACHABLE(__func__);
 }
 
 Value lxErrInit(int argCount, Value *args) {

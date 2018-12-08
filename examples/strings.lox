@@ -1,7 +1,16 @@
-var s = "string";
-var s2 = "string";
-/*print s.objectId; // FIXME: get to work */
+var s = "string1";
 print s;
+var s2 = String("string2");
+print s2;
+print String(true);
+print String(false);
+print String(nil);
+print String(3);
 
 __END__
-string
+string1
+string2
+true
+false
+nil
+3.00

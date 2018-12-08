@@ -115,6 +115,7 @@ ObjClass *lxClassClass;
 ObjClass *lxModuleClass;
 ObjClass *lxAryClass;
 ObjClass *lxMapClass;
+ObjClass *lxIteratorClass;
 ObjClass *lxErrClass;
 ObjClass *lxArgErrClass;
 ObjClass *lxTypeErrClass;
@@ -241,6 +242,19 @@ static void defineNativeClasses() {
     ObjNative *mapToStringNat = newNative(internedString("toString", 8), lxMapToString);
     tableSet(&mapClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(mapToStringNat));
 
+    // class Iterator
+    ObjString *iterClassName = internedString("Iterator", 8);
+    ObjClass *iterClass = newClass(iterClassName, objClass);
+    tableSet(&vm.globals, OBJ_VAL(iterClassName), OBJ_VAL(iterClass));
+
+    ObjNative *iterInitNat = newNative(internedString("init", 4), lxIteratorInit);
+    tableSet(&iterClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(iterInitNat));
+
+    ObjNative *iterNextNat = newNative(internedString("init", 4), lxIteratorNext);
+    tableSet(&iterClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(iterNextNat));
+
+    lxIteratorClass = iterClass;
+
     // class Error
     ObjString *errClassName = internedString("Error", 5);
     ObjClass *errClass = newClass(errClassName, objClass);
@@ -306,15 +320,21 @@ static bool isIterable(Value val) {
 }
 
 static bool isIterator(Value val) {
-    return true; //IS_AN_ITERATOR(val);
+    return IS_A(val, lxIteratorClass);
 }
 
 Value iteratorNext(Value iterator) {
-    return NIL_VAL;
+    return lxIteratorNext(1, &iterator);
 }
 
 Value createIterator(Value iterable) {
-    return NIL_VAL;
+    ObjInstance *iterObj = newInstance(lxIteratorClass);
+    Value iter = OBJ_VAL(iterObj);
+    Value args[2];
+    args[0] = iter;
+    args[1] = iterable;
+    lxIteratorInit(2, args);
+    return iter;
 }
 
 static jmp_buf CCallJumpBuf;
@@ -1950,7 +1970,9 @@ static InterpretResult vm_run(bool doResetStack) {
       case OP_ITER_NEXT: {
           Value iterator = peek(0);
           ASSERT(isIterator(iterator)); // FIXME: throw TypeError
-          push(iteratorNext(iterator));
+          Value next = iteratorNext(iterator);
+          ASSERT(!IS_UNDEF(next));
+          push(next);
           break;
       }
       case OP_CLASS: { // add or re-open class
