@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <setjmp.h>
+#include <signal.h>
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
@@ -7,7 +9,6 @@
 #include "memory.h"
 #include "compiler.h"
 #include "nodes.h"
-#include <setjmp.h>
 
 VM vm;
 
@@ -18,8 +19,6 @@ VM vm;
 #define VM_DEBUG(...) (void)0
 #define VM_WARN(...) (void)0
 #endif
-
-#define EC (vm.ec)
 
 static int vmRunLvl = 0;
 
@@ -39,6 +38,22 @@ static void vm_warn(const char *format, ...) {
     vfprintf(stderr, format, ap);
     va_end(ap);
     fprintf(stderr, "\n");
+}
+
+static void stacktraceHandler(int sig, siginfo_t *si, void *unused) {
+    fprintf(stderr, "Got SIGSEGV at address: 0x%lx\n", (long)si->si_addr);
+    die("info:");
+}
+
+void initSighandlers() {
+    struct sigaction sa;
+
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_sigaction = stacktraceHandler;
+    if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+        fprintf(stderr, "[WARNING]: SIGSEGV signal handler could not bet set.\n");
+    }
 }
 
 char *unredefinableGlobals[] = {
@@ -691,17 +706,24 @@ void setBacktrace(Value err) {
             CallFrame *frame = &ctx->frames[j];
             int line = frame->callLine;
             ObjString *file = frame->file;
+            ASSERT(file);
             ObjString *outBuf = hiddenString("", 0);
             Value out = newStringInstance(outBuf);
             if (frame->isCCall) {
                 ObjNative *nativeFunc = frame->nativeFunc;
                 pushCStringFmt(outBuf, "%s:%d in ", file->chars, line);
-                pushCStringFmt(outBuf, "<%s (native)>\n",
-                        nativeFunc->name->chars);
+                if (nativeFunc) {
+                    pushCStringFmt(outBuf, "<%s (native)>\n",
+                            nativeFunc->name->chars);
+                } else {
+                    pushCStringFmt(outBuf, "<%s (native)>\n", "?unknown?");
+                }
             } else {
-                ObjFunction *function = frame->closure->function;
+                ObjFunction *function = NULL;
+                function = frame->closure ? frame->closure->function : NULL;
                 pushCStringFmt(outBuf, "%s:%d in ", file->chars, line);
-                if (function->name == NULL) {
+                // NOTE: function can be null in test cases
+                if (!function || function->name == NULL) {
                     pushCString(outBuf, "<script>\n", 9); // top-level
                 } else {
                     char *fnName = function->name ? function->name->chars : "(anon)";
@@ -894,22 +916,25 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
 }
 
 
-static void popFrame(void) {
+void popFrame(void) {
     DBG_ASSERT(vm.inited);
     ASSERT(EC->frameCount >= 1);
     VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
+    CallFrame *frame = getFrame();
+    inCCall = frame->isCCall;
+    memset(frame, 0, sizeof(*frame));
     EC->frameCount--;
-    inCCall = getFrame()->isCCall;
     ASSERT_VALID_STACK();
 }
 
-static CallFrame *pushFrame() {
+CallFrame *pushFrame(void) {
     DBG_ASSERT(vm.inited);
     if (EC->frameCount >= FRAMES_MAX) {
         throwErrorFmt(lxErrClass, "Stackoverflow, max number of call frames (%d)", FRAMES_MAX);
         return NULL;
     }
     CallFrame *frame = &EC->frames[EC->frameCount++];
+    memset(frame, 0, sizeof(*frame));
     frame->callLine = curLine;
     /*Value curFile;*/
     ASSERT(vm.fileString);
@@ -2295,6 +2320,12 @@ void unsetPrintBuf(void) {
     DBG_ASSERT(vm.inited);
     vm.printBuf = NULL;
     vm.printToStdout = true;
+}
+
+void vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, int *status) {
+    *status = 0;
+    func(arg);
+    // TODO: actually protect the function, catch errors
 }
 
 NORETURN void stopVM(int status) {

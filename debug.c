@@ -18,6 +18,7 @@ NORETURN void die(const char *fmt, ...) {
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");
+    printBacktrace();
     exit(1);
 }
 

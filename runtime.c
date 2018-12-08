@@ -141,6 +141,10 @@ Value lxSleep(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+/**
+ * TODO: run atexit hooks
+ * ex: exit(0);
+ */
 Value lxExit(int argCount, Value *args) {
     CHECK_ARGS("exit", 1, 1, argCount);
     Value status = *args;

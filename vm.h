@@ -84,12 +84,15 @@ typedef struct VM {
 
 extern VM vm;
 
+#define EC (vm.ec)
+
 typedef enum {
   INTERPRET_OK = 1,
   INTERPRET_UNINITIALIZED, // tried to call interpret() before initVM()
   INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
 
+void initSighandlers();
 void initVM();
 void freeVM();
 InterpretResult interpret(Chunk *chunk, char *filename);
@@ -120,6 +123,11 @@ void throwErrorFmt(ObjClass *klass, const char *format, ...);
 void throwError(Value err);
 
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
+
+void popFrame(void);
+CallFrame *pushFrame(void);
+typedef void* (vm_cb_func)(void*);
+void vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, int *status);
 
 NORETURN void stopVM(int status);
 

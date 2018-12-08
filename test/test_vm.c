@@ -25,6 +25,35 @@ cleanup:
     return ires;
 }
 
+static void raiseErr(int a) {
+    throwErrorFmt(lxErrClass, "error %d", a);
+    UNREACHABLE("bug");
+}
+
+static void* raiseErrProtect(void *arg) {
+    raiseErr(*((int*)arg));
+    return NULL;
+}
+
+static int test_vm_protect1(void) {
+    initVM();
+    int arg = 3;
+    int status;
+    EC->frameCount = 0;
+    CallFrame *frame = pushFrame();
+    frame->start = 0;
+    frame->ip = 0;
+    frame->slots = EC->stack;
+    frame->isCCall = true;
+    frame->callLine = 1;
+    frame->file = hiddenString("file", 4);
+    vm_protect(raiseErrProtect, &arg, lxErrClass, &status);
+    T_ASSERT_EQ(false, vm.hadError);
+cleanup:
+    freeVM();
+    return 0;
+}
+
 static int test_addition(void) {
     char *src = "1+1;";
     interp(src, true);
@@ -637,6 +666,7 @@ cleanup:
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     compilerOpts.noRemoveUnusedExpressions = true;
+    initSighandlers();
     INIT_TESTS();
     REGISTER_T_ASSERT_ON_FAIL(freeVM);
     RUN_TEST(test_addition);
@@ -676,5 +706,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_closures_env_saved);
     RUN_TEST(test_catch_thrown_errors_from_c_code);
     RUN_TEST(test_map_keys_work_as_expected);
+    RUN_TEST(test_vm_protect1);
     END_TESTS();
 }

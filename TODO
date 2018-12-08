@@ -31,7 +31,8 @@ bytecode, and benchmark the lookup results []
 
 BUGS:
 * super() bug in examples/super.lox
-* Fix nil.toString() bugs, perhaps with String() conversion
+* Fix nil.toString() bugs, perhaps with String() conversion [PARTIAL], still
+need to fix interpolation errors
 * Throw proper errors when can't find instance/static methods in VM
 * Catch blocks mess up operand stack
 * Allow throwing strings?
