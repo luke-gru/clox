@@ -910,21 +910,23 @@ static void initCompiler(
         UNREACHABLE("invalid function type %d", ftype);
     }
 
-    // FIXME: The first local variable slot is always implicitly declared.
-    // It's no longer needed.
-    Local *local = &current->locals[current->localCount++];
-    local->depth = current->scopeDepth;
-    local->isUpvalue = false;
-    if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
-            ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
-            ftype == FUN_TYPE_CLASS_METHOD) {
-        local->name.start = "";
-        local->name.length = 0;
-    } else {
-        // In a function, it holds the function, but cannot be referenced, so has
-        // no name.
-        local->name.start = "";
-        local->name.length = 0;
+    // The first local variable slot is always implicitly declared, unless
+    // we're in the function representing the top-level (main).
+    if (ftype != FUN_TYPE_TOP_LEVEL) {
+        Local *local = &current->locals[current->localCount++];
+        local->depth = current->scopeDepth;
+        local->isUpvalue = false;
+        if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
+                ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
+                ftype == FUN_TYPE_CLASS_METHOD) {
+            local->name.start = "";
+            local->name.length = 0;
+        } else {
+            // In a function, it holds the function, but cannot be referenced, so has
+            // no name.
+            local->name.start = "";
+            local->name.length = 0;
+        }
     }
     COMP_TRACE("/initCompiler");
 }
@@ -1301,6 +1303,7 @@ static void emitNode(Node *n) {
         int numVars = n->children->length - 2;
         ASSERT(numVars == 1); // FIXME: for now
         Token varName = n->children->data[0]->tok;
+        current->localCount++; // the iterator value
         uint8_t varSlot = declareVariable(&varName);
         // iterator expression
         emitNode(n->children->data[1]);

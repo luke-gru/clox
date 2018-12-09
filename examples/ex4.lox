@@ -3,8 +3,13 @@ var b = "global b";
 var c = "global c";
 
 {
+  print a;
+  print b;
+  print c;
   var a = "outer a";
   var b = "outer b";
+  print a;
+  print b;
   {
     var a = "inner a";
     print a;
@@ -18,6 +23,11 @@ print c;
 
 __END__
 -- expect: --
+global a
+global b
+global c
+outer a
+outer b
 inner a
 outer b
 global c
