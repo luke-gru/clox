@@ -128,7 +128,7 @@ Value callVMMethod(
 Value VMEval(const char *src, const char *filename, int lineno);
 void push(Value value); // push onto operand stack
 Value pop(); // pop top of operand stack
-void diePrintBacktrace(const char *format, ...);
+void errorPrintScriptBacktrace(const char *format, ...);
 
 void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given strings to this buffer, if given
 void unsetPrintBuf(void);

@@ -18,7 +18,16 @@ NORETURN void die(const char *fmt, ...) {
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");
-    printBacktrace();
+    exit(1);
+}
+
+NORETURN void diePrintCBacktrace(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fprintf(stderr, "\n");
+    printCBacktrace();
     exit(1);
 }
 
@@ -56,6 +65,8 @@ const char *opName(OpCode code) {
         return "OP_GET_LOCAL";
     case OP_SET_LOCAL:
         return "OP_SET_LOCAL";
+    case OP_UNPACK_SET_LOCAL:
+        return "OP_UNPACK_SET_LOCAL";
     case OP_GET_GLOBAL:
         return "OP_GET_GLOBAL";
     case OP_SET_GLOBAL:
@@ -280,6 +291,18 @@ static int printLocalVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
+static int printUnpackSetVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+    uint8_t slotIdx = chunk->code[i + 1];
+    uint8_t unpackIdx = chunk->code[i + 2];
+    fprintf(f, "%-16s    [slot %d] %d\n", op, slotIdx, unpackIdx);
+    return i+3;
+}
+
+static int unpackSetVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    // TODO
+    return i+3;
+}
+
 static int printClosureInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t funcConstIdx = chunk->code[i + 1];
     Value constant = getConstant(chunk, funcConstIdx);
@@ -470,6 +493,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_SET_UPVALUE:
         case OP_GET_UPVALUE:
             return printLocalVarInstruction(f, opName(byte), chunk, i);
+        case OP_UNPACK_SET_LOCAL:
+            return printUnpackSetVarInstruction(f, opName(byte), chunk, i);
         case OP_CLOSURE:
             return printClosureInstruction(f, opName(byte), chunk, i, funcs);
         case OP_JUMP:
@@ -552,6 +577,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_SET_UPVALUE:
         case OP_GET_UPVALUE:
             return localVarInstruction(buf, opName(byte), chunk, i);
+        case OP_UNPACK_SET_LOCAL:
+            return unpackSetVarInstruction(buf, opName(byte), chunk, i);
         case OP_CLOSURE:
             return closureInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_JUMP:
@@ -652,7 +679,7 @@ ObjString *disassembleChunk(Chunk *chunk) {
 }
 
 #ifdef NDEBUG
-#define printBacktrace() (void)0
+#define printCBacktrace() (void)0
 #else
 static void full_write(int fd, const char *buf, size_t len) {
     while (len > 0) {
@@ -666,8 +693,8 @@ static void full_write(int fd, const char *buf, size_t len) {
     }
 }
 
-void printBacktrace(void) {
-    static const char start[] = "BACKTRACE ------------\n";
+void printCBacktrace(void) {
+    static const char start[] = "C BACKTRACE ------------\n";
     static const char end[] = "----------------------\n";
 
     void *bt[1024];

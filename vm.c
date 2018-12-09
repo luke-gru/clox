@@ -42,7 +42,7 @@ static void vm_warn(const char *format, ...) {
 
 static void stacktraceHandler(int sig, siginfo_t *si, void *unused) {
     fprintf(stderr, "Got SIGSEGV at address: 0x%lx\n", (long)si->si_addr);
-    die("info:");
+    diePrintCBacktrace("info:");
 }
 
 void initSighandlers() {
@@ -648,13 +648,14 @@ static inline Chunk *currentChunk() {
     return &getFrame()->closure->function->chunk;
 }
 
-void diePrintBacktrace(const char *format, ...) {
+void errorPrintScriptBacktrace(const char *format, ...) {
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
     fputs("\n", stderr);
 
+    // TODO: go over all execution contexts
     for (int i = EC->frameCount - 1; i >= 0; i--) {
         CallFrame *frame = &EC->frames[i];
         if (frame->isCCall) {
@@ -974,7 +975,7 @@ static void pushNativeFrame(ObjNative *native) {
     ASSERT(native);
     VM_DEBUG("Pushing native callframe for %s", native->name->chars);
     if (EC->frameCount == FRAMES_MAX) {
-        diePrintBacktrace("Stack overflow.");
+        errorPrintScriptBacktrace("Stack overflow.");
         return;
     }
     CallFrame *prevFrame = getFrame();
@@ -1123,7 +1124,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     }
 
     if (EC->frameCount >= FRAMES_MAX) {
-        diePrintBacktrace("Stack overflow.");
+        errorPrintScriptBacktrace("Stack overflow.");
         return false;
     }
 
@@ -1521,6 +1522,18 @@ static void closeUpvalues(Value *last) {
   }
 }
 
+static Value unpackValue(Value val, uint8_t idx) {
+    if (IS_AN_ARRAY(val)) {
+        if (idx < ARRAY_SIZE(val)) {
+            return ARRAY_GET(val, idx);
+        } else {
+            return NIL_VAL;
+        }
+    } else {
+        UNREACHABLE("type: %s", typeOfVal(val)); // FIXME: throw typeerror
+    }
+}
+
 static ObjString *methodNameForBinop(OpCode code) {
     switch (code) {
     case OP_ADD:
@@ -1803,6 +1816,13 @@ static InterpretResult vm_run(bool doResetStack) {
           getFrame()->slots[slot] = peek(0); // locals are popped at end of scope by VM
           break;
       }
+      case OP_UNPACK_SET_LOCAL: {
+          uint8_t slot = READ_BYTE();
+          uint8_t unpackIdx = READ_BYTE();
+          ASSERT(slot >= 0);
+          getFrame()->slots[slot] = unpackValue(peek(0), unpackIdx); // locals are popped at end of scope by VM
+          break;
+      }
       case OP_GET_LOCAL: {
           uint8_t slot = READ_BYTE();
           ASSERT(slot >= 0);
@@ -2015,7 +2035,7 @@ static InterpretResult vm_run(bool doResetStack) {
               AS_INSTANCE(instanceVal), klass,
               AS_STRING(methodName), &method, false);
           if (!found) {
-              diePrintBacktrace("Could not find method"); // FIXME
+              errorPrintScriptBacktrace("Could not find method"); // FIXME
               vmRunLvl--;
               return INTERPRET_RUNTIME_ERROR;
           }
@@ -2241,7 +2261,7 @@ static InterpretResult vm_run(bool doResetStack) {
           return INTERPRET_OK;
       }
       default:
-          diePrintBacktrace("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
+          errorPrintScriptBacktrace("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
           vmRunLvl--;
           return INTERPRET_RUNTIME_ERROR;
     }
@@ -2416,7 +2436,7 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
         *status = TAG_RAISE;
     } else {
         fprintf(stderr, "vm_protect: error from setjmp");
-        die("bug");
+        UNREACHABLE("setjmp error");
     }
     return NULL;
 }

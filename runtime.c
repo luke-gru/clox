@@ -769,12 +769,11 @@ Value lxIteratorNext(int argCount, Value *args) {
             Value ret = ARRAY_GET(iterable, nextIdx);
             if (IS_UNDEF(ret)) {
                 ASSERT(0);
-                ret = NIL_VAL;
             }
             return ret;
         }
     } else {
-        UNREACHABLE("bug"); // TODO: support other types
+        UNREACHABLE("bug"); // TODO: support other iterable types
     }
     UNREACHABLE(__func__);
 }

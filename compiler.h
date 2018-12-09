@@ -5,6 +5,9 @@
 #include "object.h"
 #include "chunk.h"
 #include "nodes.h"
+#include "vec.h"
+
+typedef vec_t(uint8_t) vec_byte_t;
 
 typedef enum {
     COMPILE_ERR_NONE = 1,

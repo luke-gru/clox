@@ -1163,7 +1163,7 @@ static void emitNode(Node *n) {
     }
     case LITERAL_EXPR: {
         if (n->tok.type == TOKEN_NUMBER) {
-            // TODO: handle error condition
+            // TODO: handle strtod error condition
             double d = strtod(tokStr(&n->tok), NULL);
             emitConstant(NUMBER_VAL(d), CONST_T_NUMLIT);
         // non-static string
@@ -1273,26 +1273,41 @@ static void emitNode(Node *n) {
     }
     case FOREACH_STMT: {
         pushScope(COMPILE_SCOPE_BLOCK);
+        vec_byte_t v_slots;
+        vec_init(&v_slots);
         int numVars = n->children->length - 2;
-        ASSERT(numVars == 1); // FIXME: for now
-        Token varName = n->children->data[0]->tok;
         current->localCount++; // the iterator value
-        uint8_t varSlot = declareVariable(&varName);
+        int i = 0;
+        for (i = 0; i < numVars; i++) {
+            Token varName = n->children->data[i]->tok;
+            uint8_t varSlot = declareVariable(&varName);
+            vec_push(&v_slots, varSlot);
+        }
         // iterator expression
-        emitNode(n->children->data[1]);
+        emitNode(n->children->data[i]);
+        i++;
 
         emitOp0(OP_ITER); // push iterator value to stack
         int beforeIterNext = currentIseq()->byteCount+2;
         emitOp0(OP_ITER_NEXT);
         Insn *iterDone = emitJump(OP_JUMP_IF_FALSE_PEEK); // TODO: op_jump_if_undef?
-        emitOp1(OP_SET_LOCAL, varSlot);
+        uint8_t slotNum = 0; int slotIdx = 0;
+        int setOp = numVars > 1 ? OP_UNPACK_SET_LOCAL : OP_SET_LOCAL;
+        vec_foreach(&v_slots, slotNum, slotIdx) {
+            if (setOp == OP_SET_LOCAL) {
+                emitOp1(setOp, slotNum);
+            } else {
+                emitOp2(setOp, slotNum, (uint8_t)slotIdx);
+            }
+        }
         emitOp0(OP_POP); // pop the iterator value
-        emitNode(n->children->data[2]); // foreach block
+        emitNode(n->children->data[i]); // foreach block
         emitLoop(beforeIterNext);
         popScope(COMPILE_SCOPE_BLOCK);
         patchJump(iterDone, -1, NULL);
         emitOp0(OP_POP); // pop last iterator value
         emitOp0(OP_POP); // pop the iterator
+        vec_deinit(&v_slots);
         break;
     }
     case BREAK_STMT: {
