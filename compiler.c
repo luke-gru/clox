@@ -62,8 +62,6 @@ typedef struct Compiler {
   // scope (global scope)
   int scopeDepth;
   bool hadError;
-  int currentScopeNum;
-  vec_int_t emittedReturnScopeNums;
 
   Iseq iseq; // Generated instructions for the function
   Table constTbl;
@@ -220,29 +218,15 @@ static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
 // blocks (`{}`) push new scopes
 static void pushScope(CompileScopeType stype) {
     current->scopeDepth++;
-    current->currentScopeNum++;
-    COMP_TRACE("pushScope: %s (num=%d)", compileScopeName(stype), current->currentScopeNum);
+    COMP_TRACE("pushScope: %s (depth=%d)", compileScopeName(stype), current->scopeDepth);
 }
 
 static void namedVariable(Token name, VarOp getSet);
-
-static bool emittedReturnInScope(Compiler *comp) {
-    int idx = 0;
-    vec_find(&comp->emittedReturnScopeNums, comp->currentScopeNum, idx);
-    if (idx != -1) {
-        return true;
-    }
-    return false;
-}
 
 // returns nil, this is in case OP_RETURN wasn't emitted from an explicit
 // `return` statement in a function.
 static void emitReturn(Compiler *compiler) {
     ASSERT(compiler->type != FUN_TYPE_TOP_LEVEL);
-    if (emittedReturnInScope(compiler)) {
-        COMP_TRACE("Skipping emitting return");
-        return;
-    }
     COMP_TRACE("Emitting return");
     if (compiler->type == FUN_TYPE_INIT) {
         emitOp0(OP_GET_THIS);
@@ -251,20 +235,15 @@ static void emitReturn(Compiler *compiler) {
         emitOp0(OP_NIL);
         emitOp0(OP_RETURN);
     }
-    vec_push(&compiler->emittedReturnScopeNums, compiler->currentScopeNum);
 }
 
 static void emitCloseUpvalue(void) {
-    if (emittedReturnInScope(current)) {
-        COMP_TRACE("Skipping emitting close upvalue (returned)");
-        return;
-    }
     COMP_TRACE("Emitting close upvalue");
     emitOp0(OP_CLOSE_UPVALUE);
 }
 
 static void popScope(CompileScopeType stype) {
-    COMP_TRACE("popScope: %s (num=%d)", compileScopeName(stype), current->currentScopeNum);
+    COMP_TRACE("popScope: %s (depth=%d)", compileScopeName(stype), current->scopeDepth);
     while (current->localCount > 0 && current->locals[current->localCount - 1].depth >= current->scopeDepth) {
         if (current->locals[current->localCount - 1].isUpvalue) {
             COMP_TRACE("popScope closing upvalue");
@@ -276,12 +255,9 @@ static void popScope(CompileScopeType stype) {
         current->localCount--;
     }
     if (stype == COMPILE_SCOPE_FUNCTION) {
-        current->currentScopeNum++; // XXX: so emitReturn doesn't emit the return if it's already been emitted in the parent scope's (the block scope of the function)
         emitReturn(current);
-        current->currentScopeNum--;
     }
     current->scopeDepth--;
-    current->currentScopeNum--;
 }
 
 static Insn *emitBytes(uint8_t code, uint8_t op) {
@@ -658,7 +634,6 @@ static ObjFunction *endCompiler() {
     if (current->type == FUN_TYPE_TOP_LEVEL) {
         emitLeave();
     }
-    vec_deinit(&current->emittedReturnScopeNums);
     ObjFunction *func = current->function;
     copyIseqToChunk(currentIseq(), currentChunk());
     freeTable(&current->constTbl);
@@ -864,8 +839,6 @@ static void initCompiler(
     hideFromGC((Obj*)compiler->function); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = ftype;
     compiler->hadError = false;
-    compiler->currentScopeNum = 1;
-    vec_init(&compiler->emittedReturnScopeNums);
     initTable(&compiler->constTbl);
 
     current = compiler;
@@ -1441,11 +1414,6 @@ static void emitNode(Node *n) {
         break;
     }
     case RETURN_STMT: {
-        if (emittedReturnInScope(current)) {
-            COMP_TRACE("Skipping emitting explicit return (%d)", current->currentScopeNum);
-            break;
-        }
-
         if (n->children->length > 0) {
             // always return instance in init function
             if (current->type == FUN_TYPE_INIT) {
@@ -1455,7 +1423,6 @@ static void emitNode(Node *n) {
             }
             emitOp0(OP_RETURN);
             COMP_TRACE("Emitting explicit return (children)");
-            vec_push(&current->emittedReturnScopeNums, current->currentScopeNum);
         } else {
             COMP_TRACE("Emitting explicit return (void)");
             emitReturn(current);
