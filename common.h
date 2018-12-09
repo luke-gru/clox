@@ -7,6 +7,9 @@
 #include <string.h>
 #include <stdarg.h>
 
+#define JUMP_SET 0
+#define JUMP_PERFORMED 1
+
 // NOTE: when adding/removing from here, add/remove from opName() function in debug.c!
 typedef enum {
     OP_CONSTANT = 1,

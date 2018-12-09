@@ -430,6 +430,7 @@ void initVM() {
 
     vm.lastErrorThrown = NIL_VAL;
     vm.hadError = false;
+    vm.errInfo = NULL;
     inCCall = false;
     cCallThrew = false;
     returnedFromNativeErr = false;
@@ -475,6 +476,7 @@ void freeVM() {
     returnedFromNativeErr = false;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
     curLine = 1;
+    vm.errInfo = NULL;
 
     memset(&rootVMLoopJumpBuf, 0, sizeof(rootVMLoopJumpBuf));
     rootVMLoopJumpBufSet = false;
@@ -631,6 +633,13 @@ static inline CallFrame *getFrame() {
     return &EC->frames[EC->frameCount-1];
 }
 
+static inline CallFrame *getFrameOrNull() {
+    if (EC->frameCount == 0) {
+        return NULL;
+    }
+    return &EC->frames[EC->frameCount-1];
+}
+
 static inline Chunk *currentChunk() {
     return &getFrame()->closure->function->chunk;
 }
@@ -694,6 +703,7 @@ void showUncaughtError(Value err) {
 
 // every new error value, when thrown, gets its backtrace set first
 void setBacktrace(Value err) {
+    VM_DEBUG("Setting backtrace");
     ASSERT(IS_AN_ERROR(err));
     Value ret = newArray();
     setProp(err, internedString("backtrace", 9), ret);
@@ -734,6 +744,7 @@ void setBacktrace(Value err) {
             unhideFromGC((Obj*)outBuf);
         }
     }
+    VM_DEBUG("/Setting backtrace");
 }
 
 static inline bool isThrowable(Value val) {
@@ -915,15 +926,27 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     }
 }
 
+static void unwindErrInfo(CallFrame *frame) {
+    ErrTagInfo *info = vm.errInfo;
+    while (info && info->frame == frame) {
+        ErrTagInfo *prev = info->prev;
+        free(info);
+        info = prev;
+    }
+    vm.errInfo = info;
+}
+
 
 void popFrame(void) {
     DBG_ASSERT(vm.inited);
     ASSERT(EC->frameCount >= 1);
     VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
     CallFrame *frame = getFrame();
-    inCCall = frame->isCCall;
+    unwindErrInfo(frame);
     memset(frame, 0, sizeof(*frame));
     EC->frameCount--;
+    frame = getFrameOrNull();
+    inCCall = frame ? frame->isCCall : false;
     ASSERT_VALID_STACK();
 }
 
@@ -1331,6 +1354,18 @@ static CatchTable *getCatchTableRow(int idx) {
     return row;
 }
 
+ErrTagInfo *findErrTag(ObjClass *klass) {
+    ErrTagInfo *cur = vm.errInfo;
+    while (cur) {
+        // tag for all errors
+        if (cur->errClass == NULL || cur->errClass == klass) {
+            return cur;
+        }
+        cur = cur->prev;
+    }
+    return NULL;
+}
+
 void throwError(Value self) {
     VM_DEBUG("throwing error");
     ASSERT(vm.inited);
@@ -1339,10 +1374,11 @@ void throwError(Value self) {
     if (IS_NIL(getProp(self, internedString("backtrace", 9)))) {
         setBacktrace(self);
     }
-    if (inCCall) {
+    if (inCCall) { // TODO: rework this
+        VM_DEBUG("throwing error from C call, longjmping");
         ASSERT(!cCallThrew);
         cCallThrew = true;
-        longjmp(CCallJumpBuf, 1);
+        longjmp(CCallJumpBuf, JUMP_PERFORMED);
         UNREACHABLE("after longjmp");
     }
     // error from VM
@@ -1350,6 +1386,13 @@ void throwError(Value self) {
     ObjClass *klass = obj->klass;
     CatchTable *catchRow;
     uint8_t *ipNew = NULL;
+    VM_DEBUG("throwing error from VM");
+    ErrTagInfo *errInfo = NULL;
+    if ((errInfo = findErrTag(klass))) {
+        VM_DEBUG("longjmping to tag");
+        longjmp(errInfo->jmpBuf, JUMP_PERFORMED);
+        UNREACHABLE("after longjmp");
+    }
     if (findThrowJumpLoc(klass, &ipNew, &catchRow)) {
         ASSERT(ipNew);
         ASSERT(catchRow);
@@ -1359,6 +1402,16 @@ void throwError(Value self) {
     } else {
         showUncaughtError(vm.lastErrorThrown);
     }
+}
+
+void rethrowErrInfo(ErrTagInfo *info) {
+    ASSERT(info);
+    throwError(info->caughtError);
+}
+
+void unsetErrInfo(void) {
+    vm.lastErrorThrown = NIL_VAL;
+    vm.errInfo = vm.errInfo->prev;
 }
 
 void throwErrorFmt(ObjClass *klass, const char *format, ...) {
@@ -1380,7 +1433,6 @@ void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     throwError(err);
 }
 
-// FIXME: only prints VM operand stack for current execution context (EC)
 void printVMStack(FILE *f) {
     if (EC->stackTop == EC->stack && vm.v_ecs.length == 1) {
         fprintf(f, "[DEBUG]: Stack: empty\n");
@@ -2322,10 +2374,57 @@ void unsetPrintBuf(void) {
     vm.printToStdout = true;
 }
 
-void vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, int *status) {
-    *status = 0;
-    func(arg);
-    // TODO: actually protect the function, catch errors
+static void unwindJumpRecover(ErrTagInfo *info) {
+    ASSERT(info);
+    while (getFrame() != info->frame) {
+        VM_DEBUG("popping callframe from unwind");
+        popFrame();
+    }
+    while (vm.errInfo != info) {
+        ASSERT(vm.errInfo);
+        ErrTagInfo *prev = vm.errInfo->prev;
+        ASSERT(prev);
+        free(vm.errInfo);
+        vm.errInfo = prev;
+    }
+}
+
+void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status) {
+    addErrInfo(errClass);
+    ErrTagInfo *errInfo = vm.errInfo;
+    int jmpres = 0;
+    if ((jmpres = setjmp(errInfo->jmpBuf)) == JUMP_SET) {
+        *status = TAG_NONE;
+        VM_DEBUG("vm_protect before func");
+        void *res = func(arg);
+        ErrTagInfo *prev = errInfo->prev;
+        free(errInfo);
+        vm.errInfo = prev;
+        VM_DEBUG("vm_protect after func");
+        return res;
+    } else if (jmpres == JUMP_PERFORMED) {
+        VM_DEBUG("vm_protect got to longjmp");
+        unwindJumpRecover(errInfo);
+        errInfo->status = TAG_RAISE;
+        errInfo->caughtError = vm.lastErrorThrown;
+        *status = TAG_RAISE;
+    } else {
+        fprintf(stderr, "vm_protect: error from setjmp");
+        die("bug");
+    }
+    return NULL;
+}
+
+ErrTagInfo *addErrInfo(ObjClass *errClass) {
+    struct ErrTagInfo *info = calloc(sizeof(ErrTagInfo), 1);
+    ASSERT_MEM(info);
+    info->status = TAG_NONE;
+    info->errClass = errClass;
+    info->frame = getFrame();
+    info->prev = vm.errInfo;
+    vm.errInfo = info;
+    info->caughtError = NIL_VAL;
+    return info;
 }
 
 NORETURN void stopVM(int status) {

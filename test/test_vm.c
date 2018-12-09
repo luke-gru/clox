@@ -32,23 +32,82 @@ static void raiseErr(int a) {
 
 static void* raiseErrProtect(void *arg) {
     raiseErr(*((int*)arg));
+    UNREACHABLE("bug");
     return NULL;
+}
+
+static void* raiseNoErrProtect(void *arg) {
+    return lxAryClass;
 }
 
 static int test_vm_protect1(void) {
     initVM();
     int arg = 3;
-    int status;
+    ErrTag status = TAG_NONE;
     EC->frameCount = 0;
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = 0;
     frame->slots = EC->stack;
-    frame->isCCall = true;
+    frame->isCCall = false;
     frame->callLine = 1;
     frame->file = hiddenString("file", 4);
-    vm_protect(raiseErrProtect, &arg, lxErrClass, &status);
+    // catch all errors of instance lxErrClass
+    void *res = vm_protect(raiseErrProtect, &arg, lxErrClass, &status);
+    T_ASSERT_EQ(TAG_RAISE, status);
+    T_ASSERT_EQ(NULL, res);
     T_ASSERT_EQ(false, vm.hadError);
+    T_ASSERT(vm.errInfo != NULL);
+    popFrame();
+    T_ASSERT_EQ(NULL, vm.errInfo); // frame popped, errInfo for frame should be gone
+cleanup:
+    freeVM();
+    return 0;
+}
+
+static int test_vm_protect2(void) {
+    initVM();
+    int arg = 4;
+    ErrTag status = TAG_NONE;
+    EC->frameCount = 0;
+    CallFrame *frame = pushFrame();
+    frame->start = 0;
+    frame->ip = 0;
+    frame->slots = EC->stack;
+    frame->isCCall = false;
+    frame->callLine = 1;
+    frame->file = hiddenString("file", 4);
+    // catch all errors
+    void *res = vm_protect(raiseErrProtect, &arg, NULL, &status);
+    T_ASSERT_EQ(TAG_RAISE, status);
+    T_ASSERT_EQ(NULL, res);
+    T_ASSERT_EQ(false, vm.hadError);
+    T_ASSERT(vm.errInfo != NULL);
+    popFrame();
+    T_ASSERT_EQ(NULL, vm.errInfo); // frame popped, errInfo for frame should be gone
+cleanup:
+    freeVM();
+    return 0;
+}
+
+static int test_vm_protect3(void) {
+    initVM();
+    int arg = 4;
+    ErrTag status = TAG_NONE;
+    EC->frameCount = 0;
+    CallFrame *frame = pushFrame();
+    frame->start = 0;
+    frame->ip = 0;
+    frame->slots = EC->stack;
+    frame->isCCall = false;
+    frame->callLine = 1;
+    frame->file = hiddenString("file", 4);
+    void *res = vm_protect(raiseNoErrProtect, &arg, NULL, &status);
+    T_ASSERT_EQ(TAG_NONE, status);
+    T_ASSERT_EQ(lxAryClass, res);
+    T_ASSERT_EQ(false, vm.hadError);
+    T_ASSERT_EQ(NULL, vm.errInfo); // due to no error thrown, the errinfo should be gone
+    popFrame();
 cleanup:
     freeVM();
     return 0;
@@ -707,5 +766,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_catch_thrown_errors_from_c_code);
     RUN_TEST(test_map_keys_work_as_expected);
     RUN_TEST(test_vm_protect1);
+    RUN_TEST(test_vm_protect2);
+    RUN_TEST(test_vm_protect3);
     END_TESTS();
 }

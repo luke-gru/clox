@@ -2,6 +2,7 @@
 #define clox_vm_h
 
 #include <stdio.h>
+#include <setjmp.h>
 #include "chunk.h"
 #include "object.h"
 #include "table.h"
@@ -15,6 +16,7 @@ typedef struct CallInfo CallInfo;
 
 extern bool inCCall;
 
+
 typedef struct CallFrame {
     // Non-native function fields
     ObjClosure *closure; // if call frame is from compiled code, this is set
@@ -25,12 +27,29 @@ typedef struct CallFrame {
     // Native (C) function fields
     bool isCCall; // native call, callframe created for C (native) function call
     ObjNative *nativeFunc; // only if isCCall is true
+
     int callLine;
     ObjString *file; // full path of file the function is called from
 } CallFrame; // represents a local scope (block, function, etc)
 
+typedef enum ErrTag {
+    TAG_NONE = 0,
+    TAG_RAISE
+} ErrTag;
+
+typedef struct ErrTagInfo {
+    ErrTag status;
+    ObjClass *errClass;
+    jmp_buf jmpBuf;
+    CallFrame *frame;
+    struct ErrTagInfo *prev;
+    Value caughtError;
+} ErrTagInfo;
+
 // Execution context for VM. When loading a script, a new context is created,
 // when evaling a string, a new context is also created, etc.
+// Holds the read-only globals like __FILE__ and __DIR__,
+// as well as the script name for the currently executing file.
 typedef struct VMExecContext {
     Value stack[STACK_MAX]; // stack VM, this is the stack (bottom) of operands
     Value *stackTop;
@@ -80,6 +99,8 @@ typedef struct VM {
     bool inited;
     bool hadError;
     bool exited;
+
+    ErrTagInfo *errInfo;
 } VM; // singleton
 
 extern VM vm;
@@ -116,18 +137,21 @@ void resetStack(); // reset operand stack
 int VMNumStackFrames(void);
 int VMNumCallFrames(void);
 void printVMStack(FILE *f);
-void setBacktrace(Value err);
 
+void setBacktrace(Value err);
 void throwErrorFmt(ObjClass *klass, const char *format, ...);
 #define throwArgErrorFmt(format, ...) throwErrorFmt(lxArgErrClass, format, __VA_ARGS__)
 void throwError(Value err);
+ErrTagInfo *addErrInfo(ObjClass *errClass);
+typedef void* (vm_cb_func)(void*);
+void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status);
+void rethrowErrInfo(ErrTagInfo *info);
+void unsetErrInfo(void);
 
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
 
 void popFrame(void);
 CallFrame *pushFrame(void);
-typedef void* (vm_cb_func)(void*);
-void vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, int *status);
 
 NORETURN void stopVM(int status);
 

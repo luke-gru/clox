@@ -18,7 +18,8 @@ the syntax is different for them, like in $ruby. []
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results []
 
-* Add `foreach el in item` syntax with iter() support [PARTIAL], no iter() support
+* Add `foreach el in item` syntax with iter() support [PARTIAL], no iter()
+method support
 * Add system() for running OS commands []
 * Add fork() and waitpid() [DONE]
 * Add threads with libpthread []

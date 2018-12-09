@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    initSigHandlers();
+    initSighandlers();
 
     CompileErr err = COMPILE_ERR_NONE;
     int compile_res = 0;
