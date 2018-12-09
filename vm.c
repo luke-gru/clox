@@ -232,6 +232,9 @@ static void defineNativeClasses() {
     ObjNative *aryToStringNat = newNative(internedString("toString", 8), lxArrayToString);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(aryToStringNat));
 
+    ObjNative *aryIterNat = newNative(internedString("iter", 4), lxArrayIter);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("iter", 4)), OBJ_VAL(aryIterNat));
+
     // class Map
     ObjString *mapClassName = internedString("Map", 3);
     ObjClass *mapClass = newClass(mapClassName, objClass);
@@ -257,6 +260,9 @@ static void defineNativeClasses() {
     ObjNative *mapToStringNat = newNative(internedString("toString", 8), lxMapToString);
     tableSet(&mapClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(mapToStringNat));
 
+    ObjNative *mapIterNat = newNative(internedString("iter", 4), lxMapIter);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("iter", 4)), OBJ_VAL(mapIterNat));
+
     // class Iterator
     ObjString *iterClassName = internedString("Iterator", 8);
     ObjClass *iterClass = newClass(iterClassName, objClass);
@@ -265,8 +271,8 @@ static void defineNativeClasses() {
     ObjNative *iterInitNat = newNative(internedString("init", 4), lxIteratorInit);
     tableSet(&iterClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(iterInitNat));
 
-    ObjNative *iterNextNat = newNative(internedString("init", 4), lxIteratorNext);
-    tableSet(&iterClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(iterNextNat));
+    ObjNative *iterNextNat = newNative(internedString("next", 4), lxIteratorNext);
+    tableSet(&iterClass->methods, OBJ_VAL(internedString("next", 4)), OBJ_VAL(iterNextNat));
 
     lxIteratorClass = iterClass;
 
@@ -338,7 +344,7 @@ static bool isIterator(Value val) {
     return IS_A(val, lxIteratorClass);
 }
 
-Value iteratorNext(Value iterator) {
+static Value iteratorNext(Value iterator) {
     return lxIteratorNext(1, &iterator);
 }
 

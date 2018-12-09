@@ -557,6 +557,11 @@ Value lxArrayIndexSet(int argCount, Value *args) {
     return rval;
 }
 
+Value lxArrayIter(int argCount, Value *args) {
+    CHECK_ARGS("Array#iter", 1, 1, argCount);
+    return createIterator(*args);
+}
+
 static void markInternalMap(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
@@ -706,10 +711,15 @@ Value lxMapValues(int argCount, Value *args) {
     return ary;
 }
 
+Value lxMapIter(int argCount, Value *args) {
+    CHECK_ARGS("Map#iter", 1, 1, argCount);
+    return createIterator(*args);
+}
+
 typedef struct Iterator {
-    int index;
-    ObjInstance *instance;
-    int lastRealIndex; // for maps
+    int index; // # of times iterator was called with 'next' - 1
+    int lastRealIndex; // for iterating over maps, not yet used
+    ObjInstance *instance; // the array/map/instance we're iterating over
 } Iterator;
 
 static void markInternalIter(Obj *internalObj) {
@@ -769,9 +779,7 @@ Value lxIteratorNext(int argCount, Value *args) {
             return NIL_VAL;
         } else {
             Value ret = ARRAY_GET(iterable, nextIdx);
-            if (IS_UNDEF(ret)) {
-                ASSERT(0);
-            }
+            ASSERT(!IS_UNDEF(ret));
             return ret;
         }
     } else if (IS_A_MAP(iterable)) {
@@ -780,15 +788,15 @@ Value lxIteratorNext(int argCount, Value *args) {
         if (nextIdx >= map->count) {
             return NIL_VAL;
         } else {
-            int realIndex;
+            int realIndex = -1;
             Entry e = tableNthEntry(map, nextIdx, &realIndex);
-            if (realIndex > 0) {
+            if (realIndex >= 0) {
                 Value ary = newArray();
                 arrayPush(ary, e.key);
                 arrayPush(ary, e.value);
                 return ary;
             } else {
-                return NIL_VAL;
+                return NIL_VAL; // shouldn't reach here
             }
         }
     } else {

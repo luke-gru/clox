@@ -17,6 +17,14 @@ foreach (k, v in m) {
   print v;
 }
 
+print "";
+var m2 = Map([["woah", "dude"], ["totally", "cool"]]);
+var iter = m2.iter();
+var n;
+while (n = iter.next()) {
+  print n;
+}
+
 __END__
 -- expect: --
 1.00
@@ -34,3 +42,6 @@ nil
 2.00
 3.00
 4.00
+
+[woah,dude]
+[totally,cool]

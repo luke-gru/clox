@@ -61,6 +61,7 @@ Value lxArrayPush(int argCount, Value *args);
 Value lxArrayToString(int argCount, Value *args);
 Value lxArrayIndexGet(int argCount, Value *args);
 Value lxArrayIndexSet(int argCount, Value *args);
+Value lxArrayIter(int argCount, Value *args);
 
 // class Map
 Value lxMapInit(int argCount, Value *args);
@@ -69,6 +70,7 @@ Value lxMapIndexSet(int argCount, Value *args);
 Value lxMapKeys(int argCount, Value *args);
 Value lxMapValues(int argCount, Value *args);
 Value lxMapToString(int argCount, Value *args);
+Value lxMapIter(int argCount, Value *args);
 
 // class Iterator
 Value lxIteratorInit(int argCount, Value *args);

@@ -150,6 +150,7 @@ void rethrowErrInfo(ErrTagInfo *info);
 void unsetErrInfo(void);
 
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
+Value createIterator(Value iterable);
 
 void popFrame(void);
 CallFrame *pushFrame(void);
