@@ -154,7 +154,7 @@ Value lxExit(int argCount, Value *args) {
 }
 
 static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoaded) {
-    char *cfile = AS_CSTRING(fname);
+    char *cfile = VAL_TO_STRING(fname)->chars;
     bool isAbsFile = cfile[0] == pathSeparator;
     char pathbuf[300] = { '\0' };
     bool fileFound = false;
@@ -164,8 +164,8 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
     } else {
         Value el; int i = 0;
         LXARRAY_FOREACH(lxLoadPath, el, i) {
-            if (!IS_STRING(el)) continue;
-            char *dir = AS_CSTRING(el);
+            if (!IS_A_STRING(el)) continue;
+            char *dir = VAL_TO_STRING(el)->chars;
             memset(pathbuf, 0, 300);
             memcpy(pathbuf, dir, strlen(dir));
             if (strcmp(pathbuf, ".") == 0) {

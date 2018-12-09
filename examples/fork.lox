@@ -25,13 +25,13 @@ if (pid) {
   print "BUG";
 }
 
+// TODO: get child process output into test output (problem with setPrintBuf)
 __END__
+-- expect: --
 in parent
 waiting for child...
-in child, sleeping for 3 seconds
 child ended
 round 2
 in parent
 waiting for child...
-in child, sleeping for 3 seconds
 child ended

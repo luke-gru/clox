@@ -8,6 +8,7 @@ print String(nil);
 print String(3);
 
 __END__
+-- expect: --
 string1
 string2
 true

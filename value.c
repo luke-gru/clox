@@ -82,9 +82,13 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
                 Value popped = pop();
                 ASSERT(AS_OBJ(popped) == AS_OBJ(stringVal));
             } else {
-                ObjClass *klass = inst->klass;
-                char *klassName = klass->name->chars;
-                fprintf(file, "<instance %s>", klassName);
+                if (IS_A_STRING(value)) { // when canCallMethods == false
+                    fprintf(file, "\"%s\"", VAL_TO_STRING(value)->chars);
+                } else {
+                    ObjClass *klass = inst->klass;
+                    char *klassName = klass->name->chars;
+                    fprintf(file, "<instance %s>", klassName);
+                }
             }
             return;
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {

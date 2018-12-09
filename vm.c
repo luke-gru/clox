@@ -383,6 +383,10 @@ static inline void pop_EC(void) {
     vm.ec = (VMExecContext*)vec_last(&vm.v_ecs);
 }
 
+static inline bool isInEval(void) {
+    return EC->evalContext;
+}
+
 // reset (clear) value stack for current execution context
 void resetStack() {
     EC->stackTop = EC->stack;
@@ -802,7 +806,7 @@ static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName,
     return false;
 }
 
-static InterpretResult vm_run(bool);
+static InterpretResult vm_run(bool resetStack);
 
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
@@ -2226,14 +2230,14 @@ static InterpretResult vm_run(bool doResetStack) {
           }
           break;
       }
-      // exit interpreter
+      // exit interpreter, or evaluation context if in EVAL
       case OP_LEAVE: {
-          vm.exited = true;
+          if (!isInEval()) vm.exited = true;
           if (doResetStack) resetStack();
           vmRunLvl--;
-          if (vmRunLvl > 0) {
-              longjmp(rootVMLoopJumpBuf, 1);
-          }
+          /*if (vmRunLvl > 0) {*/
+              /*longjmp(rootVMLoopJumpBuf, 1);*/
+          /*}*/
           return INTERPRET_OK;
       }
       default:
@@ -2324,11 +2328,13 @@ Value VMEval(const char *src, const char *filename, int lineno) {
     compilerOpts.noRemoveUnusedExpressions = true;
     push_EC();
     VMExecContext *ectx = EC;
+    ectx->evalContext = true;
     resetStack();
     int compile_res = compile_src(src, &chunk, &err);
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
     if (compile_res != 0) {
+        VM_DEBUG("compile error in eval");
         // TODO: throw syntax error
         pop_EC();
         ASSERT(getFrame() == oldFrame);
@@ -2336,7 +2342,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
         return BOOL_VAL(false);
     }
     EC->filename = copyString(filename, strlen(filename));
-    VM_DEBUG("%s", "Pushing initial callframe");
+    VM_DEBUG("%s", "Pushing initial eval callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk.code;
@@ -2354,7 +2360,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
     if (result != INTERPRET_OK) {
         vm.hadError = true;
     }
-    VM_DEBUG("eval finished");
+    VM_DEBUG("eval finished: error: %d", vm.hadError ? 1 : 0);
     // `EC != ectx` if an error occured in the eval, and propagated out
     // due to being caught in a surrounding context or never being caught.
     if (EC == ectx) pop_EC();

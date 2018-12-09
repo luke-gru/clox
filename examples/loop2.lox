@@ -1,5 +1,6 @@
 var i = 0;
 var a = [1,2,3];
+// large number, test for no stack overflow
 while (i < 500) {
   print i;
   print a;
