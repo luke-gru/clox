@@ -4,6 +4,7 @@
 #include "test.h"
 #include "compiler.h"
 #include "vm.h"
+#include "memory.h"
 
 #define FILENAME_BUFSZ (300)
 
@@ -27,7 +28,6 @@ static ObjString *fileExpectStr(FILE *f) {
                 inExpect = true;
             } else if (strncmp(lineBuf, "-- noexpect: --", 10) == 0) {
                 unhideFromGC((Obj*)str);
-                freeObject((Obj*)str);
                 return NULL;
             }
         } else if (strncmp(lineBuf, "__END__", 7) == 0) {

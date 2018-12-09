@@ -18,8 +18,7 @@ the syntax is different for them, like in $ruby. []
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results []
 
-* Add `foreach el in item` syntax with iter() support [PARTIAL], no iter()
-method support
+* Add `foreach el in item` syntax with iter() method support [PARTIAL], no iter()
 * Add system() for running OS commands []
 * Add fork() and waitpid() [DONE]
 * Add threads with libpthread []
@@ -39,5 +38,5 @@ need to fix interpolation errors
 * Allow throwing strings?
 * Make throwing exceptions based on a tag stack, like Ruby. This allows
 catching errors from the VM or code code and choosing to handle or propagate
-them in C code (a C API).
+them in C code (a C API). [IN PROGRESS]
 * examples/3.clox messed up (throw/catch)

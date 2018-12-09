@@ -1290,7 +1290,7 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
     CatchTable *tbl = currentChunk()->catchTbl;
     CatchTable *row = tbl;
     int currentIpOff = (int)(getFrame()->ip - currentChunk()->code);
-    bool poppedEC;
+    bool poppedEC = false;
     VM_DEBUG("findthrowjumploc");
     while (row || EC->frameCount >= 1) {
         VM_DEBUG("framecount: %d, num ECs: %d", EC->frameCount, vm.v_ecs.length);
