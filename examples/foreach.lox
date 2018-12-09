@@ -2,6 +2,7 @@ foreach (a in [1,2,3]) {
   print a;
 }
 
+print "";
 var ary = [[1, 2], [3, 4]];
 foreach (k, v, other in ary) {
   print k;
@@ -9,19 +10,27 @@ foreach (k, v, other in ary) {
   print other;
 }
 
-/*var m = Map([[1, 2], [3, 4]]);*/
-/*foreach (k, v in m) {*/
-  /*print "${k}: ${v}";*/
-/*}*/
+print "";
+var m = Map([[1, 2], [3, 4]]);
+foreach (k, v in m) {
+  print k;
+  print v;
+}
 
 __END__
 -- expect: --
 1.00
 2.00
 3.00
+
 1.00
 2.00
 nil
 3.00
 4.00
 nil
+
+1.00
+2.00
+3.00
+4.00

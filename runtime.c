@@ -709,6 +709,7 @@ Value lxMapValues(int argCount, Value *args) {
 typedef struct Iterator {
     int index;
     ObjInstance *instance;
+    int lastRealIndex; // for maps
 } Iterator;
 
 static void markInternalIter(Obj *internalObj) {
@@ -738,6 +739,7 @@ Value lxIteratorInit(int argCount, Value *args) {
     Iterator *iter = calloc(sizeof(Iterator), 1);
     ASSERT_MEM(iter);
     iter->index = -1;
+    iter->lastRealIndex = -1;
     iter->instance = AS_INSTANCE(iterable);
     ObjInternal *internalIter = newInternalObject(
         iter, markInternalIter, freeInternalIter
@@ -771,6 +773,23 @@ Value lxIteratorNext(int argCount, Value *args) {
                 ASSERT(0);
             }
             return ret;
+        }
+    } else if (IS_A_MAP(iterable)) {
+        Table *map = MAP_GETHIDDEN(iterable);
+        int nextIdx = ++(iter->index);
+        if (nextIdx >= map->count) {
+            return NIL_VAL;
+        } else {
+            int realIndex;
+            Entry e = tableNthEntry(map, nextIdx, &realIndex);
+            if (realIndex > 0) {
+                Value ary = newArray();
+                arrayPush(ary, e.key);
+                arrayPush(ary, e.value);
+                return ary;
+            } else {
+                return NIL_VAL;
+            }
         }
     } else {
         UNREACHABLE("bug"); // TODO: support other iterable types

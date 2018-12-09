@@ -26,6 +26,7 @@ bool tableSet(Table *table, Value key, Value value);
 bool tableDelete(Table *table, Value key);
 void tableAddAll(Table *from, Table *to);
 void tableEachEntry(Table *table, TableEntryCb func);
+Entry tableNthEntry(Table *table, int n, int *entryIdx);
 
 // NOTE: condition with value '555' uses this value just so that the rhs of
 // the expression results in a valid test expression, instead of just the

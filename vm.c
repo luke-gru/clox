@@ -331,7 +331,7 @@ static void defineGlobalVariables() {
 }
 
 static bool isIterable(Value val) {
-    return IS_AN_ARRAY(val); // TODO: extend definition of iterables
+    return IS_AN_ARRAY(val) || IS_A_MAP(val); // TODO: extend definition of iterables
 }
 
 static bool isIterator(Value val) {
