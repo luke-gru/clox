@@ -387,7 +387,6 @@ static jmp_buf CCallJumpBuf;
 bool inCCall;
 static bool cCallThrew = false;
 static bool returnedFromNativeErr = false;
-static bool runUntilReturn = false;
 static int lastSplatNumArgs = -1;
 
 static jmp_buf rootVMLoopJumpBuf;
@@ -469,7 +468,6 @@ void initVM(void) {
     inCCall = false;
     cCallThrew = false;
     returnedFromNativeErr = false;
-    runUntilReturn = false;
     curLine = 1;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
@@ -1294,10 +1292,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1) -
         (func->numKwargs > 0 ? numKwargsNotGiven+1 : 0);
     // NOTE: the frame is popped on OP_RETURN
-    bool oldRunUntilReturn = runUntilReturn;
-    runUntilReturn = true;
     vm_run(false); // actually run the function until return
-    runUntilReturn = oldRunUntilReturn;
     return true;
 }
 
@@ -2085,13 +2080,8 @@ static InterpretResult vm_run(bool doResetStack) {
           popFrame();
           EC->stackTop = newTop;
           push(result);
-          if (runUntilReturn) {
-              vmRunLvl--;
-              return INTERPRET_OK;
-          } else {
-              ASSERT(0);
-          }
-          break;
+          vmRunLvl--;
+          return INTERPRET_OK;
       }
       case OP_ITER: {
           Value iterable = peek(0);
