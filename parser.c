@@ -626,9 +626,18 @@ static Node *varDeclaration(void) {
         .kind = VAR_STMT,
     };
     Node *varDecl = createNode(nType, identTok, NULL);
+    while (match(TOKEN_COMMA)) {
+        consume(TOKEN_IDENTIFIER, "Expected identifier (variable name) "
+                "after ',' in var declaration");
+        Token tok = current->previous;
+        Node *varNext = createNode(nType, tok, NULL);
+        nodeAddChild(varDecl, varNext);
+    }
     if (match(TOKEN_EQUAL)) {
         Node *expr = expression();
         nodeAddChild(varDecl, expr);
+    } else {
+        // uninitialized variable, set to nil later on
     }
     consume(TOKEN_SEMICOLON, "Expected ';' after variable declaration");
     TRACE_END("varDeclaration");
