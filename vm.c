@@ -2408,6 +2408,7 @@ void unsetPrintBuf(void) {
 
 static void unwindJumpRecover(ErrTagInfo *info) {
     ASSERT(info);
+    DBG_ASSERT(getFrame());
     while (getFrame() != info->frame) {
         VM_DEBUG("popping callframe from unwind");
         popFrame();

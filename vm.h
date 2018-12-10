@@ -114,31 +114,32 @@ typedef enum {
   INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
 
+// setup
 void initSighandlers();
+
+// high-level API
 void initVM();
 void freeVM();
 InterpretResult interpret(Chunk *chunk, char *filename);
 InterpretResult loadScript(Chunk *chunk, char *filename);
-bool VMLoadedScript(char *fname);
-Value *getLastValue();
-Value callVMMethod(
-    ObjInstance *instance, Value callable,
-    int argCount, Value *args
-);
 Value VMEval(const char *src, const char *filename, int lineno);
+Value *getLastValue();
+
+bool VMLoadedScript(char *fname);
 void push(Value value); // push onto operand stack
 Value pop(); // pop top of operand stack
-void errorPrintScriptBacktrace(const char *format, ...);
-
-void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given strings to this buffer, if given
-void unsetPrintBuf(void);
 
 NORETURN void repl(void);
 void resetStack(); // reset operand stack
+
+// debug
+void printVMStack(FILE *f);
+void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given strings to this buffer, if given
+void unsetPrintBuf(void);
 int VMNumStackFrames(void);
 int VMNumCallFrames(void);
-void printVMStack(FILE *f);
 
+// errors
 void setBacktrace(Value err);
 void throwErrorFmt(ObjClass *klass, const char *format, ...);
 #define throwArgErrorFmt(format, ...) throwErrorFmt(lxArgErrClass, format, __VA_ARGS__)
@@ -148,8 +149,15 @@ typedef void* (vm_cb_func)(void*);
 void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status);
 void rethrowErrInfo(ErrTagInfo *info);
 void unsetErrInfo(void);
+void errorPrintScriptBacktrace(const char *format, ...);
 
+// calling functions/methods
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
+Value callVMMethod(
+    ObjInstance *instance, Value callable,
+    int argCount, Value *args
+);
+
 Value createIterator(Value iterable);
 
 void popFrame(void);

@@ -75,6 +75,8 @@ Value lxMapIter(int argCount, Value *args);
 // class Iterator
 Value lxIteratorInit(int argCount, Value *args);
 Value lxIteratorNext(int argCount, Value *args);
+//Value lxIteratorRewind(int argCount, Value *args);
+//Value lxIteratorIsAtEnd(int argCount, Value *args);
 
 // class File
 Value lxFileReadStatic(int argCount, Value *args);

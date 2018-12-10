@@ -629,16 +629,19 @@ static int test_print_map(void) {
     ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
-    ASSERT(buf->chars);
     const char *expected = "{}\n";
-    T_ASSERT_STREQ(expected, buf->chars);
-
-    clearObjString(buf);
-
-    src =  "var m = Map(); m[1] = 2; m[2] = 4; print m;";
-    interp(src, true);
     ASSERT(buf->chars);
+    T_ASSERT_STREQ(expected, buf->chars);
+    unsetPrintBuf();
+    freeVM();
+
+    initVM();
+    buf = copyString("", 0);
+    setPrintBuf(buf, false);
+    src =  "var m2 = Map(); m2[1] = 2; m2[2] = 4; print m2;";
+    interp(src, true);
     expected = "{1.00 => 2.00, 2.00 => 4.00}\n";
+    ASSERT(buf->chars);
     T_ASSERT_STREQ(expected, buf->chars);
 cleanup:
     unsetPrintBuf();
