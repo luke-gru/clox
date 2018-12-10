@@ -20,23 +20,23 @@ bytecode, and benchmark the lookup results []
 
 * Add `foreach el in item` syntax with iter() method support [PARTIAL], no iter()
 * Add system() for running OS commands []
-* Add fork() and waitpid() [DONE]
-* Add threads with libpthread []
+* Add threads with libpthread [GIT BRANCH]
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
 * Add Class#ancestors []
 * Add GC.stats []
-* add multiple var declaration, setters for array returns []
+* add multiple var declaration, setters for array returns [GIT BRANCH]
 * Make nil, true, false instances? []
+* Make variable lookup work as lookup in Environment tables, not statically
+compiled lookup
 
 BUGS:
 * super() bug in examples/super.lox
 * Fix nil.toString() bugs, perhaps with String() conversion [PARTIAL], still
 need to fix interpolation errors
 * Throw proper errors when can't find instance/static methods in VM
-* Catch blocks mess up operand stack
 * Allow throwing strings?
 * Make throwing exceptions based on a tag stack, like Ruby. This allows
-catching errors from the VM or code code and choosing to handle or propagate
-them in C code (a C API). [IN PROGRESS]
-* examples/3.clox messed up (throw/catch)
+catching errors from the VM or C code and choosing to handle or propagate
+them in C code (a C API). [IN PROGRESS]. So far, vm_protect does that, but
+other errors aren't caught like this.

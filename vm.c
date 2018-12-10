@@ -45,7 +45,7 @@ static void stacktraceHandler(int sig, siginfo_t *si, void *unused) {
     diePrintCBacktrace("info:");
 }
 
-void initSighandlers() {
+void initSighandlers(void) {
     struct sigaction sa;
 
     sa.sa_flags = SA_SIGINFO;
@@ -81,7 +81,7 @@ static bool isUnredefinableGlobal(char *name) {
     return false;
 }
 
-static void defineNativeFunctions() {
+static void defineNativeFunctions(void) {
     ObjString *clockName = internedString("clock", 5);
     ObjNative *clockFn = newNative(clockName, lxClock);
     tableSet(&vm.globals, OBJ_VAL(clockName), OBJ_VAL(clockFn));
@@ -138,7 +138,7 @@ ObjClass *lxNameErrClass;
 ObjClass *lxFileClass;
 Value lxLoadPath;
 
-static void defineNativeClasses() {
+static void defineNativeClasses(void) {
     // class Object
     ObjString *objClassName = internedString("Object", 6);
     ObjClass *objClass = newClass(objClassName, NULL);
@@ -319,7 +319,7 @@ static void defineNativeClasses() {
     tableSet(&fileClassStatic->methods, OBJ_VAL(internedString("read", 4)), OBJ_VAL(fileReadNat));
 }
 
-static void defineGlobalVariables() {
+static void defineGlobalVariables(void) {
     lxLoadPath = newArray();
     ObjString *loadPathStr = internedString("loadPath", 8);
     tableSet(&vm.globals, OBJ_VAL(loadPathStr), lxLoadPath);
@@ -336,8 +336,11 @@ static void defineGlobalVariables() {
     }
 }
 
-static bool isIterable(Value val) {
-    return IS_AN_ARRAY(val) || IS_A_MAP(val); // TODO: extend definition of iterables
+static bool isIterableType(Value val) {
+    if (IS_AN_ARRAY(val) || IS_A_MAP(val) || IS_INSTANCE(val)) {
+        return true;
+    };
+    return false;
 }
 
 static bool isIterator(Value val) {
@@ -348,14 +351,36 @@ static Value iteratorNext(Value iterator) {
     return lxIteratorNext(1, &iterator);
 }
 
+// NOTE: argument must be an iterable type (see isIterableType);
 Value createIterator(Value iterable) {
-    ObjInstance *iterObj = newInstance(lxIteratorClass);
-    Value iter = OBJ_VAL(iterObj);
-    Value args[2];
-    args[0] = iter;
-    args[1] = iterable;
-    lxIteratorInit(2, args);
-    return iter;
+    ASSERT(isIterableType(iterable));
+    if (IS_AN_ARRAY(iterable) || IS_A_MAP(iterable)) {
+        ObjInstance *iterObj = newInstance(lxIteratorClass);
+        Value iter = OBJ_VAL(iterObj);
+        Value args[2];
+        args[0] = iter;
+        args[1] = iterable;
+        lxIteratorInit(2, args);
+        return iter;
+    } else if (IS_INSTANCE(iterable)) {
+        ObjString *iterId = internedString("iter", 4);
+        ObjInstance *instance = AS_INSTANCE(iterable);
+        Obj *method = instanceFindMethod(instance, iterId);
+        if (method) {
+            callVMMethod(instance, OBJ_VAL(method), 0, NULL);
+            Value ret = pop();
+            if (IS_AN_ARRAY(ret) || IS_A_MAP(ret)) {
+                return createIterator(ret);
+            } else if (isIterator(ret)) {
+                return ret;
+            } else {
+                throwErrorFmt(lxTypeErrClass, "Return value from iter() must be an Iterator or iterable value (Array/Map)");
+            }
+        } else {
+            throwErrorFmt(lxNameErrClass, "Undefined method 'iter' for class %s", instanceClassName(instance));
+        }
+    }
+    UNREACHABLE(__func__);
 }
 
 static jmp_buf CCallJumpBuf;
@@ -394,14 +419,14 @@ static inline bool isInEval(void) {
 }
 
 // reset (clear) value stack for current execution context
-void resetStack() {
+void resetStack(void) {
     EC->stackTop = EC->stack;
     EC->frameCount = 0;
 }
 
 #define FIRST_GC_THRESHHOLD (1024*1024)
 
-void initVM() {
+void initVM(void) {
     if (vm.inited) {
         VM_WARN("initVM: VM already initialized");
         return;
@@ -457,7 +482,7 @@ void initVM() {
     VM_DEBUG("initVM() end");
 }
 
-void freeVM() {
+void freeVM(void) {
     /*fprintf(stderr, "VM run level: %d\n", vmRunLvl);*/
     if (!vm.inited) {
         VM_WARN("freeVM: VM not yet initialized");
@@ -503,12 +528,12 @@ void freeVM() {
 }
 
 
-int VMNumStackFrames() {
+int VMNumStackFrames(void) {
     VMExecContext *firstEC = vec_first(&vm.v_ecs);
     return EC->stackTop - firstEC->stack;
 }
 
-int VMNumCallFrames() {
+int VMNumCallFrames(void) {
     int ret = 0;
     VMExecContext *ec; int i = 0;
     vec_foreach(&vm.v_ecs, ec, i) {
@@ -530,7 +555,7 @@ bool VMLoadedScript(char *fname) {
 
 #define ASSERT_VALID_STACK(...) ASSERT(EC->stackTop >= EC->stack)
 
-static bool isOpStackEmpty() {
+static bool isOpStackEmpty(void) {
     ASSERT_VALID_STACK();
     return EC->stackTop == EC->stack;
 }
@@ -540,11 +565,12 @@ void push(Value value) {
     if (IS_OBJ(value)) {
         ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
     }
+    DBG_ASSERT(!IS_UNDEF(value));
     *EC->stackTop = value;
     EC->stackTop++;
 }
 
-Value pop() {
+Value pop(void) {
     ASSERT(EC->stackTop > EC->stack);
     EC->stackTop--;
     EC->lastValue = EC->stackTop;
@@ -562,7 +588,7 @@ static inline void setThis(unsigned n) {
     vm.thisValue = (EC->stackTop-1-n);
 }
 
-Value *getLastValue() {
+Value *getLastValue(void) {
     if (isOpStackEmpty()) {
         return EC->lastValue;
     } else {
@@ -570,15 +596,15 @@ Value *getLastValue() {
     }
 }
 
-static inline Value nilValue() {
+static inline Value nilValue(void) {
     return NIL_VAL;
 }
 
-static inline Value trueValue() {
+static inline Value trueValue(void) {
     return BOOL_VAL(true);
 }
 
-static inline Value falseValue() {
+static inline Value falseValue(void) {
     return BOOL_VAL(false);
 }
 
@@ -638,19 +664,19 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
     }
 }
 
-static inline CallFrame *getFrame() {
+static inline CallFrame *getFrame(void) {
     ASSERT(EC->frameCount >= 1);
     return &EC->frames[EC->frameCount-1];
 }
 
-static inline CallFrame *getFrameOrNull() {
+static inline CallFrame *getFrameOrNull(void) {
     if (EC->frameCount == 0) {
         return NULL;
     }
     return &EC->frames[EC->frameCount-1];
 }
 
-static inline Chunk *currentChunk() {
+static inline Chunk *currentChunk(void) {
     return &getFrame()->closure->function->chunk;
 }
 
@@ -707,6 +733,7 @@ void showUncaughtError(Value err) {
     for (int i = 0; i < btSz; i++) {
         fprintf(stderr, "%s", VAL_TO_STRING(ARRAY_GET(bt, i))->chars);
     }
+    fprintf(stderr, "/Backtrace:\n");
 
     vm.hadError = true;
     resetStack();
@@ -1033,7 +1060,7 @@ static bool checkFunctionArity(ObjFunction *func, int argCount) {
 
 // Arguments are expected to be pushed on to stack by caller. Argcount
 // does NOT include the instance argument, ex: a method with no arguments will have an
-// argCount of 0. If the callable is a class, this function creates the
+// argCount of 0. If the callable is a class (constructor), this function creates the
 // new instance and puts it in the proper spot in the stack. The return value
 // is pushed to the stack.
 static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo *callInfo) {
@@ -1277,7 +1304,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
 
 /**
  * see doCallCallable
- * argCount does NOT include instance if `isMethod` is true
+ * argCount does NOT include the instance if `isMethod` is true
  */
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     DBG_ASSERT(vm.inited);
@@ -1285,7 +1312,7 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     bool ret = doCallCallable(callable, argCount, isMethod, info);
     int lenAfter = vm.stackObjects.length;
 
-    // allow collection of stack-created objects if they're not rooted now
+    // allow collection of new stack-created objects if they're not rooted now
     for (int i = lenBefore; i < lenAfter; i++) {
         (void)vec_pop(&vm.stackObjects);
     }
@@ -1446,20 +1473,20 @@ void throwErrorFmt(ObjClass *klass, const char *format, ...) {
 
 void printVMStack(FILE *f) {
     if (EC->stackTop == EC->stack && vm.v_ecs.length == 1) {
-        fprintf(f, "[DEBUG]: Stack: empty\n");
+        fprintf(f, "[DEBUG %d]: Stack: empty\n", vmRunLvl);
         return;
     }
     VMExecContext *ec = NULL; int i = 0;
     int numCallFrames = VMNumCallFrames();
     int numStackFrames = VMNumStackFrames();
-    fprintf(f, "[DEBUG]: Stack (%d stack frames, %d call frames):\n", numStackFrames, numCallFrames);
+    fprintf(f, "[DEBUG %d]: Stack (%d stack frames, %d call frames):\n", vmRunLvl, numStackFrames, numCallFrames);
     // print VM stack values from bottom of stack to top
-    fprintf(f, "[DEBUG]: ");
+    fprintf(f, "[DEBUG %d]: ", vmRunLvl);
     int callFrameIdx = 0;
     vec_foreach(&vm.v_ecs, ec, i) {
         for (Value *slot = ec->stack; slot < ec->stackTop; slot++) {
             if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE)) {
-                fprintf(stderr, "[DEBUG]: Broken object pointer: %p\n", AS_OBJ(*slot));
+                fprintf(stderr, "[DEBUG %d]: Broken object pointer: %p\n", vmRunLvl, AS_OBJ(*slot));
                 ASSERT(0);
             }
             if (ec->frames[callFrameIdx].slots == slot) {
@@ -2068,9 +2095,11 @@ static InterpretResult vm_run(bool doResetStack) {
       }
       case OP_ITER: {
           Value iterable = peek(0);
-          ASSERT(isIterable(iterable)); // FIXME: throw TypeError
+          ASSERT(isIterableType(iterable)); // FIXME: throw TypeError
           Value iterator = createIterator(iterable);
-          pop();
+          DBG_ASSERT(isIterator(iterator));
+          DBG_ASSERT(isIterableType(peek(0)));
+          pop(); // iterable
           push(iterator);
           break;
       }

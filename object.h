@@ -240,6 +240,7 @@ typedef struct ObjBoundMethod {
 
 #define STRING_GETHIDDEN(stringVal) (stringGetHidden(stringVal))
 
+// strings
 typedef ObjString *(*newStringFunc)(char *chars, int length);
 // String creation functions
 ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
@@ -252,9 +253,7 @@ void clearObjString(ObjString *str);
 
 Value dupStringInstance(Value instance);
 Value newStringInstance(ObjString *buf);
-
-void objFreeze(Obj*);
-bool isFrozen(Obj*);
+ObjString *stringGetHidden(Value instance);
 
 // NOTE: don't call pushCString on a string value that's a key to a map! The
 // hash value changes and the map won't be able to index it anymore.
@@ -262,27 +261,30 @@ void pushCString(ObjString *string, char *chars, int lenToAdd);
 void pushCStringFmt(ObjString *string, const char *format, ...);
 uint32_t hashString(char *key, int length);
 
+// misc
+void objFreeze(Obj*);
+bool isFrozen(Obj*);
+void  setProp(Value self, ObjString *propName, Value val);
+Value getProp(Value self, ObjString *propName);
+Value getHiddenProp(Value self, ObjString *propName);
+void *internalGetData(ObjInternal *obj);
+
+// arrays
 Value       arrayGet(Value aryVal, int idx);
 int         arraySize(Value aryVal);
 void        arrayPush(Value aryVal, Value el);
 ValueArray *arrayGetHidden(Value aryVal);
 Value       newArray(void);
 
-
+// errors
 Value       newError(ObjClass *errClass, Value msg);
 
+// maps
 Value       newMap(void);
 bool        mapGet(Value map, Value key, Value *val);
 void        mapSet(Value map, Value key, Value val);
 Value       mapSize(Value map);
 Table      *mapGetHidden(Value map);
-
-ObjString *stringGetHidden(Value instance);
-
-void  setProp(Value self, ObjString *propName, Value val);
-Value getProp(Value self, ObjString *propName);
-
-Value getHiddenProp(Value self, ObjString *propName);
 
 // Object creation functions
 ObjFunction *newFunction(Chunk *chunk, Node *funcNode);
@@ -295,22 +297,25 @@ ObjInternal *newInternalObject(void *data, GCMarkFunc markFn, GCFreeFunc freeFn)
 ObjClosure *newClosure(ObjFunction *function);
 ObjUpvalue *newUpvalue(Value *slot);
 
-void *internalGetData(ObjInternal *obj);
-
+// methods/classes
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
+Obj *classFindStaticMethod(ObjClass *obj, ObjString *name);
 bool instanceIsA(ObjInstance *inst, ObjClass *klass);
 bool isSubclass(ObjClass *subklass, ObjClass *superklass);
-Obj *classFindStaticMethod(ObjClass *obj, ObjString *name);
+const char *instanceClassName(ObjInstance *obj);
 
+// metaclasses
 ObjClass *classSingletonClass(ObjClass *klass);
 ObjClass *moduleSingletonClass(ObjModule *mod);
 ObjClass *instanceSingletonClass(ObjInstance *instance);
 
+// other
 // Returns true if [value] is an object of type [type]. Do not call this
 // directly, instead use the [IS_XXX] macro for the type in question.
 static inline bool isObjType(Value value, ObjType type) {
   return IS_OBJ(value) && AS_OBJ(value)->type == type;
 }
+const char *typeOfObj(Obj *obj);
 
 typedef bool (*obj_type_p)(Obj*);
 bool is_obj_function_p(Obj*);
@@ -336,7 +341,5 @@ bool is_obj_instance_of_p(Obj*, ObjClass*);
 bool is_value_instance_of_p(Value, ObjClass*);
 bool is_obj_a_p(Obj*, ObjClass*);
 bool is_value_a_p(Value, ObjClass*);
-
-const char *typeOfObj(Obj *obj);
 
 #endif

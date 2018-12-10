@@ -1,0 +1,10 @@
+class NonString {
+  toString() {
+    return 3;
+  }
+}
+
+print NonString();
+
+__END__
+-- expect: TypeError --

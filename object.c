@@ -538,6 +538,15 @@ bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
     return subklass != NULL;
 }
 
+static const char *anonClassName = "(anon)";
+
+const char *instanceClassName(ObjInstance *obj) {
+    ASSERT(obj);
+    ObjClass *klass = obj->klass;
+    if (!klass || !klass->name) return anonClassName;
+    return klass->name->chars;
+}
+
 ObjClass *classSingletonClass(ObjClass *klass) {
     if (klass->singletonKlass) {
         return klass->singletonKlass;

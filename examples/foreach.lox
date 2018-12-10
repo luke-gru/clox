@@ -25,6 +25,24 @@ while (n = iter.next()) {
   print n;
 }
 
+class Classroom {
+  init(number, studentNames) {
+    this.names = studentNames;
+    this.number = number;
+  }
+
+  iter() {
+    return this.names;
+  }
+}
+
+print "";
+var names = ["Dave", "Kyle", "Lisa"];
+var croom = Classroom("A3", names);
+foreach (student in croom) {
+  print student;
+}
+
 __END__
 -- expect: --
 1.00
@@ -45,3 +63,7 @@ nil
 
 [woah,dude]
 [totally,cool]
+
+Dave
+Kyle
+Lisa

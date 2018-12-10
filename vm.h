@@ -115,22 +115,24 @@ typedef enum {
 } InterpretResult;
 
 // setup
-void initSighandlers();
+void initSighandlers(void);
 
 // high-level API
-void initVM();
-void freeVM();
+void initVM(void);
+void freeVM(void);
 InterpretResult interpret(Chunk *chunk, char *filename);
 InterpretResult loadScript(Chunk *chunk, char *filename);
 Value VMEval(const char *src, const char *filename, int lineno);
-Value *getLastValue();
+Value *getLastValue(void);
 
 bool VMLoadedScript(char *fname);
+
 void push(Value value); // push onto operand stack
-Value pop(); // pop top of operand stack
+Value pop(void); // pop top of operand stack
+Value peek(unsigned);
 
 NORETURN void repl(void);
-void resetStack(); // reset operand stack
+void resetStack(void); // reset operand stack
 
 // debug
 void printVMStack(FILE *f);
