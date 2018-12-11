@@ -11,7 +11,7 @@ typedef struct sCloxOptions {
     bool debugVM;
     bool debugTokens;
     bool debugBytecode;
-    bool traceGC;
+    int traceGCLvl;
     bool traceCompiler;
     bool disableBcodeOptimizer;
     bool disableGC;
@@ -35,6 +35,7 @@ int parseOption(char **argv, int idx);
 
 #define GET_OPTION(opt) (getOptions()->opt)
 #define CLOX_OPTION_T(opt) ((bool)(getOptions()->opt) == true)
+#define OPTION_T(opt) CLOX_OPTION_T(opt)
 #define SET_OPTION(name, val) do {\
     (getOptions())->name = val;\
     } while (0)

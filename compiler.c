@@ -800,24 +800,29 @@ static int declareVariable(Token *name) {
 
 // emit GET/SET global or local for named variable
 static void namedVariable(Token name, VarOp getSet) {
-  uint8_t getOp, setOp;
-  int arg = resolveLocal(current, &name);
-  if (arg != -1) {
-    getOp = OP_GET_LOCAL;
-    setOp = OP_SET_LOCAL;
-  } else if ((arg = resolveUpvalue(current, &name)) != -1) {
-    getOp = OP_GET_UPVALUE;
-    setOp = OP_SET_UPVALUE;
-  } else {
-    arg = identifierConstant(&name);
-    getOp = OP_GET_GLOBAL;
-    setOp = OP_SET_GLOBAL;
-  }
-  if (getSet == VAR_SET) {
-    emitOp1(setOp, (uint8_t)arg);
-  } else {
-    emitOp1(getOp, (uint8_t)arg);
-  }
+    uint8_t getOp, setOp;
+    int arg = resolveLocal(current, &name);
+    bool varNameUsed = false;
+    if (arg != -1) {
+        getOp = OP_GET_LOCAL;
+        setOp = OP_SET_LOCAL;
+    } else if ((arg = resolveUpvalue(current, &name)) != -1) {
+        getOp = OP_GET_UPVALUE;
+        setOp = OP_SET_UPVALUE;
+    } else {
+        arg = identifierConstant(&name);
+        varNameUsed = true;
+        getOp = OP_GET_GLOBAL;
+        setOp = OP_SET_GLOBAL;
+    }
+    uint8_t op = getOp;
+    if (getSet == VAR_SET) { op = setOp; }
+    if (varNameUsed) {
+        emitOp1(op, (uint8_t)arg);
+    } else {
+        uint8_t varName = identifierConstant(&name);
+        emitOp2(op, (uint8_t)arg, varName);
+    }
 }
 
 // Initializes a new compiler for a function, and sets it as the `current`
@@ -1021,7 +1026,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
             func->numDefaultArgs++;
             Insn *insnBefore = currentIseq()->tail;
             emitNode(vec_first(param->children)); // default arg
-            emitOp1(OP_SET_LOCAL, (uint8_t)localSlot);
+            emitOp2(OP_SET_LOCAL, (uint8_t)localSlot, identifierConstant(&param->tok));
             Insn *insnAfter = currentIseq()->tail;
             size_t codeDiff = iseqInsnByteDiff(insnBefore, insnAfter);
             ParamNodeInfo *paramNodeInfo = calloc(sizeof(ParamNodeInfo), 1);
@@ -1043,7 +1048,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
             func->numKwargs++;
             Insn *ifJumpStart = emitJump(OP_JUMP_IF_TRUE);
             emitChildren(param);
-            emitOp1(OP_SET_LOCAL, localSlot);
+            emitOp2(OP_SET_LOCAL, localSlot, identifierConstant(&param->tok));
             patchJump(ifJumpStart, -1, NULL);
         }
     }
@@ -1294,10 +1299,12 @@ static void emitNode(Node *n) {
         uint8_t slotNum = 0; int slotIdx = 0;
         int setOp = numVars > 1 ? OP_UNPACK_SET_LOCAL : OP_SET_LOCAL;
         vec_foreach(&v_slots, slotNum, slotIdx) {
+            Token name = n->children->data[slotIdx]->tok;
+            uint8_t nameIdx = identifierConstant(&name);
             if (setOp == OP_SET_LOCAL) {
-                emitOp1(setOp, slotNum);
+                emitOp2(setOp, slotNum, nameIdx);
             } else {
-                emitOp2(setOp, slotNum, (uint8_t)slotIdx);
+                emitOp3(setOp, slotNum, (uint8_t)slotIdx, nameIdx);
             }
         }
         emitOp0(OP_POP); // pop the iterator value
@@ -1341,7 +1348,7 @@ static void emitNode(Node *n) {
         if (current->scopeDepth == 0) {
             emitOp1(OP_DEFINE_GLOBAL, (uint8_t)arg);
         } else {
-            emitOp1(OP_SET_LOCAL, (uint8_t)arg);
+            emitOp2(OP_SET_LOCAL, (uint8_t)arg, identifierConstant(&n->tok));
         }
         return;
     }

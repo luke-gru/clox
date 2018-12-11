@@ -674,7 +674,7 @@ static Node *funDeclaration(ParseFunctionType fnType) {
     }
     vec_nodep_t *paramNodes = createNodeVec();
     int numParams = 0;
-    int lastParamKind;
+    int lastParamKind = -1;
     bool inKwargs = false;
     if (fnType != FUNCTION_TYPE_GETTER) {
         consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");

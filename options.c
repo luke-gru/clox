@@ -13,19 +13,23 @@ char *boolOptNames[] = {
     "debugVM",
     "debugTokens",
     "debugBytecode",
-    "traceGC",
     "traceCompiler",
     "disableBcodeOptimizer",
     "disableGC",
     "parseOnly",
     "compileOnly",
-    NULL,
+    NULL
 };
 
 char *stringOptNames[] = {
     "initialLoadPath",
     "initialScript",
-    NULL,
+    NULL
+};
+
+char *intOptNames[] = {
+    "traceGCLvl",
+    NULL
 };
 
 void initOptions(void) {
@@ -39,7 +43,6 @@ void initOptions(void) {
 
     options.traceParserCalls = false;
     options.traceVMExecution = false;
-    options.traceGC = false;
     options.traceCompiler = false;
 
     options.parseOnly = false;
@@ -51,6 +54,8 @@ void initOptions(void) {
 
     options.initialLoadPath = "";
     options.initialScript = "";
+
+    options.traceGCLvl = 0;
 
     options._inited = true;
 }
@@ -79,6 +84,15 @@ bool findOption(const char *optName, const char *typeName) {
             i++;
         }
         return false;
+    } else if (strcmp(typeName, "int") == 0) {
+        int i = 0;
+        while (intOptNames[i]) {
+            if (strcmp(optName, intOptNames[i]) == 0) {
+                return true;
+            }
+            i++;
+        }
+        return false;
     } else {
         UNREACHABLE("%s", "invalid option type: '%s'", typeName);
     }
@@ -88,7 +102,7 @@ bool findOption(const char *optName, const char *typeName) {
 static void enableAllTraceOptions(void) {
     SET_OPTION(traceParserCalls, true);
     SET_OPTION(traceVMExecution, true);
-    SET_OPTION(traceGC, true);
+    SET_OPTION(traceGCLvl, 2);
     SET_OPTION(traceCompiler, true);
 }
 
@@ -134,9 +148,12 @@ int parseOption(char **argv, int i) {
         SET_OPTION(traceVMExecution, true);
         return 1;
     }
-    if (strcmp(argv[i], "-DTRACE_GC") == 0) {
-        SET_OPTION(traceGC, true);
-        return 1;
+    if (strcmp(argv[i], "-DTRACE_GC_LVL") == 0) {
+        char *lvlStr = argv[++i];
+        int lvl = atoi(lvlStr);
+        if (lvl < 0) lvl = 0;
+        SET_OPTION(traceGCLvl, lvl);
+        return 2;
     }
     if (strcmp(argv[i], "-DTRACE_ALL") == 0) {
         enableAllTraceOptions();

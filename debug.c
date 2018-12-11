@@ -287,15 +287,19 @@ static int stringInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
 
 static int printLocalVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
-    fprintf(f, "%-16s    [slot %" PRId8 "]\n", op, slotIdx);
-    return i+2;
+    uint8_t varNameIdx = chunk->code[i + 2];
+    Value varName = getConstant(chunk, varNameIdx);
+    fprintf(f, "%-16s    '%s' [slot %" PRId8 "]\n", op, VAL_TO_STRING(varName)->chars, slotIdx);
+    return i+3;
 }
 
 static int printUnpackSetVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
     uint8_t unpackIdx = chunk->code[i + 2];
-    fprintf(f, "%-16s    [slot %d] %d\n", op, slotIdx, unpackIdx);
-    return i+3;
+    uint8_t varNameIdx = chunk->code[i + 3];
+    Value varName = getConstant(chunk, varNameIdx);
+    fprintf(f, "%-16s    '%s' [slot %d] %d\n", op, VAL_TO_STRING(varName)->chars, slotIdx, unpackIdx);
+    return i+4;
 }
 
 static int unpackSetVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
@@ -679,7 +683,7 @@ ObjString *disassembleChunk(Chunk *chunk) {
 }
 
 #ifdef NDEBUG
-#define printCBacktrace() (void)0
+void printCBacktrace(void) { }
 #else
 static void full_write(int fd, const char *buf, size_t len) {
     while (len > 0) {

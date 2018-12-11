@@ -879,11 +879,13 @@ static void defineMethod(ObjString *name) {
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         const char *klassName = klass->name ? klass->name->chars : "(anon)";
+        (void)klassName;
         VM_DEBUG("defining method '%s' in class '%s'", name->chars, klassName);
         ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         const char *modName = mod->name ? mod->name->chars : "(anon)";
+        (void)modName;
         VM_DEBUG("defining method '%s' in module '%s'", name->chars, modName);
         ASSERT(tableSet(&mod->methods, OBJ_VAL(name), method));
     }
@@ -1072,6 +1074,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     } else if (IS_CLASS(callable)) {
         ObjClass *klass = AS_CLASS(callable);
         const char *klassName = klass->name ? klass->name->chars : "(anon)";
+        (void)klassName;
         VM_DEBUG("calling callable class %s", klassName);
         ObjInstance *instance = newInstance(klass);
         instanceVal = OBJ_VAL(instance);
@@ -1840,6 +1843,8 @@ static InterpretResult vm_run(bool doResetStack) {
       }
       case OP_SET_LOCAL: {
           uint8_t slot = READ_BYTE();
+          uint8_t varName = READ_BYTE(); // for debugging
+          (void)varName;
           ASSERT(slot >= 0);
           getFrame()->slots[slot] = peek(0); // locals are popped at end of scope by VM
           break;
@@ -1847,23 +1852,31 @@ static InterpretResult vm_run(bool doResetStack) {
       case OP_UNPACK_SET_LOCAL: {
           uint8_t slot = READ_BYTE();
           uint8_t unpackIdx = READ_BYTE();
+          uint8_t varName = READ_BYTE(); // for debugging
+          (void)varName;
           ASSERT(slot >= 0);
           getFrame()->slots[slot] = unpackValue(peek(0), unpackIdx); // locals are popped at end of scope by VM
           break;
       }
       case OP_GET_LOCAL: {
           uint8_t slot = READ_BYTE();
+          uint8_t varName = READ_BYTE(); // for debugging
+          (void)varName;
           ASSERT(slot >= 0);
           push(getFrame()->slots[slot]);
           break;
       }
       case OP_GET_UPVALUE: {
           uint8_t slot = READ_BYTE();
+          uint8_t varName = READ_BYTE(); // for debugging
+          (void)varName;
           push(*getFrame()->closure->upvalues[slot]->value);
           break;
       }
       case OP_SET_UPVALUE: {
           uint8_t slot = READ_BYTE();
+          uint8_t varName = READ_BYTE(); // for debugging
+          (void)varName;
           *getFrame()->closure->upvalues[slot]->value = peek(0);
           break;
       }
