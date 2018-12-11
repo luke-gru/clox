@@ -11,6 +11,7 @@ char *boolOptNames[] = {
     "traceParserCalls",
     "traceVMExecution",
     "debugVM",
+    "debugThreads",
     "debugTokens",
     "debugBytecode",
     "traceGC",
@@ -36,6 +37,7 @@ void initOptions(void) {
     options.debugTokens = false;
     options.debugBytecode = false;
     options.debugVM = false;
+    options.debugThreads = false;
 
     options.traceParserCalls = false;
     options.traceVMExecution = false;
@@ -155,6 +157,10 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "--debug-VM") == 0) {
         SET_OPTION(debugVM, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--debug-threads") == 0) {
+        SET_OPTION(debugThreads, true);
         return 1;
     }
     if (strcmp(argv[i], "--disable-bopt") == 0) {

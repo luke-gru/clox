@@ -470,6 +470,9 @@ void collectGarbage(void) {
     }
     GC_TRACE_DEBUG("Open upvalues found: %d", numOpenUpsFound);
 
+    GC_TRACE_DEBUG("Marking VM threads");
+    grayObject((Obj*)vm.threads);
+
     GC_TRACE_DEBUG("Marking globals (%d found)", vm.globals.count);
     // Mark the global roots.
     grayTable(&vm.globals);

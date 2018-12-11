@@ -32,6 +32,25 @@ void freeValueArray(ValueArray *array) {
     initValueArray(array);
 }
 
+/*
+ *  0  *1*  2
+ * [1,  2,  3]
+ * [1,  3]
+ *
+ */
+
+// NOTE: assumes index is within bounds
+void removeValueArray(ValueArray *array, int idx) {
+    if (array->values == NULL) return;
+    if (idx == array->count-1) { // last element
+        array->count--;
+        return;
+    }
+    void *dest = array->values + idx;
+    void *src = dest + 1;
+    memmove(dest, src, sizeof(Value));
+}
+
 static void printBool(FILE *file, bool val) {
     fprintf(file, val ? "true" : "false");
 }

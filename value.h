@@ -34,6 +34,10 @@ typedef struct ValueArray {
     Value *values;
 } ValueArray;
 
+#define VALARRAY_FOREACH(ary, val, idx) \
+    for (idx = 0; idx < ary->count; idx++)
+
+
 #define IS_BOOL(value)    ((value).type == VAL_T_BOOL)
 #define IS_NIL(value)     ((value).type == VAL_T_NIL)
 #define IS_NUMBER(value)  ((value).type == VAL_T_NUMBER)
@@ -60,6 +64,7 @@ typedef struct ValueArray {
 void initValueArray(ValueArray *array);
 void writeValueArray(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);
+void removeValueArray(ValueArray *array, int idx);
 void printValue(FILE *file, Value value, bool canCallMethods);
 
 // value type predicate function

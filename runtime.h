@@ -26,6 +26,8 @@ Value lxLoadScript(int argCount, Value *args);
 Value lxRequireScript(int argCount, Value *args);
 Value lxDebugger(int argCount, Value *args);
 Value lxEval(int argCount, Value *args);
+Value lxNewThread(int argCount, Value *args);
+Value lxJoinThread(int argCount, Value *args);
 
 bool runtimeCheckArgs(int min, int max, int actual);
 
@@ -66,6 +68,9 @@ Value lxMapToString(int argCount, Value *args);
 
 // class File
 Value lxFileReadStatic(int argCount, Value *args);
+
+// class Thread
+Value lxThreadInit(int argCount, Value *args);
 
 Value lxErrInit(int argCount, Value *args);
 #endif

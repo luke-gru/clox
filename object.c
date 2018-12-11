@@ -449,6 +449,23 @@ void arrayPush(Value self, Value el) {
     writeValueArray(ary, el);
 }
 
+// Deletes the element from the array, returning its old index if
+// it was found, otherwise returns -1
+int arrayDelete(Value self, Value el) {
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    Value val; int idx = 0; int found = -1;
+    VALARRAY_FOREACH(ary, val, idx) {
+        if (valEqual(el, val)) {
+            found = idx;
+            break;
+        }
+    }
+    if (found != -1) {
+        removeValueArray(ary, found);
+    }
+    return found;
+}
+
 Value newMap(void) {
     ObjInstance *instance = newInstance(lxMapClass);
     Value map = OBJ_VAL(instance);
@@ -498,6 +515,17 @@ Value getProp(Value self, ObjString *propName) {
     ObjInstance *inst = AS_INSTANCE(self);
     Value ret;
     if (tableGet(&inst->fields, OBJ_VAL(propName), &ret)) {
+        return ret;
+    } else {
+        return NIL_VAL;
+    }
+}
+
+Value getHiddenProp(Value self, ObjString *propName) {
+    ASSERT(IS_INSTANCE(self));
+    ObjInstance *inst = AS_INSTANCE(self);
+    Value ret;
+    if (tableGet(&inst->hiddenFields, OBJ_VAL(propName), &ret)) {
         return ret;
     } else {
         return NIL_VAL;
@@ -569,6 +597,38 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     ObjClass *meta = newClass(name, inst->klass);
     inst->singletonKlass = meta;
     return meta;
+}
+
+Value newThread(void) {
+    ObjInstance *instance = newInstance(lxThreadClass);
+    Value th = OBJ_VAL(instance);
+    lxThreadInit(1, &th);
+    return th;
+}
+
+LxThread *threadGetInternal(Value thread) {
+    Value internal = getHiddenProp(thread, internedString("th", 2));
+    ObjInternal *i = AS_INTERNAL(internal);
+    ASSERT(i->data);
+    return (LxThread*)i->data;
+}
+
+void threadSetStatus(Value thread, ThreadStatus status) {
+    LxThread *th = threadGetInternal(thread);
+    th->status = status;
+}
+void threadSetId(Value thread, pthread_t tid) {
+    LxThread *th = threadGetInternal(thread);
+    th->tid = tid;
+}
+
+ThreadStatus threadGetStatus(Value thread) {
+    LxThread *th = threadGetInternal(thread);
+    return th->status;
+}
+pthread_t threadGetId(Value thread) {
+    LxThread *th = threadGetInternal(thread);
+    return th->tid;
 }
 
 bool is_obj_function_p(Obj *obj) {

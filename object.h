@@ -1,6 +1,7 @@
 #ifndef clox_object_h
 #define clox_object_h
 
+#include <pthread.h>
 #include "common.h"
 #include "chunk.h"
 #include "value.h"
@@ -148,6 +149,7 @@ extern ObjClass *lxArgErrClass;
 extern ObjClass *lxTypeErrClass;
 extern ObjClass *lxNameErrClass;
 extern ObjClass *lxFileClass;
+extern ObjClass *lxThreadClass;
 
 extern Value lxLoadPath;
 
@@ -164,6 +166,17 @@ typedef struct ObjBoundMethod {
   Value receiver;
   Obj *callable; // ObjClosure* or ObjNative*
 } ObjBoundMethod;
+
+// thread internals
+typedef enum ThreadStatus {
+    THREAD_STOPPED = 0,
+    THREAD_RUNNING,
+    THREAD_ZOMBIE
+} ThreadStatus;
+typedef struct LxThread {
+    pthread_t tid;
+    ThreadStatus status;
+} LxThread;
 
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))
 #define IS_FUNCTION(value)      (isObjType(value, OBJ_T_FUNCTION))
@@ -209,6 +222,7 @@ typedef struct ObjBoundMethod {
 #define IS_A_STRING(value)      (IS_A(value, lxStringClass))
 #define IS_T_STRING(value)      (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxStringClass)
 #define IS_AN_ERROR(value)      (IS_A(value, lxErrClass))
+#define IS_A_THREAD(value)      (IS_A(value, lxThreadClass))
 
 #define IS_SUBCLASS(subklass,superklass) (isSubclass(subklass,superklass))
 
@@ -264,9 +278,9 @@ uint32_t hashString(char *key, int length);
 Value       arrayGet(Value aryVal, int idx);
 int         arraySize(Value aryVal);
 void        arrayPush(Value aryVal, Value el);
+int         arrayDelete(Value aryVal, Value el);
 ValueArray *arrayGetHidden(Value aryVal);
 Value       newArray(void);
-
 
 Value       newError(ObjClass *errClass, Value msg);
 
@@ -275,6 +289,13 @@ bool        mapGet(Value map, Value key, Value *val);
 void        mapSet(Value map, Value key, Value val);
 Value       mapSize(Value map);
 Table      *mapGetHidden(Value map);
+
+void threadSetStatus(Value thread, ThreadStatus status);
+void threadSetId(Value thread, pthread_t tid);
+ThreadStatus threadGetStatus(Value thread);
+pthread_t threadGetId(Value thread);
+Value newThread(void);
+LxThread *threadGetInternal(Value thread);
 
 ObjString *stringGetHidden(Value instance);
 

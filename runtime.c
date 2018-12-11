@@ -92,8 +92,35 @@ Value lxEval(int argCount, Value *args) {
     return VMEval(csrc, "(eval)", 1);
 }
 
-static void runCallableInNewThread(void *arg) {
+static void enteredNewThread() {
+    Value thread = newThread();
+    threadSetStatus(thread, THREAD_RUNNING);
+    threadSetId(thread, pthread_self());
+    vm.curThread = AS_INSTANCE(thread);
+    arrayPush(OBJ_VAL(vm.threads), thread);
+    // TODO: set other threads to STOPPED?
+}
+
+static void exitingThread() {
+    threadSetStatus(OBJ_VAL(vm.curThread), THREAD_STOPPED);
+    arrayDelete(OBJ_VAL(vm.threads), OBJ_VAL(vm.curThread));
+    vm.curThread = NULL;
+}
+
+static void *runCallableInNewThread(void *arg) {
     ObjClosure *closure = arg;
+    ASSERT(closure);
+    acquireGVL();
+    THREAD_DEBUG(2, "in new thread");
+    enteredNewThread();
+    push(OBJ_VAL(closure));
+    THREAD_DEBUG(2, "calling callable");
+    callCallable(OBJ_VAL(closure), 0, false, NULL);
+    vm_run(false);
+    exitingThread();
+    THREAD_DEBUG(2, "exiting new thread");
+    releaseGVL();
+    return AS_OBJ(pop());
 }
 
 Value lxNewThread(int argCount, Value *args) {
@@ -102,9 +129,14 @@ Value lxNewThread(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(closure, IS_CLOSURE_FUNC, "closure", 1);
     ObjClosure *func = AS_CLOSURE(closure);
     pthread_t tnew;
-    if (pthread_create(&tnew, NULL, runCallableInNewThread, func)) {
+    if (pthread_create(&tnew, NULL, runCallableInNewThread, func) == 0) {
+        THREAD_DEBUG(2, "created thread id %lu", (unsigned long)tnew);
+        releaseGVL();
+        acquireGVL();
         return NUMBER_VAL((unsigned long)tnew);
     } else {
+        THREAD_DEBUG(1, "Error creating new thread");
+        // TODO: throw error
         return NIL_VAL;
     }
 }
@@ -114,6 +146,28 @@ Value lxJoinThread(int argCount, Value *args) {
     Value tidNum = *args;
     CHECK_ARG_BUILTIN_TYPE(tidNum, IS_NUMBER_FUNC, "number", 1);
     double num = AS_NUMBER(tidNum);
+    THREAD_DEBUG(2, "Joining thread id %lu\n", (unsigned long)num);
+    releaseGVL();
+    int ret = 0;
+    if ((ret = pthread_join((pthread_t)num, NULL)) != 0) {
+        // TODO: throw error
+        THREAD_DEBUG(1, "Error joining thread: (ret=%d)", ret);
+    }
+    // blocks
+    acquireGVL();
+    return NIL_VAL;
+}
+
+Value lxThreadInit(int argCount, Value *args) {
+    CHECK_ARGS("Thread#init", 1, 1, argCount);
+    Value self = *args;
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjInternal *internalObj = newInternalObject(NULL, NULL, NULL);
+    LxThread *th = calloc(sizeof(LxThread), 1); // GCed by default GC free of internalObject
+    ASSERT_MEM(th);
+    internalObj->data = th;
+    tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)), OBJ_VAL(internalObj));
+    return self;
 }
 
 static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoaded) {

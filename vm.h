@@ -2,6 +2,7 @@
 #define clox_vm_h
 
 #include <stdio.h>
+#include <pthread.h>
 #include "chunk.h"
 #include "object.h"
 #include "table.h"
@@ -10,6 +11,12 @@
 
 #define STACK_MAX 256
 #define FRAMES_MAX 64
+
+#ifndef NDEBUG
+#define THREAD_DEBUG(lvl, ...) thread_debug(lvl, __VA_ARGS__)
+#else
+#define THREAD_DEBUG(lvl, ...) (void)0
+#endif
 
 typedef struct CallInfo CallInfo;
 
@@ -28,6 +35,7 @@ typedef struct CallFrame {
     int callLine;
     ObjString *file; // full path of file the function is called from
 } CallFrame; // represents a local scope (block, function, etc)
+
 
 // Execution context for VM. When loading a script, a new context is created,
 // when evaling a string, a new context is also created, etc.
@@ -79,6 +87,12 @@ typedef struct VM {
 
     bool inited;
     bool hadError;
+
+    // threading
+    pthread_mutex_t GVLock; // global VM lock
+    ObjInstance *curThread;
+    ObjInstance *mainThread;
+    ObjInstance *threads; // array of current threads
 } VM; // singleton
 
 extern VM vm;
@@ -118,6 +132,11 @@ void throwErrorFmt(ObjClass *klass, const char *format, ...);
 #define throwArgErrorFmt(format, ...) throwErrorFmt(lxArgErrClass, format, __VA_ARGS__)
 void throwError(Value err);
 
+void acquireGVL(void);
+void releaseGVL(void);
+void thread_debug(int lvl, const char *format, ...);
+
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
+InterpretResult vm_run(bool doResetStack);
 
 #endif

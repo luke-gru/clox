@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <setjmp.h>
+#include <pthread.h>
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
@@ -15,8 +16,8 @@ VM vm;
 #define VM_DEBUG(...) vm_debug(__VA_ARGS__)
 #define VM_WARN(...) vm_warn(__VA_ARGS__)
 #else
-#define VM_DEBUG(...) (void(0))
-#define VM_WARN(...) (void(0))
+#define VM_DEBUG(...) (void)0
+#define VM_WARN(...) (void)0
 #endif
 
 #define EC (vm.ec)
@@ -29,6 +30,18 @@ static void vm_debug(const char *format, ...) {
     vfprintf(stderr, format, ap);
     va_end(ap);
     fprintf(stderr, "\n");
+}
+void thread_debug(int lvl, const char *format, ...) {
+#ifndef NDEBUG
+    if (!CLOX_OPTION_T(debugThreads)) return; // TODO: incorporate lvl
+    va_list ap;
+    va_start(ap, format);
+    fprintf(stderr, "[TH]: ");
+    vfprintf(stderr, format, ap);
+    va_end(ap);
+    fprintf(stderr, "\n");
+    fflush(stderr);
+#endif
 }
 static void vm_warn(const char *format, ...) {
     va_list ap;
@@ -88,6 +101,14 @@ static void defineNativeFunctions() {
     ObjString *evalName = internedString("eval", 4);
     ObjNative *evalFn = newNative(evalName, lxEval);
     tableSet(&vm.globals, OBJ_VAL(evalName), OBJ_VAL(evalFn));
+
+    ObjString *newThreadName = internedString("newThread", 9);
+    ObjNative *newThreadFn = newNative(newThreadName, lxNewThread);
+    tableSet(&vm.globals, OBJ_VAL(newThreadName), OBJ_VAL(newThreadFn));
+
+    ObjString *joinThreadName = internedString("joinThread", 10);
+    ObjNative *joinThreadFn = newNative(joinThreadName, lxJoinThread);
+    tableSet(&vm.globals, OBJ_VAL(joinThreadName), OBJ_VAL(joinThreadFn));
 }
 
 // Builtin classes:
@@ -102,6 +123,7 @@ ObjClass *lxArgErrClass;
 ObjClass *lxTypeErrClass;
 ObjClass *lxNameErrClass;
 ObjClass *lxFileClass;
+ObjClass *lxThreadClass;
 Value lxLoadPath;
 
 static void defineNativeClasses() {
@@ -258,6 +280,13 @@ static void defineNativeClasses() {
 
     ObjNative *fileReadNat = newNative(internedString("read", 4), lxFileReadStatic);
     tableSet(&fileClassStatic->methods, OBJ_VAL(internedString("read", 4)), OBJ_VAL(fileReadNat));
+
+    // class Thread
+    ObjString *threadClassName = internedString("Thread", 6);
+    ObjClass *threadClass = newClass(threadClassName, objClass);
+    tableSet(&vm.globals, OBJ_VAL(threadClassName), OBJ_VAL(threadClass));
+
+    lxThreadClass = threadClass;
 }
 
 static void defineGlobalVariables() {
@@ -282,7 +311,6 @@ static jmp_buf CCallJumpBuf;
 bool inCCall;
 static bool cCallThrew = false;
 static bool returnedFromNativeErr = false;
-static bool runUntilReturn = false;
 static int lastSplatNumArgs = -1;
 
 static int curLine = 1;
@@ -313,6 +341,29 @@ void resetStack() {
 }
 
 #define FIRST_GC_THRESHHOLD (1024*1024)
+
+static void initMainThread(void) {
+    if (pthread_mutex_init(&vm.GVLock, NULL) != 0) {
+        die("Global VM lock unable to initialize");
+    }
+
+    vm.curThread = NULL;
+    vm.mainThread = NULL;
+
+    Value mainThread = newThread();
+    Value threadList = newArray();
+    arrayPush(threadList, mainThread);
+
+    vm.curThread = AS_INSTANCE(mainThread);
+    vm.mainThread = AS_INSTANCE(mainThread);
+    vm.threads = AS_INSTANCE(threadList);
+
+    acquireGVL();
+    threadSetStatus(mainThread, THREAD_RUNNING);
+    pthread_t tid = pthread_self();
+    threadSetId(mainThread, tid);
+    THREAD_DEBUG(1, "Main thread initialized");
+}
 
 void initVM() {
     if (vm.inited) {
@@ -354,11 +405,11 @@ void initVM() {
     inCCall = false;
     cCallThrew = false;
     returnedFromNativeErr = false;
-    runUntilReturn = false;
     curLine = 1;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
     defineGlobalVariables();
+    initMainThread();
     resetStack();
     turnGCOn();
     VM_DEBUG("initVM() end");
@@ -400,6 +451,13 @@ void freeVM() {
     vec_clear(&vm.v_ecs);
     vm.ec = NULL;
     vm.inited = false;
+
+    releaseGVL();
+    pthread_mutex_destroy(&vm.GVLock);
+    vm.curThread = NULL;
+    vm.mainThread = NULL;
+    vm.threads = NULL;
+
     VM_DEBUG("freeVM() end");
 }
 
@@ -689,8 +747,6 @@ static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName,
     return false;
 }
 
-static InterpretResult run(bool);
-
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
     if (tableGet(&obj->fields, OBJ_VAL(propName), &ret)) {
@@ -806,10 +862,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     VM_DEBUG("call begin");
     callCallable(callable, argCount, true, NULL); // pushes return value to stack
     if (IS_CLOSURE(callable)) {
-        bool oldRunUntilReturn = runUntilReturn;
-        runUntilReturn = true;
-        run(false); // actually run the function
-        runUntilReturn = oldRunUntilReturn;
+        vm_run(false); // actually run the function
     }
     VM_DEBUG("call end");
     if (vm.hadError) {
@@ -1352,7 +1405,7 @@ static ObjString *methodNameForBinop(OpCode code) {
 /**
  * Run the VM's instructions.
  */
-static InterpretResult run(bool doResetStack) {
+InterpretResult vm_run(bool doResetStack) {
     if (CLOX_OPTION_T(parseOnly) || CLOX_OPTION_T(compileOnly)) {
         return INTERPRET_OK;
     }
@@ -1514,6 +1567,7 @@ static InterpretResult run(bool doResetStack) {
         if (!vm.printBuf || vm.printToStdout) {
             printValue(stdout, val, true);
             printf("\n");
+            fflush(stdout);
         }
         if (vm.printBuf) {
             ObjString *out = valueToString(val, hiddenString);
@@ -1820,10 +1874,7 @@ static InterpretResult run(bool doResetStack) {
           popFrame();
           EC->stackTop = newTop;
           push(result);
-          if (runUntilReturn) {
-              return INTERPRET_OK;
-          }
-          break;
+          return INTERPRET_OK;
       }
       case OP_CLASS: { // add or re-open class
           Value className = READ_CONSTANT();
@@ -2049,7 +2100,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     frame->nativeFunc = NULL;
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = run(true);
+    InterpretResult result = vm_run(true);
     return result;
 }
 
@@ -2072,7 +2123,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
 
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = run(false);
+    InterpretResult result = vm_run(false);
     pop_EC();
     ASSERT(oldFrame == getFrame());
     return result;
@@ -2112,7 +2163,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
 
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = run(false);
+    InterpretResult result = vm_run(false);
     if (result != INTERPRET_OK) {
         vm.hadError = false;
     }
@@ -2132,4 +2183,17 @@ void unsetPrintBuf(void) {
     DBG_ASSERT(vm.inited);
     vm.printBuf = NULL;
     vm.printToStdout = true;
+}
+
+void acquireGVL(void) {
+    pthread_t tid = pthread_self();
+    THREAD_DEBUG(3, "thread %lu locking GVL...", (unsigned long)tid);
+    pthread_mutex_lock(&vm.GVLock);
+    THREAD_DEBUG(3, "thread %lu locked GVL", (unsigned long)tid);
+}
+
+void releaseGVL(void) {
+    pthread_t tid = pthread_self();
+    THREAD_DEBUG(3, "thread %lu unlocking GVL", (unsigned long)tid);
+    pthread_mutex_unlock(&vm.GVLock);
 }

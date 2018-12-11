@@ -9,6 +9,7 @@ typedef struct sCloxOptions {
     bool traceParserCalls;
     bool traceVMExecution;
     bool debugVM;
+    bool debugThreads;
     bool debugTokens;
     bool debugBytecode;
     bool traceGC;
