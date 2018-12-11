@@ -452,6 +452,21 @@ Value lxArrayPush(int argCount, Value *args) {
     return self;
 }
 
+Value lxArrayDelete(int argCount, Value *args) {
+    CHECK_ARGS("Array#delete", 2, 2, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    int idx = arrayDelete(self, args[1]);
+    if (idx == -1) {
+        return NIL_VAL;
+    } else {
+        return NUMBER_VAL(idx);
+    }
+}
+
 // ex:
 //   print a;
 // OR

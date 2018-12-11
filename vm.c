@@ -205,6 +205,9 @@ static void defineNativeClasses() {
     ObjNative *aryPushNat = newNative(internedString("push", 4), lxArrayPush);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(aryPushNat));
 
+    ObjNative *aryDelNat = newNative(internedString("delete", 6), lxArrayDelete);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("delete", 6)), OBJ_VAL(aryDelNat));
+
     ObjNative *aryIdxGetNat = newNative(internedString("indexGet", 8), lxArrayIndexGet);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("indexGet", 8)), OBJ_VAL(aryIdxGetNat));
 
