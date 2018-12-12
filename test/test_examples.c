@@ -56,15 +56,24 @@ static int test_run_example_files(void) {
     int numErrors = 0;
     int numSuccesses = 0;
     Chunk chunk;
+    const char *filePrefix = "./examples/";
+    size_t filePrefixLen = strlen(filePrefix);
     while ((ent = readdir(d))) {
         if (ent->d_type != DT_REG) { // reg. file
             continue;
         }
-        if (strstr(ent->d_name, ".lox") == NULL) {
+        char *extBeg = strstr(ent->d_name, ".lox");
+        size_t entSz = strlen(ent->d_name);
+        if (extBeg == NULL || extBeg != ent->d_name+entSz-4) {
+            fprintf(stderr, "Skipping file '%s', not '.lox' extension\n", ent->d_name);
+            continue;
+        }
+        if (entSz+filePrefixLen+1 > FILENAME_BUFSZ) {
+            fprintf(stderr, "Skipping file '%s', filename too long\n", ent->d_name);
             continue;
         }
         memset(fbuf, 0, FILENAME_BUFSZ);
-        strcat(fbuf, "./examples/");
+        strcat(fbuf, filePrefix);
         strcat(fbuf, ent->d_name);
         fprintf(stderr, "Opening file '%s'\n", fbuf);
         FILE *f = fopen(fbuf, "r");

@@ -10,7 +10,7 @@ class Math {
   }
 }
 
-print Math.square(3); // Prints "9".
+print Math.square(3);
 print Math.me();
 Math.PI = 3.14;
 print Math.PI;
