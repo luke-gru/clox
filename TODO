@@ -22,12 +22,19 @@ bytecode, and benchmark the lookup results []
 * Add `foreach el in item` syntax with iter() support []
 * Add system() for running OS commands []
 * Add fork() []
-* Add threads with libpthread []
+* Add threads with libpthread [PARTIAL]
 * Make error reporting and throwing/catching errors work across
 execution contexts (like eval) []
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
 * Add Object#dup, and Class#ancestors []
+* Add capacity to string so don't have to reallocate after every push (PERF)
+* Add default ENV map as well as ARGV array
+* Add atexit hooks (`atexit(fun() { })`)
+* Add signal trap handlers (`trap(signame, fun() { })`)
+* Add Mutex class, mutexes for thread synchronization
+* release GVL before performing blocking calls/syscalls etc.
+* Add String#clear(), String#insertAt("new", 0), String#substr(start, len)
 
 BUGS:
 * super() bug in examples/super.lox

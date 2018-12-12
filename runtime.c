@@ -503,6 +503,18 @@ Value lxArrayDelete(int argCount, Value *args) {
     }
 }
 
+// ex: a.clear();
+Value lxArrayClear(int argCount, Value *args) {
+    CHECK_ARGS("Array#clear", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    arrayClear(self);
+    return self;
+}
+
 // ex:
 //   print a;
 // OR
@@ -731,6 +743,17 @@ Value lxMapValues(int argCount, Value *args) {
         arrayPush(ary, entry.value);
     }
     return ary;
+}
+
+Value lxMapClear(int argCount, Value *args) {
+    CHECK_ARGS("Map#clear", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot mutate");
+    }
+    mapClear(self);
+    return self;
 }
 
 Value lxErrInit(int argCount, Value *args) {

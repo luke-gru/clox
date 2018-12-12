@@ -283,6 +283,7 @@ Value       arrayPop(Value aryVal);
 void        arrayPushFront(Value aryVal, Value el);
 Value       arrayPopFront(Value aryVal);
 int         arrayDelete(Value aryVal, Value el);
+void        arrayClear(Value aryVal);
 ValueArray *arrayGetHidden(Value aryVal);
 
 Value       newError(ObjClass *errClass, Value msg);
@@ -291,6 +292,7 @@ Value       newMap(void);
 bool        mapGet(Value map, Value key, Value *val);
 void        mapSet(Value map, Value key, Value val);
 Value       mapSize(Value map);
+void        mapClear(Value map);
 Table      *mapGetHidden(Value map);
 
 void threadSetStatus(Value thread, ThreadStatus status);

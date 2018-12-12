@@ -226,6 +226,9 @@ static void defineNativeClasses() {
     ObjNative *aryToStringNat = newNative(internedString("toString", 8), lxArrayToString);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(aryToStringNat));
 
+    ObjNative *aryClearNat = newNative(internedString("clear", 5), lxArrayClear);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(aryClearNat));
+
     // class Map
     ObjString *mapClassName = internedString("Map", 3);
     ObjClass *mapClass = newClass(mapClassName, objClass);
@@ -250,6 +253,9 @@ static void defineNativeClasses() {
 
     ObjNative *mapToStringNat = newNative(internedString("toString", 8), lxMapToString);
     tableSet(&mapClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(mapToStringNat));
+
+    ObjNative *mapClearNat = newNative(internedString("clear", 5), lxMapClear);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(mapClearNat));
 
     // class Error
     ObjString *errClassName = internedString("Error", 5);

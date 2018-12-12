@@ -493,6 +493,11 @@ void arrayPushFront(Value self, Value el) {
     writeValueArrayBeg(ary, el);
 }
 
+// NOTE: doesn't check frozenness or type of `self`
+void arrayClear(Value self) {
+    freeValueArray(ARRAY_GETHIDDEN(self));
+}
+
 Value newMap(void) {
     ObjInstance *instance = newInstance(lxMapClass);
     Value map = OBJ_VAL(instance);
@@ -509,14 +514,22 @@ bool mapGet(Value mapVal, Value key, Value *ret) {
     }
 }
 
+// NOTE: doesn't check frozenness or type of `mapVal`
 void mapSet(Value mapVal, Value key, Value val) {
     Table *map = MAP_GETHIDDEN(mapVal);
     tableSet(map, key, val);
 }
 
+// number of key-value pairs
 Value mapSize(Value mapVal) {
     Table *map = MAP_GETHIDDEN(mapVal);
     return NUMBER_VAL(map->count);
+}
+
+// NOTE: doesn't check frozenness or type of `mapVal`
+void mapClear(Value mapVal) {
+    Table *map = MAP_GETHIDDEN(mapVal);
+    freeTable(map);
 }
 
 Table *mapGetHidden(Value mapVal) {
@@ -559,6 +572,7 @@ Value getHiddenProp(Value self, ObjString *propName) {
     }
 }
 
+// NOTE: doesn't check frozenness of `self`
 void setProp(Value self, ObjString *propName, Value val) {
     ASSERT(IS_INSTANCE(self));
     ObjInstance *inst = AS_INSTANCE(self);
