@@ -729,6 +729,7 @@ int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     compilerOpts.noRemoveUnusedExpressions = true;
     initSighandlers();
+
     INIT_TESTS();
     REGISTER_T_ASSERT_ON_FAIL(freeVM);
     RUN_TEST(test_addition);

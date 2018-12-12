@@ -33,5 +33,6 @@ int main(int argc, char *argv[]) {
     INIT_TESTS();
     RUN_TEST(test_string_object);
     RUN_TEST(test_string_pushCStringFmt);
+    freeVM();
     END_TESTS();
 }

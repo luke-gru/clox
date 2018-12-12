@@ -519,5 +519,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_output_nodes_from_parser_propset);
     RUN_TEST(test_output_nodes_from_parser_precedence1);
     RUN_TEST(test_parser_string_interpolation);
+    freeVM();
     END_TESTS();
 }

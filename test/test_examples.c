@@ -15,6 +15,8 @@ DIR *getDir(const char *name) {
     return dir; // can be NULL
 }
 
+// returns string containing lines of expected output after "__END__\n-- expect: --"
+// in given file.
 static ObjString *fileExpectStr(FILE *f) {
     bool inEnd = false;
     bool inExpect = false;
@@ -26,7 +28,7 @@ static ObjString *fileExpectStr(FILE *f) {
                 memset(lineBuf, 0, 1024);
             } else if (strncmp(lineBuf, "-- expect: --", 13) == 0) {
                 inExpect = true;
-            } else if (strncmp(lineBuf, "-- noexpect: --", 10) == 0) {
+            } else if (strncmp(lineBuf, "-- noexpect: --", 15) == 0) {
                 unhideFromGC((Obj*)str);
                 return NULL;
             }
@@ -143,6 +145,7 @@ cleanup:
 
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
+    initSighandlers();
     initVM();
     INIT_TESTS();
     RUN_TEST(test_run_example_files);

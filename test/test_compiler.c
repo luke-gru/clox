@@ -395,8 +395,10 @@ cleanup:
 
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
+    initSighandlers();
+
     initVM();
-    turnGCOff();
+    turnGCOff(); // FIXME: why is this here?
     INIT_TESTS();
     RUN_TEST(test_compile_addition);
     RUN_TEST(test_compile_global_variable);
@@ -415,5 +417,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_jump_consolidation_and_unused_expression_removal);
     RUN_TEST(test_while_true);
 
+    freeVM();
     END_TESTS();
 }
