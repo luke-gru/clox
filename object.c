@@ -8,7 +8,7 @@
 #include "runtime.h"
 #include "vec.h"
 
-// allocate object on the VM heap
+// allocate object and link it to the VM object heap
 #define ALLOCATE_OBJ(type, objectType) \
     (type*)allocateObject(sizeof(type), objectType)
 
@@ -44,7 +44,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
  * Allocate a new lox string object with given characters and length
  * NOTE: length here is strlen(chars). Interns it right away.
  */
-static ObjString *allocateString(char *chars, int length, uint32_t hash) {
+static ObjString *allocateString(char *chars, int length) {
     if (!vm.inited) {
         fprintf(stderr, "allocateString before VM inited: %s\n", chars);
         ASSERT(vm.inited);
@@ -53,7 +53,7 @@ static ObjString *allocateString(char *chars, int length, uint32_t hash) {
     string->length = length;
     string->capacity = length;
     string->chars = chars;
-    string->hash = hash;
+    string->hash = 0; // lazily computed
     return string;
 }
 
@@ -84,25 +84,22 @@ uint32_t hashString(char *key, int length) {
 
 // use `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
-// XXX: Do not pass a static string here, it'll break when we try to free it.
+// XXX: Do not pass a static string here, it'll break when GC tries to free it.
 ObjString *takeString(char *chars, int length) {
     DBG_ASSERT(strlen(chars) == length);
-    uint32_t hash = hashString(chars, length);
-    return allocateString(chars, length, hash);
+    return allocateString(chars, length);
 }
 
 // use copy of `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
 ObjString *copyString(char *chars, int length) {
     DBG_ASSERT(strlen(chars) >= length);
-    // Copy the characters to the heap so the object can own it.
-    uint32_t hash = hashString((char*)chars, length);
 
     char *heapChars = ALLOCATE(char, length + 1);
     memcpy(heapChars, chars, length);
     heapChars[length] = '\0';
 
-    return allocateString(heapChars, length, hash);
+    return allocateString(heapChars, length);
 }
 
 ObjString *hiddenString(char *chars, int len) {
@@ -136,10 +133,7 @@ void pushString(ObjString *a, ObjString *b) {
 
 // Copies `chars`, adds them to end of string.
 // NOTE: don't use this function on a ObjString that is already a key
-// for a table, it will fail.
-// TODO: add a capacity field to string, so we don't always reallocate when
-// pushing new chars to the buffer. Also, treat strings as mutable externally.
-// NOTE: length here is strlen(chars)
+// for a table, it won't retrieve the value in the table anymore.
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     if (((Obj*)string)->isFrozen) {
@@ -162,8 +156,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     }
     string->chars[string->length + i] = '\0';
     string->length += lenToAdd;
-    // TODO: avoid rehash, hash should be calculated when needed (lazily)
-    string->hash = hashString(string->chars, strlen(string->chars));
+    string->hash = 0;
 }
 
 void pushCStringFmt(ObjString *string, const char *format, ...) {
@@ -197,7 +190,7 @@ void pushCStringFmt(ObjString *string, const char *format, ...) {
     }
     string->chars[string->length + i] = '\0';
     string->length += buflen;
-    string->hash = hashString(string->chars, strlen(string->chars));
+    string->hash = 0;
 }
 
 void clearObjString(ObjString *string) {
@@ -206,11 +199,11 @@ void clearObjString(ObjString *string) {
         fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
         ASSERT(0);
     }
-    string->chars = GROW_ARRAY(string->chars, char, string->length+1, 1);
+    string->chars = GROW_ARRAY(string->chars, char, string->capacity+1, 1);
     string->chars[0] = '\0';
     string->length = 0;
     string->capacity = 0;
-    string->hash = hashString(string->chars, 0);
+    string->hash = 0;
 }
 
 ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {

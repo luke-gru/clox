@@ -304,11 +304,17 @@ uint32_t valHash(Value val) {
     if (IS_OBJ(val)) {
         if (IS_STRING(val) || IS_A_STRING(val)) {
             ObjString *string = VAL_TO_STRING(val);
-            return hashString(string->chars, string->length);
+            if (string->hash > 0) {
+                return string->hash;
+            } else {
+                uint32_t hash = hashString(string->chars, string->length);
+                string->hash = hash;
+                return hash;
+            }
         } else {
             char buf[20] = {'\0'};
             sprintf(buf, "%p", AS_OBJ(val));
-            return hashString(buf, strlen(buf));
+            return hashString(buf, strlen(buf)); // hash the pointer string
         }
     } else if (IS_NUMBER(val)) {
         return ((uint32_t)AS_NUMBER(val))+3;
