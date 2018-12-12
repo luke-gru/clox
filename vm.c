@@ -628,7 +628,7 @@ bool VMLoadedScript(char *fname) {
     return false;
 }
 
-#define ASSERT_VALID_STACK(...) ASSERT(EC->stackTop >= EC->stack)
+#define ASSERT_VALID_STACK() ASSERT(EC->stackTop >= EC->stack)
 
 static bool isOpStackEmpty(void) {
     ASSERT_VALID_STACK();
@@ -713,7 +713,15 @@ static int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
             return 1;
         }
     } else if (IS_A_STRING(lhs) && IS_A_STRING(rhs)) {
-        return strcmp(VAL_TO_STRING(lhs)->chars, VAL_TO_STRING(rhs)->chars);
+        ObjString *lhsStr = VAL_TO_STRING(lhs);
+        ObjString *rhsStr = VAL_TO_STRING(rhs);
+        if (lhsStr->hash > 0 && rhsStr->hash > 0) {
+            return lhsStr->hash == rhsStr->hash;
+        } else {
+            // FIXME: what if lengths differ and the same chars otherwise?
+            // strncmp?
+            return strcmp(lhsStr->chars, rhsStr->chars);
+        }
     }
 
     // TODO: error out
@@ -725,7 +733,15 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
         return false;
     }
     if (IS_A_STRING(lhs) && IS_A_STRING(rhs)) {
-        return strcmp(VAL_TO_STRING(lhs)->chars, VAL_TO_STRING(rhs)->chars) == 0;
+        ObjString *lhsStr = VAL_TO_STRING(lhs);
+        ObjString *rhsStr = VAL_TO_STRING(rhs);
+        if (lhsStr->hash > 0 && rhsStr->hash > 0) {
+            return lhsStr->hash == rhsStr->hash;
+        } else {
+            // FIXME: what if lengths differ and the same chars otherwise?
+            // strncmp?
+            return strcmp(lhsStr->chars, rhsStr->chars) == 0;
+        }
     } else if (IS_OBJ(lhs)) { // 2 objects, same pointers to Obj are equal
         return AS_OBJ(lhs) == AS_OBJ(rhs);
     } else if (IS_NUMBER(lhs)) { // 2 numbers, same values are equal
@@ -2576,14 +2592,14 @@ NORETURN void stopVM(int status) {
 }
 
 void acquireGVL(void) {
-    pthread_t tid = pthread_self();
+    pthread_t tid = pthread_self(); (void)tid;
     THREAD_DEBUG(3, "thread %lu locking GVL...", (unsigned long)tid);
     pthread_mutex_lock(&vm.GVLock);
     THREAD_DEBUG(3, "thread %lu locked GVL", (unsigned long)tid);
 }
 
 void releaseGVL(void) {
-    pthread_t tid = pthread_self();
+    pthread_t tid = pthread_self(); (void)tid;
     THREAD_DEBUG(3, "thread %lu unlocking GVL", (unsigned long)tid);
     pthread_mutex_unlock(&vm.GVLock);
 }
