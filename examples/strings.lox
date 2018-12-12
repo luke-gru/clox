@@ -7,6 +7,10 @@ print String(false);
 print String(nil);
 print String(3);
 
+var s3 = "happy day";
+s3.insertAt("Oh, ", 0);
+print s3;
+
 __END__
 -- expect: --
 string1
@@ -15,3 +19,4 @@ true
 false
 nil
 3.00
+Oh, happy day

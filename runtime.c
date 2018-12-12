@@ -124,6 +124,7 @@ Value lxWaitpid(int argCount, Value *args) {
     pid_t childpid = (pid_t)AS_NUMBER(pidVal);
     int wstatus;
     // TODO: allow wait flags
+    // Also, releaseGVL here
     pid_t wret = waitpid(childpid, &wstatus, 0);
     if (wret == -1) { // error, should throw?
         return NUMBER_VAL(-1);
@@ -137,7 +138,9 @@ Value lxSleep(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(nsecs, IS_NUMBER_FUNC, "number", 1);
     int secs = (int)AS_NUMBER(nsecs);
     if (secs > 0) {
+        releaseGVL();
         sleep(secs); // NOTE: could be interrupted by signal handler
+        acquireGVL();
     }
     return NIL_VAL;
 }
@@ -192,7 +195,7 @@ Value lxNewThread(int argCount, Value *args) {
     pthread_t tnew;
     if (pthread_create(&tnew, NULL, runCallableInNewThread, func) == 0) {
         THREAD_DEBUG(2, "created thread id %lu", (unsigned long)tnew);
-        releaseGVL();
+        releaseGVL(); // allow thread to run if it's ready
         acquireGVL();
         return NUMBER_VAL((unsigned long)tnew);
     } else {
@@ -210,11 +213,11 @@ Value lxJoinThread(int argCount, Value *args) {
     THREAD_DEBUG(2, "Joining thread id %lu\n", (unsigned long)num);
     releaseGVL();
     int ret = 0;
+    // blocks
     if ((ret = pthread_join((pthread_t)num, NULL)) != 0) {
         // TODO: throw error
         THREAD_DEBUG(1, "Error joining thread: (ret=%d)", ret);
     }
-    // blocks
     acquireGVL();
     return NIL_VAL;
 }
@@ -349,7 +352,7 @@ Value lxObjectGetObjectId(int argCount, Value *args) {
 Value lxObjectDup(int argCount, Value *args) {
     CHECK_ARGS("Object#dup", 1, 1, argCount);
     Value self = *args;
-    ASSERT(IS_INSTANCE(self)); // TODO: what about dup for classes/modules?
+    ASSERT(IS_INSTANCE(self)); // FIXME: what about dup for classes/modules?
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInstance *newObj = newInstance(selfObj->klass);
     Entry e; int idx = 0;
@@ -458,18 +461,17 @@ Value lxStringInit(int argCount, Value *args) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (argCount == 2) {
         Value internalStrVal = args[1];
-        if (IS_T_STRING(internalStrVal)) { // lox string given, copy the buffer
+        if (IS_T_STRING(internalStrVal)) { // string instance given, copy the buffer
             ObjString *orig = STRING_GETHIDDEN(internalStrVal);
             ObjString *new = dupString(orig);
             internalStrVal = OBJ_VAL(new);
         }
-        if (!IS_STRING(internalStrVal)) { // string instance
-            ObjString *str = valueToString(internalStrVal, hiddenString);
+        if (!IS_STRING(internalStrVal)) { // other type given, convert to string
+            ObjString *str = valueToString(internalStrVal, copyString);
             internalStrVal = OBJ_VAL(str);
         }
         ASSERT(IS_STRING(internalStrVal));
         tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
-        unhideFromGC(AS_OBJ(internalStrVal));
     } else { // empty string
         Value internalStrVal = OBJ_VAL(copyString("", 0));
         tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
@@ -491,7 +493,7 @@ Value lxStringOpAdd(int argCount, Value *args) {
     ObjString *lhsBuf = STRING_GETHIDDEN(ret);
     ASSERT(IS_A_STRING(rhs)); // TODO: throw error or coerce into String
     ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
-    pushString(lhsBuf, rhsBuf);
+    pushObjString(lhsBuf, rhsBuf);
     return ret;
 }
 
@@ -501,9 +503,7 @@ Value lxStringPush(int argCount, Value *args) {
     Value self = *args;
     Value rhs = args[1];
     CHECK_ARG_IS_A(rhs, lxStringClass, 1);
-    ObjString *lhsBuf = STRING_GETHIDDEN(self);
-    ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
-    pushString(lhsBuf, rhsBuf);
+    pushString(self, rhs);
     return self;
 }
 
@@ -526,6 +526,17 @@ Value lxStringClear(int argCount, Value *args) {
     CHECK_ARGS("String#clear", 1, 1, argCount);
     clearString(*args);
     return *args;
+}
+
+Value lxStringInsertAt(int argCount, Value *args) {
+    CHECK_ARGS("String#insertAt", 3, 3, argCount);
+    Value self = args[0];
+    Value insert = args[1];
+    Value at = args[2];
+    // TODO: check types
+
+    stringInsertAt(self, insert, (int)AS_NUMBER(at));
+    return self;
 }
 
 // ex: var a = Array();
@@ -991,6 +1002,22 @@ Value lxFileReadStatic(int argCount, Value *args) {
     }
     fclose(f);
     return ret;
+}
+
+Value lxGCStats(int argCount, Value *args) {
+    CHECK_ARGS("GC.stats", 1, 1, argCount);
+    Value map = newMap();
+    Value bytesKey = newStringInstance(copyString("bytes", 5));
+    mapSet(map, bytesKey, NUMBER_VAL(vm.bytesAllocated));
+    return map;
+}
+
+Value lxGCCollect(int argCount, Value *args) {
+    CHECK_ARGS("GC.collect", 1, 1, argCount);
+    bool prevOn = turnGCOn();
+    collectGarbage();
+    setGCOnOff(prevOn);
+    return NIL_VAL;
 }
 
 bool runtimeCheckArgs(int min, int max, int actual) {

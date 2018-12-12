@@ -127,11 +127,21 @@ ObjString *dupString(ObjString *string) {
     return copyString(string->chars, string->length);
 }
 
-void pushString(ObjString *a, ObjString *b) {
-    if (isFrozen((Obj*)a)) {
-        throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot mutate");
+void pushString(Value self, Value pushed) {
+    if (isFrozen(AS_OBJ(self))) {
+        throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
+    ObjString *lhsBuf = STRING_GETHIDDEN(self);
+    ObjString *rhsBuf = STRING_GETHIDDEN(pushed);
+    pushObjString(lhsBuf, rhsBuf);
+}
+
+void pushObjString(ObjString *a, ObjString *b) {
     pushCString(a, b->chars, b->length);
+}
+
+void insertObjString(ObjString *a, ObjString *b, int at) {
+    insertCString(a, b->chars, b->length, at);
 }
 
 // Copies `chars`, adds them to end of string.
@@ -140,6 +150,8 @@ void pushString(ObjString *a, ObjString *b) {
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     ASSERT(!((Obj*)string)->isFrozen);
+
+    if (lenToAdd == 0) return;
 
     size_t newLen = string->length + lenToAdd;
     if (newLen > string->capacity) {
@@ -159,6 +171,37 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     string->hash = 0;
 }
 
+void insertCString(ObjString *string, char *chars, int lenToAdd, int at) {
+    DBG_ASSERT(strlen(chars) >= lenToAdd);
+    ASSERT(!((Obj*)string)->isFrozen);
+
+    ASSERT(at <= string->length); // FIXME: allow `at` that's larger than length, and add space in between
+
+    if (at == string->length) {
+        return pushCString(string, chars, lenToAdd);
+    }
+
+
+    if (lenToAdd == 0) return;
+
+    size_t newLen = string->length + lenToAdd;
+    if (newLen > string->capacity) {
+        size_t newCapa = GROW_CAPACITY(string->capacity);
+        size_t newSz = newLen > newCapa ? newLen : newCapa;
+        string->chars = GROW_ARRAY(string->chars, char, string->capacity+1, newSz+1);
+        string->capacity = newSz;
+    }
+    char *dest = string->chars + at + lenToAdd;
+    char *src = string->chars+at;
+    int charsToMove = string->length-at;
+    memmove(dest, src, sizeof(char)*charsToMove);
+    for (int i = 0; i < lenToAdd; i++) {
+        string->chars[at+i] = chars[i];
+    }
+    string->length += lenToAdd;
+    string->hash = 0;
+}
+
 void pushCStringFmt(ObjString *string, const char *format, ...) {
     ASSERT(!((Obj*)string)->isFrozen);
 
@@ -170,6 +213,8 @@ void pushCStringFmt(ObjString *string, const char *format, ...) {
 
     size_t buflen = strlen(sbuf);
     sbuf[buflen] = '\0';
+
+    if (buflen == 0) return;
 
     size_t newLen = string->length + buflen;
     if (newLen > string->capacity) {
@@ -366,11 +411,33 @@ Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
     return NULL;
 }
 
+Obj *moduleFindStaticMethod(ObjModule *mod, ObjString *name) {
+    ObjClass *klass = moduleSingletonClass(mod);
+    Value method;
+    // look up in singleton class hierarchy
+    while (klass) {
+        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
+            return AS_OBJ(method);
+        }
+        klass = klass->superclass;
+    }
+    // not found, look up in class `Module` instance methods, to Object
+    klass = lxModuleClass;
+    while (klass) {
+        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
+            return AS_OBJ(method);
+        }
+        klass = klass->superclass;
+    }
+    return NULL;
+}
+
 void *internalGetData(ObjInternal *obj) {
     return obj->data;
 }
 
 const char *typeOfObj(Obj *obj) {
+    DBG_ASSERT(obj);
     switch (obj->type) {
     case OBJ_T_STRING:
         return "string";
@@ -454,6 +521,15 @@ void clearString(Value string) {
     clearObjString(buf);
 }
 
+void stringInsertAt(Value self, Value insert, int at) {
+    if (isFrozen(AS_OBJ(self))) {
+        throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
+    }
+    ObjString *selfBuf = STRING_GETHIDDEN(self);
+    ObjString *insertBuf = STRING_GETHIDDEN(insert);
+    insertObjString(selfBuf, insertBuf, at);
+}
+
 void arrayPush(Value self, Value el) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
@@ -469,7 +545,7 @@ void arrayPush(Value self, Value el) {
 int arrayDelete(Value self, Value el) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     Value val; int idx = 0; int found = -1;
@@ -522,7 +598,7 @@ void arrayPushFront(Value self, Value el) {
 void arrayClear(Value self) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
     freeValueArray(ARRAY_GETHIDDEN(self));
 }
@@ -575,9 +651,12 @@ ObjString *stringGetHidden(Value instance) {
     ASSERT(IS_A_STRING(instance));
     ObjInstance *inst = AS_INSTANCE(instance);
     Value stringVal;
-    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(internedString("buf", 3)), &stringVal));
-    DBG_ASSERT(IS_STRING(stringVal));
-    return (ObjString*)AS_OBJ(stringVal);
+    if (tableGet(&inst->hiddenFields, OBJ_VAL(internedString("buf", 3)), &stringVal)) {
+        DBG_ASSERT(IS_STRING(stringVal));
+        return (ObjString*)AS_OBJ(stringVal);
+    } else {
+        return NULL;
+    }
 }
 
 Value getProp(Value self, ObjString *propName) {
@@ -649,7 +728,13 @@ ObjClass *classSingletonClass(ObjClass *klass) {
     if (klass->singletonKlass) {
         return klass->singletonKlass;
     }
-    ObjString *name = dupString(klass->name);
+    ObjString *name = NULL;
+    if (klass->name) {
+        name = dupString(klass->name);
+    } else {
+        name = copyString("(anon)", 6);
+        klass->name = name;
+    }
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, klass->superclass);
     klass->singletonKlass = meta;
@@ -661,10 +746,18 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
     if (mod->singletonKlass) {
         return mod->singletonKlass;
     }
-    ObjString *name = dupString(mod->name);
+    ObjString *name = NULL;
+    if (mod->name) {
+        name = dupString(mod->name);
+        hideFromGC((Obj*)name);
+    } else {
+        name = hiddenString("(anon)", 6);
+        mod->name = name;
+    }
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, lxClassClass);
     mod->singletonKlass = meta;
+    unhideFromGC((Obj*)name);
     return meta;
 }
 

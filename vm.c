@@ -158,6 +158,7 @@ ObjClass *lxTypeErrClass;
 ObjClass *lxNameErrClass;
 ObjClass *lxFileClass;
 ObjClass *lxThreadClass;
+ObjModule *lxGCModule;
 Value lxLoadPath;
 
 static void defineNativeClasses(void) {
@@ -216,6 +217,9 @@ static void defineNativeClasses(void) {
 
     ObjNative *stringClearNat = newNative(internedString("clear", 5), lxStringClear);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(stringClearNat));
+
+    ObjNative *stringInsertAtNat = newNative(internedString("insertAt", 8), lxStringInsertAt);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("insertAt", 8)), OBJ_VAL(stringInsertAtNat));
 
     ObjNative *stringDupNat = newNative(internedString("dup", 3), lxStringDup);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("dup", 3)), OBJ_VAL(stringDupNat));
@@ -366,6 +370,21 @@ static void defineNativeClasses(void) {
     tableSet(&vm.globals, OBJ_VAL(threadClassName), OBJ_VAL(threadClass));
 
     lxThreadClass = threadClass;
+
+    // module GC
+    ObjString *GCModName = internedString("GC", 2);
+    ObjModule *GCModule = newModule(GCModName);
+    tableSet(&vm.globals, OBJ_VAL(GCModName), OBJ_VAL(GCModule));
+
+    ObjClass *GCClassStatic = moduleSingletonClass(GCModule);
+
+    ObjNative *GCStatsNat = newNative(internedString("stats", 5), lxGCStats);
+    tableSet(&GCClassStatic->methods, OBJ_VAL(internedString("stats", 5)), OBJ_VAL(GCStatsNat));
+
+    ObjNative *GCCollectNat = newNative(internedString("collect", 7), lxGCCollect);
+    tableSet(&GCClassStatic->methods, OBJ_VAL(internedString("collect", 7)), OBJ_VAL(GCCollectNat));
+
+    lxGCModule = GCModule;
 }
 
 static void defineGlobalVariables(void) {
@@ -1705,7 +1724,7 @@ static InterpretResult vm_run(bool doResetStack) {
           push(NUMBER_VAL(AS_NUMBER(a) op AS_NUMBER(b))); \
       } else if (opcode == OP_ADD && (IS_STRING(a) && IS_STRING(b))) {\
           ObjString *str = dupString(AS_STRING(a));\
-          pushString(str, AS_STRING(b));\
+          pushObjString(str, AS_STRING(b));\
           push(OBJ_VAL(str));\
       } else if (IS_INSTANCE(a)) {\
           push(a);\
@@ -2126,7 +2145,7 @@ static InterpretResult vm_run(bool doResetStack) {
               Obj *callable = classFindStaticMethod(klass, mname);
               if (!callable) {
                   ObjString *className = klass->name;
-                  const char *classStr = className->chars ? className->chars : "(anon)";
+                  const char *classStr = className ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, mname->chars);
                   lastSplatNumArgs = -1;
                   break;
@@ -2134,8 +2153,22 @@ static InterpretResult vm_run(bool doResetStack) {
               EC->stackTop[-numArgs-1] = instanceVal;
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
+          } else if (IS_MODULE(instanceVal)) {
+              ObjModule *mod = AS_MODULE(instanceVal);
+              Obj *callable = moduleFindStaticMethod(mod, mname);
+              if (!callable) {
+                  ObjString *modName = mod->name;
+                  const char *modStr = modName ? modName->chars : "(anon)";
+                  throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, mname->chars);
+                  lastSplatNumArgs = -1;
+                  break;
+              }
+              EC->stackTop[-numArgs-1] = instanceVal;
+              setThis(numArgs);
+              callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
+          } else {
+              // throw type error
           }
-          // TODO: static module methods
           if (vm.hadError) {
               vmRunLvl--;
               return INTERPRET_RUNTIME_ERROR;
@@ -2589,6 +2622,7 @@ ErrTagInfo *addErrInfo(ObjClass *errClass) {
     return info;
 }
 
+// FIXME: only exit current thread. Stop the VM only if it's main thread.
 NORETURN void stopVM(int status) {
     freeVM();
     exit(status);
@@ -2598,11 +2632,13 @@ void acquireGVL(void) {
     pthread_t tid = pthread_self(); (void)tid;
     THREAD_DEBUG(3, "thread %lu locking GVL...", (unsigned long)tid);
     pthread_mutex_lock(&vm.GVLock);
+    // TODO: set vm.curThread here
     THREAD_DEBUG(3, "thread %lu locked GVL", (unsigned long)tid);
 }
 
 void releaseGVL(void) {
     pthread_t tid = pthread_self(); (void)tid;
     THREAD_DEBUG(3, "thread %lu unlocking GVL", (unsigned long)tid);
+    // TODO: set vm.curThread to NULL here
     pthread_mutex_unlock(&vm.GVLock);
 }

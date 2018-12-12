@@ -24,9 +24,9 @@
 
 static void gc_trace_mark(int lvl, Obj *obj) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
-    fprintf(stderr, "[GC]: marking object at %p, ", obj);
-    if (obj->type != OBJ_T_UPVALUE) {
-        fprintf(stderr, "value => ");
+    fprintf(stderr, "[GC]: marking %s object at %p", typeOfObj(obj), obj);
+    if (obj->type != OBJ_T_UPVALUE && obj->type != OBJ_T_INTERNAL) {
+        fprintf(stderr, ", value => ");
         printValue(stderr, OBJ_VAL(obj), false);
     }
     fprintf(stderr, "\n");
@@ -69,11 +69,16 @@ static bool GCOn = true;
 // Main memory management function used by both ALLOCATE/FREE (see memory.h)
 // NOTE: memory is NOT initialized (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
-    TRACE_GC_FUNC_START(5, "reallocate");
+    TRACE_GC_FUNC_START(10, "reallocate");
     if (newSize > 0) {
         ASSERT(!inGC); // if we're in GC phase we can't allocate memory
     }
-    vm.bytesAllocated += (newSize - oldSize);
+
+    if (newSize > oldSize) {
+        vm.bytesAllocated += (newSize - oldSize);
+    } else {
+        vm.bytesAllocated -= (oldSize - newSize);
+    }
 
     if (OPTION_T(stressGC) && newSize > 0) {
         collectGarbage();
@@ -82,18 +87,18 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     }
 
     if (newSize == 0) { // freeing
-        GC_TRACE_DEBUG(5, "  freeing %p from realloc", previous);
+        GC_TRACE_DEBUG(10, "  freeing %p from realloc", previous);
         free(previous);
-        TRACE_GC_FUNC_END(5, "reallocate");
+        TRACE_GC_FUNC_END(10, "reallocate");
         return NULL;
     }
 
     void *ret = realloc(previous, newSize);
     ASSERT_MEM(ret);
     if (newSize > 0) {
-        GC_TRACE_DEBUG(5, "  allocated %p", ret);
+        GC_TRACE_DEBUG(10, "  allocated %p", ret);
     }
-    TRACE_GC_FUNC_END(5, "reallocate");
+    TRACE_GC_FUNC_END(10, "reallocate");
     return ret;
 }
 
@@ -140,14 +145,18 @@ void blackenObject(Obj *obj) {
     TRACE_GC_FUNC_START(4, "blackenObject");
     switch (obj->type) {
         case OBJ_T_BOUND_METHOD: {
+            GC_TRACE_DEBUG(5, "Blackening bound method");
             ObjBoundMethod *method = (ObjBoundMethod*)obj;
             grayValue(method->receiver);
             grayObject(method->callable);
             break;
         }
         case OBJ_T_CLASS: {
+            GC_TRACE_DEBUG(5, "Blackening class");
             ObjClass *klass = (ObjClass*)obj;
-            grayObject((Obj*)klass->name);
+            if (klass->name) {
+                grayObject((Obj*)klass->name);
+            }
             if (klass->klass) {
                 grayObject((Obj*)klass->klass);
             }
@@ -164,12 +173,36 @@ void blackenObject(Obj *obj) {
             grayTable(&klass->setters);
             break;
         }
+        case OBJ_T_MODULE: {
+            GC_TRACE_DEBUG(5, "Blackening module");
+            ObjModule *mod = (ObjModule*)obj;
+            if (mod->klass) {
+                grayObject((Obj*)mod->klass);
+            }
+            if (mod->singletonKlass) {
+                grayObject((Obj*)mod->singletonKlass);
+            }
+            if (mod->name) {
+                grayObject((Obj*)mod->name);
+            }
+
+            grayTable(&mod->fields);
+            grayTable(&mod->hiddenFields);
+            grayTable(&mod->methods);
+            grayTable(&mod->getters);
+            grayTable(&mod->setters);
+            break;
+        }
         case OBJ_T_FUNCTION: {
+            GC_TRACE_DEBUG(5, "Blackening function");
             ObjFunction *func = (ObjFunction*)obj;
-            grayObject((Obj*)func->name);
+            if (func->name) {
+                grayObject((Obj*)func->name);
+            }
             break;
         }
         case OBJ_T_CLOSURE: {
+            GC_TRACE_DEBUG(5, "Blackening closure");
             ObjClosure *closure = (ObjClosure*)obj;
             grayObject((Obj*)closure->function);
             for (int i = 0; i < closure->upvalueCount; i++) {
@@ -178,11 +211,13 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_NATIVE_FUNCTION: {
+            GC_TRACE_DEBUG(5, "Blackening native function");
             ObjNative *native = (ObjNative*)obj;
             grayObject((Obj*)native->name);
             break;
         }
         case OBJ_T_INSTANCE: {
+            GC_TRACE_DEBUG(5, "Blackening instance");
             ObjInstance *instance = (ObjInstance*)obj;
             grayObject((Obj*)instance->klass);
             if (instance->singletonKlass) {
@@ -193,6 +228,7 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_INTERNAL: {
+            GC_TRACE_DEBUG(5, "Blackening internal object");
             ObjInternal *internal = (ObjInternal*)obj;
             if (internal->markFunc) {
                 internal->markFunc(obj);
@@ -200,10 +236,12 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_UPVALUE: {
+            GC_TRACE_DEBUG(5, "Blackening upvalue object");
             grayValue(((ObjUpvalue*)obj)->closed);
             break;
         }
         case OBJ_T_STRING: { // no references
+            GC_TRACE_DEBUG(5, "Blackening internal string");
             break;
         }
         default: {
@@ -226,7 +264,7 @@ void freeObject(Obj *obj, bool unlink) {
         vec_find(&vm.stackObjects, obj, stackObjFoundIdx);
         if (stackObjFoundIdx != -1) {
             if (inGC) {
-                GC_TRACE_DEBUG(5, "Skipped freeing stack object: p=%p (in GC)", obj);
+                GC_TRACE_DEBUG(4, "Skipped freeing stack object: p=%p (in GC)", obj);
                 return; // Don't free stack objects in a GC
             }
             GC_TRACE_DEBUG(5, "Freeing stack object: p=%p (must be manual call "
@@ -285,7 +323,7 @@ void freeObject(Obj *obj, bool unlink) {
         }
         case OBJ_T_MODULE: {
             ObjModule *mod = (ObjModule*)obj;
-            GC_TRACE_DEBUG(5, "Freeing class methods/getters/setters tables");
+            GC_TRACE_DEBUG(5, "Freeing module methods/getters/setters tables");
             freeTable(&mod->fields);
             freeTable(&mod->hiddenFields);
             freeTable(&mod->methods);
@@ -447,6 +485,7 @@ void collectGarbage(void) {
     GC_TRACE_DEBUG(2, "Marking VM frame functions");
     // gray active function closure objects
     ctx = NULL; k = 0;
+    int numFramesFound = 0;
     vec_foreach(&vm.v_ecs, ctx, k) {
         grayObject((Obj*)ctx->filename);
         if (ctx->lastValue) {
@@ -454,8 +493,10 @@ void collectGarbage(void) {
         }
         for (int i = 0; i < ctx->frameCount; i++) {
             grayObject((Obj*)ctx->frames[i].closure);
+            numFramesFound++;
         }
     }
+    GC_TRACE_DEBUG(2, "%d frame functions found", numFramesFound);
 
     GC_TRACE_DEBUG(2, "Marking open upvalues");
     int numOpenUpsFound = 0;
@@ -502,6 +543,7 @@ void collectGarbage(void) {
     vec_foreach(&vm.hiddenObjs, objPtr, j) {
         if (((Obj*)objPtr)->noGC) {
             GC_TRACE_DEBUG(3, "Hidden root found: %p", objPtr);
+            /*GC_TRACE_MARK(3, objPtr);*/
             numHiddenFound++;
             grayObject((Obj*)objPtr);
         }
@@ -535,6 +577,9 @@ void collectGarbage(void) {
     vec_void_t vvisited;
     vec_init(&vvisited);
     int iter = 0;
+    unsigned long numObjectsFreed = 0;
+    unsigned long numObjectsKept = 0;
+    bool cycleFound = false;
     while (object != NULL) {
         ASSERT(object->type > OBJ_T_NONE);
         int idx = 0;
@@ -542,6 +587,7 @@ void collectGarbage(void) {
         if (idx != -1) {
             const char *otypeStr = typeOfObj(object); (void)otypeStr;
             GC_TRACE_DEBUG(3, "Found cycle during free process (iter=%d, p=%p, otype=%s), stopping", iter, *object, otypeStr);
+            cycleFound = true;
             break; // found cycles, dangerous (FIXME: proper cycle detection)
         }
         vec_push(&vvisited, object);
@@ -552,16 +598,20 @@ void collectGarbage(void) {
             ASSERT(unreached->isLinked);
             freeObject(unreached, true);
             ASSERT(!unreached->isLinked);
+            numObjectsFreed++;
         } else {
             // This object was reached, so unmark it (for the next GC) and move on to
             // the next.
             object->isDark = false;
             object = object->next;
+            numObjectsKept++;
         }
         iter++;
     }
     vec_deinit(&vvisited);
     GC_TRACE_DEBUG(2, "done FREE process");
+    GC_TRACE_DEBUG(3, "%lu objects freed, %lu objects kept, cycle found: %s",
+            numObjectsFreed, numObjectsKept, cycleFound ? "yes" : "no");
 
     // Adjust the heap size based on live memory.
     vm.nextGCThreshhold = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;

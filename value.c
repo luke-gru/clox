@@ -122,7 +122,13 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
                 ASSERT(AS_OBJ(popped) == AS_OBJ(stringVal));
             } else {
                 if (IS_A_STRING(value)) { // when canCallMethods == false
-                    fprintf(file, "\"%s\"", VAL_TO_STRING(value)->chars);
+                    ObjString *str = VAL_TO_STRING(value);
+                    if (str) {
+                        fprintf(file, "\"%s\"", str->chars);
+                    } else {
+                        // Shouldn't happen, but happens sometimes when debugging the GC
+                        fprintf(file, "??unknown string??");
+                    }
                 } else {
                     ObjClass *klass = inst->klass;
                     char *klassName = klass->name->chars;
@@ -132,12 +138,12 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
             return;
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
-            char *klassName = klass->name->chars;
+            char *klassName = klass->name ? klass->name->chars : "(anon)";
             fprintf(file, "<class %s>", klassName);
             return;
         } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
             ObjModule *mod = AS_MODULE(value);
-            char *modName = mod->name->chars;
+            char *modName = mod->name ? mod->name->chars : "(anon)";
             fprintf(file, "<module %s>", modName);
             return;
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {

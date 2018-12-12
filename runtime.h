@@ -57,6 +57,7 @@ Value lxStringOpAdd(int argCount, Value *args);
 Value lxStringPush(int argCount, Value *args);
 Value lxStringClear(int argCount, Value *args);
 Value lxStringDup(int argCount, Value *args);
+Value lxStringInsertAt(int argCount, Value *args);
 
 // class Array
 Value lxArrayInit(int argCount, Value *args);
@@ -93,6 +94,10 @@ Value lxFileReadStatic(int argCount, Value *args);
 
 // class Thread
 Value lxThreadInit(int argCount, Value *args);
+
+// module GC
+Value lxGCStats(int argCount, Value *args);
+Value lxGCCollect(int argCount, Value *args);
 
 Value lxErrInit(int argCount, Value *args);
 #endif

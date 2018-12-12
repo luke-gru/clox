@@ -24,17 +24,18 @@ bytecode, and benchmark the lookup results []
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
 * Add Object#dup, and Class#ancestors []
-* Add default ENV map as well as ARGV array
+* Add default ENV map-like thing as well as ARGV array
 * Add atexit hooks (`atexit(fun() { })`)
 * Add signal trap handlers (`trap(signame, fun() { })`)
 * Add Mutex class, mutexes for thread synchronization
 * release GVL before performing blocking calls/syscalls etc.
-* Add String#insertAt("new", 0), String#substr(start, len) [IN PROGRESS]
-* Add GC.stats []
+* Add String#substr(start, len), String#length,
+String#replace(other) [IN PROGRESS]
+* Add GC.stats() and GC.collect() []
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Make nil, true, false instances? []
 * Make variable lookup work as lookup in Environment tables, not statically
-compiled lookup
+compiled lookup []
 
 BUGS:
 * super() bug in examples/super.lox

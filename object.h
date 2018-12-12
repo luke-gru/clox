@@ -152,6 +152,7 @@ extern ObjClass *lxTypeErrClass;
 extern ObjClass *lxNameErrClass;
 extern ObjClass *lxFileClass;
 extern ObjClass *lxThreadClass;
+extern ObjModule *lxGCModule;
 
 extern Value lxLoadPath;
 
@@ -255,7 +256,7 @@ typedef struct LxThread {
 
 #define STRING_GETHIDDEN(stringVal) (stringGetHidden(stringVal))
 
-// strings
+// strings (internal)
 typedef ObjString *(*newStringFunc)(char *chars, int length);
 // String creation functions
 ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
@@ -263,17 +264,22 @@ ObjString *copyString(char *chars, int length); // copies provided memory. Objec
 ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
 ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
 ObjString *dupString(ObjString *string);
-void pushString(ObjString *a, ObjString *b);
+void pushObjString(ObjString *a, ObjString *b);
 void clearObjString(ObjString *str);
+void insertObjString(ObjString *a, ObjString *b, int at);
 
+// string instances
 Value dupStringInstance(Value instance);
 Value newStringInstance(ObjString *buf);
-void clearString(Value string);
+void clearString(Value self);
+void pushString(Value self, Value pushed);
+void stringInsertAt(Value self, Value insert, int at);
 ObjString *stringGetHidden(Value instance);
 
 // NOTE: don't call pushCString on a string value that's a key to a map! The
 // hash value changes and the map won't be able to index it anymore.
 void pushCString(ObjString *string, char *chars, int lenToAdd);
+void insertCString(ObjString *a, char *chars, int lenToAdd, int at);
 void pushCStringFmt(ObjString *string, const char *format, ...);
 uint32_t hashString(char *key, int length);
 
@@ -330,6 +336,7 @@ ObjUpvalue *newUpvalue(Value *slot);
 // methods/classes
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
 Obj *classFindStaticMethod(ObjClass *obj, ObjString *name);
+Obj *moduleFindStaticMethod(ObjModule *obj, ObjString *name);
 bool instanceIsA(ObjInstance *inst, ObjClass *klass);
 bool isSubclass(ObjClass *subklass, ObjClass *superklass);
 const char *instanceClassName(ObjInstance *obj);

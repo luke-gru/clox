@@ -5,6 +5,10 @@ var t = newThread(fun() {
     i = i + 1;
   }
 });
+print "in main thread";
+print "sleeping";
+sleep(3);
+print "done sleeping";
 joinThread(t);
 print "joined";
 
