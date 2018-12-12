@@ -205,6 +205,15 @@ static void defineNativeClasses() {
     ObjNative *aryPushNat = newNative(internedString("push", 4), lxArrayPush);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(aryPushNat));
 
+    ObjNative *aryPopNat = newNative(internedString("pop", 3), lxArrayPop);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("pop", 3)), OBJ_VAL(aryPopNat));
+
+    ObjNative *aryPushFrontNat = newNative(internedString("pushFront", 9), lxArrayPushFront);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("pushFront", 9)), OBJ_VAL(aryPushFrontNat));
+
+    ObjNative *aryPopFrontNat = newNative(internedString("popFront", 8), lxArrayPopFront);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("popFront", 8)), OBJ_VAL(aryPopFrontNat));
+
     ObjNative *aryDelNat = newNative(internedString("delete", 6), lxArrayDelete);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("delete", 6)), OBJ_VAL(aryDelNat));
 

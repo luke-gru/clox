@@ -444,13 +444,16 @@ Value newStringInstance(ObjString *buf) {
     return retVal;
 }
 
+// NOTE: doesn't check frozenness or type of `self`
 void arrayPush(Value self, Value el) {
     ValueArray *ary = ARRAY_GETHIDDEN(self);
-    writeValueArray(ary, el);
+    writeValueArrayEnd(ary, el);
 }
 
-// Deletes the element from the array, returning its old index if
-// it was found, otherwise returns -1
+// NOTE: doesn't check frozenness or type of `self`
+// Deletes the given element from the array, returning its old index if
+// it was found and deleted, otherwise returns -1. Uses `valEqual()` for
+// equality check.
 int arrayDelete(Value self, Value el) {
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     Value val; int idx = 0; int found = -1;
@@ -464,6 +467,30 @@ int arrayDelete(Value self, Value el) {
         removeValueArray(ary, found);
     }
     return found;
+}
+
+// NOTE: doesn't check frozenness or type of `self`
+Value arrayPop(Value self) {
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    if (ary->count == 0) return NIL_VAL;
+    Value found = arrayGet(self, ary->count-1);
+    removeValueArray(ary, ary->count-1);
+    return found;
+}
+
+// NOTE: doesn't check frozenness or type of `self`
+Value arrayPopFront(Value self) {
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    if (ary->count == 0) return NIL_VAL;
+    Value found = arrayGet(self, 0);
+    removeValueArray(ary, 0);
+    return found;
+}
+
+// NOTE: doesn't check frozenness or type of `self`
+void arrayPushFront(Value self, Value el) {
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    writeValueArrayBeg(ary, el);
 }
 
 Value newMap(void) {

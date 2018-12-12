@@ -423,6 +423,7 @@ Value lxStringPush(int argCount, Value *args) {
 }
 
 // ex: var a = Array();
+//     var b = ["hi", 2, Map()];
 Value lxArrayInit(int argCount, Value *args) {
     CHECK_ARGS("Array#init", 1, -1, argCount);
     Value self = *args;
@@ -434,7 +435,7 @@ Value lxArrayInit(int argCount, Value *args) {
     internalObj->data = ary;
     tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), OBJ_VAL(internalObj));
     for (int i = 1; i < argCount; i++) {
-        writeValueArray(ary, args[i]);
+        writeValueArrayEnd(ary, args[i]);
     }
     ASSERT(ary->count == argCount-1);
     return self;
@@ -452,6 +453,41 @@ Value lxArrayPush(int argCount, Value *args) {
     return self;
 }
 
+// ex: a.pop();
+Value lxArrayPop(int argCount, Value *args) {
+    CHECK_ARGS("Array#pop", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    return arrayPop(self);
+}
+
+// ex: a.pushFront(100);
+Value lxArrayPushFront(int argCount, Value *args) {
+    CHECK_ARGS("Array#pushFront", 2, 2, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    arrayPushFront(self, args[1]);
+    return self;
+}
+
+// ex: a.popFront();
+Value lxArrayPopFront(int argCount, Value *args) {
+    CHECK_ARGS("Array#popFront", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    return arrayPopFront(self);
+}
+
+// ex: a.delete(2);
 Value lxArrayDelete(int argCount, Value *args) {
     CHECK_ARGS("Array#delete", 2, 2, argCount);
     Value self = args[0];

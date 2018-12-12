@@ -12,7 +12,7 @@ void initValueArray(ValueArray *array) {
     array->count = 0;
 }
 
-void writeValueArray(ValueArray *array, Value value) {
+void writeValueArrayEnd(ValueArray *array, Value value) {
     if (array->capacity < array->count + 1) {
         int oldCapacity = array->capacity;
         array->capacity = GROW_CAPACITY(oldCapacity);
@@ -23,6 +23,23 @@ void writeValueArray(ValueArray *array, Value value) {
     }
 
     array->values[array->count] = value;
+    array->count++;
+}
+
+void writeValueArrayBeg(ValueArray *array, Value value) {
+    if (array->capacity < array->count + 1) {
+        int oldCapacity = array->capacity;
+        array->capacity = GROW_CAPACITY(oldCapacity);
+        array->values = GROW_ARRAY(
+            array->values, Value,
+            oldCapacity, array->capacity
+        );
+    }
+
+    Value *dest = array->values+1;
+    Value *src = array->values;
+    memmove(dest, src, sizeof(Value));
+    array->values[0] = value;
     array->count++;
 }
 
@@ -40,6 +57,7 @@ void freeValueArray(ValueArray *array) {
  */
 // NOTE: assumes index is within bounds
 bool removeValueArray(ValueArray *array, int idx) {
+    ASSERT(idx < array->count);
     if (array->values == NULL) return false;
     if (idx == array->count-1) { // last element
         array->count--;

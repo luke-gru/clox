@@ -62,7 +62,8 @@ typedef struct ValueArray {
 #define OBJ_TYPE(value)   (AS_OBJ(value)->type)
 
 void initValueArray(ValueArray *array);
-void writeValueArray(ValueArray *array, Value value);
+void writeValueArrayEnd(ValueArray *array, Value value);
+void writeValueArrayBeg(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);
 bool removeValueArray(ValueArray *array, int idx);
 void printValue(FILE *file, Value value, bool canCallMethods);

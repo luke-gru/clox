@@ -54,6 +54,9 @@ Value lxStringPush(int argCount, Value *args);
 // class Array
 Value lxArrayInit(int argCount, Value *args);
 Value lxArrayPush(int argCount, Value *args);
+Value lxArrayPop(int argCount, Value *args);
+Value lxArrayPushFront(int argCount, Value *args);
+Value lxArrayPopFront(int argCount, Value *args);
 Value lxArrayToString(int argCount, Value *args);
 Value lxArrayIndexGet(int argCount, Value *args);
 Value lxArrayIndexSet(int argCount, Value *args);

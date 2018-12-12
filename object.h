@@ -275,12 +275,15 @@ void pushCString(ObjString *string, char *chars, int lenToAdd);
 void pushCStringFmt(ObjString *string, const char *format, ...);
 uint32_t hashString(char *key, int length);
 
+Value       newArray(void);
 Value       arrayGet(Value aryVal, int idx);
 int         arraySize(Value aryVal);
 void        arrayPush(Value aryVal, Value el);
+Value       arrayPop(Value aryVal);
+void        arrayPushFront(Value aryVal, Value el);
+Value       arrayPopFront(Value aryVal);
 int         arrayDelete(Value aryVal, Value el);
 ValueArray *arrayGetHidden(Value aryVal);
-Value       newArray(void);
 
 Value       newError(ObjClass *errClass, Value msg);
 
