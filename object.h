@@ -268,6 +268,7 @@ void clearObjString(ObjString *str);
 
 Value dupStringInstance(Value instance);
 Value newStringInstance(ObjString *buf);
+void clearString(Value string);
 ObjString *stringGetHidden(Value instance);
 
 // NOTE: don't call pushCString on a string value that's a key to a map! The

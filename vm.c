@@ -214,6 +214,9 @@ static void defineNativeClasses(void) {
     ObjNative *stringPushNat = newNative(internedString("push", 4), lxStringPush);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(stringPushNat));
 
+    ObjNative *stringClearNat = newNative(internedString("clear", 5), lxStringClear);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(stringClearNat));
+
     ObjNative *stringDupNat = newNative(internedString("dup", 3), lxStringDup);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("dup", 3)), OBJ_VAL(stringDupNat));
 

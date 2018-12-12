@@ -24,7 +24,6 @@ class Bacon {
 
 b = Bacon().eat();
 
-
 class Cake {
   init(flavor) {
     this.flavor = flavor;
@@ -37,7 +36,7 @@ class Cake {
 
 var chocCake = Cake("German chocolate");
 print chocCake.flavor;
-chocCake.taste(); // Prints "The German chocolate cake is delicious!".
+chocCake.taste();
 
 __END__
 -- expect: --

@@ -497,29 +497,35 @@ Value lxStringOpAdd(int argCount, Value *args) {
 
 // var s = "hey"; s.push(" there!"); => "hey there!"
 Value lxStringPush(int argCount, Value *args) {
-    Value self = *args;
-    ObjInstance *selfObj = AS_INSTANCE(self);
     CHECK_ARGS("String#push", 2, 2, argCount);
-    if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot mutate");
-    }
+    Value self = *args;
     Value rhs = args[1];
     CHECK_ARG_IS_A(rhs, lxStringClass, 1);
-    ObjString *lhsBuf = STRING_GETHIDDEN(*args);
+    ObjString *lhsBuf = STRING_GETHIDDEN(self);
     ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
     pushString(lhsBuf, rhsBuf);
-    return *args;
+    return self;
 }
 
-// var s = "hey"; var s2 = s.dup(); s.push(" again");
-// print s;  => "hey"
-// print s2; => "hey again"
+// ex: var s = "hey"; var s2 = s.dup(); s.push(" again");
+//     print s;  => "hey"
+//     print s2; => "hey again"
 Value lxStringDup(int argCount, Value *args) {
+    CHECK_ARGS("String#dup", 1, 1, argCount);
     Value ret = lxObjectDup(argCount, args);
     ObjInstance *retInst = AS_INSTANCE(ret);
     ObjString *buf = STRING_GETHIDDEN(ret);
     tableSet(&retInst->hiddenFields, OBJ_VAL(internedString("buf", 3)), OBJ_VAL(dupString(buf)));
     return ret;
+}
+
+// ex: var s = "going";
+//     s.clear();
+//     print s; => ""
+Value lxStringClear(int argCount, Value *args) {
+    CHECK_ARGS("String#clear", 1, 1, argCount);
+    clearString(*args);
+    return *args;
 }
 
 // ex: var a = Array();
@@ -528,7 +534,7 @@ Value lxArrayInit(int argCount, Value *args) {
     // TODO: call super?
     CHECK_ARGS("Array#init", 1, -1, argCount);
     Value self = *args;
-    ASSERT(IS_AN_ARRAY(self));
+    DBG_ASSERT(IS_AN_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = newInternalObject(NULL, markInternalAry, freeInternalAry);
     ValueArray *ary = ALLOCATE(ValueArray, 1);
@@ -546,56 +552,44 @@ Value lxArrayInit(int argCount, Value *args) {
 Value lxArrayPush(int argCount, Value *args) {
     CHECK_ARGS("Array#push", 2, 2, argCount);
     Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
-    }
     arrayPush(self, args[1]);
     return self;
 }
 
-// ex: a.pop();
+// Deletes last element in array and returns it.
+// ex: var a = [1,2,3];
+//     print a.pop(); => 3
+//     print a; => [1,2]
 Value lxArrayPop(int argCount, Value *args) {
     CHECK_ARGS("Array#pop", 1, 1, argCount);
-    Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
-    }
-    return arrayPop(self);
+    return arrayPop(*args);
 }
 
-// ex: a.pushFront(100);
+// Adds an element to the beginning of the array and returns `self`
+// ex: var a = [1,2,3];
+//     a.pushFront(100);
+//     print a; => [100, 1, 2, 3];
 Value lxArrayPushFront(int argCount, Value *args) {
     CHECK_ARGS("Array#pushFront", 2, 2, argCount);
     Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
-    }
     arrayPushFront(self, args[1]);
     return self;
 }
 
-// ex: a.popFront();
+// Deletes an element from the beginning of the array and returns it.
+// Returns nil if no elements left.
+// ex: var a = [1,2,3];
+//     print a.popFront(); => 1
+//     print a; => [2,3]
 Value lxArrayPopFront(int argCount, Value *args) {
     CHECK_ARGS("Array#popFront", 1, 1, argCount);
-    Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
-    }
-    return arrayPopFront(self);
+    return arrayPopFront(*args);
 }
 
 // ex: a.delete(2);
 Value lxArrayDelete(int argCount, Value *args) {
     CHECK_ARGS("Array#delete", 2, 2, argCount);
     Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
-    }
     int idx = arrayDelete(self, args[1]);
     if (idx == -1) {
         return NIL_VAL;
@@ -608,10 +602,6 @@ Value lxArrayDelete(int argCount, Value *args) {
 Value lxArrayClear(int argCount, Value *args) {
     CHECK_ARGS("Array#clear", 1, 1, argCount);
     Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
-    }
     arrayClear(self);
     return self;
 }

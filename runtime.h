@@ -55,6 +55,7 @@ Value lxStringInit(int argCount, Value *args);
 Value lxStringToString(int argCount, Value *args);
 Value lxStringOpAdd(int argCount, Value *args);
 Value lxStringPush(int argCount, Value *args);
+Value lxStringClear(int argCount, Value *args);
 Value lxStringDup(int argCount, Value *args);
 
 // class Array

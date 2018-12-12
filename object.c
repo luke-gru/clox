@@ -128,6 +128,9 @@ ObjString *dupString(ObjString *string) {
 }
 
 void pushString(ObjString *a, ObjString *b) {
+    if (isFrozen((Obj*)a)) {
+        throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot mutate");
+    }
     pushCString(a, b->chars, b->length);
 }
 
@@ -136,11 +139,8 @@ void pushString(ObjString *a, ObjString *b) {
 // for a table, it won't retrieve the value in the table anymore.
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
-    if (((Obj*)string)->isFrozen) {
-        // FIXME: raise FrozenObjectError
-        fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
-        ASSERT(0);
-    }
+    ASSERT(!((Obj*)string)->isFrozen);
+
     size_t newLen = string->length + lenToAdd;
     if (newLen > string->capacity) {
         size_t newCapa = GROW_CAPACITY(string->capacity);
@@ -160,11 +160,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
 }
 
 void pushCStringFmt(ObjString *string, const char *format, ...) {
-    if (((Obj*)string)->isFrozen) {
-        // FIXME: raise FrozenObjectError
-        fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
-        ASSERT(0);
-    }
+    ASSERT(!((Obj*)string)->isFrozen);
 
     char sbuf[201] = {'\0'};
     va_list args;
@@ -194,11 +190,7 @@ void pushCStringFmt(ObjString *string, const char *format, ...) {
 }
 
 void clearObjString(ObjString *string) {
-    if (((Obj*)string)->isFrozen) {
-        // FIXME: raise FrozenObjectError
-        fprintf(stderr, "Tried to modify a frozen string: '%s'\n", string->chars);
-        ASSERT(0);
-    }
+    ASSERT(!((Obj*)string)->isFrozen);
     string->chars = GROW_ARRAY(string->chars, char, string->capacity+1, 1);
     string->chars[0] = '\0';
     string->length = 0;
@@ -454,17 +446,31 @@ Value newStringInstance(ObjString *buf) {
     return retVal;
 }
 
-// NOTE: doesn't check frozenness or type of `self`
+void clearString(Value string) {
+    if (isFrozen(AS_OBJ(string))) {
+        throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
+    }
+    ObjString *buf = STRING_GETHIDDEN(string);
+    clearObjString(buf);
+}
+
 void arrayPush(Value self, Value el) {
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+    }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     writeValueArrayEnd(ary, el);
 }
 
-// NOTE: doesn't check frozenness or type of `self`
 // Deletes the given element from the array, returning its old index if
 // it was found and deleted, otherwise returns -1. Uses `valEqual()` for
 // equality check.
 int arrayDelete(Value self, Value el) {
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     Value val; int idx = 0; int found = -1;
     VALARRAY_FOREACH(ary, val, idx) {
@@ -479,8 +485,11 @@ int arrayDelete(Value self, Value el) {
     return found;
 }
 
-// NOTE: doesn't check frozenness or type of `self`
 Value arrayPop(Value self) {
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+    }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     if (ary->count == 0) return NIL_VAL;
     Value found = arrayGet(self, ary->count-1);
@@ -488,8 +497,11 @@ Value arrayPop(Value self) {
     return found;
 }
 
-// NOTE: doesn't check frozenness or type of `self`
 Value arrayPopFront(Value self) {
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+    }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     if (ary->count == 0) return NIL_VAL;
     Value found = arrayGet(self, 0);
@@ -497,14 +509,21 @@ Value arrayPopFront(Value self) {
     return found;
 }
 
-// NOTE: doesn't check frozenness or type of `self`
 void arrayPushFront(Value self, Value el) {
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+    }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     writeValueArrayBeg(ary, el);
 }
 
 // NOTE: doesn't check frozenness or type of `self`
 void arrayClear(Value self) {
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
     freeValueArray(ARRAY_GETHIDDEN(self));
 }
 
@@ -557,6 +576,7 @@ ObjString *stringGetHidden(Value instance) {
     ObjInstance *inst = AS_INSTANCE(instance);
     Value stringVal;
     ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(internedString("buf", 3)), &stringVal));
+    DBG_ASSERT(IS_STRING(stringVal));
     return (ObjString*)AS_OBJ(stringVal);
 }
 
