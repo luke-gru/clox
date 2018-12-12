@@ -41,6 +41,7 @@ typedef struct ObjString {
   int length;
   char *chars;
   uint32_t hash;
+  int capacity;
   bool isStatic;
 } ObjString;
 

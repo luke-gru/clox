@@ -353,7 +353,7 @@ void freeObject(Obj *obj, bool unlink) {
             ASSERT(string->chars);
             GC_TRACE_DEBUG(5, "Freeing string chars: p=%p", string->chars);
             GC_TRACE_DEBUG(5, "Freeing string chars: s='%s'", string->chars);
-            FREE_ARRAY(char, string->chars, string->length + 1);
+            FREE_ARRAY(char, string->chars, string->capacity + 1);
             string->chars = NULL;
             GC_TRACE_DEBUG(5, "Freeing ObjString: p=%p", obj);
             FREE(ObjString, obj);
