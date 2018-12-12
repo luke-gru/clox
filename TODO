@@ -20,10 +20,17 @@ bytecode, and benchmark the lookup results []
 
 * Add `foreach el in item` syntax with iter() method support [PARTIAL], no iterNext()
 * Add system() for running OS commands []
-* Add threads with libpthread [GIT BRANCH]
+* Add threads with libpthread [PARTIAL]
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
-* Add Class#ancestors []
+* Add Object#dup, and Class#ancestors []
+* Add capacity to string so don't have to reallocate after every push (PERF)
+* Add default ENV map as well as ARGV array
+* Add atexit hooks (`atexit(fun() { })`)
+* Add signal trap handlers (`trap(signame, fun() { })`)
+* Add Mutex class, mutexes for thread synchronization
+* release GVL before performing blocking calls/syscalls etc.
+* Add String#clear(), String#insertAt("new", 0), String#substr(start, len)
 * Add GC.stats []
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Make nil, true, false instances? []

@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <setjmp.h>
+#include <pthread.h>
 #include "chunk.h"
 #include "object.h"
 #include "table.h"
@@ -11,6 +12,12 @@
 
 #define STACK_MAX 256
 #define FRAMES_MAX 64
+
+#ifndef NDEBUG
+#define THREAD_DEBUG(lvl, ...) thread_debug(lvl, __VA_ARGS__)
+#else
+#define THREAD_DEBUG(lvl, ...) (void)0
+#endif
 
 typedef struct CallInfo CallInfo;
 
@@ -98,10 +105,16 @@ typedef struct VM {
     Debugger debugger;
 
     bool inited;
-    bool hadError;
-    bool exited;
 
+    bool exited;
+    bool hadError;
     ErrTagInfo *errInfo;
+
+    // threading
+    pthread_mutex_t GVLock; // global VM lock
+    ObjInstance *curThread;
+    ObjInstance *mainThread;
+    ObjInstance *threads; // array of current threads
 } VM; // singleton
 
 extern VM vm;
@@ -146,6 +159,7 @@ void setBacktrace(Value err);
 void throwErrorFmt(ObjClass *klass, const char *format, ...);
 #define throwArgErrorFmt(format, ...) throwErrorFmt(lxArgErrClass, format, __VA_ARGS__)
 void throwError(Value err);
+
 ErrTagInfo *addErrInfo(ObjClass *errClass);
 typedef void* (vm_cb_func)(void*);
 void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status);
@@ -166,5 +180,10 @@ void popFrame(void);
 CallFrame *pushFrame(void);
 
 NORETURN void stopVM(int status);
+
+// threads
+void acquireGVL(void);
+void releaseGVL(void);
+void thread_debug(int lvl, const char *format, ...);
 
 #endif

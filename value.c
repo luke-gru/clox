@@ -12,7 +12,7 @@ void initValueArray(ValueArray *array) {
     array->count = 0;
 }
 
-void writeValueArray(ValueArray *array, Value value) {
+void writeValueArrayEnd(ValueArray *array, Value value) {
     if (array->capacity < array->count + 1) {
         int oldCapacity = array->capacity;
         array->capacity = GROW_CAPACITY(oldCapacity);
@@ -26,10 +26,49 @@ void writeValueArray(ValueArray *array, Value value) {
     array->count++;
 }
 
+void writeValueArrayBeg(ValueArray *array, Value value) {
+    if (array->capacity < array->count + 1) {
+        int oldCapacity = array->capacity;
+        array->capacity = GROW_CAPACITY(oldCapacity);
+        array->values = GROW_ARRAY(
+            array->values, Value,
+            oldCapacity, array->capacity
+        );
+    }
+
+    Value *dest = array->values+1;
+    Value *src = array->values;
+    memmove(dest, src, sizeof(Value));
+    array->values[0] = value;
+    array->count++;
+}
+
 void freeValueArray(ValueArray *array) {
     FREE_ARRAY(ValueArray, array->values, array->capacity);
     array->values = NULL;
     initValueArray(array);
+}
+
+/**
+ *  0  *1*  2   3
+ * [1,  2,  3,  4]
+ * [1,  3]
+ *
+ */
+// NOTE: assumes index is within bounds
+bool removeValueArray(ValueArray *array, int idx) {
+    ASSERT(idx < array->count);
+    if (array->values == NULL) return false;
+    if (idx == array->count-1) { // last element
+        array->count--;
+        return true;
+    }
+    Value *dest = array->values + idx;
+    Value *src = dest + 1;
+    size_t szNum = array->count - idx - 1;
+    memmove(dest, src, sizeof(Value) * szNum);
+    array->count--;
+    return true;
 }
 
 static void printBool(FILE *file, bool val) {

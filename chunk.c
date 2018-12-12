@@ -197,6 +197,6 @@ int iseqAddCatchRow(
 }
 
 int iseqAddConstant(Iseq *seq, Value value) {
-    writeValueArray(&seq->constants, value);
+    writeValueArrayEnd(&seq->constants, value);
     return seq->constants.count - 1;
 }

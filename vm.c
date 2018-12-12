@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <setjmp.h>
 #include <signal.h>
+#include <pthread.h>
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
@@ -30,6 +31,18 @@ static void vm_debug(const char *format, ...) {
     vfprintf(stderr, format, ap);
     va_end(ap);
     fprintf(stderr, "\n");
+}
+void thread_debug(int lvl, const char *format, ...) {
+#ifndef NDEBUG
+    if (!CLOX_OPTION_T(debugThreads)) return; // TODO: incorporate lvl
+    va_list ap;
+    va_start(ap, format);
+    fprintf(stderr, "[TH]: ");
+    vfprintf(stderr, format, ap);
+    va_end(ap);
+    fprintf(stderr, "\n");
+    fflush(stderr);
+#endif
 }
 static void vm_warn(const char *format, ...) {
     va_list ap;
@@ -121,6 +134,14 @@ static void defineNativeFunctions(void) {
     ObjString *exitName = internedString("exit", 4);
     ObjNative *exitFn = newNative(exitName, lxExit);
     tableSet(&vm.globals, OBJ_VAL(exitName), OBJ_VAL(exitFn));
+
+    ObjString *newThreadName = internedString("newThread", 9);
+    ObjNative *newThreadFn = newNative(newThreadName, lxNewThread);
+    tableSet(&vm.globals, OBJ_VAL(newThreadName), OBJ_VAL(newThreadFn));
+
+    ObjString *joinThreadName = internedString("joinThread", 10);
+    ObjNative *joinThreadFn = newNative(joinThreadName, lxJoinThread);
+    tableSet(&vm.globals, OBJ_VAL(joinThreadName), OBJ_VAL(joinThreadFn));
 }
 
 // Builtin classes:
@@ -136,6 +157,7 @@ ObjClass *lxArgErrClass;
 ObjClass *lxTypeErrClass;
 ObjClass *lxNameErrClass;
 ObjClass *lxFileClass;
+ObjClass *lxThreadClass;
 Value lxLoadPath;
 
 static void defineNativeClasses(void) {
@@ -223,6 +245,18 @@ static void defineNativeClasses(void) {
     ObjNative *aryPushNat = newNative(internedString("push", 4), lxArrayPush);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(aryPushNat));
 
+    ObjNative *aryPopNat = newNative(internedString("pop", 3), lxArrayPop);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("pop", 3)), OBJ_VAL(aryPopNat));
+
+    ObjNative *aryPushFrontNat = newNative(internedString("pushFront", 9), lxArrayPushFront);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("pushFront", 9)), OBJ_VAL(aryPushFrontNat));
+
+    ObjNative *aryPopFrontNat = newNative(internedString("popFront", 8), lxArrayPopFront);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("popFront", 8)), OBJ_VAL(aryPopFrontNat));
+
+    ObjNative *aryDelNat = newNative(internedString("delete", 6), lxArrayDelete);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("delete", 6)), OBJ_VAL(aryDelNat));
+
     ObjNative *aryIdxGetNat = newNative(internedString("indexGet", 8), lxArrayIndexGet);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("indexGet", 8)), OBJ_VAL(aryIdxGetNat));
 
@@ -234,6 +268,9 @@ static void defineNativeClasses(void) {
 
     ObjNative *aryIterNat = newNative(internedString("iter", 4), lxArrayIter);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("iter", 4)), OBJ_VAL(aryIterNat));
+
+    ObjNative *aryClearNat = newNative(internedString("clear", 5), lxArrayClear);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(aryClearNat));
 
     // class Map
     ObjString *mapClassName = internedString("Map", 3);
@@ -275,6 +312,8 @@ static void defineNativeClasses(void) {
     tableSet(&iterClass->methods, OBJ_VAL(internedString("next", 4)), OBJ_VAL(iterNextNat));
 
     lxIteratorClass = iterClass;
+    ObjNative *mapClearNat = newNative(internedString("clear", 5), lxMapClear);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(mapClearNat));
 
     // class Error
     ObjString *errClassName = internedString("Error", 5);
@@ -317,6 +356,13 @@ static void defineNativeClasses(void) {
 
     ObjNative *fileReadNat = newNative(internedString("read", 4), lxFileReadStatic);
     tableSet(&fileClassStatic->methods, OBJ_VAL(internedString("read", 4)), OBJ_VAL(fileReadNat));
+
+    // class Thread
+    ObjString *threadClassName = internedString("Thread", 6);
+    ObjClass *threadClass = newClass(threadClassName, objClass);
+    tableSet(&vm.globals, OBJ_VAL(threadClassName), OBJ_VAL(threadClass));
+
+    lxThreadClass = threadClass;
 }
 
 static void defineGlobalVariables(void) {
@@ -425,7 +471,30 @@ void resetStack(void) {
 
 #define FIRST_GC_THRESHHOLD (1024*1024)
 
-void initVM(void) {
+static void initMainThread(void) {
+    if (pthread_mutex_init(&vm.GVLock, NULL) != 0) {
+        die("Global VM lock unable to initialize");
+    }
+
+    vm.curThread = NULL;
+    vm.mainThread = NULL;
+
+    Value mainThread = newThread();
+    Value threadList = newArray();
+    arrayPush(threadList, mainThread);
+
+    vm.curThread = AS_INSTANCE(mainThread);
+    vm.mainThread = AS_INSTANCE(mainThread);
+    vm.threads = AS_INSTANCE(threadList);
+
+    acquireGVL();
+    threadSetStatus(mainThread, THREAD_RUNNING);
+    pthread_t tid = pthread_self();
+    threadSetId(mainThread, tid);
+    THREAD_DEBUG(1, "Main thread initialized");
+}
+
+void initVM() {
     if (vm.inited) {
         VM_WARN("initVM: VM already initialized");
         return;
@@ -475,6 +544,7 @@ void initVM(void) {
     rootVMLoopJumpBufSet = false;
 
     defineGlobalVariables();
+    initMainThread();
     resetStack();
     turnGCOn();
     VM_DEBUG("initVM() end");
@@ -522,6 +592,13 @@ void freeVM(void) {
     vm.ec = NULL;
     vm.inited = false;
     vm.exited = false;
+
+    releaseGVL();
+    pthread_mutex_destroy(&vm.GVLock);
+    vm.curThread = NULL;
+    vm.mainThread = NULL;
+    vm.threads = NULL;
+
     VM_DEBUG("freeVM() end");
 }
 
@@ -1766,6 +1843,7 @@ static InterpretResult vm_run(bool doResetStack) {
         if (!vm.printBuf || vm.printToStdout) {
             printValue(stdout, val, true);
             printf("\n");
+            fflush(stdout);
         }
         if (vm.printBuf) {
             ObjString *out = valueToString(val, hiddenString);
@@ -2495,4 +2573,17 @@ ErrTagInfo *addErrInfo(ObjClass *errClass) {
 NORETURN void stopVM(int status) {
     freeVM();
     exit(status);
+}
+
+void acquireGVL(void) {
+    pthread_t tid = pthread_self();
+    THREAD_DEBUG(3, "thread %lu locking GVL...", (unsigned long)tid);
+    pthread_mutex_lock(&vm.GVLock);
+    THREAD_DEBUG(3, "thread %lu locked GVL", (unsigned long)tid);
+}
+
+void releaseGVL(void) {
+    pthread_t tid = pthread_self();
+    THREAD_DEBUG(3, "thread %lu unlocking GVL", (unsigned long)tid);
+    pthread_mutex_unlock(&vm.GVLock);
 }

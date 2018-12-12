@@ -445,9 +445,58 @@ Value newStringInstance(ObjString *buf) {
     return retVal;
 }
 
+// NOTE: doesn't check frozenness or type of `self`
 void arrayPush(Value self, Value el) {
     ValueArray *ary = ARRAY_GETHIDDEN(self);
-    writeValueArray(ary, el);
+    writeValueArrayEnd(ary, el);
+}
+
+// NOTE: doesn't check frozenness or type of `self`
+// Deletes the given element from the array, returning its old index if
+// it was found and deleted, otherwise returns -1. Uses `valEqual()` for
+// equality check.
+int arrayDelete(Value self, Value el) {
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    Value val; int idx = 0; int found = -1;
+    VALARRAY_FOREACH(ary, val, idx) {
+        if (valEqual(el, val)) {
+            found = idx;
+            break;
+        }
+    }
+    if (found != -1) {
+        removeValueArray(ary, found);
+    }
+    return found;
+}
+
+// NOTE: doesn't check frozenness or type of `self`
+Value arrayPop(Value self) {
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    if (ary->count == 0) return NIL_VAL;
+    Value found = arrayGet(self, ary->count-1);
+    removeValueArray(ary, ary->count-1);
+    return found;
+}
+
+// NOTE: doesn't check frozenness or type of `self`
+Value arrayPopFront(Value self) {
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    if (ary->count == 0) return NIL_VAL;
+    Value found = arrayGet(self, 0);
+    removeValueArray(ary, 0);
+    return found;
+}
+
+// NOTE: doesn't check frozenness or type of `self`
+void arrayPushFront(Value self, Value el) {
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    writeValueArrayBeg(ary, el);
+}
+
+// NOTE: doesn't check frozenness or type of `self`
+void arrayClear(Value self) {
+    freeValueArray(ARRAY_GETHIDDEN(self));
 }
 
 Value newMap(void) {
@@ -466,14 +515,22 @@ bool mapGet(Value mapVal, Value key, Value *ret) {
     }
 }
 
+// NOTE: doesn't check frozenness or type of `mapVal`
 void mapSet(Value mapVal, Value key, Value val) {
     Table *map = MAP_GETHIDDEN(mapVal);
     tableSet(map, key, val);
 }
 
+// number of key-value pairs
 Value mapSize(Value mapVal) {
     Table *map = MAP_GETHIDDEN(mapVal);
     return NUMBER_VAL(map->count);
+}
+
+// NOTE: doesn't check frozenness or type of `mapVal`
+void mapClear(Value mapVal) {
+    Table *map = MAP_GETHIDDEN(mapVal);
+    freeTable(map);
 }
 
 Table *mapGetHidden(Value mapVal) {
@@ -505,6 +562,18 @@ Value getProp(Value self, ObjString *propName) {
     }
 }
 
+Value getHiddenProp(Value self, ObjString *propName) {
+    ASSERT(IS_INSTANCE(self));
+    ObjInstance *inst = AS_INSTANCE(self);
+    Value ret;
+    if (tableGet(&inst->hiddenFields, OBJ_VAL(propName), &ret)) {
+        return ret;
+    } else {
+        return NIL_VAL;
+    }
+}
+
+// NOTE: doesn't check frozenness of `self`
 void setProp(Value self, ObjString *propName, Value val) {
     ASSERT(IS_INSTANCE(self));
     ObjInstance *inst = AS_INSTANCE(self);
@@ -579,6 +648,38 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     ObjClass *meta = newClass(name, inst->klass);
     inst->singletonKlass = meta;
     return meta;
+}
+
+Value newThread(void) {
+    ObjInstance *instance = newInstance(lxThreadClass);
+    Value th = OBJ_VAL(instance);
+    lxThreadInit(1, &th);
+    return th;
+}
+
+LxThread *threadGetInternal(Value thread) {
+    Value internal = getHiddenProp(thread, internedString("th", 2));
+    ObjInternal *i = AS_INTERNAL(internal);
+    ASSERT(i->data);
+    return (LxThread*)i->data;
+}
+
+void threadSetStatus(Value thread, ThreadStatus status) {
+    LxThread *th = threadGetInternal(thread);
+    th->status = status;
+}
+void threadSetId(Value thread, pthread_t tid) {
+    LxThread *th = threadGetInternal(thread);
+    th->tid = tid;
+}
+
+ThreadStatus threadGetStatus(Value thread) {
+    LxThread *th = threadGetInternal(thread);
+    return th->status;
+}
+pthread_t threadGetId(Value thread) {
+    LxThread *th = threadGetInternal(thread);
+    return th->tid;
 }
 
 bool is_obj_function_p(Obj *obj) {

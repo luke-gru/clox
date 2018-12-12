@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <time.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -151,6 +152,83 @@ Value lxExit(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(status, IS_NUMBER_FUNC, "number", 1);
     stopVM((int)AS_NUMBER(status));
     return NIL_VAL; // not reached
+}
+
+static void enteredNewThread() {
+    Value thread = newThread();
+    threadSetStatus(thread, THREAD_RUNNING);
+    threadSetId(thread, pthread_self());
+    vm.curThread = AS_INSTANCE(thread);
+    arrayPush(OBJ_VAL(vm.threads), thread);
+    // TODO: set other threads to STOPPED?
+}
+
+static void exitingThread() {
+    threadSetStatus(OBJ_VAL(vm.curThread), THREAD_STOPPED);
+    arrayDelete(OBJ_VAL(vm.threads), OBJ_VAL(vm.curThread));
+    vm.curThread = NULL;
+}
+
+static void *runCallableInNewThread(void *arg) {
+    ObjClosure *closure = arg;
+    ASSERT(closure);
+    acquireGVL();
+    THREAD_DEBUG(2, "in new thread");
+    enteredNewThread();
+    push(OBJ_VAL(closure));
+    THREAD_DEBUG(2, "calling callable");
+    callCallable(OBJ_VAL(closure), 0, false, NULL);
+    exitingThread();
+    THREAD_DEBUG(2, "exiting new thread");
+    releaseGVL();
+    return AS_OBJ(pop());
+}
+
+Value lxNewThread(int argCount, Value *args) {
+    CHECK_ARGS("newThread", 1, 1, argCount);
+    Value closure = *args;
+    CHECK_ARG_BUILTIN_TYPE(closure, IS_CLOSURE_FUNC, "closure", 1);
+    ObjClosure *func = AS_CLOSURE(closure);
+    pthread_t tnew;
+    if (pthread_create(&tnew, NULL, runCallableInNewThread, func) == 0) {
+        THREAD_DEBUG(2, "created thread id %lu", (unsigned long)tnew);
+        releaseGVL();
+        acquireGVL();
+        return NUMBER_VAL((unsigned long)tnew);
+    } else {
+        THREAD_DEBUG(1, "Error creating new thread");
+        // TODO: throw error
+        return NIL_VAL;
+    }
+}
+
+Value lxJoinThread(int argCount, Value *args) {
+    CHECK_ARGS("joinThread", 1, 1, argCount);
+    Value tidNum = *args;
+    CHECK_ARG_BUILTIN_TYPE(tidNum, IS_NUMBER_FUNC, "number", 1);
+    double num = AS_NUMBER(tidNum);
+    THREAD_DEBUG(2, "Joining thread id %lu\n", (unsigned long)num);
+    releaseGVL();
+    int ret = 0;
+    if ((ret = pthread_join((pthread_t)num, NULL)) != 0) {
+        // TODO: throw error
+        THREAD_DEBUG(1, "Error joining thread: (ret=%d)", ret);
+    }
+    // blocks
+    acquireGVL();
+    return NIL_VAL;
+}
+
+Value lxThreadInit(int argCount, Value *args) {
+    CHECK_ARGS("Thread#init", 1, 1, argCount);
+    Value self = *args;
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjInternal *internalObj = newInternalObject(NULL, NULL, NULL);
+    LxThread *th = calloc(sizeof(LxThread), 1); // GCed by default GC free of internalObject
+    ASSERT_MEM(th);
+    internalObj->data = th;
+    tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)), OBJ_VAL(internalObj));
+    return self;
 }
 
 static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoaded) {
@@ -445,6 +523,7 @@ Value lxStringDup(int argCount, Value *args) {
 }
 
 // ex: var a = Array();
+//     var b = ["hi", 2, Map()];
 Value lxArrayInit(int argCount, Value *args) {
     // TODO: call super?
     CHECK_ARGS("Array#init", 1, -1, argCount);
@@ -457,7 +536,7 @@ Value lxArrayInit(int argCount, Value *args) {
     internalObj->data = ary;
     tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), OBJ_VAL(internalObj));
     for (int i = 1; i < argCount; i++) {
-        writeValueArray(ary, args[i]);
+        writeValueArrayEnd(ary, args[i]);
     }
     ASSERT(ary->count == argCount-1);
     return self;
@@ -472,6 +551,68 @@ Value lxArrayPush(int argCount, Value *args) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
     }
     arrayPush(self, args[1]);
+    return self;
+}
+
+// ex: a.pop();
+Value lxArrayPop(int argCount, Value *args) {
+    CHECK_ARGS("Array#pop", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    return arrayPop(self);
+}
+
+// ex: a.pushFront(100);
+Value lxArrayPushFront(int argCount, Value *args) {
+    CHECK_ARGS("Array#pushFront", 2, 2, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    arrayPushFront(self, args[1]);
+    return self;
+}
+
+// ex: a.popFront();
+Value lxArrayPopFront(int argCount, Value *args) {
+    CHECK_ARGS("Array#popFront", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    return arrayPopFront(self);
+}
+
+// ex: a.delete(2);
+Value lxArrayDelete(int argCount, Value *args) {
+    CHECK_ARGS("Array#delete", 2, 2, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    int idx = arrayDelete(self, args[1]);
+    if (idx == -1) {
+        return NIL_VAL;
+    } else {
+        return NUMBER_VAL(idx);
+    }
+}
+
+// ex: a.clear();
+Value lxArrayClear(int argCount, Value *args) {
+    CHECK_ARGS("Array#clear", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+    }
+    arrayClear(self);
     return self;
 }
 
@@ -804,6 +945,17 @@ Value lxIteratorNext(int argCount, Value *args) {
         UNREACHABLE("bug"); // TODO: support other iterable types
     }
     UNREACHABLE(__func__);
+}
+
+Value lxMapClear(int argCount, Value *args) {
+    CHECK_ARGS("Map#clear", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot mutate");
+    }
+    mapClear(self);
+    return self;
 }
 
 Value lxErrInit(int argCount, Value *args) {

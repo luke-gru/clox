@@ -30,6 +30,8 @@ Value lxFork(int argCount, Value *args);
 Value lxWaitpid(int argCount, Value *args);
 Value lxSleep(int argCount, Value *args);
 Value lxExit(int argCount, Value *args);
+Value lxNewThread(int argCount, Value *args);
+Value lxJoinThread(int argCount, Value *args);
 
 bool runtimeCheckArgs(int min, int max, int actual);
 
@@ -57,20 +59,27 @@ Value lxStringDup(int argCount, Value *args);
 
 // class Array
 Value lxArrayInit(int argCount, Value *args);
-Value lxArrayPush(int argCount, Value *args);
 Value lxArrayToString(int argCount, Value *args);
+Value lxArrayPush(int argCount, Value *args);
+Value lxArrayPop(int argCount, Value *args);
+Value lxArrayPushFront(int argCount, Value *args);
+Value lxArrayPopFront(int argCount, Value *args);
 Value lxArrayIndexGet(int argCount, Value *args);
 Value lxArrayIndexSet(int argCount, Value *args);
 Value lxArrayIter(int argCount, Value *args);
+Value lxArrayDelete(int argCount, Value *args);
+Value lxArrayClear(int argCount, Value *args);
 
 // class Map
 Value lxMapInit(int argCount, Value *args);
+Value lxMapToString(int argCount, Value *args);
 Value lxMapIndexGet(int argCount, Value *args);
 Value lxMapIndexSet(int argCount, Value *args);
 Value lxMapKeys(int argCount, Value *args);
 Value lxMapValues(int argCount, Value *args);
 Value lxMapToString(int argCount, Value *args);
 Value lxMapIter(int argCount, Value *args);
+Value lxMapClear(int argCount, Value *args);
 
 // class Iterator
 Value lxIteratorInit(int argCount, Value *args);
@@ -80,6 +89,9 @@ Value lxIteratorNext(int argCount, Value *args);
 
 // class File
 Value lxFileReadStatic(int argCount, Value *args);
+
+// class Thread
+Value lxThreadInit(int argCount, Value *args);
 
 Value lxErrInit(int argCount, Value *args);
 #endif
