@@ -1,4 +1,7 @@
-system("WOAH");
-system("ls", "-al");
-system("WOAH");
-system("ls", "-al");
+print system("WOAH");
+print system("ls");
+print system("WOAH");
+print system("ls > /dev/null");
+
+__END__
+-- noexpect: --

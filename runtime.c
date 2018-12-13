@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 #include "runtime.h"
 #include "object.h"
 #include "value.h"
@@ -125,7 +126,9 @@ Value lxWaitpid(int argCount, Value *args) {
     int wstatus;
     // TODO: allow wait flags
     // Also, releaseGVL here
+    releaseGVL();
     pid_t wret = waitpid(childpid, &wstatus, 0);
+    acquireGVL();
     if (wret == -1) { // error, should throw?
         return NUMBER_VAL(-1);
     }
@@ -146,36 +149,17 @@ Value lxSleep(int argCount, Value *args) {
 }
 
 Value lxSystem(int argCount, Value *args) {
-    CHECK_ARGS("system", 1, -1, argCount);
+    CHECK_ARGS("system", 1, 1, argCount);
     Value cmd = *args;
     CHECK_ARG_IS_A(cmd, lxStringClass, 1);
 
-    const char *argv[argCount+1]; // FIXME: c99 only
-    memset(argv, 0, sizeof(char*)*(argCount+1));
-
-    const char *cmdStr = VAL_TO_STRING(*args)->chars;
-    argv[0] = cmdStr;
-
-    for (int i = 1; i < (argCount); i++) {
-        CHECK_ARG_IS_A(args[i], lxStringClass, i+1);
-        argv[i] = VAL_TO_STRING(args[i])->chars;
-    }
-    // TODO: check if fork is supported
-    pid_t pid = vfork();
-    if (pid == 0) { // child process
-        execvp(cmdStr, (char *const *)argv); // replaces the process
-        // if reached here, error has occured
-        exit(1);
-    } else { // parent
-        int wstatus;
-        int wret = waitpid(pid, &wstatus, 0);
-        if (wret == -1) { // error, should throw?
-            return BOOL_VAL(false);
-        }
-        int exitStatus = WEXITSTATUS(wstatus);
-        if (exitStatus != 0) {
-            return BOOL_VAL(false);
-        }
+    const char *cmdStr = VAL_TO_STRING(cmd)->chars;
+    releaseGVL();
+    int status = system(cmdStr);
+    acquireGVL();
+    int exitStatus = WEXITSTATUS(status);
+    if (exitStatus != 0) {
+        return BOOL_VAL(false);
     }
     return BOOL_VAL(true);
 }
@@ -409,7 +393,6 @@ Value lxObjectDup(int argCount, Value *args) {
 // ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
     // TODO: call super?
-    // TODO: add to module map, and make sure module doesn't already exist, maybe
     Value self = *args;
     CHECK_ARGS("Module#init", 1, 2, argCount);
     if (argCount == 1) { return self; }
@@ -719,7 +702,7 @@ Value lxArrayIndexSet(int argCount, Value *args) {
     Value rval = args[2];
     CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
     if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot mutate");
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
     Value internalObjVal;
     ASSERT(tableGet(&selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), &internalObjVal));
@@ -859,7 +842,7 @@ Value lxMapIndexSet(int argCount, Value *args) {
     ASSERT(IS_A_MAP(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot mutate");
+        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
     }
     Table *map = MAP_GETHIDDEN(self);
     Value key = args[1];
@@ -994,7 +977,7 @@ Value lxMapClear(int argCount, Value *args) {
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
-        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot mutate");
+        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
     }
     mapClear(self);
     return self;
@@ -1030,6 +1013,7 @@ Value lxFileReadStatic(int argCount, Value *args) {
         }
         return NIL_VAL;
     }
+    // TODO: release and re-acquire GVL for fopen, or is it fast enough?
     FILE *f = fopen(fnameStr->chars, "r");
     if (!f) {
         throwArgErrorFmt("Error reading File '%s': %s", fnameStr->chars, strerror(errno));
