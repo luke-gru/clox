@@ -127,6 +127,10 @@ static void defineNativeFunctions(void) {
     ObjNative *waitpidFn = newNative(waitpidName, lxWaitpid);
     tableSet(&vm.globals, OBJ_VAL(waitpidName), OBJ_VAL(waitpidFn));
 
+    ObjString *systemName = internedString("system", 6);
+    ObjNative *systemFn = newNative(systemName, lxSystem);
+    tableSet(&vm.globals, OBJ_VAL(systemName), OBJ_VAL(systemFn));
+
     ObjString *sleepName = internedString("sleep", 5);
     ObjNative *sleepFn = newNative(sleepName, lxSleep);
     tableSet(&vm.globals, OBJ_VAL(sleepName), OBJ_VAL(sleepFn));

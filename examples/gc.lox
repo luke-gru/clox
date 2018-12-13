@@ -1,0 +1,19 @@
+var i = 0;
+var bytesBefore = GC.stats()['bytes'];
+/*print bytesBefore;*/
+while (i < 500) {
+  [1, 2, 3];
+  "FREE ME";
+  i = i + 1;
+}
+print "collecting GC";
+GC.collect();
+GC.collect();
+var bytesAfter = GC.stats()['bytes'];
+/*print bytesAfter;*/
+print bytesAfter <= bytesBefore;
+
+__END__
+-- expect: --
+print "collecting GC";
+true

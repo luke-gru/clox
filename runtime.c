@@ -145,6 +145,41 @@ Value lxSleep(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+Value lxSystem(int argCount, Value *args) {
+    CHECK_ARGS("system", 1, -1, argCount);
+    Value cmd = *args;
+    CHECK_ARG_IS_A(cmd, lxStringClass, 1);
+
+    const char *argv[argCount+1]; // FIXME: c99 only
+    memset(argv, 0, sizeof(char*)*(argCount+1));
+
+    const char *cmdStr = VAL_TO_STRING(*args)->chars;
+    argv[0] = cmdStr;
+
+    for (int i = 1; i < (argCount); i++) {
+        CHECK_ARG_IS_A(args[i], lxStringClass, i+1);
+        argv[i] = VAL_TO_STRING(args[i])->chars;
+    }
+    // TODO: check if fork is supported
+    pid_t pid = vfork();
+    if (pid == 0) { // child process
+        execvp(cmdStr, (char *const *)argv); // replaces the process
+        // if reached here, error has occured
+        exit(1);
+    } else { // parent
+        int wstatus;
+        int wret = waitpid(pid, &wstatus, 0);
+        if (wret == -1) { // error, should throw?
+            return BOOL_VAL(false);
+        }
+        int exitStatus = WEXITSTATUS(wstatus);
+        if (exitStatus != 0) {
+            return BOOL_VAL(false);
+        }
+    }
+    return BOOL_VAL(true);
+}
+
 /**
  * TODO: run atexit hooks
  * ex: exit(0);
