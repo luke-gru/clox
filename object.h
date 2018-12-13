@@ -251,6 +251,10 @@ typedef struct LxThread {
     for (idx = 0; idx < ARRAY_SIZE(ary) && \
         (el = ARRAY_GET(ary, idx)).type != VAL_T_UNDEF; idx++)
 
+#define LXARRAY_FOREACH_REV(ary, el, idx) \
+    for (idx = ARRAY_SIZE(ary)-1; idx >= 0 && \
+        (el = ARRAY_GET(ary, idx)).type != VAL_T_UNDEF; idx--)
+
 #define MAP_GET(mapVal, valKey, pval)   (mapGet(mapVal, valKey, pval))
 #define MAP_SIZE(mapVal)          (mapSize(mapVal))
 #define MAP_GETHIDDEN(mapVal)     (mapGetHidden(mapVal))

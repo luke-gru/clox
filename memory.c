@@ -544,6 +544,13 @@ void collectGarbage(void) {
         grayValue(*vm.lastValue);
     }
 
+    GC_TRACE_DEBUG(2, "Marking atExit handlers: %d", vm.exitHandlers.length);
+    ObjClosure *func = NULL;
+    int funcIdx = 0;
+    vec_foreach(&vm.exitHandlers, func, funcIdx) {
+        grayObject((Obj*)func);
+    }
+
     GC_TRACE_DEBUG(2, "Marking VM hidden rooted objects (%d)", vm.hiddenObjs.length);
     // gray hidden roots...
     void *objPtr = NULL; int j = 0;

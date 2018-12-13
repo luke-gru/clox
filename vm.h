@@ -110,6 +110,8 @@ typedef struct VM {
     bool hadError;
     ErrTagInfo *errInfo;
 
+    vec_void_t exitHandlers;
+
     // threading
     pthread_mutex_t GVLock; // global VM lock
     ObjInstance *curThread;

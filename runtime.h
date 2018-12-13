@@ -33,6 +33,7 @@ Value lxExit(int argCount, Value *args);
 Value lxNewThread(int argCount, Value *args);
 Value lxJoinThread(int argCount, Value *args);
 Value lxSystem(int argCount, Value *args);
+Value lxAtExit(int argCount, Value *args);
 
 bool runtimeCheckArgs(int min, int max, int actual);
 

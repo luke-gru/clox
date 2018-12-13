@@ -36,6 +36,7 @@ static bool evalLines(char *lines[], int numLines) {
     }
     /*fprintf(stderr, "interpreting code\n");*/
     InterpretResult ires = interpret(&rChunk, "(repl)");
+    resetStack();
     if (ires != INTERPRET_OK) {
         fprintf(stderr, "%s", "Error evaluating code\n");
         return false;

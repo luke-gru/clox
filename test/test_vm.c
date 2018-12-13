@@ -18,6 +18,7 @@ static InterpretResult interp(char *src, bool expectSuccess) {
         T_ASSERT_EQ(COMPILE_ERR_NONE, cerr);
     }
     ires = interpret(&chunk, "test");
+    resetStack();
     if (expectSuccess) {
         T_ASSERT_EQ(INTERPRET_OK, ires);
     }

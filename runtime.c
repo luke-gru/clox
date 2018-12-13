@@ -164,8 +164,15 @@ Value lxSystem(int argCount, Value *args) {
     return BOOL_VAL(true);
 }
 
+Value lxAtExit(int argCount, Value *args) {
+    CHECK_ARGS("atExit", 1, 1, argCount);
+    Value func = *args;
+    CHECK_ARG_BUILTIN_TYPE(func, IS_CLOSURE_FUNC, "function", 1);
+    vec_push(&vm.exitHandlers, AS_OBJ(func));
+    return NIL_VAL;
+}
+
 /**
- * TODO: run atexit hooks
  * ex: exit(0);
  */
 Value lxExit(int argCount, Value *args) {
@@ -209,7 +216,7 @@ static void *runCallableInNewThread(void *arg) {
 Value lxNewThread(int argCount, Value *args) {
     CHECK_ARGS("newThread", 1, 1, argCount);
     Value closure = *args;
-    CHECK_ARG_BUILTIN_TYPE(closure, IS_CLOSURE_FUNC, "closure", 1);
+    CHECK_ARG_BUILTIN_TYPE(closure, IS_CLOSURE_FUNC, "function", 1);
     ObjClosure *func = AS_CLOSURE(closure);
     pthread_t tnew;
     if (pthread_create(&tnew, NULL, runCallableInNewThread, func) == 0) {

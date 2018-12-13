@@ -112,7 +112,6 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    freeVM();
     freeChunk(&chunk);
-    return 0;
+    stopVM(0);
 }

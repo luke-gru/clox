@@ -1,0 +1,13 @@
+atExit(fun() {
+  print "Exiting 1";
+});
+atExit(fun() {
+  print "Exiting 2";
+});
+print "About to exit";
+
+__END__
+-- expect: --
+About to exit
+Exiting 2
+Exiting 1

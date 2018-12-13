@@ -139,6 +139,10 @@ static void defineNativeFunctions(void) {
     ObjNative *exitFn = newNative(exitName, lxExit);
     tableSet(&vm.globals, OBJ_VAL(exitName), OBJ_VAL(exitFn));
 
+    ObjString *atExitName = internedString("atExit", 6);
+    ObjNative *atExitFn = newNative(atExitName, lxAtExit);
+    tableSet(&vm.globals, OBJ_VAL(atExitName), OBJ_VAL(atExitFn));
+
     ObjString *newThreadName = internedString("newThread", 9);
     ObjNative *newThreadFn = newNative(newThreadName, lxNewThread);
     tableSet(&vm.globals, OBJ_VAL(newThreadName), OBJ_VAL(newThreadFn));
@@ -555,6 +559,8 @@ void initVM() {
     vec_init(&vm.hiddenObjs);
     vec_init(&vm.stackObjects);
 
+    vec_init(&vm.exitHandlers);
+
     initDebugger(&vm.debugger);
 
     vm.lastErrorThrown = NIL_VAL;
@@ -618,6 +624,8 @@ void freeVM(void) {
     vm.ec = NULL;
     vm.inited = false;
     vm.exited = false;
+
+    vec_deinit(&vm.exitHandlers);
 
     releaseGVL();
     pthread_mutex_destroy(&vm.GVLock);
@@ -957,7 +965,7 @@ static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName,
     return false;
 }
 
-static InterpretResult vm_run(bool resetStack);
+static InterpretResult vm_run(void);
 
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
@@ -1414,7 +1422,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1) -
         (func->numKwargs > 0 ? numKwargsNotGiven+1 : 0);
     // NOTE: the frame is popped on OP_RETURN
-    vm_run(false); // actually run the function until return
+    vm_run(); // actually run the function until return
     return true;
 }
 
@@ -1708,7 +1716,7 @@ static ObjString *methodNameForBinop(OpCode code) {
 /**
  * Run the VM's instructions.
  */
-static InterpretResult vm_run(bool doResetStack) {
+static InterpretResult vm_run() {
     if (!rootVMLoopJumpBufSet) {
         int jumpRes = setjmp(rootVMLoopJumpBuf);
         rootVMLoopJumpBufSet = true;
@@ -2431,7 +2439,6 @@ static InterpretResult vm_run(bool doResetStack) {
       // exit interpreter, or evaluation context if in EVAL
       case OP_LEAVE: {
           if (!isInEval()) vm.exited = true;
-          if (doResetStack) resetStack();
           vmRunLvl--;
           /*if (vmRunLvl > 0) {*/
               /*longjmp(rootVMLoopJumpBuf, 1);*/
@@ -2485,7 +2492,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     frame->nativeFunc = NULL;
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = vm_run(true);
+    InterpretResult result = vm_run();
     return result;
 }
 
@@ -2509,7 +2516,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
 
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = vm_run(false);
+    InterpretResult result = vm_run();
     // `EC != ectx` if an error occured in the script, and propagated out
     // due to being caught in a calling script or never being caught.
     if (EC == ectx) pop_EC();
@@ -2554,7 +2561,7 @@ Value VMEval(const char *src, const char *filename, int lineno) {
 
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = vm_run(false);
+    InterpretResult result = vm_run();
     if (result != INTERPRET_OK) {
         vm.hadError = true;
     }
@@ -2632,8 +2639,21 @@ ErrTagInfo *addErrInfo(ObjClass *errClass) {
     return info;
 }
 
+static void runAtExitHooks(void) {
+    vm.exited = false;
+    ObjClosure *func = NULL;
+    int i = 0;
+    vec_foreach_rev(&vm.exitHandlers, func, i) {
+        callCallable(OBJ_VAL(func), 0, false, NULL);
+        pop();
+    }
+    vm.exited = true;
+}
+
 // FIXME: only exit current thread. Stop the VM only if it's main thread.
 NORETURN void stopVM(int status) {
+    runAtExitHooks();
+    resetStack();
     freeVM();
     exit(status);
 }
