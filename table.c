@@ -23,7 +23,7 @@ void initTable(Table *table) {
 }
 
 void freeTable(Table *table) {
-    FREE_ARRAY(Value, table->entries, table->capacityMask + 1);
+    FREE_ARRAY(Entry, table->entries, table->capacityMask + 1);
     initTable(table);
 }
 

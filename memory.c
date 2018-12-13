@@ -76,8 +76,10 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
 
     if (newSize > oldSize) {
         vm.bytesAllocated += (newSize - oldSize);
+        GC_TRACE_DEBUG(12, "reallocate added %lu bytes", newSize-oldSize);
     } else {
         vm.bytesAllocated -= (oldSize - newSize);
+        GC_TRACE_DEBUG(12, "reallocate freed %lu bytes", oldSize-newSize);
     }
 
     if (OPTION_T(stressGC) && newSize > 0) {
@@ -254,6 +256,7 @@ void blackenObject(Obj *obj) {
 void freeObject(Obj *obj, bool unlink) {
     if (obj == NULL) return;
     if (obj->type == OBJ_T_NONE) {
+        GC_TRACE_DEBUG(5, "freeObject called on OBJ_T_NONE: %p", obj);
         return; // already freed
     }
 
@@ -282,11 +285,11 @@ void freeObject(Obj *obj, bool unlink) {
         Obj *next = obj->next;
         Obj *prev = obj->prev;
         if (next) {
-            obj->next->prev = prev;
+            next->prev = prev;
             obj->next = NULL;
         }
         if (prev) {
-            obj->prev->next = next;
+            prev->next = next;
             obj->prev = NULL;
         } else {
             GC_TRACE_DEBUG(5, "  unlinked first object");
@@ -374,7 +377,10 @@ void freeObject(Obj *obj, bool unlink) {
                 internal->freeFunc(obj);
             } else if (internal->data) {
                 GC_TRACE_DEBUG(5, "Freeing internal object data: p=%p", internal->data);
-                free(internal->data);
+                ASSERT(internal->dataSz > 0);
+                FREE_SIZE(internal->dataSz, internal->data);
+            } else {
+                ASSERT(0);
             }
             GC_TRACE_DEBUG(5, "Freeing internal object: p=%p", internal);
             FREE(ObjInternal, internal);
@@ -393,6 +399,7 @@ void freeObject(Obj *obj, bool unlink) {
             GC_TRACE_DEBUG(5, "Freeing string chars: s='%s'", string->chars);
             FREE_ARRAY(char, string->chars, string->capacity + 1);
             string->chars = NULL;
+            string->hash = 0;
             GC_TRACE_DEBUG(5, "Freeing ObjString: p=%p", obj);
             FREE(ObjString, obj);
             memset(obj, 0, sizeof(ObjString));
@@ -431,6 +438,7 @@ void setGCOnOff(bool turnOn) {
 }
 
 void hideFromGC(Obj *obj) {
+    DBG_ASSERT(obj);
     if (!obj->noGC) {
         vec_push(&vm.hiddenObjs, obj);
         obj->noGC = true;
@@ -438,6 +446,7 @@ void hideFromGC(Obj *obj) {
 }
 
 void unhideFromGC(Obj *obj) {
+    DBG_ASSERT(obj);
     if (obj->noGC) {
         vec_remove(&vm.hiddenObjs, obj);
         obj->noGC = false;
@@ -471,7 +480,7 @@ void collectGarbage(void) {
         }
     }
 
-    GC_TRACE_DEBUG(2, "Marking VM C stack objects (%d found)", vm.stackObjects.length);
+    GC_TRACE_DEBUG(2, "Marking VM C-call stack objects (%d found)", vm.stackObjects.length);
     Obj *stackObjPtr = NULL; int idx = 0;
     vec_foreach(&vm.stackObjects, stackObjPtr, idx) {
         grayObject(stackObjPtr);
@@ -535,7 +544,7 @@ void collectGarbage(void) {
         grayValue(*vm.lastValue);
     }
 
-    GC_TRACE_DEBUG(2, "Marking VM hidden roots (%d)", vm.hiddenObjs.length);
+    GC_TRACE_DEBUG(2, "Marking VM hidden rooted objects (%d)", vm.hiddenObjs.length);
     // gray hidden roots...
     void *objPtr = NULL; int j = 0;
     int numHiddenRoots = vm.hiddenObjs.length;
@@ -546,6 +555,9 @@ void collectGarbage(void) {
             /*GC_TRACE_MARK(3, objPtr);*/
             numHiddenFound++;
             grayObject((Obj*)objPtr);
+        } else {
+            GC_TRACE_DEBUG(3, "Non-hidden root found in hiddenObjs list: %p", objPtr);
+            ASSERT(0);
         }
     }
     GC_TRACE_DEBUG(3, "Hidden roots founds: %d", numHiddenFound);
@@ -560,16 +572,14 @@ void collectGarbage(void) {
 
     numRootsLastGC = vm.grayCount;
 
-    GC_TRACE_DEBUG(2, "Traversing references to mark...");
+    GC_TRACE_DEBUG(2, "Blackening marked references");
     // traverse the references, graying them all
     while (vm.grayCount > 0) {
         // Pop an item from the gray stack.
         Obj *marked = vm.grayStack[--vm.grayCount];
         blackenObject(marked);
     }
-
-    // Delete unused interned strings.
-    /*tableRemoveWhite(&vm.strings);*/
+    GC_TRACE_DEBUG(3, "Done blackening references");
 
     GC_TRACE_DEBUG(2, "Begin FREE process");
     // Collect the white (unmarked) objects.
@@ -579,9 +589,11 @@ void collectGarbage(void) {
     int iter = 0;
     unsigned long numObjectsFreed = 0;
     unsigned long numObjectsKept = 0;
+    unsigned long numObjectsHiddenNotMarked = 0;
     bool cycleFound = false;
     while (object != NULL) {
         ASSERT(object->type > OBJ_T_NONE);
+        ASSERT(object->isLinked);
         int idx = 0;
         vec_find(&vvisited, object, idx);
         if (idx != -1) {
@@ -595,11 +607,12 @@ void collectGarbage(void) {
             // This object wasn't marked, so remove it from the list and free it.
             Obj *unreached = object;
             object = unreached->next;
-            ASSERT(unreached->isLinked);
             freeObject(unreached, true);
-            ASSERT(!unreached->isLinked);
             numObjectsFreed++;
         } else {
+            if (object->noGC && !object->isDark) {
+                numObjectsHiddenNotMarked++;
+            }
             // This object was reached, so unmark it (for the next GC) and move on to
             // the next.
             object->isDark = false;
@@ -610,8 +623,9 @@ void collectGarbage(void) {
     }
     vec_deinit(&vvisited);
     GC_TRACE_DEBUG(2, "done FREE process");
-    GC_TRACE_DEBUG(3, "%lu objects freed, %lu objects kept, cycle found: %s",
-            numObjectsFreed, numObjectsKept, cycleFound ? "yes" : "no");
+    GC_TRACE_DEBUG(3, "%lu objects freed, %lu objects kept, %lu unmarked hidden objects, cycle found: %s",
+            numObjectsFreed, numObjectsKept, numObjectsHiddenNotMarked,
+            cycleFound ? "yes" : "no");
 
     // Adjust the heap size based on live memory.
     vm.nextGCThreshhold = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;

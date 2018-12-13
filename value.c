@@ -44,7 +44,7 @@ void writeValueArrayBeg(ValueArray *array, Value value) {
 }
 
 void freeValueArray(ValueArray *array) {
-    FREE_ARRAY(ValueArray, array->values, array->capacity);
+    FREE_ARRAY(Value, array->values, array->capacity);
     array->values = NULL;
     initValueArray(array);
 }

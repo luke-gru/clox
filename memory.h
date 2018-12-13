@@ -1,15 +1,23 @@
 #ifndef clox_memory_h
 #define clox_memory_h
 
+#include <stdio.h>
 #include "object.h"
 #include "value.h"
 
+#define xstr(a) #a
+
 // NOTE: zeroes the memory
-#define ALLOCATE(type, count) \
-    (type*)reallocate(NULL, 0, sizeof(type) * (count))
+#define ALLOCATE(type, count)\
+    /*fprintf(stderr, "Allocating %d %s\n", (int)count, xstr(type)) > 0 ? \*/\
+    (type*)reallocate(NULL, 0, sizeof(type) * (count)) /*: NULL */
+
 
 #define FREE(type, pointer) \
     reallocate(pointer, sizeof(type), 0)
+
+#define FREE_SIZE(oldSize, pointer) \
+    reallocate(pointer, oldSize, 0)
 
 #define GROW_CAPACITY(capacity) \
     ((capacity) < 8 ? 8 : (capacity) * 2)

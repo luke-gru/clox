@@ -1,16 +1,12 @@
 var i = 0;
 print GC.stats();
-var array = [];
 while (i < 500) {
-  var a = "wasted strings";
-  array.push(a);
-  var b = ["and arrays"];
-  array.push(b);
+  [1, 2, 3];
+  "FREE ME";
   i = i + 1;
 }
 print GC.stats();
-array.clear();
-print GC.stats();
 print "collecting GC";
+GC.collect();
 GC.collect();
 print GC.stats();

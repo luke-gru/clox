@@ -1198,12 +1198,12 @@ static void emitNode(Node *n) {
         Token arrayTok = syntheticToken("Array");
         namedVariable(arrayTok, VAR_GET);
         emitChildren(n);
-        CallInfo *callInfoData = calloc(sizeof(CallInfo), 1);
+        CallInfo *callInfoData = ALLOCATE(CallInfo, 1);
         ASSERT_MEM(callInfoData);
         callInfoData->nameTok = arrayTok;
         callInfoData->argc = n->children->length;
         callInfoData->numKwargs = 0;
-        ObjInternal *callInfoObj = newInternalObject(callInfoData, NULL, NULL);
+        ObjInternal *callInfoObj = newInternalObject(callInfoData, sizeof(CallInfo), NULL, NULL);
         hideFromGC((Obj*)callInfoObj);
         uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
         emitOp2(OP_CALL, (uint8_t)n->children->length, callInfoConstSlot);
@@ -1485,7 +1485,7 @@ static void emitNode(Node *n) {
                 }
                 emitNode(arg);
             }
-            CallInfo *callInfoData = calloc(sizeof(CallInfo), 1);
+            CallInfo *callInfoData = ALLOCATE(CallInfo, 1);
             ASSERT_MEM(callInfoData);
             callInfoData->nameTok = n->tok;
             callInfoData->argc = argc;
@@ -1497,7 +1497,7 @@ static void emitNode(Node *n) {
                     idx++;
                 }
             }
-            ObjInternal *callInfoObj = newInternalObject(callInfoData, NULL, NULL);
+            ObjInternal *callInfoObj = newInternalObject(callInfoData, sizeof(CallInfo), NULL, NULL);
             hideFromGC((Obj*)callInfoObj);
             uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
             emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
@@ -1512,7 +1512,7 @@ static void emitNode(Node *n) {
                 }
                 emitNode(arg);
             }
-            CallInfo *callInfoData = calloc(sizeof(CallInfo), 1);
+            CallInfo *callInfoData = ALLOCATE(CallInfo, 1);
             ASSERT_MEM(callInfoData);
             callInfoData->nameTok = n->tok;
             callInfoData->argc = argc;
@@ -1524,7 +1524,7 @@ static void emitNode(Node *n) {
                     idx++;
                 }
             }
-            ObjInternal *callInfoObj = newInternalObject(callInfoData, NULL, NULL);
+            ObjInternal *callInfoObj = newInternalObject(callInfoData, sizeof(CallInfo), NULL, NULL);
             hideFromGC((Obj*)callInfoObj);
             uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
             emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);

@@ -51,6 +51,7 @@ typedef void (*GCFreeFunc)(Obj *obj);
 typedef struct ObjInternal {
   Obj object;
   void *data; // internal data
+  size_t dataSz;
   GCMarkFunc markFunc;
   GCMarkFunc freeFunc;
 } ObjInternal;
@@ -329,7 +330,7 @@ ObjModule *newModule(ObjString *name);
 ObjInstance *newInstance(ObjClass *klass);
 ObjNative *newNative(ObjString *name, NativeFn function);
 ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
-ObjInternal *newInternalObject(void *data, GCMarkFunc markFn, GCFreeFunc freeFn);
+ObjInternal *newInternalObject(void *data, size_t dataSz, GCMarkFunc markFn, GCFreeFunc freeFn);
 ObjClosure *newClosure(ObjFunction *function);
 ObjUpvalue *newUpvalue(Value *slot);
 

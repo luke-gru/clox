@@ -1572,7 +1572,7 @@ void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     vsnprintf(sbuf, 250, format, args);
     va_end(args);
     size_t len = strlen(sbuf);
-    char *cbuf = ALLOCATE(char, len+1);
+    char *cbuf = ALLOCATE(char, len+1); // uses takeString below
     strncpy(cbuf, sbuf, len);
     cbuf[len] = '\0';
     ObjString *buf = takeString(cbuf, len);
@@ -1609,6 +1609,12 @@ void printVMStack(FILE *f) {
             fprintf(f, "[ ");
             printValue(f, *slot, false);
             fprintf(f, " ]");
+            if (IS_OBJ(*slot)) {
+                Obj *objPtr = AS_OBJ(*slot);
+                if (objPtr->noGC) {
+                    fprintf(f, " (hidden!)");
+                }
+            }
         }
     }
     fprintf(f, "\n");
@@ -2410,7 +2416,7 @@ static InterpretResult vm_run(bool doResetStack) {
           ASSERT(IS_STRING(strLit));
           uint8_t isStatic = READ_BYTE();
           push(OBJ_VAL(lxStringClass));
-          push(strLit);
+          push(OBJ_VAL(dupString(AS_STRING(strLit))));
           bool ret = callCallable(peek(1), 1, false, NULL);
           ASSERT(ret); // the string instance is pushed to top of stack
           if (isStatic == 1) {

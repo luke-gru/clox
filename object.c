@@ -20,7 +20,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
     Obj *object = (Obj*)reallocate(NULL, 0, size);
     ASSERT(type > OBJ_T_NONE);
     object->type = type;
-    object->isDark = true;
+    object->isDark = true; // don't collect right away, wait at least 1 round of GC
     object->isFrozen = false;
 
     // prepend new object to linked list
@@ -32,6 +32,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
     vm.objects = object;
     object->isLinked = true;
     object->objectId = (size_t)object;
+    object->noGC = false;
 
     if (inCCall) {
         vec_push(&vm.stackObjects, object);
@@ -358,11 +359,12 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
     return bmethod;
 }
 
-ObjInternal *newInternalObject(void *data, GCMarkFunc markFunc, GCFreeFunc freeFunc) {
+ObjInternal *newInternalObject(void *data, size_t dataSz, GCMarkFunc markFunc, GCFreeFunc freeFunc) {
     ObjInternal *obj = ALLOCATE_OBJ(
         ObjInternal, OBJ_T_INTERNAL
     );
     obj->data = data;
+    obj->dataSz = dataSz;
     obj->markFunc = markFunc;
     obj->freeFunc = freeFunc;
     return obj;

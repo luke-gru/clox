@@ -226,9 +226,8 @@ Value lxThreadInit(int argCount, Value *args) {
     CHECK_ARGS("Thread#init", 1, 1, argCount);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(NULL, NULL, NULL);
-    LxThread *th = calloc(sizeof(LxThread), 1); // GCed by default GC free of internalObject
-    ASSERT_MEM(th);
+    ObjInternal *internalObj = newInternalObject(NULL, sizeof(LxThread), NULL, NULL);
+    LxThread *th = ALLOCATE(LxThread, 1); // GCed by default GC free of internalObject
     internalObj->data = th;
     tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)), OBJ_VAL(internalObj));
     return self;
@@ -314,16 +313,22 @@ static void markInternalAry(Obj *internalObj) {
     ValueArray *valAry = internal->data;
     ASSERT(valAry);
     for (int i = 0; i < valAry->count; i++) {
-        if (!IS_OBJ(valAry->values[i])) continue;
-        blackenObject(AS_OBJ(valAry->values[i]));
+        Value val = valAry->values[i];
+        if (!IS_OBJ(val)) continue;
+        // XXX: this is needed for GC code not to segfault for some reason,
+        // need to investigate. It especially happens after multiple (3) calls
+        // to GC.collect().
+        if (AS_OBJ(val)->type <= OBJ_T_INTERNAL) {
+            blackenObject(AS_OBJ(val));
+        }
     }
 }
 
 static void freeInternalAry(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
-    ValueArray *valAry = internal->data;
     ASSERT(internal);
+    ValueArray *valAry = internal->data;
     ASSERT(valAry);
     freeValueArray(valAry);
     FREE(ValueArray, valAry); // release the actual memory
@@ -547,10 +552,11 @@ Value lxArrayInit(int argCount, Value *args) {
     Value self = *args;
     DBG_ASSERT(IS_AN_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(NULL, markInternalAry, freeInternalAry);
+    ObjInternal *internalObj = newInternalObject(NULL, 0, markInternalAry, freeInternalAry);
     ValueArray *ary = ALLOCATE(ValueArray, 1);
     initValueArray(ary);
     internalObj->data = ary;
+    internalObj->dataSz = sizeof(ValueArray);
     tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), OBJ_VAL(internalObj));
     for (int i = 1; i < argCount; i++) {
         writeValueArrayEnd(ary, args[i]);
@@ -728,7 +734,7 @@ Value lxMapInit(int argCount, Value *args) {
     ASSERT(IS_A_MAP(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalMap = newInternalObject(
-        NULL, markInternalMap, freeInternalMap
+        NULL, sizeof(Table), markInternalMap, freeInternalMap
     );
     Table *map = ALLOCATE(Table, 1);
     initTable(map);
@@ -881,7 +887,7 @@ static void freeInternalIter(Obj *internalObj) {
     ASSERT(instance);
     unhideFromGC((Obj*)instance);
     freeObject((Obj*)instance, true); // release the actual memory
-    free(internal->data); // free the Iterator struct
+    FREE(Iterator, internal->data); // free the Iterator struct
 }
 
 Value lxIteratorInit(int argCount, Value *args) {
@@ -889,13 +895,13 @@ Value lxIteratorInit(int argCount, Value *args) {
     Value self = args[0];
     Value iterable = args[1];
     ObjInstance *selfObj = AS_INSTANCE(self);
-    Iterator *iter = calloc(sizeof(Iterator), 1);
+    Iterator *iter = ALLOCATE(Iterator, 1);
     ASSERT_MEM(iter);
     iter->index = -1;
     iter->lastRealIndex = -1;
     iter->instance = AS_INSTANCE(iterable);
     ObjInternal *internalIter = newInternalObject(
-        iter, markInternalIter, freeInternalIter
+        iter, sizeof(Iterator), markInternalIter, freeInternalIter
     );
     tableSet(&selfObj->hiddenFields,
             OBJ_VAL(internedString("iter", 4)),
