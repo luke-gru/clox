@@ -60,6 +60,9 @@ Value lxStringPush(int argCount, Value *args);
 Value lxStringClear(int argCount, Value *args);
 Value lxStringDup(int argCount, Value *args);
 Value lxStringInsertAt(int argCount, Value *args);
+Value lxStringSubstr(int argCount, Value *args);
+Value lxStringIndexGet(int argCount, Value *args);
+Value lxStringIndexSet(int argCount, Value *args);
 
 // class Array
 Value lxArrayInit(int argCount, Value *args);
@@ -101,5 +104,6 @@ Value lxThreadInit(int argCount, Value *args);
 Value lxGCStats(int argCount, Value *args);
 Value lxGCCollect(int argCount, Value *args);
 
+// class Error
 Value lxErrInit(int argCount, Value *args);
 #endif

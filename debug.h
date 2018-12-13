@@ -33,6 +33,11 @@ NORETURN extern void diePrintCBacktrace(const char *fmt, ...);
     diePrintCBacktrace(__VA_ARGS__);\
     } while (0)
 
+#define UNREACHABLE_RETURN(ret) do {\
+    UNREACHABLE("return reached!");\
+    return ret;\
+} while (0)
+
 #ifndef NDEBUG
 #define DBG_ASSERT(expr) ASSERT(expr)
 #else

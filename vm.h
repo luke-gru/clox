@@ -1,9 +1,9 @@
 #ifndef clox_vm_h
 #define clox_vm_h
 
+#include <pthread.h>
 #include <stdio.h>
 #include <setjmp.h>
-#include <pthread.h>
 #include "chunk.h"
 #include "object.h"
 #include "table.h"

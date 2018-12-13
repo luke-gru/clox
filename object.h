@@ -38,7 +38,7 @@ typedef struct Obj {
 
 typedef struct ObjString {
   Obj object;
-  int length;
+  int length; // doesn't include NULL byte
   char *chars;
   uint32_t hash;
   int capacity;
@@ -279,6 +279,9 @@ Value newStringInstance(ObjString *buf);
 void clearString(Value self);
 void pushString(Value self, Value pushed);
 void stringInsertAt(Value self, Value insert, int at);
+Value stringSubstr(Value self, int startIdx, int len);
+Value stringIndexGet(Value self, int index);
+Value stringIndexSet(Value self, int index, char c);
 ObjString *stringGetHidden(Value instance);
 
 // NOTE: don't call pushCString on a string value that's a key to a map! The
@@ -340,6 +343,7 @@ ObjUpvalue *newUpvalue(Value *slot);
 
 // methods/classes
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
+Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name);
 Obj *classFindStaticMethod(ObjClass *obj, ObjString *name);
 Obj *moduleFindStaticMethod(ObjModule *obj, ObjString *name);
 bool instanceIsA(ObjInstance *inst, ObjClass *klass);

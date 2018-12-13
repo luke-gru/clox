@@ -1,7 +1,7 @@
+#include <pthread.h>
 #include <stdio.h>
 #include <setjmp.h>
 #include <signal.h>
-#include <pthread.h>
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
@@ -229,6 +229,15 @@ static void defineNativeClasses(void) {
     ObjNative *stringInsertAtNat = newNative(internedString("insertAt", 8), lxStringInsertAt);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("insertAt", 8)), OBJ_VAL(stringInsertAtNat));
 
+    ObjNative *stringSubstrNat = newNative(internedString("substr", 6), lxStringSubstr);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("substr", 6)), OBJ_VAL(stringSubstrNat));
+
+    ObjNative *stringIndexGetNat = newNative(internedString("indexGet", 8), lxStringIndexGet);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("indexGet", 8)), OBJ_VAL(stringIndexGetNat));
+
+    ObjNative *stringIndexSetNat = newNative(internedString("indexSet", 8), lxStringIndexSet);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("indexSet", 8)), OBJ_VAL(stringIndexSetNat));
+
     ObjNative *stringDupNat = newNative(internedString("dup", 3), lxStringDup);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("dup", 3)), OBJ_VAL(stringDupNat));
 
@@ -441,19 +450,15 @@ Value createIterator(Value iterable) {
     } else if (IS_INSTANCE(iterable)) {
         ObjString *iterId = internedString("iter", 4);
         ObjInstance *instance = AS_INSTANCE(iterable);
-        Obj *method = instanceFindMethod(instance, iterId);
-        if (method) {
-            callVMMethod(instance, OBJ_VAL(method), 0, NULL);
-            Value ret = pop();
-            if (IS_AN_ARRAY(ret) || IS_A_MAP(ret)) {
-                return createIterator(ret);
-            } else if (isIterator(ret)) {
-                return ret;
-            } else {
-                throwErrorFmt(lxTypeErrClass, "Return value from iter() must be an Iterator or iterable value (Array/Map)");
-            }
+        Obj *method = instanceFindMethodOrRaise(instance, iterId);
+        callVMMethod(instance, OBJ_VAL(method), 0, NULL);
+        Value ret = pop();
+        if (IS_AN_ARRAY(ret) || IS_A_MAP(ret)) {
+            return createIterator(ret);
+        } else if (isIterator(ret)) {
+            return ret;
         } else {
-            throwErrorFmt(lxNameErrClass, "Undefined method 'iter' for class %s", instanceClassName(instance));
+            throwErrorFmt(lxTypeErrClass, "Return value from iter() must be an Iterator or iterable value (Array/Map)");
         }
     }
     UNREACHABLE(__func__);
@@ -2384,20 +2389,22 @@ static InterpretResult vm_run() {
           break;
       }
       case OP_INDEX_GET: {
-          Value lval = peek(1); // ex: Array object
-          ASSERT(IS_INSTANCE(lval)); // TODO: handle error, and allow classes/modules
+          Value lval = peek(1); // ex: Array/String/instance object
+          if (!IS_INSTANCE_LIKE(lval)) {
+              throwErrorFmt(lxTypeErrClass, "Cannot call indexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
+          }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethod(instance, internedString("indexGet", 8));
-          ASSERT(method); // FIXME: handle method not found
+          Obj *method = instanceFindMethodOrRaise(instance, internedString("indexGet", 8));
           callCallable(OBJ_VAL(method), 1, true, NULL);
           break;
       }
       case OP_INDEX_SET: {
           Value lval = peek(2);
-          ASSERT(IS_INSTANCE(lval)); // TODO: handle error, throw TypeError, allow classes/modules
+          if (!IS_INSTANCE_LIKE(lval)) {
+              throwErrorFmt(lxTypeErrClass, "Cannot call indexSet ('[]=') on a non-instance, found a: %s", typeOfVal(lval));
+          }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethod(instance, internedString("indexSet", 8));
-          ASSERT(method); // FIXME: handle method not found
+          Obj *method = instanceFindMethodOrRaise(instance, internedString("indexSet", 8));
           callCallable(OBJ_VAL(method), 2, true, NULL);
           break;
       }

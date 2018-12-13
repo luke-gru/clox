@@ -392,6 +392,17 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     return NULL;
 }
 
+Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name) {
+    Obj *method = instanceFindMethod(obj, name);
+    if (!method) {
+        throwErrorFmt(lxNameErrClass,
+            "Undefined instance method '%s' for class %s",
+            name->chars, instanceClassName(obj)
+        );
+    }
+    return method;
+}
+
 Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
     ObjClass *klass = classSingletonClass(obj);
     Value method;
@@ -530,6 +541,51 @@ void stringInsertAt(Value self, Value insert, int at) {
     ObjString *selfBuf = STRING_GETHIDDEN(self);
     ObjString *insertBuf = STRING_GETHIDDEN(insert);
     insertObjString(selfBuf, insertBuf, at);
+}
+
+Value stringSubstr(Value self, int startIdx, int len) {
+    if (startIdx < 0) {
+        throwArgErrorFmt("%s", "start index must be positive, is: %d", startIdx);
+    }
+    ObjString *buf = STRING_GETHIDDEN(self);
+    ObjString *substr = NULL;
+    if (startIdx >= buf->length) {
+        substr = copyString("", 0);
+    } else {
+        int maxlen = buf->length-startIdx; // "abc"
+        // TODO: support negative len, like `-2` also,
+        // to mean up to 2nd to last char
+        if (len > maxlen || len < 0) {
+            len = maxlen;
+        }
+        substr = copyString(buf->chars+startIdx, len);
+    }
+
+    return newStringInstance(substr);
+}
+
+Value stringIndexGet(Value self, int index) {
+    ObjString *buf = STRING_GETHIDDEN(self);
+    if (index >= buf->length) {
+        return newStringInstance(copyString("", 0));
+    } else if (index < 0) { // FIXME: handle
+        throwArgErrorFmt("%s", "index cannot be negative");
+    } else {
+        return newStringInstance(copyString(buf->chars+index, 1));
+    }
+    UNREACHABLE_RETURN(NIL_VAL);
+}
+
+Value stringIndexSet(Value self, int index, char c) {
+    ObjString *buf = STRING_GETHIDDEN(self);
+    if (index >= buf->length) {
+        throwArgErrorFmt("%s", "index too big");
+    } else if (index < 0) { // FIXME: handle
+        throwArgErrorFmt("%s", "index cannot be negative");
+    } else {
+        buf->chars[index] = c;
+    }
+    return self;
 }
 
 void arrayPush(Value self, Value el) {

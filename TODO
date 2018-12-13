@@ -19,13 +19,12 @@ the syntax is different for them, like in $ruby. []
 bytecode, and benchmark the lookup results []
 
 * Add `foreach el in item` syntax with iter() method support [PARTIAL], no iterNext()
-* Add system() and exec() for running shell commands []
+* Add exec() for running shell commands []
 * Add threads with libpthread [PARTIAL]
 * Add File class [PARTIAL]
 * Add modules like in jlox [PARTIAL]
 * Add Object#dup, and Class#ancestors []
 * Add default ENV map-like thing as well as ARGV array
-* Add atexit hooks (`atexit(fun() { })`)
 * Add signal trap handlers (`trap(signame, fun() { })`)
 * Add Mutex class, mutexes for thread synchronization
 * release GVL before performing blocking calls/syscalls etc. []

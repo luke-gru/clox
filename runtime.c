@@ -569,6 +569,36 @@ Value lxStringInsertAt(int argCount, Value *args) {
     return self;
 }
 
+Value lxStringSubstr(int argCount, Value *args) {
+    CHECK_ARGS("String#substr", 3, 3, argCount);
+    Value self = args[0];
+    Value startIdx = args[1];
+    Value len = args[2];
+    CHECK_ARG_BUILTIN_TYPE(startIdx, IS_NUMBER_FUNC, "number", 2);
+    CHECK_ARG_BUILTIN_TYPE(len, IS_NUMBER_FUNC, "number", 3);
+    return stringSubstr(self, AS_NUMBER(startIdx), AS_NUMBER(len));
+}
+
+Value lxStringIndexGet(int argCount, Value *args) {
+    CHECK_ARGS("String#indexGet", 2, 2, argCount);
+    Value self = args[0];
+    Value index = args[1];
+    CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 2);
+    return stringIndexGet(self, AS_NUMBER(index));
+}
+
+Value lxStringIndexSet(int argCount, Value *args) {
+    CHECK_ARGS("String#indexSet", 3, 3, argCount);
+    Value self = args[0];
+    Value index = args[1];
+    CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 2);
+    Value chrStr = args[1];
+    CHECK_ARG_IS_A(chrStr, lxStringClass, 3);
+    char chr = VAL_TO_STRING(chrStr)->chars[0];
+    stringIndexSet(self, AS_NUMBER(index), chr);
+    return self;
+}
+
 // ex: var a = Array();
 //     var b = ["hi", 2, Map()];
 Value lxArrayInit(int argCount, Value *args) {
