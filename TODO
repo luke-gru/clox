@@ -28,7 +28,7 @@ bytecode, and benchmark the lookup results []
 * Add signal trap handlers (`trap(signame, fun() { })`)
 * Add Mutex class, mutexes for thread synchronization
 * release GVL before performing blocking calls/syscalls etc. []
-* Add String#substr(start, len), String#length, String#replace(other) [IN PROGRESS]
+* Add String#length, String#replace(other) [IN PROGRESS]
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Make nil, true, false instances? []
 * Make variable lookup work as lookup in Environment tables, not statically

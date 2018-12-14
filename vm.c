@@ -679,7 +679,6 @@ void push(Value value) {
     if (IS_OBJ(value)) {
         ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
     }
-    DBG_ASSERT(!IS_UNDEF(value));
     *EC->stackTop = value;
     EC->stackTop++;
 }
