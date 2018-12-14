@@ -181,6 +181,7 @@ Value createIterator(Value iterable);
 void popFrame(void);
 CallFrame *pushFrame(void);
 
+void runAtExitHooks(void);
 NORETURN void stopVM(int status);
 
 // threads

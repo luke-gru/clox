@@ -2645,7 +2645,7 @@ ErrTagInfo *addErrInfo(ObjClass *errClass) {
     return info;
 }
 
-static void runAtExitHooks(void) {
+void runAtExitHooks(void) {
     vm.exited = false;
     ObjClosure *func = NULL;
     int i = 0;
