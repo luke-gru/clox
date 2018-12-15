@@ -147,13 +147,14 @@ extern ObjClass *lxModuleClass;
 extern ObjClass *lxAryClass;
 extern ObjClass *lxMapClass;
 extern ObjClass *lxIteratorClass;
+extern ObjClass *lxFileClass;
+extern ObjClass *lxThreadClass;
+extern ObjModule *lxGCModule;
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
 extern ObjClass *lxTypeErrClass;
 extern ObjClass *lxNameErrClass;
-extern ObjClass *lxFileClass;
-extern ObjClass *lxThreadClass;
-extern ObjModule *lxGCModule;
+extern ObjClass *lxSyntaxErrClass;
 
 extern Value lxLoadPath;
 
@@ -272,6 +273,7 @@ ObjString *dupString(ObjString *string);
 void pushObjString(ObjString *a, ObjString *b);
 void clearObjString(ObjString *str);
 void insertObjString(ObjString *a, ObjString *b, int at);
+bool objStringEquals(ObjString *a, ObjString *b);
 
 // string instances
 Value dupStringInstance(Value instance);
@@ -282,6 +284,7 @@ void stringInsertAt(Value self, Value insert, int at);
 Value stringSubstr(Value self, int startIdx, int len);
 Value stringIndexGet(Value self, int index);
 Value stringIndexSet(Value self, int index, char c);
+bool  stringEquals(Value a, Value b);
 ObjString *stringGetHidden(Value instance);
 
 // NOTE: don't call pushCString on a string value that's a key to a map! The

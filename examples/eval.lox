@@ -8,6 +8,16 @@ try {
   print('Caught error');
 }
 
+/* FIXME
+var gotSyntaxErr = false;
+try {
+  eval("woops bad syntax!");
+} catch(SyntaxError) {
+  gotSyntaxErr = true;
+}
+print gotSyntaxErr; // true
+*/
+
 __END__
 -- expect: --
 3.00

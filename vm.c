@@ -164,13 +164,14 @@ ObjClass *lxModuleClass;
 ObjClass *lxAryClass;
 ObjClass *lxMapClass;
 ObjClass *lxIteratorClass;
+ObjClass *lxFileClass;
+ObjClass *lxThreadClass;
+ObjModule *lxGCModule;
 ObjClass *lxErrClass;
 ObjClass *lxArgErrClass;
 ObjClass *lxTypeErrClass;
 ObjClass *lxNameErrClass;
-ObjClass *lxFileClass;
-ObjClass *lxThreadClass;
-ObjModule *lxGCModule;
+ObjClass *lxSyntaxErrClass;
 Value lxLoadPath;
 
 static void defineNativeClasses(void) {
@@ -224,6 +225,15 @@ static void defineNativeClasses(void) {
     ObjNative *stringOpAddNat = newNative(internedString("opAdd", 5), lxStringOpAdd);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("opAdd", 5)), OBJ_VAL(stringOpAddNat));
 
+    ObjNative *stringOpIndexGetNat = newNative(internedString("opIndexGet", 10), lxStringOpIndexGet);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("opIndexGet", 10)), OBJ_VAL(stringOpIndexGetNat));
+
+    ObjNative *stringOpIndexSetNat = newNative(internedString("opIndexSet", 8), lxStringOpIndexSet);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("opIndexSet", 8)), OBJ_VAL(stringOpIndexSetNat));
+
+    ObjNative *stringOpEqNat = newNative(internedString("opEquals", 8), lxStringOpEquals);
+    tableSet(&stringClass->methods, OBJ_VAL(internedString("opEquals", 8)), OBJ_VAL(stringOpEqNat));
+
     ObjNative *stringPushNat = newNative(internedString("push", 4), lxStringPush);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(stringPushNat));
 
@@ -236,11 +246,6 @@ static void defineNativeClasses(void) {
     ObjNative *stringSubstrNat = newNative(internedString("substr", 6), lxStringSubstr);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("substr", 6)), OBJ_VAL(stringSubstrNat));
 
-    ObjNative *stringIndexGetNat = newNative(internedString("indexGet", 8), lxStringIndexGet);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("indexGet", 8)), OBJ_VAL(stringIndexGetNat));
-
-    ObjNative *stringIndexSetNat = newNative(internedString("indexSet", 8), lxStringIndexSet);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("indexSet", 8)), OBJ_VAL(stringIndexSetNat));
 
     ObjNative *stringDupNat = newNative(internedString("dup", 3), lxStringDup);
     tableSet(&stringClass->methods, OBJ_VAL(internedString("dup", 3)), OBJ_VAL(stringDupNat));
@@ -285,11 +290,11 @@ static void defineNativeClasses(void) {
     ObjNative *aryDelNat = newNative(internedString("delete", 6), lxArrayDelete);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("delete", 6)), OBJ_VAL(aryDelNat));
 
-    ObjNative *aryIdxGetNat = newNative(internedString("indexGet", 8), lxArrayIndexGet);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("indexGet", 8)), OBJ_VAL(aryIdxGetNat));
+    ObjNative *aryIdxGetNat = newNative(internedString("opIndexGet", 10), lxArrayOpIndexGet);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("opIndexGet", 10)), OBJ_VAL(aryIdxGetNat));
 
-    ObjNative *aryIdxSetNat = newNative(internedString("indexSet", 8), lxArrayIndexSet);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("indexSet", 8)), OBJ_VAL(aryIdxSetNat));
+    ObjNative *aryIdxSetNat = newNative(internedString("opIndexSet", 10), lxArrayOpIndexSet);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("opIndexSet", 10)), OBJ_VAL(aryIdxSetNat));
 
     ObjNative *aryToStringNat = newNative(internedString("toString", 8), lxArrayToString);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(aryToStringNat));
@@ -313,11 +318,14 @@ static void defineNativeClasses(void) {
     ObjNative *mapInitNat = newNative(internedString("init", 4), lxMapInit);
     tableSet(&mapClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(mapInitNat));
 
-    ObjNative *mapIdxGetNat = newNative(internedString("indexGet", 8), lxMapIndexGet);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("indexGet", 8)), OBJ_VAL(mapIdxGetNat));
+    ObjNative *mapIdxGetNat = newNative(internedString("opIndexGet", 10), lxMapOpIndexGet);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("opIndexGet", 10)), OBJ_VAL(mapIdxGetNat));
 
-    ObjNative *mapIdxSetNat = newNative(internedString("indexSet", 8), lxMapIndexSet);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("indexSet", 8)), OBJ_VAL(mapIdxSetNat));
+    ObjNative *mapIdxSetNat = newNative(internedString("opIndexSet", 10), lxMapOpIndexSet);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("opIndexSet", 10)), OBJ_VAL(mapIdxSetNat));
+
+    ObjNative *mapOpEqNat = newNative(internedString("opEquals", 8), lxMapOpEquals);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("opEquals", 8)), OBJ_VAL(mapOpEqNat));
 
     ObjNative *mapKeysNat = newNative(internedString("keys", 4), lxMapKeys);
     tableSet(&mapClass->methods, OBJ_VAL(internedString("keys", 4)), OBJ_VAL(mapKeysNat));
@@ -330,9 +338,6 @@ static void defineNativeClasses(void) {
 
     ObjNative *mapIterNat = newNative(internedString("iter", 4), lxMapIter);
     tableSet(&mapClass->methods, OBJ_VAL(internedString("iter", 4)), OBJ_VAL(mapIterNat));
-
-    ObjNative *mapOpEqNat = newNative(internedString("opEquals", 8), lxMapOpEquals);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("opEquals", 8)), OBJ_VAL(mapOpEqNat));
 
     // class Iterator
     ObjString *iterClassName = internedString("Iterator", 8);
@@ -379,6 +384,13 @@ static void defineNativeClasses(void) {
     tableSet(&vm.globals, OBJ_VAL(nameErrClassName), OBJ_VAL(nameErrClass));
 
     lxNameErrClass = nameErrClass;
+
+    // class SyntaxError
+    ObjString *syntaxErrClassName = internedString("SyntaxError", 11);
+    ObjClass *syntaxErrClass = newClass(syntaxErrClassName, errClass);
+    tableSet(&vm.globals, OBJ_VAL(syntaxErrClassName), OBJ_VAL(syntaxErrClass));
+
+    lxSyntaxErrClass = syntaxErrClass;
 
     // class File
     ObjString *fileClassName = internedString("File", 4);
@@ -778,15 +790,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
     if (lhs.type != rhs.type) {
         return false;
     }
-    if (IS_A_STRING(lhs) && IS_A_STRING(rhs)) {
-        ObjString *lhsStr = VAL_TO_STRING(lhs);
-        ObjString *rhsStr = VAL_TO_STRING(rhs);
-        if (lhsStr->hash > 0 && rhsStr->hash > 0) {
-            return lhsStr->hash == rhsStr->hash;
-        } else {
-            return strcmp(lhsStr->chars, rhsStr->chars) == 0;
-        }
-    } else if (IS_OBJ(lhs)) { // 2 objects, same pointers to Obj are equal
+    if (IS_OBJ(lhs)) {
         if (IS_INSTANCE_LIKE(lhs)) {
             ObjString *opEquals = internedString("opEquals", 8);
             ObjInstance *self = AS_INSTANCE(lhs);
@@ -797,6 +801,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
                 return isTruthy(ret);
             }
         }
+        // 2 objects, same pointers to Obj are equal
         return AS_OBJ(lhs) == AS_OBJ(rhs);
     } else if (IS_NUMBER(lhs)) { // 2 numbers, same values are equal
         return AS_NUMBER(lhs) == AS_NUMBER(rhs);
@@ -1119,7 +1124,7 @@ static void unwindErrInfo(CallFrame *frame) {
     ErrTagInfo *info = vm.errInfo;
     while (info && info->frame == frame) {
         ErrTagInfo *prev = info->prev;
-        free(info);
+        FREE(ErrTagInfo, info);
         info = prev;
     }
     vm.errInfo = info;
@@ -2411,20 +2416,20 @@ static InterpretResult vm_run() {
       case OP_INDEX_GET: {
           Value lval = peek(1); // ex: Array/String/instance object
           if (!IS_INSTANCE_LIKE(lval)) {
-              throwErrorFmt(lxTypeErrClass, "Cannot call indexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
+              throwErrorFmt(lxTypeErrClass, "Cannot call opIndexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, internedString("indexGet", 8));
+          Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexGet", 10));
           callCallable(OBJ_VAL(method), 1, true, NULL);
           break;
       }
       case OP_INDEX_SET: {
           Value lval = peek(2);
           if (!IS_INSTANCE_LIKE(lval)) {
-              throwErrorFmt(lxTypeErrClass, "Cannot call indexSet ('[]=') on a non-instance, found a: %s", typeOfVal(lval));
+              throwErrorFmt(lxTypeErrClass, "Cannot call opIndexSet ('[]=') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, internedString("indexSet", 8));
+          Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexSet", 10));
           callCallable(OBJ_VAL(method), 2, true, NULL);
           break;
       }
@@ -2567,11 +2572,11 @@ Value VMEval(const char *src, const char *filename, int lineno) {
 
     if (compile_res != 0) {
         VM_DEBUG("compile error in eval");
-        // TODO: throw syntax error
         pop_EC();
         ASSERT(getFrame() == oldFrame);
         freeChunk(&chunk);
-        return BOOL_VAL(false);
+        throwErrorFmt(lxSyntaxErrClass, "%s", "Syntax error");
+        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     EC->filename = copyString(filename, strlen(filename));
     VM_DEBUG("%s", "Pushing initial eval callframe");
@@ -2623,7 +2628,7 @@ static void unwindJumpRecover(ErrTagInfo *info) {
         ASSERT(vm.errInfo);
         ErrTagInfo *prev = vm.errInfo->prev;
         ASSERT(prev);
-        free(vm.errInfo);
+        FREE(ErrTagInfo, vm.errInfo);
         vm.errInfo = prev;
     }
 }
@@ -2637,7 +2642,7 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
         VM_DEBUG("vm_protect before func");
         void *res = func(arg);
         ErrTagInfo *prev = errInfo->prev;
-        free(errInfo);
+        FREE(ErrTagInfo, errInfo);
         vm.errInfo = prev;
         VM_DEBUG("vm_protect after func");
         return res;
@@ -2655,8 +2660,7 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
 }
 
 ErrTagInfo *addErrInfo(ObjClass *errClass) {
-    struct ErrTagInfo *info = calloc(sizeof(ErrTagInfo), 1);
-    ASSERT_MEM(info);
+    struct ErrTagInfo *info = ALLOCATE(ErrTagInfo, 1);
     info->status = TAG_NONE;
     info->errClass = errClass;
     info->frame = getFrame();
@@ -2677,7 +2681,7 @@ void runAtExitHooks(void) {
     vm.exited = true;
 }
 
-// FIXME: only exit current thread. Stop the VM only if it's main thread.
+// FIXME: only exit the current thread. Stop the VM only if it's main thread.
 NORETURN void stopVM(int status) {
     runAtExitHooks();
     resetStack();

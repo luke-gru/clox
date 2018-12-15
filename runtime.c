@@ -597,16 +597,16 @@ Value lxStringSubstr(int argCount, Value *args) {
     return stringSubstr(self, AS_NUMBER(startIdx), AS_NUMBER(len));
 }
 
-Value lxStringIndexGet(int argCount, Value *args) {
-    CHECK_ARGS("String#indexGet", 2, 2, argCount);
+Value lxStringOpIndexGet(int argCount, Value *args) {
+    CHECK_ARGS("String#[]", 2, 2, argCount);
     Value self = args[0];
     Value index = args[1];
     CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 2);
     return stringIndexGet(self, AS_NUMBER(index));
 }
 
-Value lxStringIndexSet(int argCount, Value *args) {
-    CHECK_ARGS("String#indexSet", 3, 3, argCount);
+Value lxStringOpIndexSet(int argCount, Value *args) {
+    CHECK_ARGS("String#[]=", 3, 3, argCount);
     Value self = args[0];
     Value index = args[1];
     CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 2);
@@ -615,6 +615,11 @@ Value lxStringIndexSet(int argCount, Value *args) {
     char chr = VAL_TO_STRING(chrStr)->chars[0];
     stringIndexSet(self, AS_NUMBER(index), chr);
     return self;
+}
+
+Value lxStringOpEquals(int argCount, Value *args) {
+    CHECK_ARGS("String#==", 2, 2, argCount);
+    return BOOL_VAL(stringEquals(args[0], args[1]));
 }
 
 // ex: var a = Array();
@@ -728,7 +733,7 @@ Value lxArrayToString(int argCount, Value *args) {
 }
 
 
-Value lxArrayIndexGet(int argCount, Value *args) {
+Value lxArrayOpIndexGet(int argCount, Value *args) {
     CHECK_ARGS("Array#[]", 2, 2, argCount);
     Value self = args[0];
     ASSERT(IS_AN_ARRAY(self));
@@ -748,7 +753,7 @@ Value lxArrayIndexGet(int argCount, Value *args) {
     }
 }
 
-Value lxArrayIndexSet(int argCount, Value *args) {
+Value lxArrayOpIndexSet(int argCount, Value *args) {
     CHECK_ARGS("Array#[]=", 3, 3, argCount);
     Value self = args[0];
     ASSERT(IS_AN_ARRAY(self));
@@ -784,7 +789,7 @@ Value lxArrayIter(int argCount, Value *args) {
 }
 
 Value lxArrayOpEquals(int argCount, Value *args) {
-    CHECK_ARGS("Array#opEquals", 2, 2, argCount);
+    CHECK_ARGS("Array#==", 2, 2, argCount);
     return BOOL_VAL(arrayEquals(args[0], args[1]));
 }
 
@@ -886,8 +891,8 @@ Value lxMapToString(int argCount, Value *args) {
     return ret;
 }
 
-Value lxMapIndexGet(int argCount, Value *args) {
-    CHECK_ARGS("Map#indexGet", 2, 2, argCount);
+Value lxMapOpIndexGet(int argCount, Value *args) {
+    CHECK_ARGS("Map#[]", 2, 2, argCount);
     Value self = args[0];
     ASSERT(IS_A_MAP(self));
     Table *map = MAP_GETHIDDEN(self);
@@ -900,8 +905,8 @@ Value lxMapIndexGet(int argCount, Value *args) {
     }
 }
 
-Value lxMapIndexSet(int argCount, Value *args) {
-    CHECK_ARGS("Map#indexSet", 3, 3, argCount);
+Value lxMapOpIndexSet(int argCount, Value *args) {
+    CHECK_ARGS("Map#[]=", 3, 3, argCount);
     Value self = args[0];
     ASSERT(IS_A_MAP(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
@@ -947,7 +952,7 @@ Value lxMapIter(int argCount, Value *args) {
 }
 
 Value lxMapOpEquals(int argCount, Value *args) {
-    CHECK_ARGS("Map#opEquals", 2, 2, argCount);
+    CHECK_ARGS("Map#==", 2, 2, argCount);
     return BOOL_VAL(mapEquals(args[0], args[1]));
 }
 

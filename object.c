@@ -146,6 +146,13 @@ void insertObjString(ObjString *a, ObjString *b, int at) {
     insertCString(a, b->chars, b->length, at);
 }
 
+bool objStringEquals(ObjString *a, ObjString *b) {
+    DBG_ASSERT(a && b);
+    if (a->length != b->length) return false;
+    if (a->hash > 0 && b->hash > 0) return a->hash == b->hash;
+    return strcmp(a->chars, b->chars) == 0;
+}
+
 // Copies `chars`, adds them to end of string.
 // NOTE: don't use this function on a ObjString that is already a key
 // for a table, it won't retrieve the value in the table anymore.
@@ -590,6 +597,11 @@ Value stringIndexSet(Value self, int index, char c) {
         buf->chars[index] = c;
     }
     return self;
+}
+
+bool stringEquals(Value a, Value b) {
+    if (!IS_A_STRING(b)) return false;
+    return objStringEquals(STRING_GETHIDDEN(a), STRING_GETHIDDEN(b));
 }
 
 void arrayPush(Value self, Value el) {
