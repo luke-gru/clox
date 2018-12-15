@@ -17,6 +17,7 @@ static void resetChunk(void) {
 static bool evalLines(char *lines[], int numLines) {
     resetStack();
     resetChunk();
+    vm.exited = false;
     vm.hadError = false;
     ObjString *buf = hiddenString("", 0);
     for (int i = 0; i < numLines; i++) {
@@ -29,7 +30,6 @@ static bool evalLines(char *lines[], int numLines) {
     /*fprintf(stderr, "compiling code: '%s'", code);*/
     int res = compile_src(code, &rChunk, &cerr);
     unhideFromGC((Obj*)buf);
-    freeObject((Obj*)buf, true);
     if (res != 0) {
         fprintf(stderr, "%s", "Compilation error\n");
         return false;
@@ -65,19 +65,21 @@ static bool scanToEnd(void) {
     ASSERT(0);
 }
 
+// Adds copied chars in `src` to `scanner.source`
 void scannerAddSrc(char *src) {
     ASSERT(src);
     ASSERT(scanner.source);
-    // TODO: use realloc to avoid leaking memory
     size_t newsz = strlen(scanner.source)+1+strlen(src);
     char *buf = calloc(newsz, 1);
     ASSERT_MEM(buf);
     strcpy(buf, scanner.source);
     strcat(buf, src);
+    free(scanner.source);
     scanner.source = buf;
 }
 
 static void _resetScanner(void) {
+    if (scanner.source) free(scanner.source);
     initScanner(&scanner, strdup(""));
 }
 
@@ -122,6 +124,10 @@ NORETURN void repl(void) {
             continue;
         }
         ASSERT(line);
+        if (numLines == 50) {
+            fprintf(stderr, "Too many lines");
+            ASSERT(0); // FIXME: don't just error out
+        }
         lines[numLines++] = line;
         scannerAddSrc(line);
         bool isOk = scanToEnd();
@@ -134,6 +140,7 @@ NORETURN void repl(void) {
             continue;
         }
         if (scanner.indent == 0) { // evaluate the statement/expression
+            free(scanner.source);
             if (!evalLines(lines, numLines)) {
                 freeLines(lines, numLines);
                 numLines = 0;
@@ -164,5 +171,5 @@ NORETURN void repl(void) {
         }
         line = NULL;
     }
-    exit(0);
+    stopVM(0);
 }

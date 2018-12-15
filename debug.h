@@ -17,13 +17,16 @@ typedef vec_t(ObjFunction*) vec_funcp_t;
 
 void printDisassembledChunk(FILE *f, Chunk *chunk, const char *name);
 int  printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *funcs);
+// Relies on program being build with -rdynamic for seeing function names (see man 3 backtrace)
 void printCBacktrace(void);
 
 ObjString *disassembleChunk(Chunk *chunk);
 
 const char *opName(OpCode code);
 
+// Prints msg, exit(1)
 NORETURN extern void die(const char *fmt, ...);
+// Prints msg, prints C backtrace, exit(1)
 NORETURN extern void diePrintCBacktrace(const char *fmt, ...);
 
 #define ASSERT(expr) ((expr) ? (void)0 : diePrintCBacktrace("assertion failure (%s:%d) in %s\n", __FILE__, __LINE__, __func__))
