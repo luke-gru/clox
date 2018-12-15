@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -I. -Ivendor -pthread
-SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c table.c runtime.c repl.c debugger.c vendor/linenoise.c
-TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vec.c nodes.c parser.c table.c runtime.c debugger.c
+SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c repl.c debugger.c vendor/linenoise.c
+TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c debugger.c
 TEST_FILES = test/test_object.c test/test_nodes.c test/test_compiler.c test/test_vm.c test/test_gc.c test/test_examples.c test/test_regex.c
 DEBUG_FLAGS=-O0 -g -rdynamic
 TEST_FLAGS=-O0 -g -rdynamic -Itest/include -I.
@@ -63,7 +63,6 @@ run_test_vm:
 .PHONY: build_test_gc
 build_test_gc:
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_gc.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_gc
-	@ ./bin/test_gc
 
 .PHONY: run_test_gc
 run_test_gc:
