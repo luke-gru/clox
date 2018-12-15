@@ -6,7 +6,10 @@ print m;
 m[10] = 9;
 print m[10];
 
+print m == Map([[10, 9]]);
+
 __END__
 -- expect: --
 {10.00 => 5.00}
 9.00
+true

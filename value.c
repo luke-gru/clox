@@ -113,8 +113,8 @@ void printValue(FILE *file, Value value, bool canCallMethods) {
             if (callable && vm.inited && canCallMethods) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL);
                 if (!IS_A_STRING(stringVal)) {
-                    pop();
                     throwErrorFmt(lxTypeErrClass, "TypeError, toString() returned non-string, is a: %s", typeOfVal(stringVal));
+                    UNREACHABLE_RETURN((void)0);
                 }
                 ObjString *out = VAL_TO_STRING(stringVal);
                 fprintf(file, "%s", out->chars);
@@ -229,8 +229,8 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             if (toString && vm.inited) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL);
                 if (!IS_A_STRING(stringVal)) {
-                    pop();
                     throwErrorFmt(lxTypeErrClass, "TypeError, toString() returned non-string, is a: %s", typeOfVal(stringVal));
+                    UNREACHABLE_RETURN(NULL);
                 }
                 ret = VAL_TO_STRING(stringVal);
                 pop(); // stringVal

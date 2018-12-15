@@ -106,10 +106,9 @@ int main(int argc, char *argv[]) {
 
     InterpretResult ires = interpret(&chunk, fname);
     if (ires != INTERPRET_OK) {
-        freeVM();
         freeChunk(&chunk);
         // error message was already displayed
-        exit(1);
+        stopVM(1);
     }
 
     freeChunk(&chunk);

@@ -296,6 +296,9 @@ static void defineNativeClasses(void) {
     ObjNative *aryClearNat = newNative(internedString("clear", 5), lxArrayClear);
     tableSet(&arrayClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(aryClearNat));
 
+    ObjNative *aryOpEqNat = newNative(internedString("opEquals", 8), lxArrayOpEquals);
+    tableSet(&arrayClass->methods, OBJ_VAL(internedString("opEquals", 8)), OBJ_VAL(aryOpEqNat));
+
     // class Map
     ObjString *mapClassName = internedString("Map", 3);
     ObjClass *mapClass = newClass(mapClassName, objClass);
@@ -323,6 +326,9 @@ static void defineNativeClasses(void) {
 
     ObjNative *mapIterNat = newNative(internedString("iter", 4), lxMapIter);
     tableSet(&mapClass->methods, OBJ_VAL(internedString("iter", 4)), OBJ_VAL(mapIterNat));
+
+    ObjNative *mapOpEqNat = newNative(internedString("opEquals", 8), lxMapOpEquals);
+    tableSet(&mapClass->methods, OBJ_VAL(internedString("opEquals", 8)), OBJ_VAL(mapOpEqNat));
 
     // class Iterator
     ObjString *iterClassName = internedString("Iterator", 8);
@@ -756,8 +762,6 @@ static int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
         if (lhsStr->hash > 0 && rhsStr->hash > 0) {
             return lhsStr->hash == rhsStr->hash;
         } else {
-            // FIXME: what if lengths differ and the same chars otherwise?
-            // strncmp?
             return strcmp(lhsStr->chars, rhsStr->chars);
         }
     }
@@ -776,11 +780,19 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
         if (lhsStr->hash > 0 && rhsStr->hash > 0) {
             return lhsStr->hash == rhsStr->hash;
         } else {
-            // FIXME: what if lengths differ and the same chars otherwise?
-            // strncmp?
             return strcmp(lhsStr->chars, rhsStr->chars) == 0;
         }
     } else if (IS_OBJ(lhs)) { // 2 objects, same pointers to Obj are equal
+        if (IS_INSTANCE_LIKE(lhs)) {
+            ObjString *opEquals = internedString("opEquals", 8);
+            ObjInstance *self = AS_INSTANCE(lhs);
+            Obj *methodOpEq = instanceFindMethod(self, opEquals);
+            if (methodOpEq) {
+                Value ret = callVMMethod(self, OBJ_VAL(methodOpEq), 1, &rhs);
+                pop();
+                return isTruthy(ret);
+            }
+        }
         return AS_OBJ(lhs) == AS_OBJ(rhs);
     } else if (IS_NUMBER(lhs)) { // 2 numbers, same values are equal
         return AS_NUMBER(lhs) == AS_NUMBER(rhs);
@@ -842,8 +854,13 @@ void errorPrintScriptBacktrace(const char *format, ...) {
 }
 
 void showUncaughtError(Value err) {
-    char *className = AS_INSTANCE(err)->klass->name->chars;
-    if (!className) { className = "(anon)"; }
+    ObjString *classNameObj = AS_INSTANCE(err)->klass->name;
+    char *className = NULL;
+    if (classNameObj) {
+        className = classNameObj->chars;
+    } else {
+        className = "(anon)";
+    }
     Value msg = getProp(err, internedString("message", 7));
     char *msgStr = NULL;
     if (!IS_NIL(msg)) {
@@ -862,7 +879,6 @@ void showUncaughtError(Value err) {
     for (int i = 0; i < btSz; i++) {
         fprintf(stderr, "%s", VAL_TO_STRING(ARRAY_GET(bt, i))->chars);
     }
-    fprintf(stderr, "/Backtrace:\n");
 
     vm.hadError = true;
     resetStack();
@@ -1123,7 +1139,7 @@ CallFrame *pushFrame(void) {
     DBG_ASSERT(vm.inited);
     if (EC->frameCount >= FRAMES_MAX) {
         throwErrorFmt(lxErrClass, "Stackoverflow, max number of call frames (%d)", FRAMES_MAX);
-        return NULL;
+        UNREACHABLE_RETURN(NULL);
     }
     CallFrame *frame = &EC->frames[EC->frameCount++];
     memset(frame, 0, sizeof(*frame));
@@ -1598,6 +1614,7 @@ void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     vm.lastErrorThrown = err;
     unhideFromGC((Obj*)buf);
     throwError(err);
+    UNREACHABLE_RETURN((void)0);
 }
 
 void printVMStack(FILE *f) {

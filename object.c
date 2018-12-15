@@ -131,6 +131,7 @@ ObjString *dupString(ObjString *string) {
 void pushString(Value self, Value pushed) {
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
+        UNREACHABLE_RETURN((void)0);
     }
     ObjString *lhsBuf = STRING_GETHIDDEN(self);
     ObjString *rhsBuf = STRING_GETHIDDEN(pushed);
@@ -399,6 +400,7 @@ Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name) {
             "Undefined instance method '%s' for class %s",
             name->chars, instanceClassName(obj)
         );
+        UNREACHABLE_RETURN(NULL);
     }
     return method;
 }
@@ -529,6 +531,7 @@ Value newStringInstance(ObjString *buf) {
 void clearString(Value string) {
     if (isFrozen(AS_OBJ(string))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
+        UNREACHABLE_RETURN((void)0);
     }
     ObjString *buf = STRING_GETHIDDEN(string);
     clearObjString(buf);
@@ -537,6 +540,7 @@ void clearString(Value string) {
 void stringInsertAt(Value self, Value insert, int at) {
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
+        UNREACHABLE_RETURN((void)0);
     }
     ObjString *selfBuf = STRING_GETHIDDEN(self);
     ObjString *insertBuf = STRING_GETHIDDEN(insert);
@@ -592,6 +596,7 @@ void arrayPush(Value self, Value el) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+        UNREACHABLE_RETURN((void)0);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     writeValueArrayEnd(ary, el);
@@ -604,6 +609,7 @@ int arrayDelete(Value self, Value el) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+        UNREACHABLE_RETURN(-1);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     Value val; int idx = 0; int found = -1;
@@ -623,6 +629,7 @@ Value arrayPop(Value self) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     if (ary->count == 0) return NIL_VAL;
@@ -635,6 +642,7 @@ Value arrayPopFront(Value self) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     if (ary->count == 0) return NIL_VAL;
@@ -647,6 +655,7 @@ void arrayPushFront(Value self, Value el) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+        UNREACHABLE_RETURN((void)0);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     writeValueArrayBeg(ary, el);
@@ -657,8 +666,22 @@ void arrayClear(Value self) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+        UNREACHABLE_RETURN((void)0);
     }
     freeValueArray(ARRAY_GETHIDDEN(self));
+}
+
+bool arrayEquals(Value self, Value other) {
+    if (!IS_AN_ARRAY(other)) return false;
+    ValueArray *buf1 = ARRAY_GETHIDDEN(self);
+    ValueArray *buf2 = ARRAY_GETHIDDEN(other);
+    if (buf1->count != buf2->count) return false;
+    for (int i = 0; i < buf1->count; i++) {
+        if (!valEqual(buf1->values[i], buf2->values[i])) {
+            return false;
+        }
+    }
+    return true;
 }
 
 Value newMap(void) {
@@ -693,6 +716,24 @@ Value mapSize(Value mapVal) {
 void mapClear(Value mapVal) {
     Table *map = MAP_GETHIDDEN(mapVal);
     freeTable(map);
+}
+
+bool mapEquals(Value self, Value other) {
+    if (!IS_A_MAP(other)) return false;
+    Table *map1 = MAP_GETHIDDEN(self);
+    Table *map2 = MAP_GETHIDDEN(other);
+    if (map1->count != map2->count) return false;
+    Entry e; int idx = 0;
+    Value val2;
+    TABLE_FOREACH(map1, e, idx) {
+        if (!tableGet(map2, e.key, &val2)) {
+            return false;
+        }
+        if (!valEqual(e.value, val2)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 Table *mapGetHidden(Value mapVal) {

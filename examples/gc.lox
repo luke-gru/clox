@@ -15,5 +15,5 @@ print bytesAfter <= bytesBefore;
 
 __END__
 -- expect: --
-print "collecting GC";
+"collecting GC";
 true

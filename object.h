@@ -309,6 +309,7 @@ void        arrayPushFront(Value aryVal, Value el);
 Value       arrayPopFront(Value aryVal);
 int         arrayDelete(Value aryVal, Value el);
 void        arrayClear(Value aryVal);
+bool        arrayEquals(Value self, Value other);
 ValueArray *arrayGetHidden(Value aryVal);
 
 // errors
@@ -320,6 +321,7 @@ bool        mapGet(Value map, Value key, Value *val);
 void        mapSet(Value map, Value key, Value val);
 Value       mapSize(Value map);
 void        mapClear(Value map);
+bool        mapEquals(Value map, Value other);
 Table      *mapGetHidden(Value map);
 
 // threads

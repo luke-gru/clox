@@ -102,6 +102,7 @@ Value lxFork(int argCount, Value *args) {
         func = *args;
         if (!isCallable(func)) {
             throwArgErrorFmt("Expected argument 1 to be callable, is: %s", typeOfVal(func));
+            UNREACHABLE_RETURN(vm.lastErrorThrown);
         }
     }
     pid_t pid = fork();
@@ -125,7 +126,6 @@ Value lxWaitpid(int argCount, Value *args) {
     pid_t childpid = (pid_t)AS_NUMBER(pidVal);
     int wstatus;
     // TODO: allow wait flags
-    // Also, releaseGVL here
     releaseGVL();
     pid_t wret = waitpid(childpid, &wstatus, 0);
     acquireGVL();
@@ -237,8 +237,8 @@ Value lxJoinThread(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(tidNum, IS_NUMBER_FUNC, "number", 1);
     double num = AS_NUMBER(tidNum);
     THREAD_DEBUG(2, "Joining thread id %lu\n", (unsigned long)num);
-    releaseGVL();
     int ret = 0;
+    releaseGVL();
     // blocks
     if ((ret = pthread_join((pthread_t)num, NULL)) != 0) {
         // TODO: throw error
@@ -431,6 +431,7 @@ Value lxClassInit(int argCount, Value *args) {
         superClass = AS_CLASS(arg1);
     } else {
         throwArgErrorFmt("Expected argument 1 to be String or Class, got: %s", typeOfVal(arg1));
+        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     if (argCount == 3 && !superClass) {
         CHECK_ARG_IS_INSTANCE_OF(args[2], lxClassClass, 2);
@@ -765,6 +766,11 @@ Value lxArrayIter(int argCount, Value *args) {
     return createIterator(*args);
 }
 
+Value lxArrayOpEquals(int argCount, Value *args) {
+    CHECK_ARGS("Array#opEquals", 2, 2, argCount);
+    return BOOL_VAL(arrayEquals(args[0], args[1]));
+}
+
 static void markInternalMap(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
@@ -807,18 +813,22 @@ Value lxMapInit(int argCount, Value *args) {
         ValueArray *aryInt = ARRAY_GETHIDDEN(ary);
         for (int i = 0; i < aryInt->count; i++) {
             Value el = aryInt->values[i];
-            // FIXME: throw error
-            ASSERT(IS_AN_ARRAY(el));
+            if (!IS_AN_ARRAY(el)) {
+                throwErrorFmt(lxTypeErrClass, "Expected array element to be an array of length 2, got a: %s", typeOfVal(el));
+                UNREACHABLE_RETURN(vm.lastErrorThrown);
+            }
             if (ARRAY_SIZE(el) != 2) {
-                fprintf(stderr, "Wrong array size given, expected 2\n");
-                ASSERT(0);
+                throwArgErrorFmt("Wrong array size given, expected 2, got: %d",
+                        ARRAY_SIZE(el));
+                UNREACHABLE_RETURN(vm.lastErrorThrown);
             }
             Value mapKey = ARRAY_GET(el, 0);
             Value mapVal = ARRAY_GET(el, 1);
-            ASSERT(tableSet(map, mapKey, mapVal));
+            tableSet(map, mapKey, mapVal);
         }
     } else {
         throwArgErrorFmt("Expected 1 argument, got %d", argCount-1);
+        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     return self;
 }
@@ -917,6 +927,11 @@ Value lxMapValues(int argCount, Value *args) {
 Value lxMapIter(int argCount, Value *args) {
     CHECK_ARGS("Map#iter", 1, 1, argCount);
     return createIterator(*args);
+}
+
+Value lxMapOpEquals(int argCount, Value *args) {
+    CHECK_ARGS("Map#opEquals", 2, 2, argCount);
+    return BOOL_VAL(mapEquals(args[0], args[1]));
 }
 
 typedef struct Iterator {
@@ -1048,13 +1063,13 @@ Value lxFileReadStatic(int argCount, Value *args) {
         } else {
             throwArgErrorFmt("File '%s' not found", fnameStr->chars);
         }
-        return NIL_VAL;
+        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     // TODO: release and re-acquire GVL for fopen, or is it fast enough?
     FILE *f = fopen(fnameStr->chars, "r");
     if (!f) {
         throwArgErrorFmt("Error reading File '%s': %s", fnameStr->chars, strerror(errno));
-        return NIL_VAL;
+        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     ObjString *retBuf = copyString("", 0);
     Value ret = newStringInstance(retBuf);
