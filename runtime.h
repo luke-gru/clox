@@ -27,6 +27,7 @@ Value lxRequireScript(int argCount, Value *args);
 Value lxDebugger(int argCount, Value *args);
 Value lxEval(int argCount, Value *args);
 Value lxFork(int argCount, Value *args);
+Value lxExec(int argCount, Value *args);
 Value lxWaitpid(int argCount, Value *args);
 Value lxSleep(int argCount, Value *args);
 Value lxExit(int argCount, Value *args);

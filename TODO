@@ -30,9 +30,10 @@ bytecode, and benchmark the lookup results []
 * release GVL before performing blocking calls/syscalls etc. []
 * Add String#length, String#replace(other) [IN PROGRESS]
 * add multiple var declaration, setters for array returns [GIT BRANCH]
-* Make nil, true, false instances? []
+e Make nil, true, false instances? []
 * Make variable lookup work as lookup in Environment tables, not statically
 compiled lookup []
+* Integrate regexes from regex.c
 
 BUGS:
 * super() bug in examples/super.lox
@@ -44,3 +45,5 @@ need to fix interpolation errors
 catching errors from the VM or C code and choosing to handle or propagate
 them in C code (a C API). [IN PROGRESS]. So far, vm_protect does that, but
 other errors aren't caught like this.
+* Nodes created during parsing are never freed. This results in memory leak
+when evaling.

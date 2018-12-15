@@ -13,6 +13,9 @@
 
 static bool debug = true;
 
+#ifdef NDEBUG
+#define regex_debug(...) (void)0
+#else
 static void regex_debug(const char *format, ...) {
     if (!debug) return;
     va_list ap;
@@ -23,6 +26,7 @@ static void regex_debug(const char *format, ...) {
     fprintf(stderr, "\n");
 
 }
+#endif
 
 void regex_init(Regex *regex, const char *src, RegexOptions *opts) {
     regex->node = NULL;

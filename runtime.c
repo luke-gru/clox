@@ -106,7 +106,7 @@ Value lxFork(int argCount, Value *args) {
         }
     }
     pid_t pid = fork();
-    if (pid < 0) { // error, should throw?
+    if (pid < 0) { // error, TODO: should throw?
         return NUMBER_VAL(-1);
     }
     if (pid) { // in parent
@@ -133,6 +133,23 @@ Value lxWaitpid(int argCount, Value *args) {
         return NUMBER_VAL(-1);
     }
     return pidVal;
+}
+
+Value lxExec(int argCount, Value *args) {
+    CHECK_ARGS("exec", 1, -1, argCount);
+
+    char const *argv[argCount+2]; // FIXME: only c99
+    memset(argv, 0, sizeof(char*)*(argCount+2));
+    for (int i = 0; i < argCount; i++) {
+        CHECK_ARG_IS_A(args[i], lxStringClass, i+1);
+        ASSERT(argv[i] == NULL);
+        argv[i] = VAL_TO_STRING(args[i])->chars;
+    }
+    ASSERT(argv[argCount+1] == NULL);
+    execvp(argv[0], (char *const *)argv);
+    fprintf(stderr, "Error during exec: %s\n", strerror(errno));
+    // got here, error execing. TODO: throw error?
+    return NUMBER_VAL(-1);
 }
 
 Value lxSleep(int argCount, Value *args) {
