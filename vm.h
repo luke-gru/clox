@@ -99,7 +99,6 @@ typedef struct VM {
     // collected during GC.
     vec_void_t stackObjects;
 
-    Value lastErrorThrown;
     vec_val_t loadedScripts;
 
     Debugger debugger;
@@ -109,6 +108,7 @@ typedef struct VM {
     bool exited;
     bool hadError;
     ErrTagInfo *errInfo;
+    Value lastErrorThrown;
 
     vec_void_t exitHandlers;
 

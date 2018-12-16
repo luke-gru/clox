@@ -6,7 +6,7 @@ class A {
 
 class B < A {
   color=(color) {
-    //super.color = color;
+    super.color = color;
     print "B color set: " + color;
   }
 }
@@ -16,4 +16,5 @@ b.color = "red";
 
 __END__
 -- expect: --
+A color set: red
 B color set: red

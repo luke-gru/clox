@@ -21,7 +21,7 @@ bytecode, and benchmark the lookup results []
 * Add `foreach el in item` syntax with iter() method support [PARTIAL], no iterNext()
 * Add threads with libpthread [PARTIAL]
 * Add File class [PARTIAL]
-* Add modules like in jlox [PARTIAL]
+* Add modules like in jlox [PARTIAL], they don't work properly yet
 * Add Object#dup, and Class#ancestors []
 * Add default ENV map-like thing as well as ARGV array
 * Add signal trap handlers (`trap(signame, fun() { })`)
@@ -29,13 +29,15 @@ bytecode, and benchmark the lookup results []
 * release GVL before performing blocking calls/syscalls etc. []
 * Add String#length, String#replace(other) [IN PROGRESS]
 * add multiple var declaration, setters for array returns [GIT BRANCH]
-e Make nil, true, false instances? []
+* Make nil, true, false instances? []
 * Make variable lookup work as lookup in Environment tables, not statically
 compiled lookup []
 * Integrate regexes from regex.c
+* Add README
 
 BUGS:
 * super() bug in examples/super.lox
+* super bug for getters/setters (examples/super_setter.lox)
 * Fix nil.toString() bugs, perhaps with String() conversion [PARTIAL], still
 need to fix interpolation errors
 * Throw proper errors when can't find instance/static methods in VM

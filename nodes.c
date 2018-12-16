@@ -707,8 +707,11 @@ char *outputASTString(Node *node, int indentLevel) {
 }
 
 NodeType nodeType(Node *n) {
+    DBG_ASSERT(n);
     return n->type.type;
 }
+
 int nodeKind(Node *n) {
+    DBG_ASSERT(n);
     return n->type.kind;
 }

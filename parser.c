@@ -850,6 +850,16 @@ static Node *assignment() {
             nodeAddChild(ret, rval);
             TRACE_END("indexGetExpr");
         } else if (nodeKind(lval) == SUPER_EXPR) {
+            ASSERT(0); // FIXME
+            TRACE_START("propAccessExpr (super.)");
+            node_type_t propsetT = {
+                .type = NODE_EXPR,
+                .kind = PROP_SET_EXPR,
+            };
+            ret = createNode(propsetT, lval->tok, NULL);
+            nodeAddChild(ret, vec_first(lval->children));
+            nodeAddChild(ret, rval);
+            TRACE_END("propAccessExpr (super.)");
             // TODO turn into propset
         } else {
             errorAtCurrent("invalid assignment lvalue");
