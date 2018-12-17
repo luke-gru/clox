@@ -69,7 +69,8 @@ typedef struct VMExecContext {
     Table roGlobals; // per-script readonly global vars (ex: __FILE__)
     ObjString *filename;
     Value *lastValue;
-    bool evalContext;
+    bool evalContext; // is executing eval()
+    bool loadContext; // is executing 'loadScript' or 'requireScript'
 } VMExecContext;
 
 typedef struct VM {

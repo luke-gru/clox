@@ -15,9 +15,11 @@ typedef struct sParser {
   Token previous;
   vec_tok_t peekBuf;
   bool inCallExpr;
+  vec_void_t v_errMessages; // list of ObjStrings
 } Parser;
 
 void initParser(Parser *p);
+void freeParser(Parser *p); // frees parser, but NOT the nodes
 Node *parse(Parser *p);
 Node *parseExpression(Parser *p);
 

@@ -1,18 +1,23 @@
 print loadPath;
 print loadScript("anon_fun.lox");
+loadPath.push(__DIR__);
 print requireScript("anon_fun.lox");
 print requireScript("anon_fun.lox");
-print __DIR__;
-print __FILE__;
+print __DIR__._class;
+print __FILE__._class;
 
 __END__
 -- expect: --
 []
 File 'anon_fun.lox' not found (loadScript)
 false
-File 'anon_fun.lox' not found (requireScript)
+3
+callbacks:
+1
+2
+3
+called!
+true
 false
-File 'anon_fun.lox' not found (requireScript)
-false
-/home/luke/workspace/clox/examples
-/home/luke/workspace/clox/examples/load_path.lox
+<class String>
+<class String>

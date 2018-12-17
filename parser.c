@@ -1,11 +1,13 @@
 #include <string.h>
 #include <stdio.h>
 #include <setjmp.h>
+#include "common.h"
 #include "parser.h"
 #include "options.h"
 #include "memory.h"
 #include "debug.h"
 #include "nodes.h"
+#include "vm.h"
 
 #ifdef NDEBUG
 #define TRACE_START(name) (void)0
@@ -27,9 +29,9 @@ static void _trace_end(const char *name) {
 }
 
 // global
-Parser parser;
+Parser parser; // TODO: remove global parser
 static Parser *current = NULL;
-static jmp_buf errJmpBuf;
+static jmp_buf errJmpBuf; // only 1 parser runs at at time, so it can be global
 
 // initialize/reinitialize parser
 void initParser(Parser *p) {
@@ -39,7 +41,14 @@ void initParser(Parser *p) {
     memset(&p->current, 0, sizeof(Token));
     memset(&p->previous, 0, sizeof(Token));
     vec_init(&p->peekBuf);
+    vec_init(&p->v_errMessages);
     p->inCallExpr = false;
+}
+
+void freeParser(Parser *p) {
+    vec_clear(&p->v_errMessages);
+    vec_clear(&p->peekBuf);
+    initParser(p);
 }
 
 static void errorAt(Token *token, const char *message) {
@@ -58,7 +67,7 @@ static void errorAt(Token *token, const char *message) {
 
   fprintf(stderr, ": %s\n", message);
   current->hadError = true;
-  longjmp(errJmpBuf, 1);
+  longjmp(errJmpBuf, JUMP_PERFORMED);
 }
 
 static void error(const char *message) {
@@ -174,6 +183,12 @@ static bool isAtEnd(void) {
 // initScanner(char *src) must be called so the scanner is ready
 // to pass us the tokens to parse.
 Node *parse(Parser *p) {
+    if (!vm.inited) {
+        // if any errors occur, we add ObjStrings to v_errMessages. Object
+        // creation requires VM initialization
+        fprintf(stderr, "VM must be initialized (initVM()) before call to parse()\n");
+        return NULL;
+    }
     initParser(p);
     Parser *oldCurrent = current;
     current = p;
@@ -185,7 +200,7 @@ Node *parse(Parser *p) {
     advance(); // prime parser with parser.current
     TRACE_START("parse");
     int jumpRes = setjmp(errJmpBuf);
-    if (jumpRes != 0) { // jumped, had error
+    if (jumpRes != JUMP_SET) { // jumped, had error
         ASSERT(current->panicMode);
         current = oldCurrent;
         TRACE_END("parse (error)");

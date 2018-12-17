@@ -287,7 +287,10 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
     } else {
         Value el; int i = 0;
         LXARRAY_FOREACH(lxLoadPath, el, i) {
-            if (!IS_A_STRING(el)) continue;
+            if (!IS_A_STRING(el)) {
+                fprintf(stderr, "Warning: non-string found in loadPath: type=%s\n", typeOfVal(el));
+                continue;
+            }
             char *dir = VAL_TO_STRING(el)->chars;
             memset(pathbuf, 0, 300);
             memcpy(pathbuf, dir, strlen(dir));
@@ -325,7 +328,7 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
         }
         ObjString *fpath = copyString(pathbuf, strlen(pathbuf));
         if (checkLoaded) {
-            vec_push(&vm.loadedScripts, OBJ_VAL(fpath));
+            vec_push(&vm.loadedScripts, newStringInstance(fpath));
         }
         InterpretResult ires = loadScript(&chunk, pathbuf);
         return BOOL_VAL(ires == INTERPRET_OK);

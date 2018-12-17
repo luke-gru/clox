@@ -48,3 +48,8 @@ Errors in lox (throwing/catching)
       ...
     }
 
+** Improvements
+
+- Get parser and compiler to output error messages to ObjStrings instead of
+  stdout/stderr, so we can silence the output if we catch the error.
+- Add vm_protect to loadScript and requireScript

@@ -1,0 +1,14 @@
+var i = 0;
+while (i < 3) {
+  try {
+    throw Error("OMG");
+  } catch (Error e) {
+    print e.message;
+  }
+  i = i + 1;
+}
+__END__
+-- expect: --
+OMG
+OMG
+OMG

@@ -437,7 +437,7 @@ static void defineGlobalVariables(void) {
         char *end = NULL;
         while ((end = strchr(beg, ':'))) {
             ObjString *str = copyString(beg, end - beg);
-            arrayPush(lxLoadPath, OBJ_VAL(str));
+            arrayPush(lxLoadPath, newStringInstance(str));
             beg = end+1;
         }
     }
@@ -486,12 +486,15 @@ Value createIterator(Value iterable) {
     UNREACHABLE(__func__);
 }
 
+// VM/C call context switch data
 static jmp_buf CCallJumpBuf;
 unsigned inCCall;
 static bool cCallThrew = false;
 static bool returnedFromNativeErr = false;
-static int lastSplatNumArgs = -1;
 
+static int lastSplatNumArgs = -1; // FIXME: this is really ugly
+
+// Uncaught errors jump here
 static jmp_buf rootVMLoopJumpBuf;
 static bool rootVMLoopJumpBufSet = false;
 
@@ -518,6 +521,10 @@ static inline void pop_EC(void) {
 
 static inline bool isInEval(void) {
     return EC->evalContext;
+}
+
+static inline bool isInLoadedScript(void) {
+    return EC->loadContext;
 }
 
 // reset (clear) value stack for current execution context
@@ -684,7 +691,7 @@ bool VMLoadedScript(char *fname) {
     DBG_ASSERT(vm.inited);
     Value *loaded = NULL; int i = 0;
     vec_foreach_ptr(&vm.loadedScripts, loaded, i) {
-        if (strcmp(fname, AS_CSTRING(*loaded)) == 0) {
+        if (strcmp(fname, VAL_TO_STRING(*loaded)->chars) == 0) {
             return true;
         }
     }
@@ -2496,13 +2503,11 @@ static InterpretResult vm_run() {
           }
           break;
       }
-      // exit interpreter, or evaluation context if in EVAL
+      // exit interpreter, or evaluation context if in eval() or
+      // loadScript/requireScript
       case OP_LEAVE: {
-          if (!isInEval()) vm.exited = true;
+          if (!isInEval() && !isInLoadedScript()) vm.exited = true;
           vmRunLvl--;
-          /*if (vmRunLvl > 0) {*/
-              /*longjmp(rootVMLoopJumpBuf, 1);*/
-          /*}*/
           return INTERPRET_OK;
       }
       default:
@@ -2521,13 +2526,13 @@ static InterpretResult vm_run() {
 
 static void setupPerScriptROGlobals(char *filename) {
     ObjString *file = copyString(filename, strlen(filename));
-    tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), OBJ_VAL(file));
+    tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), newStringInstance(file));
 
     if (filename[0] == pathSeparator) {
         char *lastSep = rindex(filename, pathSeparator);
         int len = lastSep - filename;
         ObjString *dir = copyString(filename, len);
-        tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), OBJ_VAL(dir));
+        tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), newStringInstance(dir));
     } else {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), NIL_VAL);
     }
@@ -2556,38 +2561,45 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     return result;
 }
 
+static void *vm_run_protect(void *arg) {
+    (void)arg;
+    vm_run();
+    return NULL;
+}
+
 InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();
     push_EC();
+    resetStack();
     VMExecContext *ectx = EC;
+    EC->loadContext = true;
     EC->filename = copyString(filename, strlen(filename));
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk->code;
-    frame->slots = EC->stackTop-1;
+    frame->slots = EC->stack;
     ObjFunction *func = newFunction(chunk, NULL);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
-    unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
 
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = vm_run();
+    ErrTag status = TAG_NONE;
+    vm_protect(vm_run_protect, NULL, NULL, &status);
     // `EC != ectx` if an error occured in the script, and propagated out
     // due to being caught in a calling script or never being caught.
     if (EC == ectx) pop_EC();
     ASSERT(oldFrame == getFrame());
-    return result;
-}
-
-static void *vm_run_protect(void *arg) {
-    (void)arg;
-    vm_run();
-    return NULL;
+    if (status == TAG_RAISE) {
+        rethrowErrInfo(vm.errInfo); // FIXME: throw LoadError
+        UNREACHABLE_RETURN(INTERPRET_RUNTIME_ERROR);
+    } else {
+        return INTERPRET_OK;
+    }
 }
 
 Value VMEval(const char *src, const char *filename, int lineno) {

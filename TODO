@@ -39,6 +39,7 @@ compiled lookup []
 
 BUGS:
 * super() bug in examples/super.lox
+* lxLoadPath and loadScript/requireScript acting weird (OP_LEAVE in required script)
 * super bug for getters/setters (examples/super_setter.lox)
 * Fix nil.toString() bugs, perhaps with String() conversion [PARTIAL], still
 need to fix interpolation errors
