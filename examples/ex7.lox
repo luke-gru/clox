@@ -2,8 +2,9 @@ var a = nil;
 var b = "string";
 print a;
 print b;
-print (a or b);
-print (b or a);
+print (a or b); // "string"
+print (b or a); // "string"
+print (a and b);
 if (a) {
   print a;
 } else {
@@ -16,4 +17,5 @@ nil
 string
 string
 string
+nil
 string

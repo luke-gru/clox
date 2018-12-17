@@ -13,7 +13,7 @@
     (type*)allocateObject(sizeof(type), objectType)
 
 extern VM vm;
-extern bool inCCall;
+extern unsigned inCCall;
 
 static Obj *allocateObject(size_t size, ObjType type) {
     ASSERT(vm.inited);
@@ -34,7 +34,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->objectId = (size_t)object;
     object->noGC = false;
 
-    if (inCCall) {
+    if (inCCall > 0) {
         vec_push(&vm.stackObjects, object);
     }
 

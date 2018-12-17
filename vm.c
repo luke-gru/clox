@@ -487,7 +487,7 @@ Value createIterator(Value iterable) {
 }
 
 static jmp_buf CCallJumpBuf;
-bool inCCall;
+unsigned inCCall;
 static bool cCallThrew = false;
 static bool returnedFromNativeErr = false;
 static int lastSplatNumArgs = -1;
@@ -593,7 +593,7 @@ void initVM() {
     vm.lastErrorThrown = NIL_VAL;
     vm.hadError = false;
     vm.errInfo = NULL;
-    inCCall = false;
+    inCCall = 0;
     cCallThrew = false;
     returnedFromNativeErr = false;
     curLine = 1;
@@ -606,6 +606,7 @@ void initVM() {
     initMainThread();
     resetStack();
     turnGCOn();
+    vmRunLvl = 0;
     VM_DEBUG("initVM() end");
 }
 
@@ -633,7 +634,7 @@ void freeVM(void) {
 
     freeDebugger(&vm.debugger);
 
-    inCCall = false;
+    inCCall = 0;
     cCallThrew = false;
     returnedFromNativeErr = false;
     memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
@@ -654,6 +655,7 @@ void freeVM(void) {
 
     vec_deinit(&vm.exitHandlers);
 
+    vmRunLvl = 0;
     releaseGVL();
     pthread_mutex_destroy(&vm.GVLock);
     vm.curThread = NULL;
@@ -1021,7 +1023,7 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
     if (lookupSetter(obj, propName, &setterMethod)) {
         VM_DEBUG("setter found");
         callVMMethod(obj, setterMethod, 1, &rval);
-        if (!vm.hadError) pop();
+        pop();
     } else {
         tableSet(&obj->fields, OBJ_VAL(propName), rval);
     }
@@ -1113,11 +1115,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     VM_DEBUG("call begin");
     callCallable(callable, argCount, true, NULL); // pushes return value to stack
     VM_DEBUG("call end");
-    if (vm.hadError) {
-        return NIL_VAL;
-    } else {
-        return peek(0);
-    }
+    return peek(0);
 }
 
 static void unwindErrInfo(CallFrame *frame) {
@@ -1137,10 +1135,16 @@ void popFrame(void) {
     VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
     CallFrame *frame = getFrame();
     unwindErrInfo(frame);
+    if (frame->isCCall) {
+        ASSERT(inCCall > 0);
+        inCCall--;
+        if (inCCall == 0) {
+            vec_clear(&vm.stackObjects);
+        }
+    }
     memset(frame, 0, sizeof(*frame));
     EC->frameCount--;
     frame = getFrameOrNull();
-    inCCall = frame ? frame->isCCall : false;
     ASSERT_VALID_STACK();
 }
 
@@ -1157,6 +1161,12 @@ CallFrame *pushFrame(void) {
     ASSERT(vm.fileString);
     frame->file = EC->filename;
     return frame;
+}
+
+const char *callFrameName(CallFrame *frame) {
+    DBG_ASSERT(frame);
+    ObjString *fnName = frame->closure->function->name;
+    return fnName ? fnName->chars : "<main>";
 }
 
 static void pushNativeFrame(ObjNative *native) {
@@ -1176,21 +1186,19 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->isCCall = true;
     newFrame->nativeFunc = native;
     newFrame->file = EC->filename;
-    inCCall = true;
+    inCCall++;
 }
 
 // sets up VM/C call jumpbuf if not set
 static void captureNativeError(void) {
-    if (!inCCall) {
+    if (inCCall == 0) {
         VM_DEBUG("%s", "Setting VM/C error jump buffer");
         int jumpRes = setjmp(CCallJumpBuf);
-        if (jumpRes == 0) { // jump is set, prepared to enter C land
+        if (jumpRes == JUMP_SET) { // jump is set, prepared to enter C land
             return;
         } else { // C call longjmped here from throwError()
-            ASSERT(getFrame()->isCCall);
-            ASSERT(inCCall);
+            ASSERT(inCCall > 0);
             ASSERT(cCallThrew);
-            inCCall = false;
             cCallThrew = false;
             returnedFromNativeErr = true;
         }
@@ -1258,6 +1266,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                     while (getFrame() >= newFrame) {
                         popFrame();
                     }
+                    ASSERT(inCCall == 0);
                     throwError(vm.lastErrorThrown); // re-throw inside VM
                     return false;
                 } else {
@@ -1299,7 +1308,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
             while (getFrame() >= newFrame) {
                 popFrame();
             }
-            vec_clear(&vm.stackObjects);
+            ASSERT(inCCall == 0);
             throwError(vm.lastErrorThrown); // re-throw inside VM
             return false;
         } else {
@@ -1476,7 +1485,7 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
 
 /**
  * When thrown (OP_THROW), find any surrounding try { } catch { } block with
- * the proper class.
+ * the proper class to catch.
  */
 static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowFound) {
     CatchTable *tbl = currentChunk()->catchTbl;
@@ -1558,7 +1567,7 @@ ErrTagInfo *findErrTag(ObjClass *klass) {
     return NULL;
 }
 
-void throwError(Value self) {
+NORETURN void throwError(Value self) {
     VM_DEBUG("throwing error");
     ASSERT(vm.inited);
     ASSERT(IS_INSTANCE(self));
@@ -1566,47 +1575,57 @@ void throwError(Value self) {
     if (IS_NIL(getProp(self, internedString("backtrace", 9)))) {
         setBacktrace(self);
     }
-    if (inCCall) { // TODO: rework this
-        VM_DEBUG("throwing error from C call, longjmping");
-        ASSERT(!cCallThrew);
-        cCallThrew = true;
-        longjmp(CCallJumpBuf, JUMP_PERFORMED);
-        UNREACHABLE("after longjmp");
-    }
     // error from VM
     ObjInstance *obj = AS_INSTANCE(self);
     ObjClass *klass = obj->klass;
     CatchTable *catchRow;
     uint8_t *ipNew = NULL;
-    VM_DEBUG("throwing error from VM");
     ErrTagInfo *errInfo = NULL;
     if ((errInfo = findErrTag(klass))) {
         VM_DEBUG("longjmping to tag");
         longjmp(errInfo->jmpBuf, JUMP_PERFORMED);
         UNREACHABLE("after longjmp");
     }
+    if (inCCall > 0) {
+        VM_DEBUG("throwing error from C call, longjmping");
+        ASSERT(!cCallThrew);
+        cCallThrew = true;
+        longjmp(CCallJumpBuf, JUMP_PERFORMED);
+        UNREACHABLE("after longjmp");
+    }
     if (findThrowJumpLoc(klass, &ipNew, &catchRow)) {
         ASSERT(ipNew);
         ASSERT(catchRow);
+        ASSERT(getFrame());
         catchRow->lastThrownValue = self;
         getFrame()->ip = ipNew;
-        return; // frames were popped by `findThrowJumpLoc`
+        ASSERT(getFrame()->jmpBufSet);
+        longjmp(getFrame()->jmpBuf, JUMP_PERFORMED);
     } else {
-        showUncaughtError(vm.lastErrorThrown);
+        ASSERT(rootVMLoopJumpBufSet);
+        longjmp(rootVMLoopJumpBuf, JUMP_PERFORMED);
     }
+    UNREACHABLE("after longjmp");
 }
 
-void rethrowErrInfo(ErrTagInfo *info) {
-    ASSERT(info);
-    throwError(info->caughtError);
+void popErrInfo(void) {
+    vm.errInfo = vm.errInfo->prev;
 }
 
 void unsetErrInfo(void) {
     vm.lastErrorThrown = NIL_VAL;
+    ASSERT(vm.errInfo);
     vm.errInfo = vm.errInfo->prev;
 }
 
-void throwErrorFmt(ObjClass *klass, const char *format, ...) {
+void rethrowErrInfo(ErrTagInfo *info) {
+    ASSERT(info);
+    Value err = info->caughtError;
+    popErrInfo();
+    throwError(err);
+}
+
+NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     char sbuf[250] = {'\0'};
     va_list args;
     va_start(args, format);
@@ -1623,7 +1642,7 @@ void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     vm.lastErrorThrown = err;
     unhideFromGC((Obj*)buf);
     throwError(err);
-    UNREACHABLE_RETURN((void)0);
+    UNREACHABLE("thrown");
 }
 
 void printVMStack(FILE *f) {
@@ -1747,19 +1766,38 @@ static ObjString *methodNameForBinop(OpCode code) {
  * Run the VM's instructions.
  */
 static InterpretResult vm_run() {
-    if (!rootVMLoopJumpBufSet) {
-        int jumpRes = setjmp(rootVMLoopJumpBuf);
-        rootVMLoopJumpBufSet = true;
-        if (jumpRes == 0) { // jump is set
-        } else { // longjmp here from OP_LEAVE
-            return INTERPRET_OK;
-        }
-    }
     if (CLOX_OPTION_T(parseOnly) || CLOX_OPTION_T(compileOnly)) {
         return INTERPRET_OK;
     }
+
+    if (!rootVMLoopJumpBufSet) {
+        ASSERT(vmRunLvl == 0);
+        int jumpRes = setjmp(rootVMLoopJumpBuf);
+        rootVMLoopJumpBufSet = true;
+        if (jumpRes == JUMP_SET) { // jump is set
+            VM_DEBUG("VM set rootVMLoopJumpBuf");
+        } else {
+            VM_DEBUG("VM caught error in rootVMLoopJumpBuf");
+            showUncaughtError(vm.lastErrorThrown);
+            return INTERPRET_RUNTIME_ERROR;
+        }
+    }
+    vmRunLvl++;
+    Chunk *ch = currentChunk();
+    if (ch->catchTbl != NULL) {
+        CallFrame *f = getFrame();
+        int jumpRes = setjmp(f->jmpBuf);
+        if (jumpRes == JUMP_SET) {
+            f->jmpBufSet = true;
+            VM_DEBUG("VM set catch table for call frame (vm_run lvl %d)", vmRunLvl-1);
+        } else {
+            VM_DEBUG("VM caught error for call frame (vm_run lvl %d)", vmRunLvl-1);
+            vm.hadError = false;
+            // stack is already unwound to proper frame
+        }
+    }
 #define READ_BYTE() (*getFrame()->ip++)
-#define READ_CONSTANT() (currentChunk()->constants.values[READ_BYTE()])
+#define READ_CONSTANT() (ch->constants.values[READ_BYTE()])
 #define BINARY_OP(op, opcode) \
     do { \
       Value b = pop(); \
@@ -1770,10 +1808,6 @@ static InterpretResult vm_run() {
               break;\
           }\
           push(NUMBER_VAL(AS_NUMBER(a) op AS_NUMBER(b))); \
-      } else if (opcode == OP_ADD && (IS_STRING(a) && IS_STRING(b))) {\
-          ObjString *str = dupString(AS_STRING(a));\
-          pushObjString(str, AS_STRING(b));\
-          push(OBJ_VAL(str));\
       } else if (IS_INSTANCE(a)) {\
           push(a);\
           push(b);\
@@ -1794,7 +1828,6 @@ static InterpretResult vm_run() {
       }\
     } while (0)
 
-  vmRunLvl++;
   /*fprintf(stderr, "VM run level: %d\n", vmRunLvl);*/
   for (;;) {
       if (vm.hadError) {
@@ -1809,7 +1842,6 @@ static InterpretResult vm_run() {
           ASSERT(0);
       }
 
-      Chunk *ch = currentChunk();
       int byteCount = (int)(getFrame()->ip - ch->code);
       curLine = ch->lines[byteCount];
       int lastLine = -1;
@@ -1992,13 +2024,17 @@ static InterpretResult vm_run() {
       case OP_AND: {
           Value rhs = pop();
           Value lhs = pop();
-          push(BOOL_VAL(isTruthy(lhs) && isTruthy(rhs)));
+          (void)lhs;
+          // NOTE: we only check truthiness of rhs because lhs is
+          // short-circuited (a JUMP_IF_FALSE is output in the bytecode for
+          // the lhs).
+          push(isTruthy(rhs) ? rhs : BOOL_VAL(false));
           break;
       }
       case OP_OR: {
           Value rhs = pop();
           Value lhs = pop();
-          push(BOOL_VAL(isTruthy(lhs) || isTruthy(rhs)));
+          push(isTruthy(lhs) || isTruthy(rhs) ? rhs : lhs);
           break;
       }
       case OP_POP: {
@@ -2145,10 +2181,6 @@ static InterpretResult vm_run() {
               break;
           }
           callCallable(callableVal, numArgs, false, callInfo);
-          if (vm.hadError) {
-              vmRunLvl--;
-              return INTERPRET_RUNTIME_ERROR;
-          }
           ASSERT_VALID_STACK();
           lastSplatNumArgs = -1;
           break;
@@ -2216,10 +2248,6 @@ static InterpretResult vm_run() {
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
           } else {
               // throw type error
-          }
-          if (vm.hadError) {
-              vmRunLvl--;
-              return INTERPRET_RUNTIME_ERROR;
           }
           ASSERT_VALID_STACK();
           lastSplatNumArgs = -1;
@@ -2556,6 +2584,12 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     return result;
 }
 
+static void *vm_run_protect(void *arg) {
+    (void)arg;
+    vm_run();
+    return NULL;
+}
+
 Value VMEval(const char *src, const char *filename, int lineno) {
     CallFrame *oldFrame = getFrame();
     CompileErr err = COMPILE_ERR_NONE;
@@ -2593,8 +2627,11 @@ Value VMEval(const char *src, const char *filename, int lineno) {
 
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = vm_run();
-    if (result != INTERPRET_OK) {
+    ErrTag status = TAG_NONE;
+    InterpretResult result = INTERPRET_OK;
+    vm_protect(vm_run_protect, NULL, NULL, &status);
+    if (status == TAG_RAISE) {
+        result = INTERPRET_RUNTIME_ERROR;
         vm.hadError = true;
     }
     VM_DEBUG("eval finished: error: %d", vm.hadError ? 1 : 0);
@@ -2602,7 +2639,12 @@ Value VMEval(const char *src, const char *filename, int lineno) {
     // due to being caught in a surrounding context or never being caught.
     if (EC == ectx) pop_EC();
     ASSERT(getFrame() == oldFrame);
-    return BOOL_VAL(result == INTERPRET_OK);
+    if (result == INTERPRET_OK) {
+        return BOOL_VAL(true);
+    } else {
+        rethrowErrInfo(vm.errInfo);
+        UNREACHABLE_RETURN(vm.lastErrorThrown);
+    }
 }
 
 void setPrintBuf(ObjString *buf, bool alsoStdout) {
@@ -2625,6 +2667,7 @@ static void unwindJumpRecover(ErrTagInfo *info) {
         popFrame();
     }
     while (vm.errInfo != info) {
+        VM_DEBUG("freeing Errinfo");
         ASSERT(vm.errInfo);
         ErrTagInfo *prev = vm.errInfo->prev;
         ASSERT(prev);
@@ -2648,6 +2691,7 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
         return res;
     } else if (jmpres == JUMP_PERFORMED) {
         VM_DEBUG("vm_protect got to longjmp");
+        ASSERT(errInfo == vm.errInfo);
         unwindJumpRecover(errInfo);
         errInfo->status = TAG_RAISE;
         errInfo->caughtError = vm.lastErrorThrown;

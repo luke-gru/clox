@@ -21,8 +21,7 @@
 
 typedef struct CallInfo CallInfo;
 
-extern bool inCCall;
-
+extern unsigned inCCall;
 
 typedef struct CallFrame {
     // Non-native function fields
@@ -37,6 +36,8 @@ typedef struct CallFrame {
 
     int callLine;
     ObjString *file; // full path of file the function is called from
+    jmp_buf jmpBuf; // only used if chunk associated with closure has a catch table
+    bool jmpBufSet;
 } CallFrame; // represents a local scope (block, function, etc)
 
 typedef enum ErrTag {
@@ -155,18 +156,20 @@ void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given 
 void unsetPrintBuf(void);
 int VMNumStackFrames(void);
 int VMNumCallFrames(void);
+const char *callFrameName(CallFrame *frame);
 
 // errors
 void setBacktrace(Value err);
-void throwErrorFmt(ObjClass *klass, const char *format, ...);
+NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...);
 #define throwArgErrorFmt(format, ...) throwErrorFmt(lxArgErrClass, format, __VA_ARGS__)
-void throwError(Value err);
+NORETURN void throwError(Value err);
 
 ErrTagInfo *addErrInfo(ObjClass *errClass);
 typedef void* (vm_cb_func)(void*);
 void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status);
 void rethrowErrInfo(ErrTagInfo *info);
 void unsetErrInfo(void);
+void popErrInfo(void);
 void errorPrintScriptBacktrace(const char *format, ...);
 
 // calling functions/methods

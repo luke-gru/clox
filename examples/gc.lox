@@ -4,6 +4,8 @@ var bytesBefore = GC.stats()['bytes'];
 while (i < 500) {
   [1, 2, 3];
   "FREE ME";
+  Map();
+  Object();
   i = i + 1;
 }
 print "collecting GC";
@@ -15,5 +17,5 @@ print bytesAfter <= bytesBefore;
 
 __END__
 -- expect: --
-"collecting GC";
+collecting GC;
 true

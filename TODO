@@ -34,6 +34,8 @@ bytecode, and benchmark the lookup results []
 compiled lookup []
 * Integrate regexes from regex.c
 * Add README
+* Allow more constants in a chunk (more than 256)
+* Allow bigger jumps (more than 1 byte offsets)
 
 BUGS:
 * super() bug in examples/super.lox
