@@ -1,0 +1,41 @@
+README
+======
+
+Lox (clox) is an object-oriented scripting language developed alongside the reading of
+craftinginterpreters (craftinginterpreters.com) by Bob Nystrom.
+
+I've followed along, but added my own features as well.
+
+Added features:
+* Splatted (rest) arguments
+* Default arguments
+* Keyword arguments
+* Mutable strings
+* Modules
+* Integrated debugger
+* Integrated REPL
+* Multi-process integration with fork() syscall
+* Basic multi-threading with libpthread with a global VM lock
+* try/catch blocks
+* Iterators and foreach() statement
+* String interpolation
+
+Some internal differences:
+* bytecode optimization passes (including constant folding)
+* Easy way to create objects in C functions without having to hide
+them from GC, even if they're not pushed to operand stack (aka rooted).
+
+Future features:
+* Support for regex
+* Add some standard library and networking support
+* Improve threading story, add mutex objects to start with
+
+OS/compiler support:
+* Only tested on linux, uses fork() and libpthread, as well as C99 features.
+
+Examples:
+See examples folder. These are also tests run by the ./bin/test_examples
+binary (see Makefile for more details).
+
+Thanks:
+Thanks to Bob Nystrom for the book and github repo.

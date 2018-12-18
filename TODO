@@ -10,8 +10,6 @@ the syntax is different for them, like in ruby. []
 * Saving/loading bytecode to disk []
 * Add benchmark library/internals so I can benchmark/profile performance of the
 interpreter []
-* optimize array and string method lookup with an inline cache in the
-bytecode, and benchmark the lookup results []
 * Add threads with libpthread [PARTIAL]
   stopVM() has to work with current thread only
 * Add File class [PARTIAL]
@@ -40,12 +38,9 @@ Bugs
 as singleton classes, etc.
 * super() bug in examples/super.lox
 * super bug for getters/setters (examples/super_setter.lox)
-* Fix nil.toString() bugs, perhaps with String() conversion [PARTIAL], still
-need to fix interpolation errors
 * Allow throwing strings?
 * Nodes created during parsing are never freed. This results in memory leak
 when evaling.
-* Interpolation should stringify (String()) every part
 
 Optimizations
 -------------
@@ -54,3 +49,5 @@ Optimizations
 * Add tailcall optimization
 * simple JIT, maybe? []
 * different GC strategies, maybe support copying GC []
+* optimize array and string method lookup with an inline cache in the
+bytecode, and benchmark the lookup results []
