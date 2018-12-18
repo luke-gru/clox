@@ -1,0 +1,6 @@
+var time = 3;
+print "It is now ${time} o'clock";
+
+__END__
+-- expect: --
+It is now 3.00 o'clock

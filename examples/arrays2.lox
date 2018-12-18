@@ -1,3 +1,6 @@
+/**
+Testing array get/set and toString
+*/
 var a = [1,2,3];
 a[0] = 400;
 print a[0];

@@ -1,3 +1,6 @@
+/**
+Testing free variables (upvalues) get closed over
+*/
 fun makeCounter() {
   var i = 0;
   fun count() {

@@ -11,7 +11,7 @@
 Scanner scanner;
 static Scanner *current = NULL;
 
-typedef struct {
+typedef struct Keyword {
   const char *name;
   size_t      length;
   TokenType   type;
@@ -548,4 +548,12 @@ Token *copyToken(Token *tok) {
     Token *ret = ALLOCATE(Token, 1);
     memcpy(ret, tok, sizeof(Token));
     return ret;
+}
+
+Token syntheticToken(const char *lexeme) {
+    Token tok;
+    tok.start = lexeme;
+    tok.length = strlen(lexeme);
+    tok.lexeme = lexeme;
+    return tok;
 }

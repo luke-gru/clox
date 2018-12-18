@@ -1,12 +1,10 @@
 #include <string.h>
 #include <stdio.h>
-#include <setjmp.h>
 #include "common.h"
 #include "parser.h"
 #include "options.h"
 #include "memory.h"
 #include "debug.h"
-#include "nodes.h"
 #include "vm.h"
 
 #ifdef NDEBUG
@@ -31,13 +29,12 @@ static void _trace_end(const char *name) {
 // global
 Parser parser; // TODO: remove global parser
 static Parser *current = NULL;
-static jmp_buf errJmpBuf; // only 1 parser runs at at time, so it can be global
 
 // initialize/reinitialize parser
 void initParser(Parser *p) {
     p->hadError = false;
     p->panicMode = false;
-    memset(&errJmpBuf, 0, sizeof(errJmpBuf));
+    memset(&p->errJmpBuf, 0, sizeof(jmp_buf));
     memset(&p->current, 0, sizeof(Token));
     memset(&p->previous, 0, sizeof(Token));
     vec_init(&p->peekBuf);
@@ -55,19 +52,21 @@ static void errorAt(Token *token, const char *message) {
   if (current->panicMode) return;
   current->panicMode = true;
 
-  fprintf(stderr, "[Parse Error], (line %d) Error", token->line);
+  ObjString *str = hiddenString("", 0);
+  pushCStringFmt(str, "[Parse Error], (line %d) Error", token->line);
 
   if (token->type == TOKEN_EOF) {
-    fprintf(stderr, " at end");
+    pushCStringFmt(str, " at end");
   } else if (token->type == TOKEN_ERROR) {
     // Nothing.
   } else {
-    fprintf(stderr, " at '%.*s'", token->length, token->start);
+    pushCStringFmt(str, " at '%.*s'", token->length, token->start);
   }
 
-  fprintf(stderr, ": %s\n", message);
+  pushCStringFmt(str, ": %s\n", message);
+  vec_push(&current->v_errMessages, str);
   current->hadError = true;
-  longjmp(errJmpBuf, JUMP_PERFORMED);
+  longjmp(current->errJmpBuf, JUMP_PERFORMED);
 }
 
 static void error(const char *message) {
@@ -75,6 +74,15 @@ static void error(const char *message) {
 }
 static void errorAtCurrent(const char *message) {
   errorAt(&current->current, message);
+}
+
+void outputParserErrors(Parser *p, FILE *f) {
+    ASSERT(p);
+    ObjString *msg = NULL;
+    int i = 0;
+    vec_foreach(&p->v_errMessages, msg, i) {
+        fprintf(f, "%s", msg->chars);
+    }
 }
 
 // takes into account peekbuffer, which scanToken() doesn't.
@@ -199,8 +207,8 @@ Node *parse(Parser *p) {
     Node *ret = createNode(nType, emptyTok(), NULL);
     advance(); // prime parser with parser.current
     TRACE_START("parse");
-    int jumpRes = setjmp(errJmpBuf);
-    if (jumpRes != JUMP_SET) { // jumped, had error
+    int jumpRes = setjmp(current->errJmpBuf);
+    if (jumpRes == JUMP_PERFORMED) { // jumped, had error
         ASSERT(current->panicMode);
         current = oldCurrent;
         TRACE_END("parse (error)");
@@ -1185,8 +1193,22 @@ static Node *primary() {
             setScanner(&newScan);
             Parser newParser;
             initParser(&newParser);
-            Node *inner = parseExpression(&newParser);
-            // FIXME: handle parse errors
+            int jmpres = 0;
+            if ((jmpres = setjmp(newParser.errJmpBuf)) == JUMP_SET) {
+                // do nothing
+            } else if (jmpres == JUMP_PERFORMED) {
+                outputParserErrors(&newParser, stderr);
+                current = oldParser;
+                error("Error in interpolation");
+            } else {
+                error("Error setting jump buffer for interpolation parser");
+            }
+
+            Node *inner = NULL;
+            inner = parseExpression(&newParser);
+            ASSERT(inner);
+            ASSERT(!newParser.hadError);
+            freeParser(&newParser);
             node_type_t nType = {
                 .type = NODE_EXPR,
                 .kind = LITERAL_EXPR,
@@ -1200,7 +1222,19 @@ static Node *primary() {
             litTok.lexeme = before;
             Node *litNode = createNode(nType, litTok, NULL);
             vec_push(&vnodes, litNode);
-            vec_push(&vnodes, inner);
+            node_type_t callT = {
+                .type = NODE_EXPR,
+                .kind = CALL_EXPR,
+            };
+            Node *toStringCall = createNode(callT, syntheticToken("String"), NULL);
+            node_type_t varT = {
+                .type = NODE_EXPR,
+                .kind = VARIABLE_EXPR,
+            };
+            Node *toStringVar = createNode(varT, syntheticToken("String"), NULL);
+            nodeAddChild(toStringCall, toStringVar);
+            nodeAddChild(toStringCall, inner);
+            vec_push(&vnodes, toStringCall);
             beg = end+1;
         }
         if (vnodes.length > 0) {

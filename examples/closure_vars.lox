@@ -1,3 +1,6 @@
+/**
+Testing variable lookup is lexically bound
+*/
 var a = "global";
 {
   fun showA() {

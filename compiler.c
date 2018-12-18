@@ -23,67 +23,6 @@
 #define COMP_TRACE(...) compiler_trace_debug(__VA_ARGS__)
 #endif
 
-typedef struct Local {
-  // The name of the local variable.
-  Token name;
-
-  // The depth in the scope chain that this variable was declared at. Zero is
-  // the outermost scope--parameters for a method, or the first local block in
-  // top level code. One is the scope within that, etc.
-  int depth;
-  bool isUpvalue;
-} Local;
-
-typedef struct Upvalue {
-  // The index of the local variable or upvalue being captured from the
-  // enclosing function.
-  uint8_t index;
-
-  // Whether the captured variable is a local or upvalue in the enclosing
-  // function.
-  bool isLocal; // is local variable in immediately enclosing scope
-} Upvalue;
-
-struct Compiler; // fwd decl
-
-typedef struct Compiler {
-  // The currently in scope local variables.
-  struct Compiler *enclosing;
-  ObjFunction *function; // function or top-level code object
-  FunctionType type;
-  Local locals[256];
-  Upvalue upvalues[256];
-
-  // The number of local variables declared/defined in this scope (including
-  // function parameters).
-  int localCount;
-
-  // The current level of block scope nesting. Zero is the outermost local
-  // scope (global scope)
-  int scopeDepth;
-  bool hadError;
-
-  Iseq iseq; // Generated instructions for the function
-  Table constTbl;
-} Compiler;
-
-
-typedef struct ClassCompiler {
-  struct ClassCompiler *enclosing;
-  Token name;
-  bool hasSuperclass;
-  bool isModule;
-} ClassCompiler;
-
-
-typedef enum {
-    COMPILE_SCOPE_BLOCK = 1,
-    COMPILE_SCOPE_FUNCTION,
-    COMPILE_SCOPE_CLASS,
-    COMPILE_SCOPE_IN,
-    COMPILE_SCOPE_MODULE, // TODO
-} CompileScopeType;
-
 static const char *compileScopeName(CompileScopeType stype) {
     switch (stype) {
     case COMPILE_SCOPE_BLOCK: return "SCOPE_BLOCK";
@@ -98,7 +37,7 @@ static const char *compileScopeName(CompileScopeType stype) {
 }
 
 static Compiler *current = NULL;
-static Compiler *top = NULL;
+static Compiler *top = NULL; // compiler for main
 static ClassCompiler *currentClassOrModule = NULL;
 static bool inINBlock = false;
 static Token *curTok = NULL;
@@ -134,27 +73,38 @@ static void compiler_trace_debug(const char *fmt, ...) {
 }
 
 static void error(const char *format, ...) {
-    va_list args;
     int line = curTok ? curTok->line : 0;
+    va_list args;
     va_start(args, format);
-    fprintf(stderr, "[Compile Error]: ");
+    ObjString *str = hiddenString("", 0);
+    pushCStringFmt(str, "[Compile Error]: ");
     if (line > 0) {
-        fprintf(stderr, "(line: %d) ", line);
+        pushCStringFmt(str, "(line: %d) ", line);
     }
-    vfprintf(stderr, format, args);
+    pushCStringVFmt(str, format, args);
     va_end(args);
-    fputs("\n", stderr);
+    pushCStringFmt(str, "%s", "\n");
+    vec_push(&top->v_errMessages, str);
 
     current->hadError = true;
     top->hadError = true;
 }
 
-static Token syntheticToken(const char *lexeme) {
-    Token tok;
-    tok.start = lexeme;
-    tok.length = strlen(lexeme);
-    tok.lexeme = lexeme;
-    return tok;
+static void outputCompilerErrors(Compiler *c, FILE *f) {
+    ASSERT(top);
+    ObjString *msg = NULL;
+    int i = 0;
+    vec_foreach(&top->v_errMessages, msg, i) {
+        fprintf(f, "%s", msg->chars);
+    }
+}
+
+static void freeCompiler(Compiler *c, bool freeErrMessages) {
+    if (freeErrMessages) {
+        vec_deinit(&c->v_errMessages);
+    }
+    freeTable(&c->constTbl);
+    freeIseq(&c->iseq);
 }
 
 static Chunk *currentChunk() {
@@ -285,7 +235,7 @@ static int addUpvalue(Compiler *compiler, uint8_t index, bool isLocal) {
         if (upvalue->index == index && upvalue->isLocal == isLocal) return i;
     }
 
-    if (compiler->function->upvalueCount == 256) {
+    if (compiler->function->upvalueCount == LX_MAX_UPVALUES) {
         error("Too many closure variables in function.");
         return 0;
     }
@@ -836,6 +786,9 @@ static void initCompiler(
 ) {
     COMP_TRACE("initCompiler");
     memset(compiler, 0, sizeof(*compiler));
+    if (ftype == FUN_TYPE_TOP_LEVEL) {
+        vec_init(&compiler->v_errMessages);
+    }
     compiler->enclosing = current;
     compiler->localCount = 0; // NOTE: below, this is increased to 1
     compiler->scopeDepth = scopeDepth;
@@ -1614,19 +1567,27 @@ static void emitNode(Node *n) {
 
 int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     initScanner(&scanner, src);
-    Compiler mainCompiler;
-    top = &mainCompiler;
-    initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, chunk);
     initParser(&parser);
     Node *program = parse(&parser);
     if (CLOX_OPTION_T(parseOnly)) {
         *err = parser.hadError ? COMPILE_ERR_SYNTAX :
             COMPILE_ERR_NONE;
-        return parser.hadError ? -1 : 0;
+        if (parser.hadError) {
+            outputParserErrors(&parser, stderr);
+            freeParser(&parser);
+            return -1;
+        }
+        return 0;
     } else if (parser.hadError) {
+        outputParserErrors(&parser, stderr);
+        freeParser(&parser); // TODO: throw SyntaxError
         *err = COMPILE_ERR_SYNTAX;
         return -1;
     }
+    freeParser(&parser);
+    Compiler mainCompiler;
+    top = &mainCompiler;
+    initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, chunk);
     ASSERT(program);
     emitNode(program);
     ObjFunction *prog = endCompiler();
@@ -1635,8 +1596,10 @@ int compile_src(char *src, Chunk *chunk, CompileErr *err) {
         printDisassembledChunk(stderr, chunk, "Bytecode:");
     }
     if (mainCompiler.hadError) {
+        outputCompilerErrors(&mainCompiler, stderr);
+        freeCompiler(&mainCompiler, true);
         *err = COMPILE_ERR_SEMANTICS;
-        return -1;
+        return -1; // TODO: throw SyntaxError
     } else {
         *err = COMPILE_ERR_NONE;
         return 0;

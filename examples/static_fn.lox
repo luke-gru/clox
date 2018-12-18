@@ -1,3 +1,9 @@
+class Object {
+  class wowie() {
+    print "zowie";
+  }
+}
+
 class Math {
   class square(n) {
     return n * n;
@@ -15,6 +21,7 @@ print Math.me();
 Math.PI = 3.14;
 print Math.PI;
 print Math.pi();
+Math.wowie();
 
 __END__
 -- expect: --
@@ -22,3 +29,4 @@ __END__
 <class Math>
 3.14
 3.14
+zowie

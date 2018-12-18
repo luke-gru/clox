@@ -75,7 +75,7 @@ typedef enum {
     FUNCTION_TYPE_CLASS_METHOD,
 } ParseFunctionType;
 
-typedef struct {
+typedef struct Token {
   TokenType type;
   const char *start;
   char *lexeme; // lazily computed, could be NULL. See `tokStr()`
@@ -83,7 +83,7 @@ typedef struct {
   int line;
 } Token;
 
-typedef struct {
+typedef struct Scanner {
   const char *source;
   const char *tokenStart;
   const char *current;
@@ -106,5 +106,6 @@ void setScanner(Scanner *scan);
 Token emptyTok(void);
 char *tokStr(Token *tok);
 Token *copyToken(Token *tok);
+Token syntheticToken(const char *lexeme);
 
 #endif

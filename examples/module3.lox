@@ -1,0 +1,30 @@
+/**
+Testing method lookup (including getter/setter)
+*/
+
+class Beast {
+}
+
+module Roarable {
+  roar() { print "RAWR"; }
+  volume { return this.vol; }
+  volume=(vol) { this.vol = vol; }
+}
+
+Beast.include(Roarable);
+
+var b = Beast();
+b.vol = 10;
+print b.volume;
+b.roar();
+b.volume = 20;
+print b.vol;
+var roar = b.roar;
+roar();
+
+__END__
+-- expect: --
+10
+RAWR
+20
+RAWR

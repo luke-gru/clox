@@ -10,13 +10,11 @@ int astDetailLevel = 0;
 
 Node *createNode(node_type_t type, Token tok, vec_nodep_t *children) {
     Node *n = ALLOCATE(Node, 1);
-    ASSERT_MEM(n);
     n->type = type;
     n->tok = tok;
     n->data = NULL;
     if (children == NULL) {
-        n->children = calloc(sizeof(vec_nodep_t), 1);
-        ASSERT_MEM(n->children);
+        n->children = ALLOCATE(vec_nodep_t, 1);
         vec_init(n->children);
     } else {
         n->children = children;
@@ -57,11 +55,14 @@ static void freeChildNodeCb(Node *node, int idx) {
 void freeNode(Node *node, bool freeChildren) {
     if (freeChildren && node->children != NULL) {
         nodeForeachChild(node, freeChildNodeCb);
-        free(node->children);
+        vec_deinit(node->children);
+        FREE(vec_nodep_t, node->children);
     }
-    free(node);
+    FREE(Node, node);
 }
 
+// NOTE: only used for outputting AST (debugging), so calloc call is okay,
+// and leaking memory is fine too.
 static char *strAdd(char *a, char *b) {
     char *result = calloc(strlen(a)+strlen(b)+1, 1);
     ASSERT_MEM(result);

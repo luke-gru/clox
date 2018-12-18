@@ -1,3 +1,6 @@
+/**
+Testing break/continue
+*/
 print "while test (1-7):";
 
 var a = 1;

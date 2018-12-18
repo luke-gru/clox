@@ -131,7 +131,6 @@ ObjString *dupString(ObjString *string) {
 void pushString(Value self, Value pushed) {
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
-        UNREACHABLE_RETURN((void)0);
     }
     ObjString *lhsBuf = STRING_GETHIDDEN(self);
     ObjString *rhsBuf = STRING_GETHIDDEN(pushed);
@@ -212,13 +211,17 @@ void insertCString(ObjString *string, char *chars, int lenToAdd, int at) {
 }
 
 void pushCStringFmt(ObjString *string, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    pushCStringVFmt(string, format, args);
+    va_end(args);
+}
+
+void pushCStringVFmt(ObjString *string, const char *format, va_list ap) {
     ASSERT(!((Obj*)string)->isFrozen);
 
     char sbuf[201] = {'\0'};
-    va_list args;
-    va_start(args, format);
-    vsnprintf(sbuf, 200, format, args);
-    va_end(args);
+    vsnprintf(sbuf, 200, format, ap);
 
     size_t buflen = strlen(sbuf);
     sbuf[buflen] = '\0';
@@ -400,6 +403,50 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     return NULL;
 }
 
+Obj *instanceFindGetter(ObjInstance *obj, ObjString *name) {
+    ObjClass *klass = obj->klass;
+    if (obj->singletonKlass) {
+        klass = obj->singletonKlass;
+    }
+    Value getter;
+    Value nameVal = OBJ_VAL(name);
+    while (klass) {
+        ObjModule *mod = NULL; int i = 0;
+        vec_foreach_rev(&klass->v_includedMods, mod, i) {
+            if (tableGet(&mod->getters, nameVal, &getter)) {
+                return AS_OBJ(getter);
+            }
+        }
+        if (tableGet(&klass->getters, nameVal, &getter)) {
+            return AS_OBJ(getter);
+        }
+        klass = klass->superclass;
+    }
+    return NULL;
+}
+
+Obj *instanceFindSetter(ObjInstance *obj, ObjString *name) {
+    ObjClass *klass = obj->klass;
+    if (obj->singletonKlass) {
+        klass = obj->singletonKlass;
+    }
+    Value setter;
+    Value nameVal = OBJ_VAL(name);
+    while (klass) {
+        ObjModule *mod = NULL; int i = 0;
+        vec_foreach_rev(&klass->v_includedMods, mod, i) {
+            if (tableGet(&mod->setters, nameVal, &setter)) {
+                return AS_OBJ(setter);
+            }
+        }
+        if (tableGet(&klass->setters, nameVal, &setter)) {
+            return AS_OBJ(setter);
+        }
+        klass = klass->superclass;
+    }
+    return NULL;
+}
+
 Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name) {
     Obj *method = instanceFindMethod(obj, name);
     if (!method) {
@@ -407,7 +454,6 @@ Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name) {
             "Undefined instance method '%s' for class %s",
             name->chars, instanceClassName(obj)
         );
-        UNREACHABLE_RETURN(NULL);
     }
     return method;
 }
@@ -538,7 +584,6 @@ Value newStringInstance(ObjString *buf) {
 void clearString(Value string) {
     if (isFrozen(AS_OBJ(string))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
-        UNREACHABLE_RETURN((void)0);
     }
     ObjString *buf = STRING_GETHIDDEN(string);
     clearObjString(buf);
@@ -547,7 +592,6 @@ void clearString(Value string) {
 void stringInsertAt(Value self, Value insert, int at) {
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
-        UNREACHABLE_RETURN((void)0);
     }
     ObjString *selfBuf = STRING_GETHIDDEN(self);
     ObjString *insertBuf = STRING_GETHIDDEN(insert);
@@ -584,7 +628,6 @@ Value stringIndexGet(Value self, int index) {
     } else {
         return newStringInstance(copyString(buf->chars+index, 1));
     }
-    UNREACHABLE_RETURN(NIL_VAL);
 }
 
 Value stringIndexSet(Value self, int index, char c) {
@@ -608,7 +651,6 @@ void arrayPush(Value self, Value el) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
-        UNREACHABLE_RETURN((void)0);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     writeValueArrayEnd(ary, el);
@@ -621,7 +663,6 @@ int arrayDelete(Value self, Value el) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
-        UNREACHABLE_RETURN(-1);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     Value val; int idx = 0; int found = -1;
@@ -641,7 +682,6 @@ Value arrayPop(Value self) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
-        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     if (ary->count == 0) return NIL_VAL;
@@ -654,7 +694,6 @@ Value arrayPopFront(Value self) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
-        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     if (ary->count == 0) return NIL_VAL;
@@ -667,7 +706,6 @@ void arrayPushFront(Value self, Value el) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
-        UNREACHABLE_RETURN((void)0);
     }
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     writeValueArrayBeg(ary, el);
@@ -678,7 +716,6 @@ void arrayClear(Value self) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
-        UNREACHABLE_RETURN((void)0);
     }
     freeValueArray(ARRAY_GETHIDDEN(self));
 }

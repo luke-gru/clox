@@ -3,7 +3,6 @@ printMe(1);
 printMe(1,5);
 printMe(1,5,10);
 
-
 __END__
 -- expect: --
 1.00

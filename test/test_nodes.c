@@ -483,7 +483,7 @@ static int test_parser_string_interpolation(void) {
     T_ASSERT(!parser.panicMode);
     char *output = outputASTString(program, 0);
     /*fprintf(stderr, "\n'%s'\n", output);*/
-    char *expected = "(+ \"Hey \" (+ (var name) \", how's it going?\"))\n";
+    char *expected = "(+ \"Hey \" (+ (call (var String) ((var name) ) \", how's it going?\"))\n";
     T_ASSERT_STREQ(expected, output);
 cleanup:
     return 0;

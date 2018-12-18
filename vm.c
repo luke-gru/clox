@@ -486,7 +486,7 @@ Value createIterator(Value iterable) {
     UNREACHABLE(__func__);
 }
 
-// VM/C call context switch data
+// VM/C call "context switch" data
 static jmp_buf CCallJumpBuf;
 unsigned inCCall;
 static bool cCallThrew = false;
@@ -953,38 +953,6 @@ static inline bool isThrowable(Value val) {
 }
 
 // FIXME: use v_includedMods
-static bool lookupGetter(ObjInstance *obj, ObjString *propName, Value *ret) {
-    ObjClass *klass = obj->klass;
-    if (klass->singletonKlass != NULL) {
-        klass = klass->singletonKlass;
-    }
-    Value key = OBJ_VAL(propName);
-    while (klass) {
-        if (tableGet(&klass->getters, key, ret)) {
-            return true;
-        }
-        klass = klass->superclass;
-    }
-    return false;
-}
-
-// FIXME: use v_includedMods
-static bool lookupSetter(ObjInstance *obj, ObjString *propName, Value *ret) {
-    ObjClass *klass = obj->klass;
-    if (klass->singletonKlass != NULL) {
-        klass = klass->singletonKlass;
-    }
-    Value key = OBJ_VAL(propName);
-    while (klass) {
-        if (tableGet(&klass->setters, key, ret)) {
-            return true;
-        }
-        klass = klass->superclass;
-    }
-    return false;
-}
-
-// FIXME: use v_includedMods
 static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
     if (klass == obj->klass && obj->singletonKlass) {
         klass = obj->singletonKlass;
@@ -1007,18 +975,20 @@ static InterpretResult vm_run(void);
 
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
+    Obj *method = NULL;
+    Obj *getter = NULL;
     if (tableGet(&obj->fields, OBJ_VAL(propName), &ret)) {
         return ret;
-    } else if (lookupGetter(obj, propName, &ret)) {
+    } else if ((getter = instanceFindGetter(obj, propName))) {
         VM_DEBUG("getter found");
-        callVMMethod(obj, ret, 0, NULL);
+        callVMMethod(obj, OBJ_VAL(getter), 0, NULL);
         if (vm.hadError) {
             return NIL_VAL;
         } else {
             return pop();
         }
-    } else if (lookupMethod(obj, obj->klass, propName, &ret, true)) {
-        ObjBoundMethod *bmethod = newBoundMethod(obj, AS_OBJ(ret));
+    } else if ((method = instanceFindMethod(obj, propName))) {
+        ObjBoundMethod *bmethod = newBoundMethod(obj, method);
         return OBJ_VAL(bmethod);
     } else {
         return NIL_VAL;
@@ -1026,10 +996,13 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
 }
 
 static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
-    Value setterMethod;
-    if (lookupSetter(obj, propName, &setterMethod)) {
+    if (isFrozen((Obj*)obj)) {
+        throwErrorFmt(lxErrClass, "Tried to set property on frozen object");
+    }
+    Obj *setter = NULL;
+    if ((setter = instanceFindSetter(obj, propName))) {
         VM_DEBUG("setter found");
-        callVMMethod(obj, setterMethod, 1, &rval);
+        callVMMethod(obj, OBJ_VAL(setter), 1, &rval);
         pop();
     } else {
         tableSet(&obj->fields, OBJ_VAL(propName), rval);
@@ -1096,7 +1069,6 @@ static void defineSetter(ObjString *name) {
     Value method = peek(0); // function
     ASSERT(IS_CLOSURE(method));
     Value classOrMod = peek(1);
-    ASSERT(IS_CLASS(classOrMod));
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG("defining setter '%s'", name->chars);
@@ -1326,7 +1298,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         }
         return true;
     } else {
-        UNREACHABLE("bug");
+        UNREACHABLE("bad callable value given to callCallable");
     }
 
     if (EC->frameCount >= FRAMES_MAX) {
@@ -1591,14 +1563,12 @@ NORETURN void throwError(Value self) {
     if ((errInfo = findErrTag(klass))) {
         VM_DEBUG("longjmping to tag");
         longjmp(errInfo->jmpBuf, JUMP_PERFORMED);
-        UNREACHABLE("after longjmp");
     }
     if (inCCall > 0) {
         VM_DEBUG("throwing error from C call, longjmping");
         ASSERT(!cCallThrew);
         cCallThrew = true;
         longjmp(CCallJumpBuf, JUMP_PERFORMED);
-        UNREACHABLE("after longjmp");
     }
     if (findThrowJumpLoc(klass, &ipNew, &catchRow)) {
         ASSERT(ipNew);
@@ -1871,7 +1841,7 @@ static InterpretResult vm_run() {
 
     uint8_t instruction = READ_BYTE();
     switch (instruction) {
-      case OP_CONSTANT: {
+      case OP_CONSTANT: { // numbers, code chunks
         Value constant = READ_CONSTANT();
         push(constant);
         break;
@@ -1884,7 +1854,6 @@ static InterpretResult vm_run() {
         Value val = pop();
         if (!IS_NUMBER(val)) {
             throwErrorFmt(lxTypeErrClass, "Can only negate numbers, type=%s", typeOfVal(val));
-            break;
         }
         push(NUMBER_VAL(-AS_NUMBER(val)));
         break;
@@ -1894,7 +1863,7 @@ static InterpretResult vm_run() {
         Value lhs = pop(); // lhs
         if (!canCmpValues(lhs, rhs, instruction)) {
             throwErrorFmt(lxTypeErrClass,
-                "Can only compare numbers and strings with '<', lhs=%s, rhs=%s",
+                "Can only compare 2 numbers or 2 strings with '<', lhs=%s, rhs=%s",
                 typeOfVal(lhs), typeOfVal(rhs));
             break;
         }
@@ -1910,7 +1879,7 @@ static InterpretResult vm_run() {
         Value lhs = pop();
         if (!canCmpValues(lhs, rhs, instruction)) {
             throwErrorFmt(lxTypeErrClass,
-                "Can only compare numbers and strings with '>', lhs=%s, rhs=%s",
+                "Can only compare 2 numbers or 2 strings with '>', lhs=%s, rhs=%s",
                 typeOfVal(lhs), typeOfVal(rhs));
             break;
         }
@@ -1936,7 +1905,7 @@ static InterpretResult vm_run() {
           Value lhs = pop();
           if (!canCmpValues(lhs, rhs, instruction)) {
               throwErrorFmt(lxTypeErrClass,
-                  "Can only compare numbers and strings with '>=', lhs=%s, rhs=%s",
+                  "Can only compare 2 numbers or 2 strings with '>=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
               break;
           }
@@ -1952,7 +1921,7 @@ static InterpretResult vm_run() {
           Value lhs = pop();
           if (!canCmpValues(lhs, rhs, instruction)) {
               throwErrorFmt(lxTypeErrClass,
-                  "Can only compare numbers and strings with '<=', lhs=%s, rhs=%s",
+                  "Can only compare 2 numbers or 2 strings with '<=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
               break;
           }
@@ -1985,7 +1954,6 @@ static InterpretResult vm_run() {
           if (isUnredefinableGlobal(name)) {
               pop();
               throwErrorFmt(lxNameErrClass, "Can't redeclare global variable '%s'", name);
-              break;
           }
           Value val = peek(0);
           tableSet(&vm.globals, varName, val);
@@ -2001,7 +1969,6 @@ static InterpretResult vm_run() {
             push(val);
         } else {
             throwErrorFmt(lxNameErrClass, "Undefined global variable '%s'.", AS_STRING(varName)->chars);
-            break;
         }
         break;
       }
@@ -2011,7 +1978,6 @@ static InterpretResult vm_run() {
         char *name = AS_CSTRING(varName);
         if (isUnredefinableGlobal(name)) {
             throwErrorFmt(lxNameErrClass, "Can't redefine global variable '%s'", name);
-            break;
         }
         tableSet(&vm.globals, varName, val);
         break;
@@ -2167,6 +2133,7 @@ static InterpretResult vm_run() {
           uint8_t numArgs = READ_BYTE();
           if (lastSplatNumArgs > 0) {
               numArgs += (lastSplatNumArgs-1);
+              lastSplatNumArgs = -1;
           }
           Value callableVal = peek(numArgs);
           if (!isCallable(callableVal)) {
@@ -2174,22 +2141,19 @@ static InterpretResult vm_run() {
                   pop();
               }
               throwErrorFmt(lxTypeErrClass, "Tried to call uncallable object (type=%s)", typeOfVal(callableVal));
-              break;
           }
           Value callInfoVal = READ_CONSTANT();
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           // ex: String("hi"), "hi" already evaluates to a string instance, so we just
           // return that.
-          if (numArgs == 1 && strcmp(tokStr(&callInfo->nameTok), "String") == 0) {
+          if (numArgs == 1 && strcmp(tokStr(&callInfo->nameTok), "String") == 0 && IS_A_STRING(peek(0))) {
               Value strVal = pop();
               pop();
               push(strVal);
-              lastSplatNumArgs = -1;
               break;
           }
           callCallable(callableVal, numArgs, false, callInfo);
           ASSERT_VALID_STACK();
-          lastSplatNumArgs = -1;
           break;
       }
       case OP_CHECK_KEYWORD: {
@@ -2213,6 +2177,7 @@ static InterpretResult vm_run() {
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           if (lastSplatNumArgs > 0) {
               numArgs += (lastSplatNumArgs-1);
+              lastSplatNumArgs = -1;
           }
           Value instanceVal = peek(numArgs);
           if (IS_INSTANCE(instanceVal)) {
@@ -2222,8 +2187,6 @@ static InterpretResult vm_run() {
                   ObjString *className = inst->klass->name;
                   const char *classStr = className->chars ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, mname->chars);
-                  lastSplatNumArgs = -1;
-                  break;
               }
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
@@ -2234,8 +2197,6 @@ static InterpretResult vm_run() {
                   ObjString *className = klass->name;
                   const char *classStr = className ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, mname->chars);
-                  lastSplatNumArgs = -1;
-                  break;
               }
               EC->stackTop[-numArgs-1] = instanceVal;
               setThis(numArgs);
@@ -2247,17 +2208,14 @@ static InterpretResult vm_run() {
                   ObjString *modName = mod->name;
                   const char *modStr = modName ? modName->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, mname->chars);
-                  lastSplatNumArgs = -1;
-                  break;
               }
               EC->stackTop[-numArgs-1] = instanceVal;
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
           } else {
-              // throw type error
+              throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfVal(instanceVal));
           }
           ASSERT_VALID_STACK();
-          lastSplatNumArgs = -1;
           break;
       }
       case OP_GET_THIS: {
@@ -2268,8 +2226,8 @@ static InterpretResult vm_run() {
       case OP_SPLAT_ARRAY: {
           Value ary = pop();
           if (!IS_AN_ARRAY(ary)) {
-              throwErrorFmt(lxTypeErrClass, "%s", "splatted expression must evaluate to an array");
-              break;
+              throwErrorFmt(lxTypeErrClass, "Splatted expression must evaluate to an Array (type=%s)",
+                      typeOfVal(ary));
           }
           lastSplatNumArgs = ARRAY_SIZE(ary);
           for (int i = 0; i < lastSplatNumArgs; i++) {
@@ -2289,9 +2247,8 @@ static InterpretResult vm_run() {
               AS_INSTANCE(instanceVal), klass,
               AS_STRING(methodName), &method, false);
           if (!found) {
-              errorPrintScriptBacktrace("Could not find method"); // FIXME
-              vmRunLvl--;
-              return INTERPRET_RUNTIME_ERROR;
+              throwErrorFmt(lxErrClass, "Could not find method for 'super': %s",
+                      AS_CSTRING(methodName));
           }
           ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method));
           push(OBJ_VAL(bmethod));
@@ -2311,7 +2268,10 @@ static InterpretResult vm_run() {
       }
       case OP_ITER: {
           Value iterable = peek(0);
-          ASSERT(isIterableType(iterable)); // FIXME: throw TypeError
+          if (!isIterableType(iterable)) {
+              throwErrorFmt(lxTypeErrClass, "Non-iterable value given to 'foreach' statement. Type found: %s",
+                      typeOfVal(iterable));
+          }
           Value iterator = createIterator(iterable);
           DBG_ASSERT(isIterator(iterator));
           DBG_ASSERT(isIterableType(peek(0)));
@@ -2332,9 +2292,15 @@ static InterpretResult vm_run() {
           Value existingClass;
           // FIXME: not perfect, if class is declared non-globally this won't
           // detect it. Maybe a new op-code is needed for class re-opening.
-          if (tableGet(&vm.globals, className, &existingClass) && IS_CLASS(existingClass)) {
-              push(existingClass);
-              break;
+          if (tableGet(&vm.globals, className, &existingClass)) {
+              if (IS_CLASS(existingClass)) { // re-open class
+                  push(existingClass);
+                  break;
+              } else if (IS_MODULE(existingClass)) {
+                  const char *classStr = AS_CSTRING(className);
+                  throwErrorFmt(lxTypeErrClass, "Tried to define class %s, but it's a module",
+                          classStr);
+              } // otherwise we override the global var with the new class
           }
           ObjClass *klass = newClass(AS_STRING(className), lxObjClass);
           push(OBJ_VAL(klass));
@@ -2346,9 +2312,15 @@ static InterpretResult vm_run() {
           Value existingMod;
           // FIXME: not perfect, if class is declared non-globally this won't
           // detect it. Maybe a new op-code is needed for class re-opening.
-          if (tableGet(&vm.globals, modName, &existingMod) && IS_MODULE(existingMod)) {
-              push(existingMod);
-              break;
+          if (tableGet(&vm.globals, modName, &existingMod)) {
+              if (IS_MODULE(existingMod)) {
+                push(existingMod); // re-open the module
+                break;
+              } else if (IS_CLASS(existingMod)) {
+                  const char *modStr = AS_CSTRING(modName);
+                  throwErrorFmt(lxTypeErrClass, "Tried to define module %s, but it's a class",
+                          modStr);
+              } // otherwise, we override the global var with the new module
           }
           ObjModule *mod = newModule(AS_STRING(modName));
           push(OBJ_VAL(mod));
@@ -2363,13 +2335,17 @@ static InterpretResult vm_run() {
                       "Class %s tried to inherit from non-class",
                       AS_CSTRING(className)
               );
-              break;
           }
           // FIXME: not perfect, if class is declared non-globally this won't detect it.
           Value existingClass;
-          if (tableGet(&vm.globals, className, &existingClass) && IS_CLASS(existingClass)) {
-              throwErrorFmt(lxNameErrClass, "Class %s already exists", AS_CSTRING(className));
-              break;
+          if (tableGet(&vm.globals, className, &existingClass)) {
+              if (IS_CLASS(existingClass)) {
+                  throwErrorFmt(lxNameErrClass, "Class %s already exists (if "
+                          "re-opening class, no superclass should be given)",
+                          AS_CSTRING(className));
+              } else if (IS_MODULE(existingClass)) {
+                  throwErrorFmt(lxTypeErrClass, "Tried to define class %s, but it's a module", AS_CSTRING(className));
+              }
           }
           ObjClass *klass = newClass(
               AS_STRING(className),
@@ -2385,8 +2361,8 @@ static InterpretResult vm_run() {
               push(classOrInst);
           } else {
               if (!IS_INSTANCE(classOrInst)) {
-                  throwErrorFmt(lxTypeErrClass, "expression given to 'in' statement must evaluate to a class/module/instance");
-                  break;
+                  throwErrorFmt(lxTypeErrClass, "Expression given to 'in' statement "
+                          "must evaluate to a class/module/instance (type=%s)", typeOfVal(classOrInst));
               }
               ObjClass *klass = instanceSingletonClass(AS_INSTANCE(classOrInst));
               push(OBJ_VAL(klass));
@@ -2426,7 +2402,6 @@ static InterpretResult vm_run() {
           if (!IS_INSTANCE_LIKE(instance)) {
               pop();
               throwErrorFmt(lxTypeErrClass, "Tried to access property '%s' of non-instance (type: %s)", propStr->chars, typeOfVal(instance));
-              break;
           }
           pop();
           push(propertyGet(AS_INSTANCE(instance), propStr));
@@ -2440,7 +2415,6 @@ static InterpretResult vm_run() {
           if (!IS_INSTANCE_LIKE(instance)) {
               pop(); pop();
               throwErrorFmt(lxTypeErrClass, "Tried to set property '%s' of non-instance", propStr->chars);
-              break;
           }
           propertySet(AS_INSTANCE(instance), propStr, rval); // TODO: check frozenness of object
           pop(); // leave rval on stack
@@ -2471,11 +2445,12 @@ static InterpretResult vm_run() {
       case OP_THROW: {
           Value throwable = pop();
           if (!isThrowable(throwable)) {
-              throwErrorFmt(lxTypeErrClass, "Tried to throw unthrowable value, must throw an instance");
-              break;
+              throwErrorFmt(lxTypeErrClass, "Tried to throw unthrowable value, must be an instance. "
+                  "Type found: %s", typeOfVal(throwable)
+              );
           }
           throwError(throwable);
-          break;
+          UNREACHABLE("after throw");
       }
       case OP_GET_THROWN: {
           Value catchTblIdx = READ_CONSTANT();
@@ -2486,7 +2461,6 @@ static InterpretResult vm_run() {
               fprintf(stderr, "Non-throwable found (BUG): %s\n", typeOfVal(tblRow->lastThrownValue));
               ASSERT(0);
           }
-          ASSERT(isThrowable(tblRow->lastThrownValue));
           push(tblRow->lastThrownValue);
           break;
       }

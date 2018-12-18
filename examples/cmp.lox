@@ -1,14 +1,16 @@
-print Object == Object;
-print Object == nil;
-print nil == Object;
-print nil == nil;
-print 1 == 2;
-print 3.2 == 3.3;
-print 3.3 == 3.3;
-print Object() == Object();
+print Object == Object; // true
+print Object == nil; // false
+print nil == Object; // false
+print nil == nil; // true
+print 1 == 2; // false
+print 3.2 == 3.3; // false
+print 3.3 == 3.3; // true
+print Object() == Object(); // false
 var o = Object();
-print o == o;
-print "wow" == "wow";
+print o == o; // true
+print "wow" == "wow"; // true
+print ["wow"] == ["wow"]; // true
+print Map() == Map(); // true
 
 __END__
 -- expect: --
@@ -20,5 +22,7 @@ false
 false
 true
 false
+true
+true
 true
 true

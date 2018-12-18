@@ -1,32 +1,25 @@
-TODO:
+TODO
+====
 
-More language features to be close to my version of jlox
+Features
+--------
 
+* add iterNext() support for iterators
+* Make it so that global variables aren't accessible everywhere, or that
+the syntax is different for them, like in ruby. []
 * Saving/loading bytecode to disk []
-* Debugger support [IN PROGRESS]
-* bytecode optimization pass [PARTIAL] (constant folding, jump consolidation, etc.)
-* simple JIT, maybe? []
-* different GC strategies, maybe support copying GC []
-
-* get rid of calls to diePrintBacktrace(), or get it to actually throw an error
-instance [IN PROGRESS]
 * Add benchmark library/internals so I can benchmark/profile performance of the
 interpreter []
-* Make it so that global variables aren't accessible everywhere, or that
-the syntax is different for them, like in $ruby. []
-
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results []
-
-* Add `foreach el in item` syntax with iter() method support [PARTIAL], no iterNext()
 * Add threads with libpthread [PARTIAL]
+  stopVM() has to work with current thread only
 * Add File class [PARTIAL]
-* Add modules like in jlox [PARTIAL], they don't work properly yet
-* Add Object#dup, and Class#ancestors []
+* Add Class#ancestors []
 * Add default ENV map-like thing as well as ARGV array
 * Add signal trap handlers (`trap(signame, fun() { })`)
 * Add Mutex class, mutexes for thread synchronization
-* release GVL before performing blocking calls/syscalls etc. []
+* release GVL after performing n instructions, or add timer thread
 * Add String#length, String#replace(other) [IN PROGRESS]
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Make nil, true, false instances? []
@@ -34,20 +27,30 @@ bytecode, and benchmark the lookup results []
 compiled lookup []
 * Integrate regexes from regex.c
 * Add README
-* Allow more constants in a chunk (more than 256)
+* Allow more constants in a chunk (more than 256 bytes)
 * Allow bigger jumps (more than 1 byte offsets)
+* Throw SyntaxError from invalid compile/parse if given flag
+* Add Process module, with static methods 'kill', 'waitall', 'pid', 'ppid', etc.
+* Add callSuper(argCount, *args) C API function that looks at current call frame, sees the
+associated class, and calls the superclass method.
 
-BUGS:
+Bugs
+----
+* Fix method lookup, look in modules for instances and classes/modules as well
+as singleton classes, etc.
 * super() bug in examples/super.lox
-* lxLoadPath and loadScript/requireScript acting weird (OP_LEAVE in required script)
 * super bug for getters/setters (examples/super_setter.lox)
 * Fix nil.toString() bugs, perhaps with String() conversion [PARTIAL], still
 need to fix interpolation errors
-* Throw proper errors when can't find instance/static methods in VM
 * Allow throwing strings?
-* Make throwing exceptions based on a tag stack, like Ruby. This allows
-catching errors from the VM or C code and choosing to handle or propagate
-them in C code (a C API). [IN PROGRESS]. So far, vm_protect does that, but
-other errors aren't caught like this.
 * Nodes created during parsing are never freed. This results in memory leak
 when evaling.
+* Interpolation should stringify (String()) every part
+
+Optimizations
+-------------
+
+* more bytecode optimization passes (ex: skip OP_NIL,OP_RETURN after an OP_RETURN)
+* Add tailcall optimization
+* simple JIT, maybe? []
+* different GC strategies, maybe support copying GC []

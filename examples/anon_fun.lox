@@ -1,3 +1,6 @@
+/**
+Testing functions as first-class values
+*/
 var a = fun(a, b) {
   print a+b;
 };

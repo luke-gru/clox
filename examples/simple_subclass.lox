@@ -1,11 +1,21 @@
 class Train < Object {
   init(color) {
-    return "non-instance!";
+    this.color = color;
+    return "non-instance!"; // returns the initialized object instead
   }
+}
+// re-open class
+class Object {
+  choo() { print "choo"; return this; }
 }
 var t = Train("Red");
 print t;
+t.choo().choo();
+print t.color;
 
 __END__
 -- expect: --
 <instance Train>
+choo
+choo
+Red

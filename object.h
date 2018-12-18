@@ -292,6 +292,7 @@ ObjString *stringGetHidden(Value instance);
 void pushCString(ObjString *string, char *chars, int lenToAdd);
 void insertCString(ObjString *a, char *chars, int lenToAdd, int at);
 void pushCStringFmt(ObjString *string, const char *format, ...);
+void pushCStringVFmt(ObjString *string, const char *format, va_list ap);
 uint32_t hashString(char *key, int length);
 
 // misc
@@ -349,6 +350,8 @@ ObjUpvalue *newUpvalue(Value *slot);
 // methods/classes
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
 Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name);
+Obj *instanceFindGetter(ObjInstance *obj, ObjString *name);
+Obj *instanceFindSetter(ObjInstance *obj, ObjString *name);
 Obj *classFindStaticMethod(ObjClass *obj, ObjString *name);
 Obj *moduleFindStaticMethod(ObjModule *obj, ObjString *name);
 bool instanceIsA(ObjInstance *inst, ObjClass *klass);

@@ -1,3 +1,6 @@
+/**
+Testing init() always returns instance
+*/
 class Foo {
   init() {
     return "something else";

@@ -1,3 +1,6 @@
+/**
+Testing ArgumentError throw/catch from native C lox call (Map#init)
+*/
 try {
   var e = Map(1, 2, 3, 4);
 } catch (Error e) {

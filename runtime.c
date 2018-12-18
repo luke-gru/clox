@@ -403,7 +403,10 @@ Value lxObjectGetObjectId(int argCount, Value *args) {
 Value lxObjectDup(int argCount, Value *args) {
     CHECK_ARGS("Object#dup", 1, 1, argCount);
     Value self = *args;
-    ASSERT(IS_INSTANCE(self)); // FIXME: what about dup for classes/modules?
+    if (!IS_INSTANCE(self)) {
+        // Must be a module or class
+        throwErrorFmt(lxTypeErrClass, "Cannot duplicate (dup) a %s", typeOfVal(self));
+    }
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInstance *newObj = newInstance(selfObj->klass);
     Entry e; int idx = 0;
@@ -540,9 +543,13 @@ Value lxStringOpAdd(int argCount, Value *args) {
     CHECK_ARGS("String#opAdd", 2, 2, argCount);
     Value self = *args;
     Value rhs = args[1];
+    // TODO: maybe coerce into String with String() constructor?
+    if (!IS_A_STRING(rhs)) {
+        throwErrorFmt(lxTypeErrClass, "String#+ (opAdd) called with non-string argument. Type: %s",
+                typeOfVal(rhs));
+    }
     Value ret = dupStringInstance(self);
     ObjString *lhsBuf = STRING_GETHIDDEN(ret);
-    ASSERT(IS_A_STRING(rhs)); // TODO: throw error or coerce into String
     ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
     pushObjString(lhsBuf, rhsBuf);
     return ret;
@@ -773,7 +780,7 @@ Value lxArrayOpIndexSet(int argCount, Value *args) {
     ASSERT(ary);
     int idx = (int)AS_NUMBER(num);
     if (idx < 0) {
-        // FIXME: throw error, or allow negative indices
+        // FIXME: throw error, or allow negative indices?
         return NIL_VAL;
     }
 
@@ -840,12 +847,10 @@ Value lxMapInit(int argCount, Value *args) {
             Value el = aryInt->values[i];
             if (!IS_AN_ARRAY(el)) {
                 throwErrorFmt(lxTypeErrClass, "Expected array element to be an array of length 2, got a: %s", typeOfVal(el));
-                UNREACHABLE_RETURN(vm.lastErrorThrown);
             }
             if (ARRAY_SIZE(el) != 2) {
                 throwArgErrorFmt("Wrong array size given, expected 2, got: %d",
                         ARRAY_SIZE(el));
-                UNREACHABLE_RETURN(vm.lastErrorThrown);
             }
             Value mapKey = ARRAY_GET(el, 0);
             Value mapVal = ARRAY_GET(el, 1);
@@ -853,7 +858,6 @@ Value lxMapInit(int argCount, Value *args) {
         }
     } else {
         throwArgErrorFmt("Expected 1 argument, got %d", argCount-1);
-        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     return self;
 }
@@ -1094,7 +1098,6 @@ Value lxFileReadStatic(int argCount, Value *args) {
     FILE *f = fopen(fnameStr->chars, "r");
     if (!f) {
         throwArgErrorFmt("Error reading File '%s': %s", fnameStr->chars, strerror(errno));
-        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     ObjString *retBuf = copyString("", 0);
     Value ret = newStringInstance(retBuf);
