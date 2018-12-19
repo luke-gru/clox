@@ -276,10 +276,12 @@ Value lxThreadInit(int argCount, Value *args) {
     return self;
 }
 
-static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoaded) {
+static Value loadScriptHelper(Value fname, bool checkLoaded) {
     char *cfile = VAL_TO_STRING(fname)->chars;
     bool isAbsFile = cfile[0] == pathSeparator;
     char pathbuf[300] = { '\0' };
+    char curdir[250] = { '\0' };
+    bool triedCurdir = false;
     bool fileFound = false;
     if (isAbsFile) {
         memcpy(pathbuf, cfile, strlen(cfile));
@@ -294,14 +296,18 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
             char *dir = VAL_TO_STRING(el)->chars;
             memset(pathbuf, 0, 300);
             memcpy(pathbuf, dir, strlen(dir));
-            if (strcmp(pathbuf, ".") == 0) {
-                char *cwdres = getcwd(pathbuf, 250);
-                if (cwdres == NULL) {
-                    fprintf(stderr,
-                        "Couldn't get current working directory for loading script!"
-                        " Maybe too long?\n");
-                    continue;
+            if (strncmp(pathbuf, ".", 1) == 0) {
+                if (!curdir[0] && !triedCurdir) {
+                    char *cwdres = getcwd(curdir, 250);
+                    triedCurdir = true;
+                    if (cwdres == NULL) {
+                        fprintf(stderr,
+                                "Couldn't get current working directory for loading script!"
+                                " Maybe too long?\n");
+                        continue;
+                    }
                 }
+                memcpy(pathbuf, curdir, strlen(curdir));
             }
             if (dir[strlen(dir)-1] != pathSeparator) { // add trailing '/'
                 strncat(pathbuf, &pathSeparator, 1);
@@ -314,42 +320,40 @@ static Value loadScriptHelper(Value fname, const char *funcName, bool checkLoade
             break;
         }
     }
-    if (fileFound) {
-        if (checkLoaded && VMLoadedScript(pathbuf)) {
-            return BOOL_VAL(false);
-        }
-        Chunk chunk;
-        initChunk(&chunk);
-        CompileErr err = COMPILE_ERR_NONE;
-        int compile_res = compile_file(pathbuf, &chunk, &err);
-        if (compile_res != 0) {
-            // TODO: throw syntax error
-            return BOOL_VAL(false);
-        }
-        ObjString *fpath = copyString(pathbuf, strlen(pathbuf));
-        if (checkLoaded) {
-            vec_push(&vm.loadedScripts, newStringInstance(fpath));
-        }
-        InterpretResult ires = loadScript(&chunk, pathbuf);
-        return BOOL_VAL(ires == INTERPRET_OK);
-    } else {
-        fprintf(stderr, "File '%s' not found (%s)\n", cfile, funcName);
+    if (!fileFound) {
+        throwErrorFmt(lxLoadErrClass,"File '%s' not found", cfile);
+    }
+    if (checkLoaded && VMLoadedScript(pathbuf)) {
         return BOOL_VAL(false);
     }
+    Chunk chunk;
+    initChunk(&chunk);
+    CompileErr err = COMPILE_ERR_NONE;
+    int compile_res = compile_file(pathbuf, &chunk, &err);
+    if (compile_res != 0) {
+        // TODO: throw syntax error
+        return BOOL_VAL(false);
+    }
+    ObjString *fpath = copyString(pathbuf, strlen(pathbuf));
+    if (checkLoaded) {
+        vec_push(&vm.loadedScripts, newStringInstance(fpath));
+    }
+    InterpretResult ires = loadScript(&chunk, pathbuf);
+    return BOOL_VAL(ires == INTERPRET_OK);
 }
 
 Value lxRequireScript(int argCount, Value *args) {
     CHECK_ARGS("requireScript", 1, 1, argCount);
     Value fname = *args;
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
-    return loadScriptHelper(fname, "requireScript", true);
+    return loadScriptHelper(fname, true);
 }
 
 Value lxLoadScript(int argCount, Value *args) {
     CHECK_ARGS("loadScript", 1, 1, argCount);
     Value fname = *args;
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
-    return loadScriptHelper(fname, "loadScript", false);
+    return loadScriptHelper(fname, false);
 }
 
 static void markInternalAry(Obj *internalObj) {

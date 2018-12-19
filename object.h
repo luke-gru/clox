@@ -155,6 +155,7 @@ extern ObjClass *lxArgErrClass;
 extern ObjClass *lxTypeErrClass;
 extern ObjClass *lxNameErrClass;
 extern ObjClass *lxSyntaxErrClass;
+extern ObjClass *lxLoadErrClass;
 
 extern Value lxLoadPath;
 

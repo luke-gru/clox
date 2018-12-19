@@ -172,6 +172,7 @@ ObjClass *lxArgErrClass;
 ObjClass *lxTypeErrClass;
 ObjClass *lxNameErrClass;
 ObjClass *lxSyntaxErrClass;
+ObjClass *lxLoadErrClass;
 Value lxLoadPath;
 
 static void defineNativeClasses(void) {
@@ -391,6 +392,13 @@ static void defineNativeClasses(void) {
     tableSet(&vm.globals, OBJ_VAL(syntaxErrClassName), OBJ_VAL(syntaxErrClass));
 
     lxSyntaxErrClass = syntaxErrClass;
+
+    // class LoadError
+    ObjString *loadErrClassName = internedString("LoadError", 9);
+    ObjClass *loadErrClass = newClass(loadErrClassName, errClass);
+    tableSet(&vm.globals, OBJ_VAL(loadErrClassName), OBJ_VAL(loadErrClass));
+
+    lxLoadErrClass = loadErrClass;
 
     // class File
     ObjString *fileClassName = internedString("File", 4);
@@ -2569,7 +2577,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     if (EC == ectx) pop_EC();
     ASSERT(oldFrame == getFrame());
     if (status == TAG_RAISE) {
-        rethrowErrInfo(vm.errInfo); // FIXME: throw LoadError
+        rethrowErrInfo(vm.errInfo);
         UNREACHABLE_RETURN(INTERPRET_RUNTIME_ERROR);
     } else {
         return INTERPRET_OK;

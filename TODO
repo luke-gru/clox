@@ -6,25 +6,24 @@ Features
 
 * add iterNext() support for iterators
 * Make it so that global variables aren't accessible everywhere, or that
-the syntax is different for them, like in ruby. []
-* Saving/loading bytecode to disk []
+the syntax is different for them, like in ruby.
+* Saving/loading bytecode to disk
 * Add benchmark library/internals so I can benchmark/profile performance of the
-interpreter []
+interpreter
 * Add threads with libpthread [PARTIAL]
   stopVM() has to work with current thread only
 * Add File class [PARTIAL]
-* Add Class#ancestors []
+* Add Class#ancestors
 * Add default ENV map-like thing as well as ARGV array
 * Add signal trap handlers (`trap(signame, fun() { })`)
 * Add Mutex class, mutexes for thread synchronization
 * release GVL after performing n instructions, or add timer thread
-* Add String#length, String#replace(other) [IN PROGRESS]
+* Add String#length, String#replace(other)
 * add multiple var declaration, setters for array returns [GIT BRANCH]
-* Make nil, true, false instances? []
+* Make nil, true, false instances?
 * Make variable lookup work as lookup in Environment tables, not statically
-compiled lookup []
+compiled lookup
 * Integrate regexes from regex.c
-* Add README
 * Allow more constants in a chunk (more than 256 bytes)
 * Allow bigger jumps (more than 1 byte offsets)
 * Throw SyntaxError from invalid compile/parse if given flag
@@ -41,13 +40,15 @@ as singleton classes, etc.
 * Allow throwing strings?
 * Nodes created during parsing are never freed. This results in memory leak
 when evaling.
+* loadScript/requireScript should use pwd of lox process during startup for
+file lookup, not pwd when calling loadScript/requireScript
 
 Optimizations
 -------------
 
 * more bytecode optimization passes (ex: skip OP_NIL,OP_RETURN after an OP_RETURN)
 * Add tailcall optimization
-* simple JIT, maybe? []
-* different GC strategies, maybe support copying GC []
+* simple JIT, maybe?
+* different GC strategies, maybe support copying GC and/or generational GC
 * optimize array and string method lookup with an inline cache in the
-bytecode, and benchmark the lookup results []
+bytecode, and benchmark the lookup results
