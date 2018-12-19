@@ -12,4 +12,4 @@ print c.area();
 
 __END__
 -- expect: --
-50.00
+50

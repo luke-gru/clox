@@ -4,4 +4,4 @@ print a + b;
 
 __END__
 -- expect: --
-3.00
+3

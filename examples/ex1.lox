@@ -8,8 +8,8 @@ print false or true;
 
 __END__
 -- expect: --
-1.00
+1
 nil
-10.00
+10
 false
 true

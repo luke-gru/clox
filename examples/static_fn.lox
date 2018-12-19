@@ -25,7 +25,7 @@ Math.wowie();
 
 __END__
 -- expect: --
-9.00
+9
 <class Math>
 3.14
 3.14

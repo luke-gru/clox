@@ -9,5 +9,5 @@ print b;
 
 __END__
 -- expect: --
-11.00
+11
 Hello, world

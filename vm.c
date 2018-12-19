@@ -108,7 +108,7 @@ static void defineNativeFunctions(void) {
     addGlobalFunction("joinThread", lxJoinThread);
 }
 
-// Builtin classes:
+// Builtin classes initialized below
 ObjClass *lxObjClass;
 ObjClass *lxStringClass;
 ObjClass *lxClassClass;
@@ -119,14 +119,14 @@ ObjClass *lxIteratorClass;
 ObjClass *lxFileClass;
 ObjClass *lxThreadClass;
 ObjModule *lxGCModule;
-ObjModule *lxProcessMod;
 ObjClass *lxErrClass;
 ObjClass *lxArgErrClass;
 ObjClass *lxTypeErrClass;
 ObjClass *lxNameErrClass;
 ObjClass *lxSyntaxErrClass;
 ObjClass *lxLoadErrClass;
-Value lxLoadPath;
+
+Value lxLoadPath; // load path for loadScript/requireScript (-L flag)
 
 static void defineNativeClasses(void) {
     // class Object
@@ -251,7 +251,9 @@ static void defineNativeClasses(void) {
     addNativeMethod(GCClassStatic, "collect", lxGCCollect);
     lxGCModule = GCModule;
 
+    // order of initialization not important here
     Init_ProcessModule();
+    Init_IOModule();
 }
 
 static void defineGlobalVariables(void) {

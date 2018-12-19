@@ -122,6 +122,8 @@ Value lxErrInit(int argCount, Value *args);
 
 // module Process
 void Init_ProcessModule(void);
+// module IO
+void Init_IOModule(void);
 
 // API for adding classes/modules/methods
 void addGlobalFunction(const char *name, NativeFn func);

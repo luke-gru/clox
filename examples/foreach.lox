@@ -45,21 +45,21 @@ foreach (student in croom) {
 
 __END__
 -- expect: --
-1.00
-2.00
-3.00
+1
+2
+3
 
-1.00
-2.00
+1
+2
 nil
-3.00
-4.00
+3
+4
 nil
 
-1.00
-2.00
-3.00
-4.00
+1
+2
+3
+4
 
 [woah,dude]
 [totally,cool]

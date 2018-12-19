@@ -195,7 +195,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
     } else if (IS_NUMBER(value)) {
         char buftemp[50] = { '\0' };
         double d = AS_NUMBER(value);
-        snprintf(buftemp, 50, "%.2f", d); // ex: "1.20"
+        snprintf(buftemp, 50, "%g", d); // ex: "1.20"
         char *buf = calloc(strlen(buftemp)+1, 1);
         ASSERT_MEM(buf);
         strcpy(buf, buftemp);

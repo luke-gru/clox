@@ -565,7 +565,7 @@ static int test_array_literal() {
     T_ASSERT(IS_T_ARRAY(*val));
     char *output = buf->chars;
     ASSERT(buf->chars);
-    char *expected = "[1.00,2.00,3.00]\n";
+    char *expected = "[1,2,3]\n";
     T_ASSERT_STREQ(expected, output);
 cleanup:
     unsetPrintBuf();
@@ -596,8 +596,8 @@ static int test_array_get_set() {
     setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
-    const char *expected = "400.00\n"
-                           "[400.00,2.00,3.00]\n";
+    const char *expected = "400\n"
+                           "[400,2,3]\n";
     T_ASSERT_STREQ(expected, buf->chars);
 cleanup:
     unsetPrintBuf();
@@ -613,8 +613,8 @@ static int test_print_nested_array(void) {
     setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
-    const char *expected = "[[4.00],1.00,2.00,3.00]\n"
-                           "[[4.00],1.00,2.00,3.00]\n";
+    const char *expected = "[[4],1,2,3]\n"
+                           "[[4],1,2,3]\n";
 
     T_ASSERT_STREQ(expected, buf->chars);
 cleanup:
@@ -641,7 +641,7 @@ static int test_print_map(void) {
     setPrintBuf(buf, false);
     src =  "var m2 = Map(); m2[1] = 2; m2[2] = 4; print m2;";
     interp(src, true);
-    expected = "{1.00 => 2.00, 2.00 => 4.00}\n";
+    expected = "{1 => 2, 2 => 4}\n";
     ASSERT(buf->chars);
     T_ASSERT_STREQ(expected, buf->chars);
 cleanup:
@@ -660,7 +660,7 @@ static int test_closures_global_scope(void) {
     ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
-    const char *expected = "0.00\n1.00\n2.00\n3.00\n";
+    const char *expected = "0\n1\n2\n3\n";
     T_ASSERT_STREQ(expected, buf->chars);
 cleanup:
     unsetPrintBuf();
@@ -678,7 +678,7 @@ static int test_closures_env_saved(void) {
     ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
-    const char *expected = "30.00\n50.00\n";
+    const char *expected = "30\n50\n";
     T_ASSERT_STREQ(expected, buf->chars);
     T_ASSERT_EQ(0, VMNumStackFrames());
     T_ASSERT_EQ(NULL, vm.openUpvalues);
@@ -718,7 +718,7 @@ static int test_map_keys_work_as_expected(void) {
     ObjString *buf = copyString("", 0);
     setPrintBuf(buf, false);
     interp(src, true);
-    const char *expected = "9.00\n6.00\n";
+    const char *expected = "9\n6\n";
     T_ASSERT_STREQ(expected, buf->chars);
 cleanup:
     unsetPrintBuf();

@@ -152,6 +152,7 @@ extern ObjClass *lxFileClass;
 extern ObjClass *lxThreadClass;
 extern ObjModule *lxGCModule;
 extern ObjModule *lxProcessMod;
+extern ObjModule *lxIOMod;
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
 extern ObjClass *lxTypeErrClass;

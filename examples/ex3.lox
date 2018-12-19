@@ -8,4 +8,4 @@ print a*b+c;
 
 __END__
 -- expect: --
-12.00
+12

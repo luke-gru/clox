@@ -8,9 +8,14 @@
 #include "table.h"
 
 // module Process, and global process functions
+ObjModule *lxProcessMod;
 
 static Value getPid(void) {
     pid_t pid = getpid();
+    return NUMBER_VAL(pid);
+}
+static Value getPpid(void) {
+    pid_t pid = getppid();
     return NUMBER_VAL(pid);
 }
 
@@ -21,7 +26,6 @@ Value lxFork(int argCount, Value *args) {
         func = *args;
         if (!isCallable(func)) {
             throwArgErrorFmt("Expected argument 1 to be callable, is: %s", typeOfVal(func));
-            UNREACHABLE_RETURN(vm.lastErrorThrown);
         }
     }
     pid_t pid = fork();
@@ -71,6 +75,10 @@ Value lxExec(int argCount, Value *args) {
     return NUMBER_VAL(-1);
 }
 
+/**
+ * Runs the given command in a subprocess, waits for it to finish,
+ * and returns true if exited successfully from command, otherwise false.
+ */
 Value lxSystem(int argCount, Value *args) {
     CHECK_ARITY("system", 1, 1, argCount);
     Value cmd = *args;
@@ -92,11 +100,69 @@ Value lxProcessPidStatic(int argCount, Value *args) {
     return getPid();
 }
 
+Value lxProcessPpidStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.ppid", 1, 1, argCount);
+    return getPpid();
+}
+
+Value lxProcessSignalStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.signal", 3, 3, argCount);
+    CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
+    CHECK_ARG_BUILTIN_TYPE(args[2], IS_NUMBER_FUNC, "number", 2);
+    int pid = (int)AS_NUMBER(args[1]);
+    int signo = (int)AS_NUMBER(args[2]);
+    if (pid <= 0) {
+        throwErrorFmt(lxErrClass, "PID must be positive");
+    }
+    if (signo < 0) {
+        throwErrorFmt(lxErrClass, "signo must be non-negative");
+    }
+    int res = kill((pid_t)pid, signo); // man 2 kill
+    if (res == -1) {
+        fprintf(stderr, "Error sending signal: %s\n", strerror(errno));
+        return BOOL_VAL(false); // TODO: throw error
+    } else {
+        return BOOL_VAL(true);
+    }
+}
+
+static void *reapProcess(void *pidArg) {
+    long pid = (long)pidArg;
+    int wstatus = 0;
+    while (waitpid((pid_t)pid, &wstatus, 0) == 0) {
+        // ...
+    }
+    THREAD_DEBUG(3, "Reaped detached process");
+    return NULL;
+}
+
+Value lxProcessDetachStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.signal", 2, 2, argCount);
+    CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
+    long pid = (long)AS_NUMBER(args[1]);
+    if (pid <= 0) {
+        throwErrorFmt(lxErrClass, "PID must be positive");
+    }
+    if (pid == (long)AS_NUMBER(getPid())) {
+        throwErrorFmt(lxErrClass, "Can't detach current process");
+    }
+    pthread_t tnew;
+    if (pthread_create(&tnew, NULL, reapProcess, (void*)pid) == 0) {
+        return BOOL_VAL(true);
+    } else {
+        THREAD_DEBUG(3, "Error creating reaper thread for Process.detach");
+        throwErrorFmt(lxErrClass, "Error creating process reaper thread");
+    }
+}
+
 void Init_ProcessModule(void) {
     ObjModule *processMod = addGlobalModule("Process");
     ObjClass *processModStatic = moduleSingletonClass(processMod);
 
     addNativeMethod(processModStatic, "pid", lxProcessPidStatic);
+    addNativeMethod(processModStatic, "ppid", lxProcessPpidStatic);
+    addNativeMethod(processModStatic, "signal", lxProcessSignalStatic);
+    addNativeMethod(processModStatic, "detach", lxProcessDetachStatic);
 
     addGlobalFunction("fork", lxFork);
     addGlobalFunction("waitpid", lxWaitpid);

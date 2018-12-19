@@ -18,5 +18,5 @@ print circle.mycolor;
 
 __END__
 -- expect: --
-50.27
+50.2655
 color: red
