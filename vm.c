@@ -2499,8 +2499,7 @@ static InterpretResult vm_run() {
     }
   }
 
-  vmRunLvl--;
-  return INTERPRET_RUNTIME_ERROR;
+  UNREACHABLE_RETURN(INTERPRET_RUNTIME_ERROR);
 #undef READ_BYTE
 #undef READ_CONSTANT
 #undef BINARY_OP

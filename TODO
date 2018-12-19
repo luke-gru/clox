@@ -30,6 +30,8 @@ compiled lookup
 * Add Process module, with static methods 'kill', 'waitall', 'pid', 'ppid', etc.
 * Add callSuper(argCount, *args) C API function that looks at current call frame, sees the
 associated class, and calls the superclass method.
+* Add Map literals
+* Allow throwing strings, maybe wrap them in Error class
 
 Bugs
 ----
@@ -37,7 +39,6 @@ Bugs
 as singleton classes, etc.
 * super() bug in examples/super.lox
 * super bug for getters/setters (examples/super_setter.lox)
-* Allow throwing strings?
 * Nodes created during parsing are never freed. This results in memory leak
 when evaling.
 * loadScript/requireScript should use pwd of lox process during startup for

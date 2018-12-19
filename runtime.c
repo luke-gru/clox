@@ -722,7 +722,6 @@ Value lxArrayClear(int argCount, Value *args) {
 Value lxArrayToString(int argCount, Value *args) {
     CHECK_ARGS("Array#toString", 1, 1, argCount);
     Value self = *args;
-    ASSERT(IS_AN_ARRAY(self));
     Obj* selfObj = AS_OBJ(self);
     Value ret = newStringInstance(copyString("[", 1));
     ObjString *bufRet = STRING_GETHIDDEN(ret);
@@ -734,7 +733,7 @@ Value lxArrayToString(int argCount, Value *args) {
             continue;
         }
         if (IS_OBJ(elVal)) {
-            ASSERT(AS_OBJ(elVal)->type > OBJ_T_NONE);
+            DBG_ASSERT(AS_OBJ(elVal)->type > OBJ_T_NONE);
         }
         ObjString *buf = valueToString(elVal, copyString);
         pushCString(bufRet, buf->chars, strlen(buf->chars));
@@ -750,7 +749,6 @@ Value lxArrayToString(int argCount, Value *args) {
 Value lxArrayOpIndexGet(int argCount, Value *args) {
     CHECK_ARGS("Array#[]", 2, 2, argCount);
     Value self = args[0];
-    ASSERT(IS_AN_ARRAY(self));
     Value num = args[1];
     CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
     ValueArray *ary = ARRAY_GETHIDDEN(self);
@@ -770,7 +768,6 @@ Value lxArrayOpIndexGet(int argCount, Value *args) {
 Value lxArrayOpIndexSet(int argCount, Value *args) {
     CHECK_ARGS("Array#[]=", 3, 3, argCount);
     Value self = args[0];
-    ASSERT(IS_AN_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     Value num = args[1];
     Value rval = args[2];
@@ -828,7 +825,6 @@ Value lxMapInit(int argCount, Value *args) {
     // TODO: call super?
     CHECK_ARGS("Map#init", 1, -1, argCount);
     Value self = args[0];
-    ASSERT(IS_A_MAP(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalMap = newInternalObject(
         NULL, sizeof(Table), markInternalMap, freeInternalMap
@@ -870,7 +866,6 @@ Value lxMapToString(int argCount, Value *args) {
     CHECK_ARGS("Map#toString", 1, 1, argCount);
     Value self = args[0];
     Obj *selfObj = AS_OBJ(self);
-    ASSERT(IS_A_MAP(self));
     Value ret = newStringInstance(copyString("{", 1));
     ObjString *bufRet = STRING_GETHIDDEN(ret);
     Table *map = MAP_GETHIDDEN(self);
@@ -905,7 +900,6 @@ Value lxMapToString(int argCount, Value *args) {
 Value lxMapOpIndexGet(int argCount, Value *args) {
     CHECK_ARGS("Map#[]", 2, 2, argCount);
     Value self = args[0];
-    ASSERT(IS_A_MAP(self));
     Table *map = MAP_GETHIDDEN(self);
     Value key = args[1];
     Value found;
@@ -919,7 +913,6 @@ Value lxMapOpIndexGet(int argCount, Value *args) {
 Value lxMapOpIndexSet(int argCount, Value *args) {
     CHECK_ARGS("Map#[]=", 3, 3, argCount);
     Value self = args[0];
-    ASSERT(IS_A_MAP(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
@@ -934,7 +927,6 @@ Value lxMapOpIndexSet(int argCount, Value *args) {
 Value lxMapKeys(int argCount, Value *args) {
     CHECK_ARGS("Map#keys", 1, 1, argCount);
     Value self = args[0];
-    ASSERT(IS_A_MAP(self));
     Table *map = MAP_GETHIDDEN(self);
     Entry entry; int i = 0;
     Value ary = newArray();
@@ -947,7 +939,6 @@ Value lxMapKeys(int argCount, Value *args) {
 Value lxMapValues(int argCount, Value *args) {
     CHECK_ARGS("Map#values", 1, 1, argCount);
     Value self = args[0];
-    ASSERT(IS_A_MAP(self));
     Table *map = MAP_GETHIDDEN(self);
     Entry entry; int i = 0;
     Value ary = newArray();
@@ -999,7 +990,6 @@ Value lxIteratorInit(int argCount, Value *args) {
     Value iterable = args[1];
     ObjInstance *selfObj = AS_INSTANCE(self);
     Iterator *iter = ALLOCATE(Iterator, 1);
-    ASSERT_MEM(iter);
     iter->index = -1;
     iter->lastRealIndex = -1;
     iter->instance = AS_INSTANCE(iterable);
@@ -1072,7 +1062,6 @@ Value lxErrInit(int argCount, Value *args) {
     // TODO: call super?
     CHECK_ARGS("Error#init", 1, 2, argCount);
     Value self = args[0];
-    ASSERT(IS_AN_ERROR(self));
     Value msg;
     if (argCount == 2) {
         msg = args[1];
