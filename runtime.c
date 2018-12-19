@@ -23,42 +23,42 @@ const char pathSeparator =
                             '/';
 #endif
 
-// ex: CHECK_ARG_BUILTIN_TYPE(value, IS_BOOL_FUNC, "bool", 1);
-#define CHECK_ARG_BUILTIN_TYPE(value, typechk_p, typename, argnum) check_builtin_arg_type(value, typechk_p, typename, argnum)
-#define CHECK_ARG_IS_INSTANCE_OF(value, klass, argnum) check_arg_is_instance_of(value, klass, argnum)
-#define CHECK_ARG_IS_A(value, klass, argnum) check_arg_is_a(value, klass, argnum)
+void addGlobalFunction(const char *name, NativeFn func) {
+    ObjString *funcName = internedString(name, strlen(name));
+    ObjNative *natFn = newNative(funcName, func);
+    tableSet(&vm.globals, OBJ_VAL(funcName), OBJ_VAL(natFn));
+}
 
-static void check_builtin_arg_type(Value arg, value_type_p typechk_p, const char *typeExpect, int argnum) {
-    if (!typechk_p(arg)) {
-        const char *typeActual = typeOfVal(arg);
-        throwArgErrorFmt("Expected argument %d to be a %s, got: %s", argnum, typeExpect, typeActual);
-    }
+ObjClass *addGlobalClass(const char *name, ObjClass *super) {
+    ObjString *className = internedString(name, strlen(name));
+    ObjClass *objClass = newClass(className, super);
+    tableSet(&vm.globals, OBJ_VAL(className), OBJ_VAL(objClass));
+    return objClass;
 }
-static void check_arg_is_instance_of(Value arg, ObjClass *klass, int argnum) {
-    const char *typeExpect = klass->name->chars;
-    if (!is_value_instance_of_p(arg, klass)) {
-        const char *typeActual;
-        if (IS_INSTANCE(arg)) {
-            ObjString *className = AS_INSTANCE(arg)->klass->name;
-            typeActual = className ? className->chars : "(anon)";
-        } else {
-            typeActual = typeOfVal(arg);
-        }
-        throwArgErrorFmt("Expected argument %d to be of exact class %s, got: %s", argnum, typeExpect, typeActual);
-    }
+
+ObjModule *addGlobalModule(const char *name) {
+    ObjString *modName = internedString(name, strlen(name));
+    ObjModule *mod = newModule(modName);
+    tableSet(&vm.globals, OBJ_VAL(modName), OBJ_VAL(mod));
+    return mod;
 }
-static void check_arg_is_a(Value arg, ObjClass *klass, int argnum) {
-    const char *typeExpect = klass->name->chars;
-    if (!is_value_a_p(arg, klass)) {
-        const char *typeActual;
-        if (IS_INSTANCE(arg)) {
-            ObjString *className = AS_INSTANCE(arg)->klass->name;
-            typeActual = className ? className->chars : "(anon)";
-        } else {
-            typeActual = typeOfVal(arg);
-        }
-        throwArgErrorFmt("Expected argument %d to be of type %s, got: %s", argnum, typeExpect, typeActual);
-    }
+
+void addNativeMethod(void *klass, const char *name, NativeFn func) {
+    ObjString *mname = internedString(name, strlen(name));
+    ObjNative *natFn = newNative(mname, func);
+    tableSet(&((ObjModule*)klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
+}
+
+void addNativeGetter(void *klass, const char *name, NativeFn func) {
+    ObjString *mname = internedString(name, strlen(name));
+    ObjNative *natFn = newNative(mname, func);
+    tableSet(&((ObjModule*)klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
+}
+
+void addNativeSetter(void *klass, const char *name, NativeFn func) {
+    ObjString *mname = internedString(name, strlen(name));
+    ObjNative *natFn = newNative(mname, func);
+    tableSet(&((ObjModule*)klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
 }
 
 // Does this file exist and is it readable?
@@ -68,24 +68,24 @@ static bool fileReadable(char *fname) {
 }
 
 Value lxClock(int argCount, Value *args) {
-    CHECK_ARGS("clock", 0, 0, argCount);
+    CHECK_ARITY("clock", 0, 0, argCount);
     return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
 Value lxTypeof(int argCount, Value *args) {
-    CHECK_ARGS("typeof", 1, 1, argCount);
+    CHECK_ARITY("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
     return newStringInstance(copyString(strType, strlen(strType)));
 }
 
 Value lxDebugger(int argCount, Value *args) {
-    CHECK_ARGS("debugger", 0, 0, argCount);
+    CHECK_ARITY("debugger", 0, 0, argCount);
     vm.debugger.awaitingPause = true;
     return NIL_VAL;
 }
 
 Value lxEval(int argCount, Value *args) {
-    CHECK_ARGS("eval", 1, 1, argCount);
+    CHECK_ARITY("eval", 1, 1, argCount);
     Value src = *args;
     CHECK_ARG_IS_A(src, lxStringClass, 1);
     char *csrc = VAL_TO_STRING(src)->chars;
@@ -95,65 +95,8 @@ Value lxEval(int argCount, Value *args) {
     return VMEval(csrc, "(eval)", 1);
 }
 
-Value lxFork(int argCount, Value *args) {
-    CHECK_ARGS("fork", 0, 1, argCount);
-    Value func;
-    if (argCount == 1) {
-        func = *args;
-        if (!isCallable(func)) {
-            throwArgErrorFmt("Expected argument 1 to be callable, is: %s", typeOfVal(func));
-            UNREACHABLE_RETURN(vm.lastErrorThrown);
-        }
-    }
-    pid_t pid = fork();
-    if (pid < 0) { // error, TODO: should throw?
-        return NUMBER_VAL(-1);
-    }
-    if (pid) { // in parent
-        return NUMBER_VAL(pid);
-    } else { // in child
-        if (argCount == 1) {
-            callCallable(func, 0, false, NULL);
-            stopVM(0);
-        }
-        return NIL_VAL;
-    }
-}
-
-Value lxWaitpid(int argCount, Value *args) {
-    CHECK_ARGS("waitpid", 1, 1, argCount);
-    Value pidVal = *args;
-    pid_t childpid = (pid_t)AS_NUMBER(pidVal);
-    int wstatus;
-    // TODO: allow wait flags
-    releaseGVL();
-    pid_t wret = waitpid(childpid, &wstatus, 0);
-    acquireGVL();
-    if (wret == -1) { // error, should throw?
-        return NUMBER_VAL(-1);
-    }
-    return pidVal;
-}
-
-Value lxExec(int argCount, Value *args) {
-    CHECK_ARGS("exec", 1, -1, argCount);
-
-    char const *argv[argCount+2]; // FIXME: only c99
-    memset(argv, 0, sizeof(char*)*(argCount+2));
-    for (int i = 0; i < argCount; i++) {
-        CHECK_ARG_IS_A(args[i], lxStringClass, i+1);
-        ASSERT(argv[i] == NULL);
-        argv[i] = VAL_TO_STRING(args[i])->chars;
-    }
-    ASSERT(argv[argCount+1] == NULL);
-    execvp(argv[0], (char *const *)argv);
-    fprintf(stderr, "Error during exec: %s\n", strerror(errno));
-    // got here, error execing. TODO: throw error?
-    return NUMBER_VAL(-1);
-}
-
 Value lxSleep(int argCount, Value *args) {
-    CHECK_ARGS("sleep", 1, 1, argCount);
+    CHECK_ARITY("sleep", 1, 1, argCount);
     Value nsecs = *args;
     CHECK_ARG_BUILTIN_TYPE(nsecs, IS_NUMBER_FUNC, "number", 1);
     int secs = (int)AS_NUMBER(nsecs);
@@ -165,24 +108,9 @@ Value lxSleep(int argCount, Value *args) {
     return NIL_VAL;
 }
 
-Value lxSystem(int argCount, Value *args) {
-    CHECK_ARGS("system", 1, 1, argCount);
-    Value cmd = *args;
-    CHECK_ARG_IS_A(cmd, lxStringClass, 1);
-
-    const char *cmdStr = VAL_TO_STRING(cmd)->chars;
-    releaseGVL();
-    int status = system(cmdStr);
-    acquireGVL();
-    int exitStatus = WEXITSTATUS(status);
-    if (exitStatus != 0) {
-        return BOOL_VAL(false);
-    }
-    return BOOL_VAL(true);
-}
-
+// Register atExit handler for process
 Value lxAtExit(int argCount, Value *args) {
-    CHECK_ARGS("atExit", 1, 1, argCount);
+    CHECK_ARITY("atExit", 1, 1, argCount);
     Value func = *args;
     CHECK_ARG_BUILTIN_TYPE(func, IS_CLOSURE_FUNC, "function", 1);
     vec_push(&vm.exitHandlers, AS_OBJ(func));
@@ -190,10 +118,11 @@ Value lxAtExit(int argCount, Value *args) {
 }
 
 /**
+ * Exit current thread
  * ex: exit(0);
  */
 Value lxExit(int argCount, Value *args) {
-    CHECK_ARGS("exit", 1, 1, argCount);
+    CHECK_ARITY("exit", 1, 1, argCount);
     Value status = *args;
     CHECK_ARG_BUILTIN_TYPE(status, IS_NUMBER_FUNC, "number", 1);
     stopVM((int)AS_NUMBER(status));
@@ -231,7 +160,7 @@ static void *runCallableInNewThread(void *arg) {
 }
 
 Value lxNewThread(int argCount, Value *args) {
-    CHECK_ARGS("newThread", 1, 1, argCount);
+    CHECK_ARITY("newThread", 1, 1, argCount);
     Value closure = *args;
     CHECK_ARG_BUILTIN_TYPE(closure, IS_CLOSURE_FUNC, "function", 1);
     ObjClosure *func = AS_CLOSURE(closure);
@@ -242,31 +171,31 @@ Value lxNewThread(int argCount, Value *args) {
         acquireGVL();
         return NUMBER_VAL((unsigned long)tnew);
     } else {
-        THREAD_DEBUG(1, "Error creating new thread");
-        // TODO: throw error
-        return NIL_VAL;
+        // TODO: throw lxThreadErrClass
+        throwErrorFmt(lxErrClass, "Error creating new thread");
     }
 }
 
 Value lxJoinThread(int argCount, Value *args) {
-    CHECK_ARGS("joinThread", 1, 1, argCount);
+    CHECK_ARITY("joinThread", 1, 1, argCount);
     Value tidNum = *args;
     CHECK_ARG_BUILTIN_TYPE(tidNum, IS_NUMBER_FUNC, "number", 1);
     double num = AS_NUMBER(tidNum);
     THREAD_DEBUG(2, "Joining thread id %lu\n", (unsigned long)num);
     int ret = 0;
     releaseGVL();
-    // blocks
+    // blocking call until given thread ends execution
     if ((ret = pthread_join((pthread_t)num, NULL)) != 0) {
-        // TODO: throw error
         THREAD_DEBUG(1, "Error joining thread: (ret=%d)", ret);
+        // TODO: throw lxThreadErrClass
+        throwErrorFmt(lxErrClass, "Error joining thread");
     }
     acquireGVL();
     return NIL_VAL;
 }
 
 Value lxThreadInit(int argCount, Value *args) {
-    CHECK_ARGS("Thread#init", 1, 1, argCount);
+    CHECK_ARITY("Thread#init", 1, 1, argCount);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = newInternalObject(NULL, sizeof(LxThread), NULL, NULL);
@@ -321,7 +250,7 @@ static Value loadScriptHelper(Value fname, bool checkLoaded) {
         }
     }
     if (!fileFound) {
-        throwErrorFmt(lxLoadErrClass,"File '%s' not found", cfile);
+        throwErrorFmt(lxLoadErrClass, "File '%s' not found", cfile);
     }
     if (checkLoaded && VMLoadedScript(pathbuf)) {
         return BOOL_VAL(false);
@@ -343,14 +272,14 @@ static Value loadScriptHelper(Value fname, bool checkLoaded) {
 }
 
 Value lxRequireScript(int argCount, Value *args) {
-    CHECK_ARGS("requireScript", 1, 1, argCount);
+    CHECK_ARITY("requireScript", 1, 1, argCount);
     Value fname = *args;
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
     return loadScriptHelper(fname, true);
 }
 
 Value lxLoadScript(int argCount, Value *args) {
-    CHECK_ARGS("loadScript", 1, 1, argCount);
+    CHECK_ARITY("loadScript", 1, 1, argCount);
     Value fname = *args;
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
     return loadScriptHelper(fname, false);
@@ -405,7 +334,7 @@ Value lxObjectGetObjectId(int argCount, Value *args) {
 // Creates a new object, with the same properties and hidden fields
 // var o = Object(); var o2 = o.dup();
 Value lxObjectDup(int argCount, Value *args) {
-    CHECK_ARGS("Object#dup", 1, 1, argCount);
+    CHECK_ARITY("Object#dup", 1, 1, argCount);
     Value self = *args;
     if (!IS_INSTANCE(self)) {
         // Must be a module or class
@@ -428,7 +357,7 @@ Value lxObjectDup(int argCount, Value *args) {
 Value lxModuleInit(int argCount, Value *args) {
     // TODO: call super?
     Value self = *args;
-    CHECK_ARGS("Module#init", 1, 2, argCount);
+    CHECK_ARITY("Module#init", 1, 2, argCount);
     if (argCount == 1) { return self; }
     Value name = args[1];
     CHECK_ARG_IS_A(name, lxStringClass, 1);
@@ -441,7 +370,7 @@ Value lxModuleInit(int argCount, Value *args) {
 // ex: var c = Class("MyClass", Object);
 Value lxClassInit(int argCount, Value *args) {
     // TODO: call super?
-    CHECK_ARGS("Class#init", 1, 3, argCount);
+    CHECK_ARITY("Class#init", 1, 3, argCount);
     Value self = *args;
     ObjClass *klass = AS_CLASS(self);
     if (argCount == 1) {
@@ -471,7 +400,7 @@ Value lxClassInit(int argCount, Value *args) {
 
 // ex: Object.include(Mod)
 Value lxClassInclude(int argCount, Value *args) {
-    CHECK_ARGS("Class#include", 2, 2, argCount);
+    CHECK_ARITY("Class#include", 2, 2, argCount);
     Value self = args[0];
     ObjClass *klass = AS_CLASS(self);
     Value modVal = args[1];
@@ -488,7 +417,7 @@ Value lxClassInclude(int argCount, Value *args) {
 // Returns a copy of the class's name as a String
 // ex: print Object.name
 Value lxClassGetName(int argCount, Value *args) {
-    CHECK_ARGS("Class#name", 1, 1, argCount);
+    CHECK_ARITY("Class#name", 1, 1, argCount);
     Value self = args[0];
     ObjClass *klass = AS_CLASS(self);
     ObjString *origName = klass->name;
@@ -514,7 +443,7 @@ Value lxClassGetSuperclass(int argCount, Value *args) {
 // ex: var s2 = String("string");
 Value lxStringInit(int argCount, Value *args) {
     // TODO: call super?
-    CHECK_ARGS("String#init", 1, 2, argCount);
+    CHECK_ARITY("String#init", 1, 2, argCount);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (argCount == 2) {
@@ -538,13 +467,13 @@ Value lxStringInit(int argCount, Value *args) {
 }
 
 Value lxStringToString(int argCount, Value *args) {
-    CHECK_ARGS("String#toString", 1, 1, argCount);
+    CHECK_ARITY("String#toString", 1, 1, argCount);
     return *args;
 }
 
 // ex: print("hi " + "there");
 Value lxStringOpAdd(int argCount, Value *args) {
-    CHECK_ARGS("String#opAdd", 2, 2, argCount);
+    CHECK_ARITY("String#opAdd", 2, 2, argCount);
     Value self = *args;
     Value rhs = args[1];
     // TODO: maybe coerce into String with String() constructor?
@@ -561,7 +490,7 @@ Value lxStringOpAdd(int argCount, Value *args) {
 
 // var s = "hey"; s.push(" there!"); => "hey there!"
 Value lxStringPush(int argCount, Value *args) {
-    CHECK_ARGS("String#push", 2, 2, argCount);
+    CHECK_ARITY("String#push", 2, 2, argCount);
     Value self = *args;
     Value rhs = args[1];
     CHECK_ARG_IS_A(rhs, lxStringClass, 1);
@@ -573,7 +502,7 @@ Value lxStringPush(int argCount, Value *args) {
 //     print s;  => "hey"
 //     print s2; => "hey again"
 Value lxStringDup(int argCount, Value *args) {
-    CHECK_ARGS("String#dup", 1, 1, argCount);
+    CHECK_ARITY("String#dup", 1, 1, argCount);
     Value ret = lxObjectDup(argCount, args);
     ObjInstance *retInst = AS_INSTANCE(ret);
     ObjString *buf = STRING_GETHIDDEN(ret);
@@ -585,13 +514,13 @@ Value lxStringDup(int argCount, Value *args) {
 //     s.clear();
 //     print s; => ""
 Value lxStringClear(int argCount, Value *args) {
-    CHECK_ARGS("String#clear", 1, 1, argCount);
+    CHECK_ARITY("String#clear", 1, 1, argCount);
     clearString(*args);
     return *args;
 }
 
 Value lxStringInsertAt(int argCount, Value *args) {
-    CHECK_ARGS("String#insertAt", 3, 3, argCount);
+    CHECK_ARITY("String#insertAt", 3, 3, argCount);
     Value self = args[0];
     Value insert = args[1];
     Value at = args[2];
@@ -602,7 +531,7 @@ Value lxStringInsertAt(int argCount, Value *args) {
 }
 
 Value lxStringSubstr(int argCount, Value *args) {
-    CHECK_ARGS("String#substr", 3, 3, argCount);
+    CHECK_ARITY("String#substr", 3, 3, argCount);
     Value self = args[0];
     Value startIdx = args[1];
     Value len = args[2];
@@ -612,7 +541,7 @@ Value lxStringSubstr(int argCount, Value *args) {
 }
 
 Value lxStringOpIndexGet(int argCount, Value *args) {
-    CHECK_ARGS("String#[]", 2, 2, argCount);
+    CHECK_ARITY("String#[]", 2, 2, argCount);
     Value self = args[0];
     Value index = args[1];
     CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 2);
@@ -620,7 +549,7 @@ Value lxStringOpIndexGet(int argCount, Value *args) {
 }
 
 Value lxStringOpIndexSet(int argCount, Value *args) {
-    CHECK_ARGS("String#[]=", 3, 3, argCount);
+    CHECK_ARITY("String#[]=", 3, 3, argCount);
     Value self = args[0];
     Value index = args[1];
     CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 2);
@@ -632,7 +561,7 @@ Value lxStringOpIndexSet(int argCount, Value *args) {
 }
 
 Value lxStringOpEquals(int argCount, Value *args) {
-    CHECK_ARGS("String#==", 2, 2, argCount);
+    CHECK_ARITY("String#==", 2, 2, argCount);
     return BOOL_VAL(stringEquals(args[0], args[1]));
 }
 
@@ -640,7 +569,7 @@ Value lxStringOpEquals(int argCount, Value *args) {
 //     var b = ["hi", 2, Map()];
 Value lxArrayInit(int argCount, Value *args) {
     // TODO: call super?
-    CHECK_ARGS("Array#init", 1, -1, argCount);
+    CHECK_ARITY("Array#init", 1, -1, argCount);
     Value self = *args;
     DBG_ASSERT(IS_AN_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
@@ -659,7 +588,7 @@ Value lxArrayInit(int argCount, Value *args) {
 
 // ex: a.push(1);
 Value lxArrayPush(int argCount, Value *args) {
-    CHECK_ARGS("Array#push", 2, 2, argCount);
+    CHECK_ARITY("Array#push", 2, 2, argCount);
     Value self = args[0];
     arrayPush(self, args[1]);
     return self;
@@ -670,7 +599,7 @@ Value lxArrayPush(int argCount, Value *args) {
 //     print a.pop(); => 3
 //     print a; => [1,2]
 Value lxArrayPop(int argCount, Value *args) {
-    CHECK_ARGS("Array#pop", 1, 1, argCount);
+    CHECK_ARITY("Array#pop", 1, 1, argCount);
     return arrayPop(*args);
 }
 
@@ -679,7 +608,7 @@ Value lxArrayPop(int argCount, Value *args) {
 //     a.pushFront(100);
 //     print a; => [100, 1, 2, 3];
 Value lxArrayPushFront(int argCount, Value *args) {
-    CHECK_ARGS("Array#pushFront", 2, 2, argCount);
+    CHECK_ARITY("Array#pushFront", 2, 2, argCount);
     Value self = args[0];
     arrayPushFront(self, args[1]);
     return self;
@@ -691,13 +620,13 @@ Value lxArrayPushFront(int argCount, Value *args) {
 //     print a.popFront(); => 1
 //     print a; => [2,3]
 Value lxArrayPopFront(int argCount, Value *args) {
-    CHECK_ARGS("Array#popFront", 1, 1, argCount);
+    CHECK_ARITY("Array#popFront", 1, 1, argCount);
     return arrayPopFront(*args);
 }
 
 // ex: a.delete(2);
 Value lxArrayDelete(int argCount, Value *args) {
-    CHECK_ARGS("Array#delete", 2, 2, argCount);
+    CHECK_ARITY("Array#delete", 2, 2, argCount);
     Value self = args[0];
     int idx = arrayDelete(self, args[1]);
     if (idx == -1) {
@@ -709,7 +638,7 @@ Value lxArrayDelete(int argCount, Value *args) {
 
 // ex: a.clear();
 Value lxArrayClear(int argCount, Value *args) {
-    CHECK_ARGS("Array#clear", 1, 1, argCount);
+    CHECK_ARITY("Array#clear", 1, 1, argCount);
     Value self = args[0];
     arrayClear(self);
     return self;
@@ -720,7 +649,7 @@ Value lxArrayClear(int argCount, Value *args) {
 // OR
 //   a.toString(); // => [1,2,3]
 Value lxArrayToString(int argCount, Value *args) {
-    CHECK_ARGS("Array#toString", 1, 1, argCount);
+    CHECK_ARITY("Array#toString", 1, 1, argCount);
     Value self = *args;
     Obj* selfObj = AS_OBJ(self);
     Value ret = newStringInstance(copyString("[", 1));
@@ -747,7 +676,7 @@ Value lxArrayToString(int argCount, Value *args) {
 
 
 Value lxArrayOpIndexGet(int argCount, Value *args) {
-    CHECK_ARGS("Array#[]", 2, 2, argCount);
+    CHECK_ARITY("Array#[]", 2, 2, argCount);
     Value self = args[0];
     Value num = args[1];
     CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
@@ -766,7 +695,7 @@ Value lxArrayOpIndexGet(int argCount, Value *args) {
 }
 
 Value lxArrayOpIndexSet(int argCount, Value *args) {
-    CHECK_ARGS("Array#[]=", 3, 3, argCount);
+    CHECK_ARITY("Array#[]=", 3, 3, argCount);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
     Value num = args[1];
@@ -795,12 +724,12 @@ Value lxArrayOpIndexSet(int argCount, Value *args) {
 }
 
 Value lxArrayIter(int argCount, Value *args) {
-    CHECK_ARGS("Array#iter", 1, 1, argCount);
+    CHECK_ARITY("Array#iter", 1, 1, argCount);
     return createIterator(*args);
 }
 
 Value lxArrayOpEquals(int argCount, Value *args) {
-    CHECK_ARGS("Array#==", 2, 2, argCount);
+    CHECK_ARITY("Array#==", 2, 2, argCount);
     return BOOL_VAL(arrayEquals(args[0], args[1]));
 }
 
@@ -823,7 +752,7 @@ static void freeInternalMap(Obj *internalObj) {
 
 Value lxMapInit(int argCount, Value *args) {
     // TODO: call super?
-    CHECK_ARGS("Map#init", 1, -1, argCount);
+    CHECK_ARITY("Map#init", 1, -1, argCount);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalMap = newInternalObject(
@@ -863,7 +792,7 @@ Value lxMapInit(int argCount, Value *args) {
 }
 
 Value lxMapToString(int argCount, Value *args) {
-    CHECK_ARGS("Map#toString", 1, 1, argCount);
+    CHECK_ARITY("Map#toString", 1, 1, argCount);
     Value self = args[0];
     Obj *selfObj = AS_OBJ(self);
     Value ret = newStringInstance(copyString("{", 1));
@@ -898,7 +827,7 @@ Value lxMapToString(int argCount, Value *args) {
 }
 
 Value lxMapOpIndexGet(int argCount, Value *args) {
-    CHECK_ARGS("Map#[]", 2, 2, argCount);
+    CHECK_ARITY("Map#[]", 2, 2, argCount);
     Value self = args[0];
     Table *map = MAP_GETHIDDEN(self);
     Value key = args[1];
@@ -911,7 +840,7 @@ Value lxMapOpIndexGet(int argCount, Value *args) {
 }
 
 Value lxMapOpIndexSet(int argCount, Value *args) {
-    CHECK_ARGS("Map#[]=", 3, 3, argCount);
+    CHECK_ARITY("Map#[]=", 3, 3, argCount);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
@@ -925,7 +854,7 @@ Value lxMapOpIndexSet(int argCount, Value *args) {
 }
 
 Value lxMapKeys(int argCount, Value *args) {
-    CHECK_ARGS("Map#keys", 1, 1, argCount);
+    CHECK_ARITY("Map#keys", 1, 1, argCount);
     Value self = args[0];
     Table *map = MAP_GETHIDDEN(self);
     Entry entry; int i = 0;
@@ -937,7 +866,7 @@ Value lxMapKeys(int argCount, Value *args) {
 }
 
 Value lxMapValues(int argCount, Value *args) {
-    CHECK_ARGS("Map#values", 1, 1, argCount);
+    CHECK_ARITY("Map#values", 1, 1, argCount);
     Value self = args[0];
     Table *map = MAP_GETHIDDEN(self);
     Entry entry; int i = 0;
@@ -949,12 +878,12 @@ Value lxMapValues(int argCount, Value *args) {
 }
 
 Value lxMapIter(int argCount, Value *args) {
-    CHECK_ARGS("Map#iter", 1, 1, argCount);
+    CHECK_ARITY("Map#iter", 1, 1, argCount);
     return createIterator(*args);
 }
 
 Value lxMapOpEquals(int argCount, Value *args) {
-    CHECK_ARGS("Map#==", 2, 2, argCount);
+    CHECK_ARITY("Map#==", 2, 2, argCount);
     return BOOL_VAL(mapEquals(args[0], args[1]));
 }
 
@@ -985,7 +914,7 @@ static void freeInternalIter(Obj *internalObj) {
 }
 
 Value lxIteratorInit(int argCount, Value *args) {
-    CHECK_ARGS("Iterator#init", 2, 2, argCount);
+    CHECK_ARITY("Iterator#init", 2, 2, argCount);
     Value self = args[0];
     Value iterable = args[1];
     ObjInstance *selfObj = AS_INSTANCE(self);
@@ -1003,7 +932,7 @@ Value lxIteratorInit(int argCount, Value *args) {
 }
 
 Value lxIteratorNext(int argCount, Value *args) {
-    CHECK_ARGS("Iterator#next", 1, 1, argCount);
+    CHECK_ARITY("Iterator#next", 1, 1, argCount);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
     Value internalIter;
@@ -1048,7 +977,7 @@ Value lxIteratorNext(int argCount, Value *args) {
 }
 
 Value lxMapClear(int argCount, Value *args) {
-    CHECK_ARGS("Map#clear", 1, 1, argCount);
+    CHECK_ARITY("Map#clear", 1, 1, argCount);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (isFrozen((Obj*)selfObj)) {
@@ -1060,7 +989,7 @@ Value lxMapClear(int argCount, Value *args) {
 
 Value lxErrInit(int argCount, Value *args) {
     // TODO: call super?
-    CHECK_ARGS("Error#init", 1, 2, argCount);
+    CHECK_ARITY("Error#init", 1, 2, argCount);
     Value self = args[0];
     Value msg;
     if (argCount == 2) {
@@ -1075,7 +1004,7 @@ Value lxErrInit(int argCount, Value *args) {
 static char fileReadBuf[4096];
 
 Value lxFileReadStatic(int argCount, Value *args) {
-    CHECK_ARGS("File.read", 2, 2, argCount);
+    CHECK_ARITY("File.read", 2, 2, argCount);
     Value fname = args[1];
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
     ObjString *fnameStr = VAL_TO_STRING(fname);
@@ -1103,7 +1032,7 @@ Value lxFileReadStatic(int argCount, Value *args) {
 }
 
 Value lxGCStats(int argCount, Value *args) {
-    CHECK_ARGS("GC.stats", 1, 1, argCount);
+    CHECK_ARITY("GC.stats", 1, 1, argCount);
     Value map = newMap();
     Value bytesKey = newStringInstance(copyString("bytes", 5));
     mapSet(map, bytesKey, NUMBER_VAL(vm.bytesAllocated));
@@ -1111,13 +1040,48 @@ Value lxGCStats(int argCount, Value *args) {
 }
 
 Value lxGCCollect(int argCount, Value *args) {
-    CHECK_ARGS("GC.collect", 1, 1, argCount);
+    CHECK_ARITY("GC.collect", 1, 1, argCount);
     bool prevOn = turnGCOn();
     collectGarbage();
     setGCOnOff(prevOn);
     return NIL_VAL;
 }
 
-bool runtimeCheckArgs(int min, int max, int actual) {
+bool checkArity(int min, int max, int actual) {
     return min <= actual && (max >= actual || max == -1);
+}
+
+void checkBuiltinArgType(Value arg, value_type_p typechk_p, const char *typeExpect, int argnum) {
+    if (!typechk_p(arg)) {
+        const char *typeActual = typeOfVal(arg);
+        throwArgErrorFmt("Expected argument %d to be a %s, got: %s", argnum, typeExpect, typeActual);
+    }
+}
+
+void checkArgIsInstanceOf(Value arg, ObjClass *klass, int argnum) {
+    const char *typeExpect = klass->name->chars;
+    if (!is_value_instance_of_p(arg, klass)) {
+        const char *typeActual;
+        if (IS_INSTANCE(arg)) {
+            ObjString *className = AS_INSTANCE(arg)->klass->name;
+            typeActual = className ? className->chars : "(anon)";
+        } else {
+            typeActual = typeOfVal(arg);
+        }
+        throwArgErrorFmt("Expected argument %d to be of exact class %s, got: %s", argnum, typeExpect, typeActual);
+    }
+}
+
+void checkArgIsA(Value arg, ObjClass *klass, int argnum) {
+    const char *typeExpect = klass->name->chars;
+    if (!is_value_a_p(arg, klass)) {
+        const char *typeActual;
+        if (IS_INSTANCE(arg)) {
+            ObjString *className = AS_INSTANCE(arg)->klass->name;
+            typeActual = className ? className->chars : "(anon)";
+        } else {
+            typeActual = typeOfVal(arg);
+        }
+        throwArgErrorFmt("Expected argument %d to be of type %s, got: %s", argnum, typeExpect, typeActual);
+    }
 }

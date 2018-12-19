@@ -4,6 +4,7 @@ TODO
 Features
 --------
 
+* Add default ENV map-like thing as well as ARGV array [IN PROGRESS]
 * add iterNext() support for iterators
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in ruby.
@@ -14,7 +15,6 @@ interpreter
   stopVM() has to work with current thread only
 * Add File class [PARTIAL]
 * Add Class#ancestors
-* Add default ENV map-like thing as well as ARGV array
 * Add signal trap handlers (`trap(signame, fun() { })`)
 * Add Mutex class, mutexes for thread synchronization
 * release GVL after performing n instructions, or add timer thread
@@ -27,7 +27,8 @@ compiled lookup
 * Allow more constants in a chunk (more than 256 bytes)
 * Allow bigger jumps (more than 1 byte offsets)
 * Throw SyntaxError from invalid compile/parse if given flag
-* Add Process module, with static methods 'kill', 'waitall', 'pid', 'ppid', etc.
+* Add Process module, with static methods 'kill', 'waitall', 'pid', 'ppid',
+* 'pwd', etc.
 * Add callSuper(argCount, *args) C API function that looks at current call frame, sees the
 associated class, and calls the superclass method.
 * Add Map literals

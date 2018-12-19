@@ -109,7 +109,7 @@ typedef struct ObjModule ObjModule; // fwd decl
 typedef struct ObjClass {
 
   // NOTE: same fields, in same order, as instance. Can be cast to an
-  // instance.
+  // instance. Also, can be cast to an ObjModule
   Obj object;
   ObjClass *klass; // always lxClassClass
   ObjClass *singletonKlass;
@@ -117,11 +117,12 @@ typedef struct ObjClass {
   Table hiddenFields;
 
   ObjString *name;
-  ObjClass *superclass;
-  vec_void_t v_includedMods; // pointers to ObjModule
   Table methods;
   Table getters;
   Table setters;
+
+  ObjClass *superclass;
+  vec_void_t v_includedMods; // pointers to ObjModule
 } ObjClass;
 
 typedef struct ObjModule {
@@ -150,6 +151,7 @@ extern ObjClass *lxIteratorClass;
 extern ObjClass *lxFileClass;
 extern ObjClass *lxThreadClass;
 extern ObjModule *lxGCModule;
+extern ObjModule *lxProcessMod;
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
 extern ObjClass *lxTypeErrClass;

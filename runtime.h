@@ -4,8 +4,8 @@
 #include "value.h"
 #include "vm.h"
 
-#define CHECK_ARGS(func, min, max, actual) do {\
-    if (!runtimeCheckArgs(min, max, actual)) {\
+#define CHECK_ARITY(func, min, max, actual) do {\
+    if (!checkArity(min, max, actual)) {\
         if (min == max) {\
             throwArgErrorFmt("Error in %s, expected %d arg%s, got %d",\
                 func, min, max == 1 ? "" : "s", actual);\
@@ -17,7 +17,18 @@
     }\
     } while (0)
 
+// ex: CHECK_ARG_BUILTIN_TYPE(value, IS_BOOL_FUNC, "bool", 1);
+#define CHECK_ARG_BUILTIN_TYPE(value, typechk_p, typenam, argnum) checkBuiltinArgType(value, typechk_p, typenam, argnum)
+#define CHECK_ARG_IS_INSTANCE_OF(value, klass, argnum) checkArgIsInstanceOf(value, klass, argnum)
+#define CHECK_ARG_IS_A(value, klass, argnum) checkArgIsA(value, klass, argnum)
+
 extern const char pathSeparator;
+
+// Error-checking functions with macros
+bool checkArity(int min, int max, int actual);
+void checkBuiltinArgType(Value arg, value_type_p typechk_p, const char *typeExpect, int argnum);
+void checkArgIsInstanceOf(Value arg, ObjClass *klass, int argnum);
+void checkArgIsA(Value arg, ObjClass *klass, int argnum);
 
 // builtin (native) functions
 Value lxClock(int argCount, Value *args);
@@ -35,8 +46,6 @@ Value lxNewThread(int argCount, Value *args);
 Value lxJoinThread(int argCount, Value *args);
 Value lxSystem(int argCount, Value *args);
 Value lxAtExit(int argCount, Value *args);
-
-bool runtimeCheckArgs(int min, int max, int actual);
 
 // class Object
 Value lxObjectGetClass(int argCount, Value *args);
@@ -110,4 +119,15 @@ Value lxGCCollect(int argCount, Value *args);
 
 // class Error
 Value lxErrInit(int argCount, Value *args);
+
+// module Process
+void Init_ProcessModule(void);
+
+// API for adding classes/modules/methods
+void addGlobalFunction(const char *name, NativeFn func);
+ObjClass *addGlobalClass(const char *name, ObjClass *super);
+ObjModule *addGlobalModule(const char *name);
+void addNativeMethod(void *klass, const char *name, NativeFn func);
+void addNativeGetter(void *klass, const char *name, NativeFn func);
+void addNativeSetter(void *klass, const char *name, NativeFn func);
 #endif

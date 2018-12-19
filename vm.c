@@ -95,65 +95,17 @@ static bool isUnredefinableGlobal(char *name) {
 }
 
 static void defineNativeFunctions(void) {
-    ObjString *clockName = internedString("clock", 5);
-    ObjNative *clockFn = newNative(clockName, lxClock);
-    tableSet(&vm.globals, OBJ_VAL(clockName), OBJ_VAL(clockFn));
-
-    ObjString *typeofName = internedString("typeof", 6);
-    ObjNative *typeofFn = newNative(typeofName, lxTypeof);
-    tableSet(&vm.globals, OBJ_VAL(typeofName), OBJ_VAL(typeofFn));
-
-    ObjString *loadScriptName = internedString("loadScript", 10);
-    ObjNative *loadScriptFn = newNative(loadScriptName, lxLoadScript);
-    tableSet(&vm.globals, OBJ_VAL(loadScriptName), OBJ_VAL(loadScriptFn));
-
-    ObjString *reqScriptName = internedString("requireScript", 13);
-    ObjNative *reqScriptFn = newNative(reqScriptName, lxRequireScript);
-    tableSet(&vm.globals, OBJ_VAL(reqScriptName), OBJ_VAL(reqScriptFn));
-
-    ObjString *debuggerName = internedString("debugger", 8);
-    ObjNative *debuggerFn = newNative(debuggerName, lxDebugger);
-    tableSet(&vm.globals, OBJ_VAL(debuggerName), OBJ_VAL(debuggerFn));
-
-    ObjString *evalName = internedString("eval", 4);
-    ObjNative *evalFn = newNative(evalName, lxEval);
-    tableSet(&vm.globals, OBJ_VAL(evalName), OBJ_VAL(evalFn));
-
-    ObjString *forkName = internedString("fork", 4);
-    ObjNative *forkFn = newNative(forkName, lxFork);
-    tableSet(&vm.globals, OBJ_VAL(forkName), OBJ_VAL(forkFn));
-
-    ObjString *waitpidName = internedString("waitpid", 7);
-    ObjNative *waitpidFn = newNative(waitpidName, lxWaitpid);
-    tableSet(&vm.globals, OBJ_VAL(waitpidName), OBJ_VAL(waitpidFn));
-
-    ObjString *execName = internedString("exec", 4);
-    ObjNative *execFn = newNative(execName, lxExec);
-    tableSet(&vm.globals, OBJ_VAL(execName), OBJ_VAL(execFn));
-
-    ObjString *systemName = internedString("system", 6);
-    ObjNative *systemFn = newNative(systemName, lxSystem);
-    tableSet(&vm.globals, OBJ_VAL(systemName), OBJ_VAL(systemFn));
-
-    ObjString *sleepName = internedString("sleep", 5);
-    ObjNative *sleepFn = newNative(sleepName, lxSleep);
-    tableSet(&vm.globals, OBJ_VAL(sleepName), OBJ_VAL(sleepFn));
-
-    ObjString *exitName = internedString("exit", 4);
-    ObjNative *exitFn = newNative(exitName, lxExit);
-    tableSet(&vm.globals, OBJ_VAL(exitName), OBJ_VAL(exitFn));
-
-    ObjString *atExitName = internedString("atExit", 6);
-    ObjNative *atExitFn = newNative(atExitName, lxAtExit);
-    tableSet(&vm.globals, OBJ_VAL(atExitName), OBJ_VAL(atExitFn));
-
-    ObjString *newThreadName = internedString("newThread", 9);
-    ObjNative *newThreadFn = newNative(newThreadName, lxNewThread);
-    tableSet(&vm.globals, OBJ_VAL(newThreadName), OBJ_VAL(newThreadFn));
-
-    ObjString *joinThreadName = internedString("joinThread", 10);
-    ObjNative *joinThreadFn = newNative(joinThreadName, lxJoinThread);
-    tableSet(&vm.globals, OBJ_VAL(joinThreadName), OBJ_VAL(joinThreadFn));
+    addGlobalFunction("clock", lxClock);
+    addGlobalFunction("typeof", lxTypeof);
+    addGlobalFunction("loadScript", lxLoadScript);
+    addGlobalFunction("requireScript", lxRequireScript);
+    addGlobalFunction("debugger", lxDebugger);
+    addGlobalFunction("eval", lxEval);
+    addGlobalFunction("sleep", lxSleep);
+    addGlobalFunction("exit", lxExit);
+    addGlobalFunction("atExit", lxAtExit);
+    addGlobalFunction("newThread", lxNewThread);
+    addGlobalFunction("joinThread", lxJoinThread);
 }
 
 // Builtin classes:
@@ -167,6 +119,7 @@ ObjClass *lxIteratorClass;
 ObjClass *lxFileClass;
 ObjClass *lxThreadClass;
 ObjModule *lxGCModule;
+ObjModule *lxProcessMod;
 ObjClass *lxErrClass;
 ObjClass *lxArgErrClass;
 ObjClass *lxTypeErrClass;
@@ -177,33 +130,18 @@ Value lxLoadPath;
 
 static void defineNativeClasses(void) {
     // class Object
-    ObjString *objClassName = internedString("Object", 6);
-    ObjClass *objClass = newClass(objClassName, NULL);
-    tableSet(&vm.globals, OBJ_VAL(objClassName), OBJ_VAL(objClass));
-
-    ObjNative *objDupNat = newNative(internedString("dup", 3), lxObjectDup);
-    tableSet(&objClass->methods, OBJ_VAL(internedString("dup", 3)), OBJ_VAL(objDupNat));
-
-    ObjNative *objGetClassNat = newNative(internedString("_class", 6), lxObjectGetClass);
-    tableSet(&objClass->getters, OBJ_VAL(internedString("_class", 6)), OBJ_VAL(objGetClassNat));
-
-    ObjNative *objGetObjectIdNat = newNative(internedString("objectId", 8), lxObjectGetObjectId);
-    tableSet(&objClass->getters, OBJ_VAL(internedString("objectId", 8)), OBJ_VAL(objGetObjectIdNat));
-
+    ObjClass *objClass = addGlobalClass("Object", NULL);
+    addNativeMethod(objClass, "dup", lxObjectDup);
+    addNativeGetter(objClass, "_class", lxObjectGetClass);
+    addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
     lxObjClass = objClass;
 
     // class Module
-    ObjString *modClassName = internedString("Module", 6);
-    ObjClass *modClass = newClass(modClassName, objClass);
-    tableSet(&vm.globals, OBJ_VAL(modClassName), OBJ_VAL(modClass));
-
+    ObjClass *modClass = addGlobalClass("Module", objClass);
     lxModuleClass = modClass;
 
     // class Class
-    ObjString *classClassName = internedString("Class", 5);
-    ObjClass *classClass = newClass(classClassName, objClass);
-    tableSet(&vm.globals, OBJ_VAL(classClassName), OBJ_VAL(classClass));
-
+    ObjClass *classClass = addGlobalClass("Class", objClass);
     lxClassClass = classClass;
 
     // restore `klass` property of above-created classes, since <class Class>
@@ -213,225 +151,107 @@ static void defineNativeClasses(void) {
     classClass->klass = classClass;
 
     // class String
-    ObjString *stringClassName = internedString("String", 6);
-    ObjClass *stringClass = newClass(stringClassName, objClass);
-    tableSet(&vm.globals, OBJ_VAL(stringClassName), OBJ_VAL(stringClass));
-
-    ObjNative *stringInitNat = newNative(internedString("init", 4), lxStringInit);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(stringInitNat));
-
-    ObjNative *stringtoStringNat = newNative(internedString("toString", 8), lxStringToString);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(stringtoStringNat));
-
-    ObjNative *stringOpAddNat = newNative(internedString("opAdd", 5), lxStringOpAdd);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("opAdd", 5)), OBJ_VAL(stringOpAddNat));
-
-    ObjNative *stringOpIndexGetNat = newNative(internedString("opIndexGet", 10), lxStringOpIndexGet);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("opIndexGet", 10)), OBJ_VAL(stringOpIndexGetNat));
-
-    ObjNative *stringOpIndexSetNat = newNative(internedString("opIndexSet", 8), lxStringOpIndexSet);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("opIndexSet", 8)), OBJ_VAL(stringOpIndexSetNat));
-
-    ObjNative *stringOpEqNat = newNative(internedString("opEquals", 8), lxStringOpEquals);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("opEquals", 8)), OBJ_VAL(stringOpEqNat));
-
-    ObjNative *stringPushNat = newNative(internedString("push", 4), lxStringPush);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(stringPushNat));
-
-    ObjNative *stringClearNat = newNative(internedString("clear", 5), lxStringClear);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(stringClearNat));
-
-    ObjNative *stringInsertAtNat = newNative(internedString("insertAt", 8), lxStringInsertAt);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("insertAt", 8)), OBJ_VAL(stringInsertAtNat));
-
-    ObjNative *stringSubstrNat = newNative(internedString("substr", 6), lxStringSubstr);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("substr", 6)), OBJ_VAL(stringSubstrNat));
-
-
-    ObjNative *stringDupNat = newNative(internedString("dup", 3), lxStringDup);
-    tableSet(&stringClass->methods, OBJ_VAL(internedString("dup", 3)), OBJ_VAL(stringDupNat));
-
+    ObjClass *stringClass = addGlobalClass("String", objClass);
+    addNativeMethod(stringClass, "init", lxStringInit);
+    addNativeMethod(stringClass, "toString", lxStringToString);
+    addNativeMethod(stringClass, "opAdd", lxStringOpAdd);
+    addNativeMethod(stringClass, "opIndexGet", lxStringOpIndexGet);
+    addNativeMethod(stringClass, "opIndexSet", lxStringOpIndexSet);
+    addNativeMethod(stringClass, "opEquals", lxStringOpEquals);
+    addNativeMethod(stringClass, "push", lxStringPush);
+    addNativeMethod(stringClass, "clear", lxStringClear);
+    addNativeMethod(stringClass, "insertAt", lxStringInsertAt);
+    addNativeMethod(stringClass, "substr", lxStringSubstr);
+    addNativeMethod(stringClass, "dup", lxStringDup);
     lxStringClass = stringClass;
 
     // class Class
-    ObjNative *classInitNat = newNative(internedString("init", 4), lxClassInit);
-    tableSet(&classClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(classInitNat));
-
-    ObjNative *classIncludeNat = newNative(internedString("include", 7), lxClassInclude);
-    tableSet(&classClass->methods, OBJ_VAL(internedString("include", 7)), OBJ_VAL(classIncludeNat));
-
-    ObjNative *classGetSuperclassNat = newNative(internedString("_superClass", 11), lxClassGetSuperclass);
-    tableSet(&classClass->getters, OBJ_VAL(internedString("_superClass", 11)), OBJ_VAL(classGetSuperclassNat));
-
-    ObjNative *classGetNameNat = newNative(internedString("name", 4), lxClassGetName);
-    tableSet(&classClass->getters, OBJ_VAL(internedString("name", 4)), OBJ_VAL(classGetNameNat));
+    addNativeMethod(classClass, "init", lxClassInit);
+    addNativeMethod(classClass, "include", lxClassInclude);
+    addNativeGetter(classClass, "_superClass", lxClassGetSuperclass);
+    addNativeGetter(classClass, "name", lxClassGetName);
 
     // class Array
-    ObjString *arrayClassName = internedString("Array", 5);
-    ObjClass *arrayClass = newClass(arrayClassName, objClass);
-    tableSet(&vm.globals, OBJ_VAL(arrayClassName), OBJ_VAL(arrayClass));
-
+    ObjClass *arrayClass = addGlobalClass("Array", objClass);
     lxAryClass = arrayClass;
 
-    ObjNative *aryInitNat = newNative(internedString("init", 4), lxArrayInit);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(aryInitNat));
-
-    ObjNative *aryPushNat = newNative(internedString("push", 4), lxArrayPush);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("push", 4)), OBJ_VAL(aryPushNat));
-
-    ObjNative *aryPopNat = newNative(internedString("pop", 3), lxArrayPop);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("pop", 3)), OBJ_VAL(aryPopNat));
-
-    ObjNative *aryPushFrontNat = newNative(internedString("pushFront", 9), lxArrayPushFront);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("pushFront", 9)), OBJ_VAL(aryPushFrontNat));
-
-    ObjNative *aryPopFrontNat = newNative(internedString("popFront", 8), lxArrayPopFront);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("popFront", 8)), OBJ_VAL(aryPopFrontNat));
-
-    ObjNative *aryDelNat = newNative(internedString("delete", 6), lxArrayDelete);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("delete", 6)), OBJ_VAL(aryDelNat));
-
-    ObjNative *aryIdxGetNat = newNative(internedString("opIndexGet", 10), lxArrayOpIndexGet);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("opIndexGet", 10)), OBJ_VAL(aryIdxGetNat));
-
-    ObjNative *aryIdxSetNat = newNative(internedString("opIndexSet", 10), lxArrayOpIndexSet);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("opIndexSet", 10)), OBJ_VAL(aryIdxSetNat));
-
-    ObjNative *aryToStringNat = newNative(internedString("toString", 8), lxArrayToString);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(aryToStringNat));
-
-    ObjNative *aryIterNat = newNative(internedString("iter", 4), lxArrayIter);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("iter", 4)), OBJ_VAL(aryIterNat));
-
-    ObjNative *aryClearNat = newNative(internedString("clear", 5), lxArrayClear);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(aryClearNat));
-
-    ObjNative *aryOpEqNat = newNative(internedString("opEquals", 8), lxArrayOpEquals);
-    tableSet(&arrayClass->methods, OBJ_VAL(internedString("opEquals", 8)), OBJ_VAL(aryOpEqNat));
+    addNativeMethod(arrayClass, "init", lxArrayInit);
+    addNativeMethod(arrayClass, "push", lxArrayPush);
+    addNativeMethod(arrayClass, "pop", lxArrayPop);
+    addNativeMethod(arrayClass, "pushFront", lxArrayPushFront);
+    addNativeMethod(arrayClass, "popFront", lxArrayPopFront);
+    addNativeMethod(arrayClass, "delete", lxArrayDelete);
+    addNativeMethod(arrayClass, "opIndexGet", lxArrayOpIndexGet);
+    addNativeMethod(arrayClass, "opIndexSet", lxArrayOpIndexSet);
+    addNativeMethod(arrayClass, "opEquals", lxArrayOpEquals);
+    addNativeMethod(arrayClass, "toString", lxArrayToString);
+    addNativeMethod(arrayClass, "iter", lxArrayIter);
+    addNativeMethod(arrayClass, "clear", lxArrayClear);
 
     // class Map
-    ObjString *mapClassName = internedString("Map", 3);
-    ObjClass *mapClass = newClass(mapClassName, objClass);
-    tableSet(&vm.globals, OBJ_VAL(mapClassName), OBJ_VAL(mapClass));
-
+    ObjClass *mapClass = addGlobalClass("Map", objClass);
     lxMapClass = mapClass;
 
-    ObjNative *mapInitNat = newNative(internedString("init", 4), lxMapInit);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(mapInitNat));
-
-    ObjNative *mapIdxGetNat = newNative(internedString("opIndexGet", 10), lxMapOpIndexGet);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("opIndexGet", 10)), OBJ_VAL(mapIdxGetNat));
-
-    ObjNative *mapIdxSetNat = newNative(internedString("opIndexSet", 10), lxMapOpIndexSet);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("opIndexSet", 10)), OBJ_VAL(mapIdxSetNat));
-
-    ObjNative *mapOpEqNat = newNative(internedString("opEquals", 8), lxMapOpEquals);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("opEquals", 8)), OBJ_VAL(mapOpEqNat));
-
-    ObjNative *mapKeysNat = newNative(internedString("keys", 4), lxMapKeys);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("keys", 4)), OBJ_VAL(mapKeysNat));
-
-    ObjNative *mapValuesNat = newNative(internedString("values", 6), lxMapValues);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("values", 6)), OBJ_VAL(mapValuesNat));
-
-    ObjNative *mapToStringNat = newNative(internedString("toString", 8), lxMapToString);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("toString", 8)), OBJ_VAL(mapToStringNat));
-
-    ObjNative *mapIterNat = newNative(internedString("iter", 4), lxMapIter);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("iter", 4)), OBJ_VAL(mapIterNat));
+    addNativeMethod(mapClass, "init", lxMapInit);
+    addNativeMethod(mapClass, "opIndexGet", lxMapOpIndexGet);
+    addNativeMethod(mapClass, "opIndexSet", lxMapOpIndexSet);
+    addNativeMethod(mapClass, "opEquals", lxMapOpEquals);
+    addNativeMethod(mapClass, "keys", lxMapKeys);
+    addNativeMethod(mapClass, "values", lxMapValues);
+    addNativeMethod(mapClass, "toString", lxMapToString);
+    addNativeMethod(mapClass, "iter", lxMapIter);
+    addNativeMethod(mapClass, "clear", lxMapClear);
 
     // class Iterator
-    ObjString *iterClassName = internedString("Iterator", 8);
-    ObjClass *iterClass = newClass(iterClassName, objClass);
-    tableSet(&vm.globals, OBJ_VAL(iterClassName), OBJ_VAL(iterClass));
-
-    ObjNative *iterInitNat = newNative(internedString("init", 4), lxIteratorInit);
-    tableSet(&iterClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(iterInitNat));
-
-    ObjNative *iterNextNat = newNative(internedString("next", 4), lxIteratorNext);
-    tableSet(&iterClass->methods, OBJ_VAL(internedString("next", 4)), OBJ_VAL(iterNextNat));
-
+    ObjClass *iterClass = addGlobalClass("Iterator", objClass);
     lxIteratorClass = iterClass;
-    ObjNative *mapClearNat = newNative(internedString("clear", 5), lxMapClear);
-    tableSet(&mapClass->methods, OBJ_VAL(internedString("clear", 5)), OBJ_VAL(mapClearNat));
+    addNativeMethod(iterClass, "init", lxIteratorInit);
+    addNativeMethod(iterClass, "next", lxIteratorNext);
 
     // class Error
-    ObjString *errClassName = internedString("Error", 5);
-    ObjClass *errClass = newClass(errClassName, objClass);
-    tableSet(&vm.globals, OBJ_VAL(errClassName), OBJ_VAL(errClass));
-
+    ObjClass *errClass = addGlobalClass("Error", objClass);
     lxErrClass = errClass;
-
-    ObjNative *errInitNat = newNative(internedString("init", 4), lxErrInit);
-    tableSet(&errClass->methods, OBJ_VAL(internedString("init", 4)), OBJ_VAL(errInitNat));
+    addNativeMethod(errClass, "init", lxErrInit);
 
     // class ArgumentError
-    ObjString *argErrClassName = internedString("ArgumentError", 13);
-    ObjClass *argErrClass = newClass(argErrClassName, errClass);
-    tableSet(&vm.globals, OBJ_VAL(argErrClassName), OBJ_VAL(argErrClass));
-
+    ObjClass *argErrClass = addGlobalClass("ArgumentError", errClass);
     lxArgErrClass = argErrClass;
 
     // class TypeError
-    ObjString *typeErrClassName = internedString("TypeError", 9);
-    ObjClass *typeErrClass = newClass(typeErrClassName, errClass);
-    tableSet(&vm.globals, OBJ_VAL(typeErrClassName), OBJ_VAL(typeErrClass));
-
+    ObjClass *typeErrClass = addGlobalClass("TypeError", errClass);
     lxTypeErrClass = typeErrClass;
 
     // class NameError
-    ObjString *nameErrClassName = internedString("NameError", 9);
-    ObjClass *nameErrClass = newClass(nameErrClassName, errClass);
-    tableSet(&vm.globals, OBJ_VAL(nameErrClassName), OBJ_VAL(nameErrClass));
-
+    ObjClass *nameErrClass = addGlobalClass("NameError", errClass);
     lxNameErrClass = nameErrClass;
 
     // class SyntaxError
-    ObjString *syntaxErrClassName = internedString("SyntaxError", 11);
-    ObjClass *syntaxErrClass = newClass(syntaxErrClassName, errClass);
-    tableSet(&vm.globals, OBJ_VAL(syntaxErrClassName), OBJ_VAL(syntaxErrClass));
-
+    ObjClass *syntaxErrClass = addGlobalClass("SyntaxError", errClass);
     lxSyntaxErrClass = syntaxErrClass;
 
     // class LoadError
-    ObjString *loadErrClassName = internedString("LoadError", 9);
-    ObjClass *loadErrClass = newClass(loadErrClassName, errClass);
-    tableSet(&vm.globals, OBJ_VAL(loadErrClassName), OBJ_VAL(loadErrClass));
-
+    ObjClass *loadErrClass = addGlobalClass("LoadError", errClass);
     lxLoadErrClass = loadErrClass;
 
     // class File
-    ObjString *fileClassName = internedString("File", 4);
-    ObjClass *fileClass = newClass(fileClassName, objClass);
-    tableSet(&vm.globals, OBJ_VAL(fileClassName), OBJ_VAL(fileClass));
+    ObjClass *fileClass = addGlobalClass("File", objClass);
     ObjClass *fileClassStatic = classSingletonClass(fileClass);
-
     lxFileClass = fileClass;
 
-    ObjNative *fileReadNat = newNative(internedString("read", 4), lxFileReadStatic);
-    tableSet(&fileClassStatic->methods, OBJ_VAL(internedString("read", 4)), OBJ_VAL(fileReadNat));
+    addNativeMethod(fileClassStatic, "read", lxFileReadStatic);
 
     // class Thread
-    ObjString *threadClassName = internedString("Thread", 6);
-    ObjClass *threadClass = newClass(threadClassName, objClass);
-    tableSet(&vm.globals, OBJ_VAL(threadClassName), OBJ_VAL(threadClass));
-
+    ObjClass *threadClass = addGlobalClass("Thread", objClass);
     lxThreadClass = threadClass;
 
     // module GC
-    ObjString *GCModName = internedString("GC", 2);
-    ObjModule *GCModule = newModule(GCModName);
-    tableSet(&vm.globals, OBJ_VAL(GCModName), OBJ_VAL(GCModule));
-
+    ObjModule *GCModule = addGlobalModule("GC");
     ObjClass *GCClassStatic = moduleSingletonClass(GCModule);
-
-    ObjNative *GCStatsNat = newNative(internedString("stats", 5), lxGCStats);
-    tableSet(&GCClassStatic->methods, OBJ_VAL(internedString("stats", 5)), OBJ_VAL(GCStatsNat));
-
-    ObjNative *GCCollectNat = newNative(internedString("collect", 7), lxGCCollect);
-    tableSet(&GCClassStatic->methods, OBJ_VAL(internedString("collect", 7)), OBJ_VAL(GCCollectNat));
-
+    addNativeMethod(GCClassStatic, "stats", lxGCStats);
+    addNativeMethod(GCClassStatic, "collect", lxGCCollect);
     lxGCModule = GCModule;
+
+    Init_ProcessModule();
 }
 
 static void defineGlobalVariables(void) {
