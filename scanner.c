@@ -558,6 +558,8 @@ void scanAllPrint(Scanner *scan, const char *src) {
 
 char *tokStr(Token *tok) {
     if (tok->lexeme != NULL) return tok->lexeme;
+    ASSERT(tok->length > 0);
+    ASSERT(tok->start);
     char *buf = calloc(tok->length+1, 1);
     ASSERT_MEM(buf);
     memcpy(buf, tok->start, tok->length);
@@ -582,6 +584,7 @@ Token emptyTok(void) {
 Token *copyToken(Token *tok) {
     Token *ret = ALLOCATE(Token, 1);
     memcpy(ret, tok, sizeof(Token));
+    ret->alloced = false;
     return ret;
 }
 

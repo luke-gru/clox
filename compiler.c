@@ -1645,7 +1645,6 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
         *err = COMPILE_ERR_ERRNO;
         return -1;
     }
-    memset(buf, 0, st.st_size+1);
     res = (int)read(fd, buf, st.st_size);
     if (res == -1) {
         *err = COMPILE_ERR_ERRNO;

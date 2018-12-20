@@ -308,7 +308,6 @@ void freeObject(Obj *obj, bool unlink) {
             // to stick around if only the bound method needs freeing
             GC_TRACE_DEBUG(5, "Freeing bound method: p=%p", obj);
             FREE(ObjBoundMethod, obj);
-            memset(obj, 0, sizeof(ObjBoundMethod));
             break;
         }
         case OBJ_T_CLASS: {
@@ -406,8 +405,7 @@ void freeObject(Obj *obj, bool unlink) {
             string->chars = NULL;
             string->hash = 0;
             GC_TRACE_DEBUG(5, "Freeing ObjString: p=%p", obj);
-            FREE(ObjString, obj);
-            memset(obj, 0, sizeof(ObjString));
+            FREE(ObjString, string);
             break;
         }
         default: {

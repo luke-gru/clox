@@ -55,6 +55,8 @@ static ObjString *allocateString(char *chars, int length) {
     string->capacity = length;
     string->chars = chars;
     string->hash = 0; // lazily computed
+    string->isInterned = false;
+    string->isStatic = false;
     return string;
 }
 
