@@ -1131,10 +1131,7 @@ static void emitNode(Node *n) {
             double d = 0.00;
             // octal number
             if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'c' || numStr[1] == 'C')) {
-                char strBuf[numLen+1]; // XXX: c99
-                memcpy(strBuf, numStr, numLen+1);
-                strBuf[1] = '0'; // remove 'C' or 'c', replacing it with '0' for proper strtod parsing
-                d = (double)strtol(strBuf+1, NULL, 8);
+                d = (double)strtol(numStr+2, NULL, 8);
             // hex number
             } else if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'x' || numStr[1] == 'X')) {
                 d = strtod(numStr, NULL);
