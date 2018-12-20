@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <fcntl.h>
 #include "object.h"
 #include "vm.h"
@@ -12,10 +13,17 @@ ObjClass *lxFileClass;
 
 static char fileReadBuf[4096];
 
-// Does this file exist and is it readable?
-static bool fileReadable(char *fname) {
+// Does this file exist and is it accessible? If not, returns errno from stat()
+static int fileExists(char *fname) {
     struct stat buffer;
-    return (stat(fname, &buffer) == 0);
+    int last = errno;
+    if (stat(fname, &buffer) == 0) {
+        return 0;
+    } else {
+        int ret = errno;
+        errno = last;
+        return ret;
+    }
 }
 
 LxFile *fileGetHidden(Value file) {
@@ -44,41 +52,77 @@ void fileClose(Value file) {
     }
 }
 
+static int checkOpen(const char *fname, int flags, mode_t mode) {
+    int last = errno;
+    int fd = open(fname, flags, mode);
+    if (fd < 0) {
+        int err = errno;
+        errno = last;
+        const char *operation = "opening";
+        if ((mode & O_CREAT) != 0) {
+            operation = "creating";
+        }
+        throwErrorFmt(lxErrClass, "Error %s File '%s': %s", operation, fname, strerror(err));
+    }
+    return fd;
+}
+
+static FILE *checkFopen(const char *path, const char *modeStr) {
+    int last = errno;
+    FILE *f = fopen(path, modeStr);
+    if (!f) {
+        int err = errno;
+        errno = last;
+        throwErrorFmt(lxErrClass, "Error opening File '%s': %s", path, strerror(err));
+    }
+    return f;
+}
+
+static int checkFclose(FILE *stream) {
+    int last = errno;
+    int res = fclose(stream);
+    errno = last;
+    return res;
+}
+
+static void checkFerror(FILE *f, const char *op, const char *fname) {
+    int last = errno;
+    int readErr = ferror(f);
+    if (readErr != 0) {
+        int err = errno;
+        errno = last;
+        throwErrorFmt(lxErrClass, "Error %s File '%s': %s", op, fname, strerror(err));
+    }
+}
+
+static void checkFileExists(const char *fname) {
+    int err = 0;
+    if ((err = fileExists(fname)) != 0) {
+        if (err == EACCES) {
+            throwArgErrorFmt("File '%s' not accessible", fname);
+        } else {
+            throwArgErrorFmt("File '%s' error: %s", fname, strerror(err));
+        }
+    }
+}
+
 Value lxFileReadStatic(int argCount, Value *args) {
     CHECK_ARITY("File.read", 2, 2, argCount);
     Value fname = args[1];
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
     ObjString *fnameStr = VAL_TO_STRING(fname);
-    if (!fileReadable(fnameStr->chars)) {
-        if (errno == EACCES) {
-            throwArgErrorFmt("File '%s' not readable", fnameStr->chars);
-        } else {
-            throwArgErrorFmt("File '%s' not found", fnameStr->chars);
-        }
-        UNREACHABLE_RETURN(vm.lastErrorThrown);
-    }
+    checkFileExists(fnameStr->chars);
     // TODO: release and re-acquire GVL for fopen, or is it fast enough?
-    int last = errno;
-    FILE *f = fopen(fnameStr->chars, "r");
-    if (!f) {
-        int err = errno;
-        errno = last;
-        throwArgErrorFmt("Error opening File '%s': %s", fnameStr->chars, strerror(err));
-    }
+    FILE *f = checkFopen(fnameStr->chars, "r");
     ObjString *retBuf = copyString("", 0);
     Value ret = newStringInstance(retBuf);
     size_t nread;
     // TODO: release GVL() and make fileReadBuf per-thread
-    while ((nread = fread(fileReadBuf, sizeof(fileReadBuf), 1, f)) > 0) {
+    while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
         pushCString(retBuf, fileReadBuf, nread);
     }
-    int readErr = ferror(f);
-    if (readErr != 0) {
-        int err = errno;
-        errno = last;
-        throwArgErrorFmt("Error reading File '%s': %s", fnameStr->chars, strerror(err));
-    }
-    fclose(f);
+    checkFerror(f, "reading", fnameStr->chars);
+    checkFclose(f);
     return ret;
 }
 
@@ -87,7 +131,7 @@ static void markInternalFile(Obj *obj) {
     ObjInternal *internal = (ObjInternal*)obj;
     LxFile *f = (LxFile*)internal->data;
     ASSERT(f && f->name);
-    blackenObject((Obj*)f->name);
+    grayObject((Obj*)f->name);
 }
 
 static void freeInternalFile(Obj *obj) {
@@ -119,13 +163,7 @@ Value lxFileInit(int argCount, Value *args) {
     Value fname = args[1];
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
     ObjString *fnameStr = VAL_TO_STRING(fname);
-    int last = errno;
-    FILE *f = fopen(fnameStr->chars, "r+");
-    if (!f) {
-        int err = errno;
-        errno = last;
-        throwArgErrorFmt("Error opening File '%s': %s", fnameStr->chars, strerror(err));
-    }
+    FILE *f = checkFopen(fnameStr->chars, "r+");
     int fd = fileno(f);
     initFile(self, fnameStr, fd, O_RDWR);
     return self;
@@ -136,16 +174,34 @@ Value lxFileCreateStatic(int argCount, Value *args) {
     Value fname = args[1];
     // TODO: support flags and mode arguments
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
-    int mode = 0664;
-    int flags = O_CREAT|O_EXCL|O_RDWR;
+    mode_t mode = 0664;
+    int flags = O_CREAT|O_EXCL|O_RDWR|O_CLOEXEC;
     ObjString *fnameStr = VAL_TO_STRING(fname);
-    int last = errno;
-    int fd = open(fnameStr->chars, flags, mode);
-    if (fd < 0) {
-        int err = errno;
-        errno = last;
-        throwArgErrorFmt("Error creating File '%s': %s", fnameStr->chars, strerror(err));
+    int fd = checkOpen(fnameStr->chars, flags, mode);
+    Value file = OBJ_VAL(newInstance(lxFileClass));
+    initFile(file, fnameStr, fd, flags);
+    return file;
+}
+
+// Returns a File object for an opened file
+Value lxFileOpenStatic(int argCount, Value *args) {
+    CHECK_ARITY("File.open", 2, 4, argCount);
+    Value fname = args[1];
+    CHECK_ARG_IS_A(fname, lxStringClass, 1);
+    ObjString *fnameStr = VAL_TO_STRING(fname);
+    int flags = O_RDWR|O_CLOEXEC;
+    mode_t mode = 0644;
+    if (argCount > 2) {
+        Value flagsVal = args[2];
+        CHECK_ARG_BUILTIN_TYPE(flagsVal, IS_NUMBER_FUNC, "number", 2);
+        flags = (int)AS_NUMBER(flagsVal);
     }
+    if (argCount > 3) {
+        Value modeVal = args[3];
+        CHECK_ARG_BUILTIN_TYPE(modeVal, IS_NUMBER_FUNC, "number", 3);
+        mode = (mode_t)AS_NUMBER(modeVal);
+    }
+    int fd = checkOpen(fnameStr->chars, flags, mode);
     Value file = OBJ_VAL(newInstance(lxFileClass));
     initFile(file, fnameStr, fd, flags);
     return file;
@@ -179,23 +235,15 @@ Value lxFileClose(int argCount, Value *args) {
     return NIL_VAL;
 }
 
-// Returns a File object for an opened file
-/*Value lxFileOpenStatic(int argCount, Value *args) {*/
-    /*CHECK_ARITY("File.open", 2, 2, argCount);*/
-    /*Value fname = args[1];*/
-    /*CHECK_ARG_IS_A(fname, lxStringClass, 1);*/
-    /*ObjString *fnameStr = VAL_TO_STRING(fname);*/
-/*}*/
-
 void Init_FileClass(void) {
     ObjClass *fileClass = addGlobalClass("File", lxObjClass);
     ObjClass *fileStatic = classSingletonClass(fileClass);
 
-    addNativeMethod(fileClass, "init", lxFileInit);
-    addNativeMethod(fileStatic, "read", lxFileReadStatic);
-    addNativeMethod(fileClass, "write", lxFileWrite);
     addNativeMethod(fileStatic, "create", lxFileCreateStatic);
-    /*addNativeMethod(fileStatic, "open", lxFileOpenStatic);*/
+    addNativeMethod(fileStatic, "open", lxFileOpenStatic);
+    addNativeMethod(fileStatic, "read", lxFileReadStatic);
+    addNativeMethod(fileClass, "init", lxFileInit);
+    addNativeMethod(fileClass, "write", lxFileWrite);
     addNativeMethod(fileClass, "close", lxFileClose);
 
     Value fileClassVal = OBJ_VAL(fileClass);
@@ -204,6 +252,16 @@ void Init_FileClass(void) {
     setProp(fileClassVal, internedString("RDWR", 4), NUMBER_VAL(O_RDWR));
     setProp(fileClassVal, internedString("APPEND", 6), NUMBER_VAL(O_APPEND));
     setProp(fileClassVal, internedString("CREAT", 5), NUMBER_VAL(O_CREAT));
+    setProp(fileClassVal, internedString("CLOEXEC", 7), NUMBER_VAL(O_CLOEXEC));
+    setProp(fileClassVal, internedString("NOFOLLOW", 8), NUMBER_VAL(O_NOFOLLOW));
+#ifdef O_TMPFILE
+    setProp(fileClassVal, internedString("TMPFILE", 7), NUMBER_VAL(O_TMPFILE));
+#else
+    setProp(fileClassVal, internedString("TMPFILE", 7), NUMBER_VAL(0));
+#endif
+    setProp(fileClassVal, internedString("SYNC", 4), NUMBER_VAL(O_SYNC));
+    setProp(fileClassVal, internedString("TRUNC", 5), NUMBER_VAL(O_TRUNC));
+    setProp(fileClassVal, internedString("EXCL", 4), NUMBER_VAL(O_EXCL));
 
     lxFileClass = fileClass;
 }
