@@ -7,6 +7,7 @@
 
 ObjModule *lxIOMod;
 
+// FIXME: make buffers non-global for multi-threading purposes
 #define READBUF_SZ 8192
 char ioReadbuf[READBUF_SZ];
 #define WRITEBUF_SZ 8192
@@ -17,7 +18,7 @@ char ioWritebuf[WRITEBUF_SZ];
  * var readerFd = pipes[0];
  * var writerFd = pipes[1];
  */
-Value IOPipeStatic(int argCount, Value *args) {
+Value lxIOPipeStatic(int argCount, Value *args) {
     // TODO: allow flags
     CHECK_ARITY("IO.pipe", 1, 1, argCount);
     int fds[2];
@@ -34,25 +35,19 @@ Value IOPipeStatic(int argCount, Value *args) {
     return ret;
 }
 
-Value IOWriteStatic(int argCount, Value *args) {
-    CHECK_ARITY("IO.write", 3, 3, argCount);
-    CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
-    CHECK_ARG_IS_A(args[2], lxStringClass, 2);
-    int fd = (int)AS_NUMBER(args[1]);
-    const char *buf = VAL_TO_STRING(args[2])->chars;
-    size_t bufSz = strlen(buf);
-    memcpy(ioWritebuf, buf, bufSz > WRITEBUF_SZ ? WRITEBUF_SZ : bufSz);
+size_t IOWrite(int fd, const void *buf, size_t count) {
+    size_t chunkSz = count > WRITEBUF_SZ ? WRITEBUF_SZ : count;
+    memcpy(ioWritebuf, buf, chunkSz);
     size_t written = 0;
     ssize_t res = 0;
     int last = errno;
     releaseGVL();
-    while ((res = write(fd, ioWritebuf, bufSz)) > 0 && res < bufSz) {
+    while ((res = write(fd, ioWritebuf, chunkSz)) > 0 && (written += res) && written < count) {
         acquireGVL();
-        written += res;
-        bufSz -= written;
+        chunkSz -= written;
         // FIXME: buf size could be changed by another thread, maybe copy at beginning or
         // do strlen() again to check length?
-        memcpy(ioWritebuf, buf+written, bufSz > WRITEBUF_SZ ? WRITEBUF_SZ : bufSz);
+        memcpy(ioWritebuf, buf+written, chunkSz > WRITEBUF_SZ ? WRITEBUF_SZ : chunkSz);
         releaseGVL();
     }
     acquireGVL();
@@ -61,12 +56,22 @@ Value IOWriteStatic(int argCount, Value *args) {
         errno = last;
         throwErrorFmt(lxErrClass, "Error during write: %s", strerror(err));
     }
-    written += res;
+    return written;
+}
+
+Value lxIOWriteStatic(int argCount, Value *args) {
+    CHECK_ARITY("IO.write", 3, 3, argCount);
+    CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
+    CHECK_ARG_IS_A(args[2], lxStringClass, 2);
+    int fd = (int)AS_NUMBER(args[1]);
+    const char *buf = VAL_TO_STRING(args[2])->chars;
+    size_t bufSz = strlen(buf);
+    size_t written = IOWrite(fd, buf, bufSz);
     return NUMBER_VAL(written);
 }
 
 
-Value IOReadStatic(int argCount, Value *args) {
+Value lxIOReadStatic(int argCount, Value *args) {
     CHECK_ARITY("IO.read", 2, 2, argCount);
     CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
     int fd = (int)AS_NUMBER(args[1]);
@@ -94,7 +99,7 @@ Value IOReadStatic(int argCount, Value *args) {
     return ret;
 }
 
-Value IOCloseStatic(int argCount, Value *args) {
+Value lxIOCloseStatic(int argCount, Value *args) {
     CHECK_ARITY("IO.close", 2, 2, argCount);
     CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
     int fd = (int)AS_NUMBER(args[1]);
@@ -113,8 +118,8 @@ void Init_IOModule(void) {
     lxIOMod = ioMod;
     ObjClass *ioStatic = moduleSingletonClass(ioMod);
 
-    addNativeMethod(ioStatic, "pipe", IOPipeStatic);
-    addNativeMethod(ioStatic, "write", IOWriteStatic);
-    addNativeMethod(ioStatic, "read", IOReadStatic);
-    addNativeMethod(ioStatic, "close", IOCloseStatic);
+    addNativeMethod(ioStatic, "read", lxIOReadStatic);
+    addNativeMethod(ioStatic, "write", lxIOWriteStatic);
+    addNativeMethod(ioStatic, "close", lxIOCloseStatic);
+    addNativeMethod(ioStatic, "pipe", lxIOPipeStatic);
 }

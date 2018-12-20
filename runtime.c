@@ -524,8 +524,8 @@ Value lxStringInsertAt(int argCount, Value *args) {
     Value self = args[0];
     Value insert = args[1];
     Value at = args[2];
-    // TODO: check types
-
+    CHECK_ARG_IS_A(insert, lxStringClass, 1);
+    CHECK_ARG_BUILTIN_TYPE(at, IS_NUMBER_FUNC, "number", 2);
     stringInsertAt(self, insert, (int)AS_NUMBER(at));
     return self;
 }
@@ -535,8 +535,8 @@ Value lxStringSubstr(int argCount, Value *args) {
     Value self = args[0];
     Value startIdx = args[1];
     Value len = args[2];
-    CHECK_ARG_BUILTIN_TYPE(startIdx, IS_NUMBER_FUNC, "number", 2);
-    CHECK_ARG_BUILTIN_TYPE(len, IS_NUMBER_FUNC, "number", 3);
+    CHECK_ARG_BUILTIN_TYPE(startIdx, IS_NUMBER_FUNC, "number", 1);
+    CHECK_ARG_BUILTIN_TYPE(len, IS_NUMBER_FUNC, "number", 2);
     return stringSubstr(self, AS_NUMBER(startIdx), AS_NUMBER(len));
 }
 
@@ -544,7 +544,7 @@ Value lxStringOpIndexGet(int argCount, Value *args) {
     CHECK_ARITY("String#[]", 2, 2, argCount);
     Value self = args[0];
     Value index = args[1];
-    CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 2);
+    CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 1);
     return stringIndexGet(self, AS_NUMBER(index));
 }
 
@@ -552,7 +552,7 @@ Value lxStringOpIndexSet(int argCount, Value *args) {
     CHECK_ARITY("String#[]=", 3, 3, argCount);
     Value self = args[0];
     Value index = args[1];
-    CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 2);
+    CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 1);
     Value chrStr = args[1];
     CHECK_ARG_IS_A(chrStr, lxStringClass, 3);
     char chr = VAL_TO_STRING(chrStr)->chars[0];
@@ -999,36 +999,6 @@ Value lxErrInit(int argCount, Value *args) {
     }
     setProp(self, internedString("message", 7), msg);
     return self;
-}
-
-static char fileReadBuf[4096];
-
-Value lxFileReadStatic(int argCount, Value *args) {
-    CHECK_ARITY("File.read", 2, 2, argCount);
-    Value fname = args[1];
-    CHECK_ARG_IS_A(fname, lxStringClass, 1);
-    ObjString *fnameStr = VAL_TO_STRING(fname);
-    if (!fileReadable(fnameStr->chars)) {
-        if (errno == EACCES) {
-            throwArgErrorFmt("File '%s' not readable", fnameStr->chars);
-        } else {
-            throwArgErrorFmt("File '%s' not found", fnameStr->chars);
-        }
-        UNREACHABLE_RETURN(vm.lastErrorThrown);
-    }
-    // TODO: release and re-acquire GVL for fopen, or is it fast enough?
-    FILE *f = fopen(fnameStr->chars, "r");
-    if (!f) {
-        throwArgErrorFmt("Error reading File '%s': %s", fnameStr->chars, strerror(errno));
-    }
-    ObjString *retBuf = copyString("", 0);
-    Value ret = newStringInstance(retBuf);
-    size_t nread;
-    while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
-        pushCString(retBuf, fileReadBuf, nread);
-    }
-    fclose(f);
-    return ret;
 }
 
 Value lxGCStats(int argCount, Value *args) {

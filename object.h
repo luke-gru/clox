@@ -187,6 +187,14 @@ typedef struct LxThread {
     ThreadStatus status;
 } LxThread;
 
+// file internals
+typedef struct LxFile {
+    int fd;
+    int oflags; // open flags
+    bool isOpen;
+    ObjString *name; // copied
+} LxFile;
+
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))
 #define IS_FUNCTION(value)      (isObjType(value, OBJ_T_FUNCTION))
 #define IS_CLOSURE(value)       (isObjType(value, OBJ_T_CLOSURE))
@@ -265,6 +273,7 @@ typedef struct LxThread {
 #define MAP_GETHIDDEN(mapVal)     (mapGetHidden(mapVal))
 
 #define STRING_GETHIDDEN(stringVal) (stringGetHidden(stringVal))
+#define FILE_GETHIDDEN(fileVal) (fileGetHidden(fileVal))
 
 // strings (internal)
 typedef ObjString *(*newStringFunc)(char *chars, int length);
@@ -339,6 +348,13 @@ ThreadStatus threadGetStatus(Value thread);
 pthread_t threadGetId(Value thread);
 Value newThread(void);
 LxThread *threadGetInternal(Value thread);
+
+// IO
+size_t IOWrite(int fd, const void *buf, size_t count);
+
+// files
+LxFile *fileGetInternal(Value file);
+void fileClose(Value file);
 
 // Object creation functions
 ObjFunction *newFunction(Chunk *chunk, Node *funcNode);

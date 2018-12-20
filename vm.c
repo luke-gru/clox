@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <setjmp.h>
 #include <signal.h>
+#include <unistd.h>
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
@@ -55,6 +56,7 @@ static void vm_warn(const char *format, ...) {
 
 static void stacktraceHandler(int sig, siginfo_t *si, void *unused) {
     fprintf(stderr, "Got SIGSEGV at address: 0x%lx\n", (long)si->si_addr);
+    fprintf(stderr, "VM initialized: %s\n", vm.inited ? "true" : "false");
     diePrintCBacktrace("info:");
 }
 
@@ -116,7 +118,6 @@ ObjClass *lxModuleClass;
 ObjClass *lxAryClass;
 ObjClass *lxMapClass;
 ObjClass *lxIteratorClass;
-ObjClass *lxFileClass;
 ObjClass *lxThreadClass;
 ObjModule *lxGCModule;
 ObjClass *lxErrClass;
@@ -233,13 +234,6 @@ static void defineNativeClasses(void) {
     ObjClass *loadErrClass = addGlobalClass("LoadError", errClass);
     lxLoadErrClass = loadErrClass;
 
-    // class File
-    ObjClass *fileClass = addGlobalClass("File", objClass);
-    ObjClass *fileClassStatic = classSingletonClass(fileClass);
-    lxFileClass = fileClass;
-
-    addNativeMethod(fileClassStatic, "read", lxFileReadStatic);
-
     // class Thread
     ObjClass *threadClass = addGlobalClass("Thread", objClass);
     lxThreadClass = threadClass;
@@ -253,6 +247,7 @@ static void defineNativeClasses(void) {
 
     // order of initialization not important here
     Init_ProcessModule();
+    Init_FileClass();
     Init_IOModule();
 }
 
@@ -2545,7 +2540,7 @@ NORETURN void stopVM(int status) {
     runAtExitHooks();
     resetStack();
     freeVM();
-    exit(status);
+    _exit(status);
 }
 
 void acquireGVL(void) {
