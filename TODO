@@ -27,8 +27,7 @@ compiled lookup
 * Allow more constants in a chunk (more than 256 bytes)
 * Allow bigger jumps (more than 1 byte offsets)
 * Throw SyntaxError from invalid compile/parse if given flag
-* Add Process module, with static methods 'kill', 'waitall', 'pid', 'ppid',
-* 'pwd', etc.
+* Add Process module, with static methods 'waitall'
 * Add callSuper(argCount, *args) C API function that looks at current call frame, sees the
 associated class, and calls the superclass method.
 * Add Map literals
@@ -36,6 +35,7 @@ associated class, and calls the superclass method.
 
 Bugs
 ----
+* Method lookup is bugged, instances get methods from static methods
 * Fix method lookup, look in modules for instances and classes/modules as well
 as singleton classes, etc.
 * super() bug in examples/super.lox

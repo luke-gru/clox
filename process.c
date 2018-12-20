@@ -7,6 +7,11 @@
 #include "runtime.h"
 #include "table.h"
 
+// TODO: find right header
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
 // module Process, and global process functions
 ObjModule *lxProcessMod;
 
@@ -19,7 +24,7 @@ static Value getPpid(void) {
     return NUMBER_VAL(pid);
 }
 
-Value lxFork(int argCount, Value *args) {
+static Value lxFork(int argCount, Value *args) {
     CHECK_ARITY("fork", 0, 1, argCount);
     Value func;
     if (argCount == 1) {
@@ -43,7 +48,7 @@ Value lxFork(int argCount, Value *args) {
     }
 }
 
-Value lxWaitpid(int argCount, Value *args) {
+static Value lxWaitpid(int argCount, Value *args) {
     CHECK_ARITY("waitpid", 1, 1, argCount);
     Value pidVal = *args;
     pid_t childpid = (pid_t)AS_NUMBER(pidVal);
@@ -58,7 +63,7 @@ Value lxWaitpid(int argCount, Value *args) {
     return pidVal;
 }
 
-Value lxExec(int argCount, Value *args) {
+static Value lxExec(int argCount, Value *args) {
     CHECK_ARITY("exec", 1, -1, argCount);
 
     char const *argv[argCount+2]; // XXX: only c99
@@ -79,7 +84,7 @@ Value lxExec(int argCount, Value *args) {
  * Runs the given command in a subprocess, waits for it to finish,
  * and returns true if exited successfully from command, otherwise false.
  */
-Value lxSystem(int argCount, Value *args) {
+static Value lxSystem(int argCount, Value *args) {
     CHECK_ARITY("system", 1, 1, argCount);
     Value cmd = *args;
     CHECK_ARG_IS_A(cmd, lxStringClass, 1);
@@ -100,12 +105,12 @@ Value lxProcessPidStatic(int argCount, Value *args) {
     return getPid();
 }
 
-Value lxProcessPpidStatic(int argCount, Value *args) {
+static Value lxProcessPpidStatic(int argCount, Value *args) {
     CHECK_ARITY("Process.ppid", 1, 1, argCount);
     return getPpid();
 }
 
-Value lxProcessSignalStatic(int argCount, Value *args) {
+static Value lxProcessSignalStatic(int argCount, Value *args) {
     CHECK_ARITY("Process.signal", 3, 3, argCount);
     CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
     CHECK_ARG_BUILTIN_TYPE(args[2], IS_NUMBER_FUNC, "number", 2);
@@ -136,7 +141,7 @@ static void *reapProcess(void *pidArg) {
     return NULL;
 }
 
-Value lxProcessDetachStatic(int argCount, Value *args) {
+static Value lxProcessDetachStatic(int argCount, Value *args) {
     CHECK_ARITY("Process.signal", 2, 2, argCount);
     CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
     long pid = (long)AS_NUMBER(args[1]);
@@ -155,6 +160,18 @@ Value lxProcessDetachStatic(int argCount, Value *args) {
     }
 }
 
+static Value lxProcessPwdStatic(int argCount, Value *args) {
+    char buf[PATH_MAX];
+    int last = errno;
+    char *res = getcwd(buf, PATH_MAX);
+    if (res == NULL) {
+        int err = errno;
+        errno = last;
+        throwErrorFmt(lxErrClass, "Cannot retrieve current directory: %s", strerror(err));
+    }
+    return newStringInstance(copyString(buf, strlen(buf)));
+}
+
 void Init_ProcessModule(void) {
     ObjModule *processMod = addGlobalModule("Process");
     ObjClass *processModStatic = moduleSingletonClass(processMod);
@@ -163,6 +180,7 @@ void Init_ProcessModule(void) {
     addNativeMethod(processModStatic, "ppid", lxProcessPpidStatic);
     addNativeMethod(processModStatic, "signal", lxProcessSignalStatic);
     addNativeMethod(processModStatic, "detach", lxProcessDetachStatic);
+    addNativeMethod(processModStatic, "pwd", lxProcessPwdStatic);
 
     addGlobalFunction("fork", lxFork);
     addGlobalFunction("waitpid", lxWaitpid);

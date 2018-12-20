@@ -597,7 +597,7 @@ void collectGarbage(void) {
     unsigned long numObjectsFreed = 0;
     unsigned long numObjectsKept = 0;
     unsigned long numObjectsHiddenNotMarked = 0;
-    bool cycleFound = false;
+    bool cycleFound = false; (void)cycleFound;
     while (object != NULL) {
         ASSERT(object->type > OBJ_T_NONE);
         ASSERT(object->isLinked);

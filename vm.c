@@ -116,7 +116,6 @@ ObjClass *lxStringClass;
 ObjClass *lxClassClass;
 ObjClass *lxModuleClass;
 ObjClass *lxAryClass;
-ObjClass *lxMapClass;
 ObjClass *lxIteratorClass;
 ObjClass *lxThreadClass;
 ObjModule *lxGCModule;
@@ -151,20 +150,7 @@ static void defineNativeClasses(void) {
     modClass->klass = classClass;
     classClass->klass = classClass;
 
-    // class String
-    ObjClass *stringClass = addGlobalClass("String", objClass);
-    addNativeMethod(stringClass, "init", lxStringInit);
-    addNativeMethod(stringClass, "toString", lxStringToString);
-    addNativeMethod(stringClass, "opAdd", lxStringOpAdd);
-    addNativeMethod(stringClass, "opIndexGet", lxStringOpIndexGet);
-    addNativeMethod(stringClass, "opIndexSet", lxStringOpIndexSet);
-    addNativeMethod(stringClass, "opEquals", lxStringOpEquals);
-    addNativeMethod(stringClass, "push", lxStringPush);
-    addNativeMethod(stringClass, "clear", lxStringClear);
-    addNativeMethod(stringClass, "insertAt", lxStringInsertAt);
-    addNativeMethod(stringClass, "substr", lxStringSubstr);
-    addNativeMethod(stringClass, "dup", lxStringDup);
-    lxStringClass = stringClass;
+    Init_StringClass();
 
     // class Class
     addNativeMethod(classClass, "init", lxClassInit);
@@ -189,19 +175,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(arrayClass, "iter", lxArrayIter);
     addNativeMethod(arrayClass, "clear", lxArrayClear);
 
-    // class Map
-    ObjClass *mapClass = addGlobalClass("Map", objClass);
-    lxMapClass = mapClass;
-
-    addNativeMethod(mapClass, "init", lxMapInit);
-    addNativeMethod(mapClass, "opIndexGet", lxMapOpIndexGet);
-    addNativeMethod(mapClass, "opIndexSet", lxMapOpIndexSet);
-    addNativeMethod(mapClass, "opEquals", lxMapOpEquals);
-    addNativeMethod(mapClass, "keys", lxMapKeys);
-    addNativeMethod(mapClass, "values", lxMapValues);
-    addNativeMethod(mapClass, "toString", lxMapToString);
-    addNativeMethod(mapClass, "iter", lxMapIter);
-    addNativeMethod(mapClass, "clear", lxMapClear);
+    Init_MapClass();
 
     // class Iterator
     ObjClass *iterClass = addGlobalClass("Iterator", objClass);

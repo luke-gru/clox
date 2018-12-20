@@ -37,14 +37,10 @@ Value lxLoadScript(int argCount, Value *args);
 Value lxRequireScript(int argCount, Value *args);
 Value lxDebugger(int argCount, Value *args);
 Value lxEval(int argCount, Value *args);
-Value lxFork(int argCount, Value *args);
-Value lxExec(int argCount, Value *args);
-Value lxWaitpid(int argCount, Value *args);
 Value lxSleep(int argCount, Value *args);
 Value lxExit(int argCount, Value *args);
 Value lxNewThread(int argCount, Value *args);
 Value lxJoinThread(int argCount, Value *args);
-Value lxSystem(int argCount, Value *args);
 Value lxAtExit(int argCount, Value *args);
 
 // class Object
@@ -64,16 +60,6 @@ Value lxClassGetName(int argCount, Value *args);
 
 // class String
 Value lxStringInit(int argCount, Value *args);
-Value lxStringToString(int argCount, Value *args);
-Value lxStringPush(int argCount, Value *args);
-Value lxStringClear(int argCount, Value *args);
-Value lxStringDup(int argCount, Value *args);
-Value lxStringInsertAt(int argCount, Value *args);
-Value lxStringSubstr(int argCount, Value *args);
-Value lxStringOpAdd(int argCount, Value *args);
-Value lxStringOpIndexGet(int argCount, Value *args);
-Value lxStringOpIndexSet(int argCount, Value *args);
-Value lxStringOpEquals(int argCount, Value *args);
 
 // class Array
 Value lxArrayInit(int argCount, Value *args);
@@ -91,15 +77,6 @@ Value lxArrayOpEquals(int argCount, Value *args);
 
 // class Map
 Value lxMapInit(int argCount, Value *args);
-Value lxMapToString(int argCount, Value *args);
-Value lxMapKeys(int argCount, Value *args);
-Value lxMapValues(int argCount, Value *args);
-Value lxMapToString(int argCount, Value *args);
-Value lxMapIter(int argCount, Value *args);
-Value lxMapClear(int argCount, Value *args);
-Value lxMapOpEquals(int argCount, Value *args);
-Value lxMapOpIndexGet(int argCount, Value *args);
-Value lxMapOpIndexSet(int argCount, Value *args);
 
 // class Iterator
 Value lxIteratorInit(int argCount, Value *args);
@@ -120,12 +97,16 @@ Value lxGCCollect(int argCount, Value *args);
 // class Error
 Value lxErrInit(int argCount, Value *args);
 
-// module Process
-void Init_ProcessModule(void);
+// class String
+void Init_StringClass(void);
+// class Map
+void Init_MapClass(void);
 // module IO
 void Init_IOModule(void);
 // class File
 void Init_FileClass(void);
+// module Process
+void Init_ProcessModule(void);
 
 // API for adding classes/modules/methods
 void addGlobalFunction(const char *name, NativeFn func);
