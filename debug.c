@@ -43,6 +43,10 @@ const char *opName(OpCode code) {
         return "OP_MULTIPLY";
     case OP_DIVIDE:
         return "OP_DIVIDE";
+    case OP_XOR:
+        return "OP_XOR";
+    case OP_XAND:
+        return "OP_XAND";
     case OP_NEGATE:
         return "OP_NEGATE";
     case OP_NOT:
@@ -521,6 +525,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_SUBTRACT:
         case OP_MULTIPLY:
         case OP_DIVIDE:
+        case OP_XOR:
+        case OP_XAND:
         case OP_LESS:
         case OP_GREATER:
         case OP_GREATER_EQUAL:
@@ -605,6 +611,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_SUBTRACT:
         case OP_MULTIPLY:
         case OP_DIVIDE:
+        case OP_XOR:
+        case OP_XAND:
         case OP_LESS:
         case OP_GREATER:
         case OP_GREATER_EQUAL:

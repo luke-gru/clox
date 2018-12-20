@@ -161,6 +161,7 @@ static Node *logicAnd(void);
 static Node *equality(void);
 static Node *comparison(void);
 static Node *addition(void);
+static Node *byteManip(void);
 static Node *multiplication(void);
 static Node *unary(void);
 static Node *call(void);
@@ -982,22 +983,43 @@ static Node *comparison() {
 
 static Node *addition() {
     TRACE_START("addition");
-    Node *left = multiplication();
+    Node *left = byteManip();
     while (match(TOKEN_PLUS) || match(TOKEN_MINUS)) {
-        TRACE_START("binaryExpr");
+        TRACE_START("binaryExpr (+/-)");
         Token addTok = current->previous;
         node_type_t addT = {
             .type = NODE_EXPR,
             .kind = BINARY_EXPR,
         };
         Node *addNode = createNode(addT, addTok, NULL);
-        Node *right = multiplication();
+        Node *right = byteManip();
         nodeAddChild(addNode, left);
         nodeAddChild(addNode, right);
         left = addNode;
-        TRACE_END("binaryExpr");
+        TRACE_END("binaryExpr (+/-)");
     }
     TRACE_END("addition");
+    return left;
+}
+
+static Node *byteManip() {
+    TRACE_START("byteManip");
+    Node *left = multiplication();
+    while (match(TOKEN_XOR) || match(TOKEN_XAND)) {
+        TRACE_START("binaryExpr (|,&)");
+        Token byteTok = current->previous;
+        node_type_t binT = {
+            .type = NODE_EXPR,
+            .kind = BINARY_EXPR,
+        };
+        Node *n = createNode(binT, byteTok, NULL);
+        Node *right = multiplication();
+        nodeAddChild(n, left);
+        nodeAddChild(n, right);
+        left = n;
+        TRACE_END("binaryExpr (|,&)");
+    }
+    TRACE_END("byteManip");
     return left;
 }
 

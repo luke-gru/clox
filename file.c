@@ -198,5 +198,12 @@ void Init_FileClass(void) {
     /*addNativeMethod(fileStatic, "open", lxFileOpenStatic);*/
     addNativeMethod(fileClass, "close", lxFileClose);
 
+    Value fileClassVal = OBJ_VAL(fileClass);
+    setProp(fileClassVal, internedString("RDONLY", 6), NUMBER_VAL(O_RDONLY));
+    setProp(fileClassVal, internedString("WRONLY", 6), NUMBER_VAL(O_WRONLY));
+    setProp(fileClassVal, internedString("RDWR", 4), NUMBER_VAL(O_RDWR));
+    setProp(fileClassVal, internedString("APPEND", 6), NUMBER_VAL(O_APPEND));
+    setProp(fileClassVal, internedString("CREAT", 5), NUMBER_VAL(O_CREAT));
+
     lxFileClass = fileClass;
 }

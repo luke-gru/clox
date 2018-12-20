@@ -808,7 +808,7 @@ ObjString *stringGetHidden(Value instance) {
 }
 
 Value getProp(Value self, ObjString *propName) {
-    ASSERT(IS_INSTANCE(self));
+    ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
     Value ret;
     if (tableGet(&inst->fields, OBJ_VAL(propName), &ret)) {
@@ -819,7 +819,7 @@ Value getProp(Value self, ObjString *propName) {
 }
 
 Value getHiddenProp(Value self, ObjString *propName) {
-    ASSERT(IS_INSTANCE(self));
+    ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
     Value ret;
     if (tableGet(&inst->hiddenFields, OBJ_VAL(propName), &ret)) {
@@ -831,7 +831,7 @@ Value getHiddenProp(Value self, ObjString *propName) {
 
 // NOTE: doesn't check frozenness of `self`
 void setProp(Value self, ObjString *propName, Value val) {
-    ASSERT(IS_INSTANCE(self));
+    ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
     tableSet(&inst->fields, OBJ_VAL(propName), val);
 }

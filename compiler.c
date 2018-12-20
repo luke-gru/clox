@@ -1084,6 +1084,10 @@ static void emitNode(Node *n) {
             emitOp0(OP_GREATER_EQUAL);
         } else if (n->tok.type == TOKEN_EQUAL_EQUAL) {
             emitOp0(OP_EQUAL);
+        } else if (n->tok.type == TOKEN_XOR) {
+            emitOp0(OP_XOR);
+        } else if (n->tok.type == TOKEN_XAND) {
+            emitOp0(OP_XAND);
         } else {
             UNREACHABLE("invalid binary expr node (token: %s)", tokStr(&n->tok));
         }
