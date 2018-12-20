@@ -83,6 +83,7 @@ typedef struct Token {
   char *lexeme; // lazily computed, could be NULL. See `tokStr()`
   int length; // not including NULL byte
   int line;
+  bool alloced; // is lexeme allocated separately? If so, can be freed
 } Token;
 
 typedef struct Scanner {

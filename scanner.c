@@ -60,6 +60,16 @@ static bool isDigit(char c) {
   return c >= '0' && c <= '9';
 }
 
+// Returns true if `c` is a valid hex char
+static bool isHex(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+        (c >= 'A' && c <= 'F');
+}
+
+static bool isOct(char c) {
+    return (c >= '0' && c <= '7');
+}
+
 // Returns true if `c` is an English letter, underscore, or digit.
 static bool isAlphaNumeric(char c) {
   return isAlpha(c) || isDigit(c);
@@ -112,6 +122,7 @@ static Token makeToken(TokenType type) {
   token.length = (int)(current->current - current->tokenStart);
   token.lexeme = NULL; // only created on demand, see tokStr()
   token.line = current->line;
+  token.alloced = false;
   if (CLOX_OPTION_T(debugTokens)) {
       fprintf(stderr, "Tok: %s -> '%s'\n", tokTypeStr(type), tokStr(&token));
   }
@@ -198,13 +209,28 @@ static Token identifier() {
       token.start = numBuf;
       token.length = strlen(numBuf);
       token.lexeme = numBuf;
+      token.alloced = true;
       return token;
   }
 
   return makeToken(type);
 }
 
-static Token number() {
+static Token number(char cur) {
+  char next = '\0';
+  // octal number (ex: 0c644)
+  if (cur == '0' && ((next = peek()) == 'c' || next == 'C')) {
+      advance();
+      while (isOct(peek())) advance();
+      return makeToken(TOKEN_NUMBER);
+  }
+  // hex number (ex: 0xff)
+  if (cur == '0' && ((next = peek()) == 'x' || next == 'X')) {
+      advance();
+      while (isHex(peek())) advance();
+      return makeToken(TOKEN_NUMBER);
+  }
+  // decimal number
   while (isDigit(peek())) advance();
 
   // Look for a fractional part.
@@ -299,6 +325,7 @@ static Token singleQuotedString(bool isStatic) {
     tok.start = newBuf;
     tok.length = strlen(newBuf);
     tok.lexeme = newBuf;
+    tok.alloced = true;
     if (CLOX_OPTION_T(debugTokens)) {
         fprintf(stderr, "  after replacements: '%s'\n", newBuf);
     }
@@ -313,7 +340,7 @@ Token scanToken(void) {
 
   char c = advance();
 
-  if (isDigit(c)) return number();
+  if (isDigit(c)) return number(c);
 
   switch (c) {
     case '(': return makeToken(TOKEN_LEFT_PAREN);
@@ -535,6 +562,7 @@ char *tokStr(Token *tok) {
     ASSERT_MEM(buf);
     memcpy(buf, tok->start, tok->length);
     tok->lexeme = buf;
+    tok->alloced = true;
     return buf;
 }
 
@@ -545,6 +573,7 @@ Token emptyTok(void) {
         .lexeme = NULL,
         .length = 0,
         .line = 0,
+        .alloced = false,
     };
     return t;
 }
@@ -561,5 +590,6 @@ Token syntheticToken(const char *lexeme) {
     tok.start = lexeme;
     tok.length = strlen(lexeme);
     tok.lexeme = lexeme;
+    tok.alloced = false;
     return tok;
 }

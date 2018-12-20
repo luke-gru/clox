@@ -1126,7 +1126,21 @@ static void emitNode(Node *n) {
     case LITERAL_EXPR: {
         if (n->tok.type == TOKEN_NUMBER) {
             // TODO: handle strtod error condition
-            double d = strtod(tokStr(&n->tok), NULL);
+            const char *numStr = tokStr(&n->tok);
+            size_t numLen = strlen(numStr);
+            double d = 0.00;
+            // octal number
+            if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'c' || numStr[1] == 'C')) {
+                char strBuf[numLen+1]; // XXX: c99
+                memcpy(strBuf, numStr, numLen+1);
+                strBuf[1] = '0'; // remove 'C' or 'c', replacing it with '0' for proper strtod parsing
+                d = (double)strtol(strBuf+1, NULL, 8);
+            // hex number
+            } else if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'x' || numStr[1] == 'X')) {
+                d = strtod(numStr, NULL);
+            } else {
+                d = strtod(numStr, NULL);
+            }
             emitConstant(NUMBER_VAL(d), CONST_T_NUMLIT);
         // non-static string
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
