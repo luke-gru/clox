@@ -318,6 +318,8 @@ static bool isBinOp(Insn *in) {
         case OP_SUBTRACT:
         case OP_MULTIPLY:
         case OP_DIVIDE:
+        case OP_XOR:
+        case OP_XAND:
             return true;
         default:
             return false;
@@ -350,6 +352,10 @@ static Value foldConstant(Iseq *seq, Insn *cur, Insn *bin, Insn *ain) {
                 return UNDEF_VAL;
             }
             return NUMBER_VAL(aNum / bNum);
+        case OP_XOR:
+            return NUMBER_VAL((double)((int)aNum | (int)bNum));
+        case OP_XAND:
+            return NUMBER_VAL((double)((int)aNum & (int)bNum));
         default:
             UNREACHABLE("bug");
     }

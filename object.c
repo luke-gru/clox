@@ -118,6 +118,7 @@ ObjString *internedString(char *chars, int length) {
     if (!interned) {
         interned = copyString(chars, length);
         tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL);
+        interned->isInterned = true;
         objFreeze((Obj*)interned);
     }
     return interned;
@@ -125,7 +126,9 @@ ObjString *internedString(char *chars, int length) {
 
 ObjString *dupString(ObjString *string) {
     ASSERT(string);
-    return copyString(string->chars, string->length);
+    ObjString *dup = copyString(string->chars, string->length);
+    dup->hash = string->hash;
+    return dup;
 }
 
 void pushString(Value self, Value pushed) {
@@ -303,7 +306,6 @@ ObjUpvalue *newUpvalue(Value *slot) {
 }
 
 ObjClass *newClass(ObjString *name, ObjClass *superclass) {
-    ASSERT(name);
     ObjClass *klass = ALLOCATE_OBJ(
         ObjClass, OBJ_T_CLASS
     );
@@ -321,7 +323,6 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
 }
 
 ObjModule *newModule(ObjString *name) {
-    ASSERT(name);
     ObjModule *mod = ALLOCATE_OBJ(
         ObjModule, OBJ_T_MODULE
     );
@@ -339,6 +340,14 @@ ObjModule *newModule(ObjString *name) {
 // allocates a new instance object, doesn't call its constructor
 ObjInstance *newInstance(ObjClass *klass) {
     ASSERT(klass);
+    // NOTE: since this is called from vm.c's doCallCallable to initialize new
+    // instances when given constructor functions, this must return new
+    // modules/classes when given Module() or Class() constructors
+    if (klass == lxModuleClass) {
+        return (ObjInstance*)newModule(NULL);
+    } else if (klass == lxClassClass) {
+        return (ObjInstance*)newClass(NULL, lxObjClass);
+    }
     ObjInstance *obj = ALLOCATE_OBJ(
         ObjInstance, OBJ_T_INSTANCE
     );

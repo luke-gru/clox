@@ -158,6 +158,8 @@ static void defineNativeClasses(void) {
     addNativeGetter(classClass, "_superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
 
+    addNativeMethod(modClass, "init", lxModuleInit);
+
     Init_ArrayClass();
 
     Init_MapClass();
@@ -408,8 +410,6 @@ void freeVM(void) {
         return;
     }
     VM_DEBUG("freeVM() start");
-    freeTable(&vm.globals);
-    freeTable(&vm.strings);
     vm.initString = NULL;
     vm.fileString = NULL;
     vm.dirString = NULL;
@@ -418,7 +418,6 @@ void freeVM(void) {
     vm.printToStdout = true;
     vm.lastValue = NULL;
     vm.thisValue = NULL;
-    vm.grayStack = NULL;
     vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
     vec_deinit(&vm.loadedScripts);
@@ -436,6 +435,8 @@ void freeVM(void) {
     rootVMLoopJumpBufSet = false;
 
     vec_deinit(&vm.stackObjects);
+    freeTable(&vm.globals);
+    freeTable(&vm.strings);
     freeObjects();
     vm.objects = NULL;
 

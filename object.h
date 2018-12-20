@@ -43,6 +43,7 @@ typedef struct ObjString {
   uint32_t hash;
   int capacity;
   bool isStatic;
+  bool isInterned;
 } ObjString;
 
 typedef void (*GCMarkFunc)(Obj *obj);
@@ -232,6 +233,7 @@ typedef struct LxFile {
 
 #define IS_A(value,klass)       (IS_INSTANCE(value) && instanceIsA(AS_INSTANCE(value), klass))
 
+#define IS_A_MODULE(value)      (IS_A(value, lxModuleClass))
 #define IS_AN_ARRAY(value)      (IS_A(value, lxAryClass))
 #define IS_T_ARRAY(value)       (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxAryClass)
 #define IS_A_MAP(value)         (IS_A(value, lxMapClass))
@@ -246,7 +248,7 @@ typedef struct LxFile {
 #define AS_STRING(value)        ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
 #define INSTANCE_AS_CSTRING(value) (STRING_GETHIDDEN(value)->chars)
-#define VAL_TO_STRING(value)    (IS_T_STRING(value) ? STRING_GETHIDDEN(value) : AS_STRING(value))
+#define VAL_TO_STRING(value)    (IS_A_STRING(value) ? STRING_GETHIDDEN(value) : AS_STRING(value))
 #define AS_FUNCTION(value)      ((ObjFunction*)AS_OBJ(value))
 #define AS_CLOSURE(value)       ((ObjClosure*)AS_OBJ(value))
 #define AS_NATIVE_FUNCTION(value) ((ObjNative*)AS_OBJ(value))

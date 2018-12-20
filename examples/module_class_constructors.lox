@@ -1,0 +1,5 @@
+var m = Module("ModuleName");
+var c = Class("ClassName");
+
+__END__
+-- noexpect: --

@@ -314,6 +314,7 @@ void freeObject(Obj *obj, bool unlink) {
         case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
             GC_TRACE_DEBUG(5, "Freeing class methods/getters/setters tables");
+            klass->name = NULL;
             freeTable(&klass->fields);
             freeTable(&klass->hiddenFields);
             freeTable(&klass->methods);
@@ -327,6 +328,7 @@ void freeObject(Obj *obj, bool unlink) {
         case OBJ_T_MODULE: {
             ObjModule *mod = (ObjModule*)obj;
             GC_TRACE_DEBUG(5, "Freeing module methods/getters/setters tables");
+            mod->name = NULL;
             freeTable(&mod->fields);
             freeTable(&mod->hiddenFields);
             freeTable(&mod->methods);
@@ -393,10 +395,13 @@ void freeObject(Obj *obj, bool unlink) {
         }
         case OBJ_T_STRING: {
             ObjString *string = (ObjString*)obj;
-            /*DBG_ASSERT(!((Obj*)string)->isInterned);*/
             ASSERT(string->chars);
-            GC_TRACE_DEBUG(5, "Freeing string chars: p=%p", string->chars);
-            GC_TRACE_DEBUG(5, "Freeing string chars: s='%s'", string->chars);
+            GC_TRACE_DEBUG(5, "Freeing string chars: p=%p, interned=%s,static=%s",
+                    string->chars,
+                    string->isInterned ? "t" : "f",
+                    string->isStatic ? "t" : "f"
+            );
+            GC_TRACE_DEBUG(5, "Freeing string chars: s='%s' (len=%d, capa=%d)", string->chars, string->length, string->capacity);
             FREE_ARRAY(char, string->chars, string->capacity + 1);
             string->chars = NULL;
             string->hash = 0;
@@ -665,6 +670,8 @@ void freeObjects(void) {
     if (vm.grayStack) {
         free(vm.grayStack);
         vm.grayStack = NULL;
+        vm.grayCount = 0;
+        vm.grayCapacity = 0;
     }
     GC_TRACE_DEBUG(2, "/freeObjects");
     numRootsLastGC = 0;

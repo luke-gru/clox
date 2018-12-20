@@ -310,7 +310,7 @@ Value lxObjectDup(int argCount, Value *args) {
     Value self = *args;
     if (!IS_INSTANCE(self)) {
         // Must be a module or class
-        throwErrorFmt(lxTypeErrClass, "Cannot duplicate (dup) a %s", typeOfVal(self));
+        throwErrorFmt(lxTypeErrClass, "Cannot call dup() on a %s", typeOfVal(self));
     }
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInstance *newObj = newInstance(selfObj->klass);
@@ -329,13 +329,16 @@ Value lxObjectDup(int argCount, Value *args) {
 Value lxModuleInit(int argCount, Value *args) {
     // TODO: call super?
     Value self = *args;
+    ASSERT(!IS_INSTANCE(self));
     CHECK_ARITY("Module#init", 1, 2, argCount);
-    if (argCount == 1) { return self; }
+    if (argCount == 1) { return self; } // anonymous module
     Value name = args[1];
     CHECK_ARG_IS_A(name, lxStringClass, 1);
+    ObjString *nameStr = STRING_GETHIDDEN(name);
     ObjModule *mod = AS_MODULE(self);
-    Value nameStr = dupStringInstance(name);
-    mod->name = VAL_TO_STRING(nameStr);
+    ASSERT(mod->name == NULL);
+    ObjString *nameCpy = dupString(nameStr);
+    mod->name = nameCpy;
     return self;
 }
 
@@ -344,22 +347,22 @@ Value lxClassInit(int argCount, Value *args) {
     // TODO: call super?
     CHECK_ARITY("Class#init", 1, 3, argCount);
     Value self = *args;
+    ASSERT(!IS_INSTANCE(self));
     ObjClass *klass = AS_CLASS(self);
     if (argCount == 1) {
         klass->name = NULL;
         klass->superclass = lxObjClass;
         return self;
     }
-    Value arg1 = args[1];
+    Value arg1 = args[1]; // name or superclass
     ObjString *name = NULL;
     ObjClass *superClass = NULL;
     if (IS_A_STRING(arg1)) {
-        name = VAL_TO_STRING(dupStringInstance(arg1));
+        name = dupString(VAL_TO_STRING(arg1));
     } else if (IS_CLASS(arg1)) {
         superClass = AS_CLASS(arg1);
     } else {
         throwArgErrorFmt("Expected argument 1 to be String or Class, got: %s", typeOfVal(arg1));
-        UNREACHABLE_RETURN(vm.lastErrorThrown);
     }
     if (argCount == 3 && !superClass) {
         CHECK_ARG_IS_INSTANCE_OF(args[2], lxClassClass, 2);
