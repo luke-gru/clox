@@ -158,22 +158,7 @@ static void defineNativeClasses(void) {
     addNativeGetter(classClass, "_superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
 
-    // class Array
-    ObjClass *arrayClass = addGlobalClass("Array", objClass);
-    lxAryClass = arrayClass;
-
-    addNativeMethod(arrayClass, "init", lxArrayInit);
-    addNativeMethod(arrayClass, "push", lxArrayPush);
-    addNativeMethod(arrayClass, "pop", lxArrayPop);
-    addNativeMethod(arrayClass, "pushFront", lxArrayPushFront);
-    addNativeMethod(arrayClass, "popFront", lxArrayPopFront);
-    addNativeMethod(arrayClass, "delete", lxArrayDelete);
-    addNativeMethod(arrayClass, "opIndexGet", lxArrayOpIndexGet);
-    addNativeMethod(arrayClass, "opIndexSet", lxArrayOpIndexSet);
-    addNativeMethod(arrayClass, "opEquals", lxArrayOpEquals);
-    addNativeMethod(arrayClass, "toString", lxArrayToString);
-    addNativeMethod(arrayClass, "iter", lxArrayIter);
-    addNativeMethod(arrayClass, "clear", lxArrayClear);
+    Init_ArrayClass();
 
     Init_MapClass();
 

@@ -63,17 +63,17 @@ Value lxStringInit(int argCount, Value *args);
 
 // class Array
 Value lxArrayInit(int argCount, Value *args);
-Value lxArrayToString(int argCount, Value *args);
-Value lxArrayPush(int argCount, Value *args);
-Value lxArrayPop(int argCount, Value *args);
-Value lxArrayPushFront(int argCount, Value *args);
-Value lxArrayPopFront(int argCount, Value *args);
-Value lxArrayIter(int argCount, Value *args);
-Value lxArrayDelete(int argCount, Value *args);
-Value lxArrayClear(int argCount, Value *args);
-Value lxArrayOpIndexGet(int argCount, Value *args);
-Value lxArrayOpIndexSet(int argCount, Value *args);
-Value lxArrayOpEquals(int argCount, Value *args);
+//Value lxArrayToString(int argCount, Value *args);
+//Value lxArrayPush(int argCount, Value *args);
+//Value lxArrayPop(int argCount, Value *args);
+//Value lxArrayPushFront(int argCount, Value *args);
+//Value lxArrayPopFront(int argCount, Value *args);
+//Value lxArrayIter(int argCount, Value *args);
+//Value lxArrayDelete(int argCount, Value *args);
+//Value lxArrayClear(int argCount, Value *args);
+//Value lxArrayOpIndexGet(int argCount, Value *args);
+//Value lxArrayOpIndexSet(int argCount, Value *args);
+//Value lxArrayOpEquals(int argCount, Value *args);
 
 // class Map
 Value lxMapInit(int argCount, Value *args);
@@ -99,6 +99,8 @@ Value lxErrInit(int argCount, Value *args);
 
 // class String
 void Init_StringClass(void);
+// class Array
+void Init_ArrayClass(void);
 // class Map
 void Init_MapClass(void);
 // module IO
