@@ -18,8 +18,10 @@ typedef enum {
     OP_SUBTRACT,
     OP_MULTIPLY,
     OP_DIVIDE,
-    OP_XOR,
-    OP_XAND,
+    OP_MODULO,
+    OP_BITOR,
+    OP_BITAND,
+    OP_BITXOR,
     OP_NEGATE,
     OP_NOT,
 

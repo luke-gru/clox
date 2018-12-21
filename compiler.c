@@ -318,8 +318,10 @@ static bool isBinOp(Insn *in) {
         case OP_SUBTRACT:
         case OP_MULTIPLY:
         case OP_DIVIDE:
-        case OP_XOR:
-        case OP_XAND:
+        case OP_MODULO:
+        case OP_BITOR:
+        case OP_BITAND:
+        case OP_BITXOR:
             return true;
         default:
             return false;
@@ -352,10 +354,18 @@ static Value foldConstant(Iseq *seq, Insn *cur, Insn *bin, Insn *ain) {
                 return UNDEF_VAL;
             }
             return NUMBER_VAL(aNum / bNum);
-        case OP_XOR:
+        case OP_MODULO:
+            if (bNum == 0.00) {
+                fprintf(stderr, "[Warning]: Divide by 0 found on line %d during constant folding\n", bin->lineno);
+                return UNDEF_VAL;
+            }
+            return NUMBER_VAL((int)aNum % (int)bNum);
+        case OP_BITOR:
             return NUMBER_VAL((double)((int)aNum | (int)bNum));
-        case OP_XAND:
+        case OP_BITAND:
             return NUMBER_VAL((double)((int)aNum & (int)bNum));
+        case OP_BITXOR:
+            return NUMBER_VAL((double)((int)aNum ^ (int)bNum));
         default:
             UNREACHABLE("bug");
     }
@@ -1080,6 +1090,8 @@ static void emitNode(Node *n) {
             emitOp0(OP_MULTIPLY);
         } else if (n->tok.type == TOKEN_SLASH) {
             emitOp0(OP_DIVIDE);
+        } else if (n->tok.type == TOKEN_PERCENT) {
+            emitOp0(OP_MODULO);
         } else if (n->tok.type == TOKEN_LESS) {
             emitOp0(OP_LESS);
         } else if (n->tok.type == TOKEN_LESS_EQUAL) {
@@ -1090,10 +1102,12 @@ static void emitNode(Node *n) {
             emitOp0(OP_GREATER_EQUAL);
         } else if (n->tok.type == TOKEN_EQUAL_EQUAL) {
             emitOp0(OP_EQUAL);
-        } else if (n->tok.type == TOKEN_XOR) {
-            emitOp0(OP_XOR);
-        } else if (n->tok.type == TOKEN_XAND) {
-            emitOp0(OP_XAND);
+        } else if (n->tok.type == TOKEN_PIPE) {
+            emitOp0(OP_BITOR);
+        } else if (n->tok.type == TOKEN_AMP) {
+            emitOp0(OP_BITAND);
+        } else if (n->tok.type == TOKEN_CARET) {
+            emitOp0(OP_BITXOR);
         } else {
             UNREACHABLE("invalid binary expr node (token: %s)", tokStr(&n->tok));
         }

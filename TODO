@@ -35,11 +35,12 @@ associated class, and calls the superclass method.
 * Allow throwing strings, maybe wrap them in Error class
 * Allow debugger to list local variables, global variables, etc.
 * Add constants to language
+* Add socket class in io.c, make it work with multi-threading
 
 Bugs
 ----
 * Method lookup is bugged, instances get methods from static methods
-* Bug in iterators for ENV and maps in general, it looks like
+* Bug in iterators for ENV and maps in general, it looks like (1.lox.err)
 * Fix method lookup, look in modules for instances and classes/modules as well
 as singleton classes, etc.
 * super() bug in examples/super.lox

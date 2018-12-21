@@ -1565,7 +1565,7 @@ static InterpretResult vm_run() {
       Value b = pop(); \
       Value a = pop(); \
       if (IS_NUMBER(a) && IS_NUMBER(b)) {\
-          if (opcode == OP_DIVIDE && AS_NUMBER(b) == 0.00) {\
+          if ((opcode == OP_DIVIDE || opcode == OP_MODULO) && AS_NUMBER(b) == 0.00) {\
               throwErrorFmt(lxErrClass, "Can't divide by 0");\
           }\
           push(NUMBER_VAL((type)AS_NUMBER(a) op (type)AS_NUMBER(b))); \
@@ -1632,8 +1632,10 @@ static InterpretResult vm_run() {
       case OP_SUBTRACT: BINARY_OP(-,OP_SUBTRACT, double); break;
       case OP_MULTIPLY: BINARY_OP(*,OP_MULTIPLY, double); break;
       case OP_DIVIDE:   BINARY_OP(/,OP_DIVIDE, double); break;
-      case OP_XOR:      BINARY_OP(|,OP_XOR, int); break;
-      case OP_XAND:     BINARY_OP(&,OP_XAND, int); break;
+      case OP_MODULO:   BINARY_OP(%,OP_MODULO, int); break;
+      case OP_BITOR:    BINARY_OP(|,OP_BITOR, int); break;
+      case OP_BITAND:   BINARY_OP(&,OP_BITAND, int); break;
+      case OP_BITXOR:   BINARY_OP(&,OP_BITAND, int); break;
       case OP_NEGATE: {
         Value val = pop();
         if (!IS_NUMBER(val)) {

@@ -159,7 +159,7 @@ static Node *logicAnd(void);
 static Node *equality(void);
 static Node *comparison(void);
 static Node *addition(void);
-static Node *byteManip(void);
+static Node *bitManip(void);
 static Node *multiplication(void);
 static Node *unary(void);
 static Node *call(void);
@@ -981,7 +981,7 @@ static Node *comparison() {
 
 static Node *addition() {
     TRACE_START("addition");
-    Node *left = byteManip();
+    Node *left = bitManip();
     while (match(TOKEN_PLUS) || match(TOKEN_MINUS)) {
         TRACE_START("binaryExpr (+/-)");
         Token addTok = current->previous;
@@ -990,7 +990,7 @@ static Node *addition() {
             .kind = BINARY_EXPR,
         };
         Node *addNode = createNode(addT, addTok, NULL);
-        Node *right = byteManip();
+        Node *right = bitManip();
         nodeAddChild(addNode, left);
         nodeAddChild(addNode, right);
         left = addNode;
@@ -1000,11 +1000,11 @@ static Node *addition() {
     return left;
 }
 
-static Node *byteManip() {
-    TRACE_START("byteManip");
+static Node *bitManip() {
+    TRACE_START("bitManip");
     Node *left = multiplication();
-    while (match(TOKEN_XOR) || match(TOKEN_XAND)) {
-        TRACE_START("binaryExpr (|,&)");
+    while (match(TOKEN_PIPE) || match(TOKEN_AMP) || match(TOKEN_CARET)) {
+        TRACE_START("binaryExpr (|,&,^)");
         Token byteTok = current->previous;
         node_type_t binT = {
             .type = NODE_EXPR,
@@ -1015,16 +1015,16 @@ static Node *byteManip() {
         nodeAddChild(n, left);
         nodeAddChild(n, right);
         left = n;
-        TRACE_END("binaryExpr (|,&)");
+        TRACE_END("binaryExpr (|,&,^)");
     }
-    TRACE_END("byteManip");
+    TRACE_END("bitManip");
     return left;
 }
 
 static Node *multiplication() {
     TRACE_START("multiplication");
     Node *left = unary();
-    while (match(TOKEN_STAR) || match(TOKEN_SLASH)) {
+    while (match(TOKEN_STAR) || match(TOKEN_SLASH) || match(TOKEN_PERCENT)) {
         TRACE_START("binaryExpr");
         Token mulTok = current->previous;
         node_type_t mulT = {

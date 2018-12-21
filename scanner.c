@@ -362,9 +362,11 @@ Token scanToken(void) {
     case '-': return makeToken(TOKEN_MINUS);
     case '+': return makeToken(TOKEN_PLUS);
     case '/': return makeToken(TOKEN_SLASH);
+    case '%': return makeToken(TOKEN_PERCENT);
     case '*': return makeToken(TOKEN_STAR);
-    case '|': return makeToken(TOKEN_XOR);
-    case '&': return makeToken(TOKEN_XAND);
+    case '|': return makeToken(TOKEN_PIPE);
+    case '^': return makeToken(TOKEN_CARET);
+    case '&': return makeToken(TOKEN_AMP);
     case '!':
       if (match('=')) return makeToken(TOKEN_BANG_EQUAL);
       return makeToken(TOKEN_BANG);
@@ -475,10 +477,14 @@ const char *tokTypeStr(TokenType ttype) {
       return "SLASH";
     case TOKEN_STAR:
       return "STAR";
-    case TOKEN_XOR:
-      return "XOR";
-    case TOKEN_XAND:
-      return "XAND";
+    case TOKEN_PIPE:
+      return "PIPE";
+    case TOKEN_AMP:
+      return "AMP";
+    case TOKEN_CARET:
+      return "CARET";
+    case TOKEN_PERCENT:
+      return "PERCENT";
     case TOKEN_IDENTIFIER:
       return "IDENTIFIER";
     case TOKEN_STRING_DQUOTE:
