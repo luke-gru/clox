@@ -1,0 +1,3 @@
+foreach (k, v in ENV.all()) {
+  print k;
+}

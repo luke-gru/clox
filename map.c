@@ -158,7 +158,7 @@ static Value lxMapValues(int argCount, Value *args) {
 
 static Value lxMapIter(int argCount, Value *args) {
     CHECK_ARITY("Map#iter", 1, 1, argCount);
-    return createIterator(*args);
+    return createIterator(args[0]);
 }
 
 static Value lxMapEquals(int argCount, Value *args) {
@@ -247,8 +247,7 @@ static Value lxEnvSet(int argCount, Value *args) {
     return val;
 }
 
-static Value lxEnvAll(int argCount, Value *args) {
-    CHECK_ARITY("ENV#all", 1, 1, argCount);
+static Value createEnvMap(void) {
     char **envp = environ;
     Value mapVal = newMap();
     Table *map = MAP_GETHIDDEN(mapVal);
@@ -267,6 +266,16 @@ static Value lxEnvAll(int argCount, Value *args) {
         envp++;
     }
     return mapVal;
+}
+
+static Value lxEnvAll(int argCount, Value *args) {
+    CHECK_ARITY("ENV#all", 1, 1, argCount);
+    return createEnvMap();
+}
+
+static Value lxEnvIter(int argCount, Value *args) {
+    CHECK_ARITY("ENV#iter", 1, 1, argCount);
+    return createIterator(createEnvMap());
 }
 
 static Value lxEnvDelete(int argCount, Value *args) {
@@ -309,6 +318,7 @@ void Init_MapClass() {
     addNativeMethod(lxEnvClass, "opIndexSet", lxEnvSet);
     addNativeMethod(lxEnvClass, "all", lxEnvAll);
     addNativeMethod(lxEnvClass, "delete", lxEnvDelete);
+    addNativeMethod(lxEnvClass, "iter", lxEnvIter);
 
     tableSet(&vm.globals, OBJ_VAL(internedString("ENV", 3)), OBJ_VAL(lxEnv));
 }
