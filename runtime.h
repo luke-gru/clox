@@ -63,17 +63,6 @@ Value lxStringInit(int argCount, Value *args);
 
 // class Array
 Value lxArrayInit(int argCount, Value *args);
-//Value lxArrayToString(int argCount, Value *args);
-//Value lxArrayPush(int argCount, Value *args);
-//Value lxArrayPop(int argCount, Value *args);
-//Value lxArrayPushFront(int argCount, Value *args);
-//Value lxArrayPopFront(int argCount, Value *args);
-//Value lxArrayIter(int argCount, Value *args);
-//Value lxArrayDelete(int argCount, Value *args);
-//Value lxArrayClear(int argCount, Value *args);
-//Value lxArrayOpIndexGet(int argCount, Value *args);
-//Value lxArrayOpIndexSet(int argCount, Value *args);
-//Value lxArrayOpEquals(int argCount, Value *args);
 
 // class Map
 Value lxMapInit(int argCount, Value *args);
@@ -83,9 +72,6 @@ Value lxIteratorInit(int argCount, Value *args);
 Value lxIteratorNext(int argCount, Value *args);
 //Value lxIteratorRewind(int argCount, Value *args);
 //Value lxIteratorIsAtEnd(int argCount, Value *args);
-
-// class File
-Value lxFileReadStatic(int argCount, Value *args);
 
 // class Thread
 Value lxThreadInit(int argCount, Value *args);

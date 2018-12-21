@@ -108,7 +108,7 @@ static void checkFileExists(const char *fname) {
     }
 }
 
-Value lxFileReadStatic(int argCount, Value *args) {
+static Value lxFileReadStatic(int argCount, Value *args) {
     CHECK_ARITY("File.read", 2, 2, argCount);
     Value fname = args[1];
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
@@ -140,7 +140,6 @@ static void freeInternalFile(Obj *obj) {
     ASSERT(obj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)obj;
     LxFile *f = (LxFile*)internal->data;
-    freeObject((Obj*)f->name, true);
     FREE(LxFile, f);
 }
 
@@ -159,7 +158,7 @@ static LxFile *initFile(Value fileVal, ObjString *fname, int fd, int flags) {
     return file;
 }
 
-Value lxFileInit(int argCount, Value *args) {
+static Value lxFileInit(int argCount, Value *args) {
     CHECK_ARITY("File#init", 2, 2, argCount);
     Value self = args[0];
     Value fname = args[1];
@@ -171,7 +170,7 @@ Value lxFileInit(int argCount, Value *args) {
     return self;
 }
 
-Value lxFileCreateStatic(int argCount, Value *args) {
+static Value lxFileCreateStatic(int argCount, Value *args) {
     CHECK_ARITY("File.create", 2, 4, argCount);
     Value fname = args[1];
     // TODO: support flags and mode arguments
@@ -186,7 +185,7 @@ Value lxFileCreateStatic(int argCount, Value *args) {
 }
 
 // Returns a File object for an opened file
-Value lxFileOpenStatic(int argCount, Value *args) {
+static Value lxFileOpenStatic(int argCount, Value *args) {
     CHECK_ARITY("File.open", 2, 4, argCount);
     Value fname = args[1];
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
@@ -218,7 +217,7 @@ static void checkFileWritable(LxFile *f) {
     }
 }
 
-Value lxFileWrite(int argCount, Value *args) {
+static Value lxFileWrite(int argCount, Value *args) {
     CHECK_ARITY("File#write", 2, 3, argCount);
     Value self = args[0];
     LxFile *f = FILE_GETHIDDEN(self);
@@ -230,11 +229,53 @@ Value lxFileWrite(int argCount, Value *args) {
     return NUMBER_VAL(written);
 }
 
-Value lxFileClose(int argCount, Value *args) {
+static Value lxFileClose(int argCount, Value *args) {
     CHECK_ARITY("File#close", 1, 1, argCount);
     Value self = args[0];
     fileClose(self);
     return NIL_VAL;
+}
+
+static Value lxFilePath(int argCount, Value *args) {
+    CHECK_ARITY("File#path", 1, 1, argCount);
+    Value self = args[0];
+    LxFile *f = FILE_GETHIDDEN(self);
+    return newStringInstance(dupString(f->name));
+}
+
+static Value lxFileUnlink(int argCount, Value *args) {
+    CHECK_ARITY("File#unlink", 1, 1, argCount);
+    Value self = args[0];
+    LxFile *f = FILE_GETHIDDEN(self);
+    int last = errno;
+    if (unlink(f->name->chars) == 0) {
+        f->isOpen = false;
+        return BOOL_VAL(true);
+    } else {
+        int err = errno;
+        errno = last;
+        throwErrorFmt(lxErrClass, "Error during file unlink: %s", strerror(err));
+    }
+}
+
+static Value lxFileRename(int argCount, Value *args) {
+    CHECK_ARITY("File#rename", 2, 2, argCount);
+    Value self = args[0];
+    Value newName = args[1];
+    CHECK_ARG_IS_A(newName, lxStringClass, 1);
+    LxFile *f = FILE_GETHIDDEN(self);
+    const char *oldPath = f->name->chars;
+    ObjString *newPathStr = VAL_TO_STRING(newName);
+    const char *newPath = newPathStr->chars;
+    int last = errno;
+    if (rename(oldPath, newPath) == 0) {
+        f->name = dupString(newPathStr);
+        return BOOL_VAL(true);
+    } else {
+        int err = errno;
+        errno = last;
+        throwErrorFmt(lxErrClass, "Error during file rename: %s", strerror(err));
+    }
 }
 
 void Init_FileClass(void) {
@@ -247,6 +288,9 @@ void Init_FileClass(void) {
     addNativeMethod(fileClass, "init", lxFileInit);
     addNativeMethod(fileClass, "write", lxFileWrite);
     addNativeMethod(fileClass, "close", lxFileClose);
+    addNativeMethod(fileClass, "path", lxFilePath);
+    addNativeMethod(fileClass, "unlink", lxFileUnlink);
+    addNativeMethod(fileClass, "rename", lxFileRename);
 
     Value fileClassVal = OBJ_VAL(fileClass);
     setProp(fileClassVal, internedString("RDONLY", 6), NUMBER_VAL(O_RDONLY));
