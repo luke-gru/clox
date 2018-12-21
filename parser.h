@@ -27,6 +27,4 @@ Node *parse(Parser *p);
 Node *parseExpression(Parser *p);
 void outputParserErrors(Parser *p, FILE *f);
 
-extern Parser parser; // main parser
-
 #endif

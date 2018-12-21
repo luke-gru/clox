@@ -26,8 +26,6 @@ static void _trace_end(const char *name) {
     }
 }
 
-// global
-Parser parser; // TODO: remove global parser
 static Parser *current = NULL;
 
 // initialize/reinitialize parser
