@@ -140,6 +140,7 @@ void freeVM(void);
 InterpretResult interpret(Chunk *chunk, char *filename);
 InterpretResult loadScript(Chunk *chunk, char *filename);
 Value VMEval(const char *src, const char *filename, int lineno);
+Value VMEvalNoThrow(const char *src, const char *filename, int lineno);
 Value *getLastValue(void);
 
 bool VMLoadedScript(char *fname);

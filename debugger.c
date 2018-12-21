@@ -189,9 +189,13 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
                 src = idx+2;
             }
             fprintf(stderr, "Executing '%s'\n", src);
-            Value val = VMEval(src, "(eval)", 1);
-            printValue(stdout, val, true);
-            fprintf(stdout, "\n");
+            Value val = VMEvalNoThrow(src, "(eval)", 1);
+            if (!IS_UNDEF(val)) {
+                printValue(stdout, val, true);
+                fprintf(stdout, "\n");
+            } else {
+                fprintf(stderr, "Error during execution\n");
+            }
         } else {
             fprintf(stderr, "Unrecognized command: '%s'\n", buf);
             fprintf(stderr, "'help' for usage details\n");

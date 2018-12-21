@@ -33,6 +33,8 @@ compiled lookup
 associated class, and calls the superclass method.
 * Add Map literals
 * Allow throwing strings, maybe wrap them in Error class
+* Allow debugger to list local variables, global variables, etc.
+* Add constants to language
 
 Bugs
 ----
@@ -46,6 +48,7 @@ as singleton classes, etc.
 when evaling.
 * loadScript/requireScript should use pwd of lox process during startup for
 file lookup, not pwd when calling loadScript/requireScript
+* Debugger bugs, not evaluating variables in context of function
 
 Optimizations
 -------------

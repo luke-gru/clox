@@ -2359,7 +2359,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     }
 }
 
-Value VMEval(const char *src, const char *filename, int lineno) {
+static Value doVMEval(const char *src, const char *filename, int lineno, bool throwOnErr) {
     CallFrame *oldFrame = getFrame();
     CompileErr err = COMPILE_ERR_NONE;
     Chunk chunk;
@@ -2378,8 +2378,12 @@ Value VMEval(const char *src, const char *filename, int lineno) {
         pop_EC();
         ASSERT(getFrame() == oldFrame);
         freeChunk(&chunk);
-        throwErrorFmt(lxSyntaxErrClass, "%s", "Syntax error");
-        UNREACHABLE_RETURN(vm.lastErrorThrown);
+        if (throwOnErr) {
+            throwErrorFmt(lxSyntaxErrClass, "%s", "Syntax error");
+        } else {
+            // TODO: output error messages
+            return UNDEF_VAL;
+        }
     }
     EC->filename = copyString(filename, strlen(filename));
     VM_DEBUG("%s", "Pushing initial eval callframe");
@@ -2403,17 +2407,31 @@ Value VMEval(const char *src, const char *filename, int lineno) {
         result = INTERPRET_RUNTIME_ERROR;
         vm.hadError = true;
     }
+    Value val = *vm.lastValue;
     VM_DEBUG("eval finished: error: %d", vm.hadError ? 1 : 0);
     // `EC != ectx` if an error occured in the eval, and propagated out
     // due to being caught in a surrounding context or never being caught.
     if (EC == ectx) pop_EC();
     ASSERT(getFrame() == oldFrame);
     if (result == INTERPRET_OK) {
-        return BOOL_VAL(true);
+        return val;
     } else {
-        rethrowErrInfo(vm.errInfo);
-        UNREACHABLE_RETURN(vm.lastErrorThrown);
+        if (throwOnErr) {
+            rethrowErrInfo(vm.errInfo);
+            UNREACHABLE_RETURN(UNDEF_VAL);
+        } else {
+            // TODO: output error messages
+            return UNDEF_VAL;
+        }
     }
+}
+
+Value VMEvalNoThrow(const char *src, const char *filename, int lineno) {
+    return doVMEval(src, filename, lineno, false);
+}
+
+Value VMEval(const char *src, const char *filename, int lineno) {
+    return doVMEval(src, filename, lineno, true);
 }
 
 void setPrintBuf(ObjString *buf, bool alsoStdout) {
