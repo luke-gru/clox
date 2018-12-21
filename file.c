@@ -1,3 +1,5 @@
+// this creates defines for O_TMPFILE, O_PATH, etc. in fcntl
+#define _GNU_SOURCE 1
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
@@ -254,11 +256,7 @@ void Init_FileClass(void) {
     setProp(fileClassVal, internedString("CREAT", 5), NUMBER_VAL(O_CREAT));
     setProp(fileClassVal, internedString("CLOEXEC", 7), NUMBER_VAL(O_CLOEXEC));
     setProp(fileClassVal, internedString("NOFOLLOW", 8), NUMBER_VAL(O_NOFOLLOW));
-#ifdef O_TMPFILE
     setProp(fileClassVal, internedString("TMPFILE", 7), NUMBER_VAL(O_TMPFILE));
-#else
-    setProp(fileClassVal, internedString("TMPFILE", 7), NUMBER_VAL(0));
-#endif
     setProp(fileClassVal, internedString("SYNC", 4), NUMBER_VAL(O_SYNC));
     setProp(fileClassVal, internedString("TRUNC", 5), NUMBER_VAL(O_TRUNC));
     setProp(fileClassVal, internedString("EXCL", 4), NUMBER_VAL(O_EXCL));

@@ -171,8 +171,44 @@ static Value lxMapClear(int argCount, Value *args) {
     return self;
 }
 
+static Value lxMapHasKey(int argCount, Value *args) {
+    CHECK_ARITY("Map#hasKey", 2, 2, argCount);
+    Value self = args[0];
+    Value key = args[1];
+    Table *map = MAP_GETHIDDEN(self);
+    Value found;
+    return BOOL_VAL(tableGet(map, key, &found));
+}
+
+static Value lxMapSlice(int argCount, Value *args) {
+    CHECK_ARITY("Map#hasKey", 2, -1, argCount);
+    Value self = args[0];
+    Table *map = MAP_GETHIDDEN(self);
+    Value ret = newMap();
+    Table *mapRet = MAP_GETHIDDEN(ret);
+    for (int i = 1; i < argCount; i++) {
+        Value val;
+        if (tableGet(map, args[i], &val)) {
+            tableSet(mapRet, args[i], val);
+        }
+    }
+    return ret;
+}
+
+static Value lxMapDelete(int argCount, Value *args) {
+    CHECK_ARITY("Map#delete", 2, -1, argCount);
+    Value self = args[0];
+    Table *map = MAP_GETHIDDEN(self);
+    int deleted = 0;
+    for (int i = 1; i < argCount; i++) {
+        if (tableDelete(map, args[i])) {
+            deleted++;
+        }
+    }
+    return NUMBER_VAL(deleted);
+}
+
 void Init_MapClass() {
-    // class Map
     ObjClass *mapClass = addGlobalClass("Map", lxObjClass);
     lxMapClass = mapClass;
 
@@ -185,4 +221,7 @@ void Init_MapClass() {
     addNativeMethod(mapClass, "toString", lxMapToString);
     addNativeMethod(mapClass, "iter", lxMapIter);
     addNativeMethod(mapClass, "clear", lxMapClear);
+    addNativeMethod(mapClass, "hasKey", lxMapHasKey);
+    addNativeMethod(mapClass, "slice", lxMapSlice);
+    addNativeMethod(mapClass, "delete", lxMapDelete);
 }

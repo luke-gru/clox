@@ -14,10 +14,10 @@ static void markInternalAry(Obj *internalObj) {
     ASSERT(valAry);
     for (int i = 0; i < valAry->count; i++) {
         Value val = valAry->values[i];
-        if (!IS_OBJ(val)) continue;
         // XXX: this is needed for GC code not to segfault for some reason,
         // need to investigate. It especially happens after multiple (3) calls
         // to GC.collect().
+        if (!IS_OBJ(val)) continue;
         if (AS_OBJ(val)->type <= OBJ_T_INTERNAL) {
             blackenObject(AS_OBJ(val));
         }
