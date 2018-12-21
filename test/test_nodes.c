@@ -57,7 +57,7 @@ static int test_output_node_literal_string(void) {
     T_ASSERT_STREQ("\"testing\n\"", output);
 cleanup:
     if (n != NULL) freeNode(n, true);
-    if (output != NULL) free(output);
+    if (output != NULL) xfree(output);
     return 0;
 }
 
@@ -80,7 +80,7 @@ static int test_output_node_literal_number(void) {
     T_ASSERT_STREQ("1.0", output);
 cleanup:
     if (n != NULL) freeNode(n, true);
-    if (output != NULL) free(output);
+    if (output != NULL) xfree(output);
     return 0;
 }
 

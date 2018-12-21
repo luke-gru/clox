@@ -40,7 +40,7 @@ void regex_init(Regex *regex, const char *src, RegexOptions *opts) {
 
 void regex_free(Regex *regex) {
     regex->node = NULL; // TODO: free nodes
-    free(regex->src);
+    xfree(regex->src);
     regex->src = NULL;
 }
 

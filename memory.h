@@ -32,6 +32,8 @@
 
 #define GC_HEAP_GROW_FACTOR 2
 
+#define xfree free
+
 void *reallocate(void *previous, size_t oldSize, size_t newSize);
 
 void grayObject(Obj *obj); // non-recursively mark object as live

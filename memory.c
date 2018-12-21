@@ -90,7 +90,7 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
 
     if (newSize == 0) { // freeing
         GC_TRACE_DEBUG(10, "  freeing %p from realloc", previous);
-        free(previous);
+        xfree(previous);
         TRACE_GC_FUNC_END(10, "reallocate");
         return NULL;
     }
@@ -666,7 +666,7 @@ void freeObjects(void) {
     }
 
     if (vm.grayStack) {
-        free(vm.grayStack);
+        xfree(vm.grayStack);
         vm.grayStack = NULL;
         vm.grayCount = 0;
         vm.grayCapacity = 0;

@@ -31,7 +31,7 @@ void freeIseq(Iseq *seq) {
         Insn *next = in->next;
         // TODO: there's a memory corruption error here if I try
         // to free the memory for some reason. Need to investigate.
-        /*free(in);*/
+        /*xfree(in);*/
         memset(in, 0, sizeof(*in));
         in = next;
         idx++;
@@ -83,7 +83,7 @@ bool iseqRmInsn(Iseq *seq, Insn *toRm) {
     }
     seq->count--;
     seq->byteCount -= (toRm->numOperands+1);
-    free(toRm);
+    xfree(toRm);
     return true;
 }
 
@@ -128,7 +128,7 @@ static void freeCatchTable(CatchTable *catchTbl) {
     CatchTable *nextRow = NULL;
     while (row) {
         nextRow = row->next;
-        free(row);
+        xfree(row);
         row = nextRow;
     }
 }

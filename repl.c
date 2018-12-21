@@ -46,7 +46,7 @@ static bool evalLines(char *lines[], int numLines) {
 
 static void freeLines(char *lines[], int numLines) {
     for (int i = 0; i < numLines; i++) {
-        free(lines[i]);
+        xfree(lines[i]);
     }
 }
 
@@ -74,12 +74,12 @@ void scannerAddSrc(char *src) {
     ASSERT_MEM(buf);
     strcpy(buf, scanner.source);
     strcat(buf, src);
-    free(scanner.source);
+    xfree(scanner.source);
     scanner.source = buf;
 }
 
 static void _resetScanner(void) {
-    if (scanner.source) free(scanner.source);
+    if (scanner.source) xfree(scanner.source);
     initScanner(&scanner, strdup(""));
 }
 
@@ -101,13 +101,13 @@ NORETURN void repl(void) {
     while ((line = linenoise(prompt)) != NULL) { // NOTE: chomps newline
         linenoiseHistoryAdd(line);
         if (numLines == 0 && strcmp(line, "exit") == 0) {
-            free(line);
+            xfree(line);
             line = NULL;
             break;
         }
         if (numLines == 0 && strcmp(line, "pstack") == 0) {
             printVMStack(stderr);
-            free(line);
+            xfree(line);
             line = NULL;
             continue;
         }
@@ -118,7 +118,7 @@ NORETURN void repl(void) {
             freeVM();
             initVM();
             _resetScanner();
-            free(line);
+            xfree(line);
             line = NULL;
             fprintf(stderr, "done.\n");
             continue;
@@ -140,7 +140,7 @@ NORETURN void repl(void) {
             continue;
         }
         if (scanner.indent == 0) { // evaluate the statement/expression
-            free(scanner.source);
+            xfree(scanner.source);
             if (!evalLines(lines, numLines)) {
                 freeLines(lines, numLines);
                 numLines = 0;

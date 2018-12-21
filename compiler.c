@@ -836,7 +836,7 @@ static void initCompiler(
         strcat(methodNameBuf, funcName);
         ObjString *methodName = hiddenString(methodNameBuf, strlen(methodNameBuf));
         current->function->name = methodName;
-        free(methodNameBuf);
+        xfree(methodNameBuf);
         break;
     }
     case FUN_TYPE_ANON:
@@ -1646,7 +1646,7 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
     res = (int)read(fd, buf, st.st_size);
     if (res == -1) {
         *err = COMPILE_ERR_ERRNO;
-        free(buf);
+        xfree(buf);
         return res;
     }
     res = compile_src(buf, chunk, err);

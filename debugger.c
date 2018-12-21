@@ -1,8 +1,9 @@
-#include "debugger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include "debugger.h"
 #include "vm.h"
+#include "memory.h"
 
 #define DBG_PROMPT " > "
 #define LINE_SZ 300
@@ -13,9 +14,9 @@ void initDebugger(Debugger *dbg) {
 }
 
 static void freeBreakpt(Breakpoint *bp) {
-    free(bp->file);
+    xfree(bp->file);
     bp->file = NULL;
-    free(bp);
+    xfree(bp);
 }
 
 void freeDebugger(Debugger *dbg) {

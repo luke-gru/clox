@@ -4,7 +4,7 @@ TODO
 Features
 --------
 
-* Add default ENV map-like thing as well as ARGV array
+* Add ARGV array
 * Add Array#deleteAt
 * add iterNext() support for iterators
 * Make it so that global variables aren't accessible everywhere, or that

@@ -205,7 +205,7 @@ void disassembleCatchTbl(ObjString *buf, CatchTable *tbl) {
         sprintf(cbuf, "%04d) from: %04d, to: %04d, target: %04d, value: %s\n",
                 idx, row->ifrom, row->ito, row->itarget, valstr);
         pushCString(buf, cbuf, strlen(cbuf));
-        free(cbuf);
+        xfree(cbuf);
         row = row->next;
         idx++;
     }
@@ -262,7 +262,7 @@ static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     sprintf(cbuf, "%s\t%04" PRId8 "\t'%s'\n", op, constantIdx, constantCStr);
 
     pushCString(buf, cbuf, strlen(cbuf));
-    free(cbuf);
+    xfree(cbuf);
     return i+2;
 }
 
@@ -285,7 +285,7 @@ static int stringInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+20, 1);
     sprintf(cbuf, "%s\t%4d\t'%s' (static=%d)\n", op, constantIdx, constantCStr, isStatic);
     pushCString(buf, cbuf, strlen(cbuf));
-    free(cbuf);
+    xfree(cbuf);
     return i+3;
 }
 
@@ -341,7 +341,7 @@ static int closureInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec
         constantCStr, numUpvalues);
 
     pushCString(buf, cbuf, strlen(cbuf));
-    free(cbuf);
+    xfree(cbuf);
     return i+2+(numUpvalues*2);
 }
 
@@ -359,7 +359,7 @@ static int jumpInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     /*ASSERT(jumpOffset != 0); // should have been patched*/
     sprintf(cbuf, "%s\t%04" PRId8 "\t(addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
     pushCString(buf, cbuf, strlen(cbuf));
-    free(cbuf);
+    xfree(cbuf);
     return i+2;
 }
 
@@ -375,7 +375,7 @@ static int loopInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t loopOffset = chunk->code[i + 1];
     sprintf(cbuf, "%s\t%4" PRId8 "\t(addr=%04" PRId8 ")\n", op, loopOffset, (i-loopOffset));
     pushCString(buf, cbuf, strlen(cbuf));
-    free(cbuf);
+    xfree(cbuf);
     return i+2;
 }
 
@@ -403,7 +403,7 @@ static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t numArgs = chunk->code[i + 1];
     sprintf(cbuf, "%s\t(argc=%d)\n", op, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
-    free(cbuf);
+    xfree(cbuf);
     return i+3;
 }
 
@@ -427,7 +427,7 @@ static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     ASSERT_MEM(cbuf);
     sprintf(cbuf, "%s\t('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
-    free(cbuf);
+    xfree(cbuf);
     return i+4;
 }
 
@@ -451,7 +451,7 @@ static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     ASSERT_MEM(cbuf);
     sprintf(cbuf, "%s\t[slot %03" PRId8 "]\n", op, slotIdx);
     pushCString(buf, cbuf, strlen(cbuf));
-    free(cbuf);
+    xfree(cbuf);
     return i+2;
 }
 
@@ -561,7 +561,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
     ASSERT_MEM(numBuf);
     sprintf(numBuf, "%04d\t", i);
     pushCString(buf, numBuf, strlen(numBuf));
-    free(numBuf);
+    xfree(numBuf);
     uint8_t byte = chunk->code[i];
     switch (byte) {
         case OP_CONSTANT:
@@ -642,7 +642,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             ASSERT_MEM(cBuf);
             sprintf(cBuf, "Unknown opcode %03" PRId8 "\n", byte);
             pushCString(buf, cBuf, strlen(cBuf));
-            free(cBuf);
+            xfree(cBuf);
             return -1;
         }
     }
@@ -684,7 +684,7 @@ ObjString *disassembleChunk(Chunk *chunk) {
         ObjString *funcStr = disassembleChunk(&func->chunk);
         pushCString(buf, funcStr->chars, strlen(funcStr->chars));
         pushCString(buf, "----\n", strlen("----\n"));
-        free(cbuf);
+        xfree(cbuf);
     }
     vec_deinit(&funcs);
     return buf;
@@ -723,6 +723,6 @@ void printCBacktrace(void) {
         full_write(STDERR_FILENO, "\n", 1);
     }
     full_write(STDERR_FILENO, end, strlen(end));
-    free(bt_syms);
+    xfree(bt_syms);
 }
 #endif

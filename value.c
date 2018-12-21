@@ -200,7 +200,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
         ASSERT_MEM(buf);
         strcpy(buf, buftemp);
         ret = stringConstructor(buf, strlen(buf));
-        free(buf);
+        xfree(buf);
     } else if (IS_OBJ(value)) {
         if (OBJ_TYPE(value) == OBJ_T_STRING) {
             char *cstring = AS_CSTRING(value);
@@ -221,7 +221,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
                 ASSERT_MEM(buf);
                 sprintf(buf, "<fun %s>", func->name->chars);
                 ret = stringConstructor(buf, strlen(buf));
-                free(buf);
+                xfree(buf);
             }
         } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE) {
             ObjInstance *inst = AS_INSTANCE(value);
@@ -241,7 +241,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
                 ASSERT_MEM(cbuf);
                 sprintf(cbuf, "<instance %s>", klassName);
                 ret = stringConstructor(cbuf, strlen(cbuf));
-                free(cbuf);
+                xfree(cbuf);
             }
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
@@ -250,7 +250,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<class %s>", klassName);
             ret = stringConstructor(cbuf, strlen(cbuf));
-            free(cbuf);
+            xfree(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
             ObjModule *mod = AS_MODULE(value);
             char *modName = mod->name->chars;
@@ -258,7 +258,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<module %s>", modName);
             ret = stringConstructor(cbuf, strlen(cbuf));
-            free(cbuf);
+            xfree(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
             ObjString *name = native->name;
@@ -267,7 +267,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<fn %s (native)>", nameStr);
             ret = stringConstructor(cbuf, strlen(cbuf));
-            free(cbuf);
+            xfree(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
             ObjString *name;
@@ -284,7 +284,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<method %s>", nameStr);
             ret = stringConstructor(cbuf, strlen(cbuf));
-            free(cbuf);
+            xfree(cbuf);
         } else {
             UNREACHABLE("Invalid object type (%d)", AS_OBJ(value)->type);
         }
