@@ -15,7 +15,7 @@ Added features:
 * Integrated debugger
 * Integrated REPL
 * Multi-process integration with fork() syscall
-* Basic multi-threading with libpthread with a global VM lock
+* Basic multi-threading with libpthread and a global VM lock
 * try/catch blocks
 * Iterators and foreach() statement
 * String interpolation

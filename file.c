@@ -1,5 +1,3 @@
-// this creates defines for O_TMPFILE, O_PATH, etc. in fcntl
-#define _GNU_SOURCE 1
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>

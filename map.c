@@ -1,3 +1,5 @@
+#include <unistd.h>
+#include <errno.h>
 #include "object.h"
 #include "vm.h"
 #include "runtime.h"
@@ -5,6 +7,10 @@
 #include "memory.h"
 
 ObjClass *lxMapClass;
+
+ObjClass *lxEnvClass;
+ObjInstance *lxEnv;
+extern char **environ; // defined in unistd.h
 
 static void markInternalMap(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
@@ -99,7 +105,7 @@ static Value lxMapToString(int argCount, Value *args) {
     return ret;
 }
 
-static Value lxMapOpIndexGet(int argCount, Value *args) {
+static Value lxMapGet(int argCount, Value *args) {
     CHECK_ARITY("Map#[]", 2, 2, argCount);
     Value self = args[0];
     Table *map = MAP_GETHIDDEN(self);
@@ -112,7 +118,7 @@ static Value lxMapOpIndexGet(int argCount, Value *args) {
     }
 }
 
-static Value lxMapOpIndexSet(int argCount, Value *args) {
+static Value lxMapSet(int argCount, Value *args) {
     CHECK_ARITY("Map#[]=", 3, 3, argCount);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
@@ -155,7 +161,7 @@ static Value lxMapIter(int argCount, Value *args) {
     return createIterator(*args);
 }
 
-static Value lxMapOpEquals(int argCount, Value *args) {
+static Value lxMapEquals(int argCount, Value *args) {
     CHECK_ARITY("Map#==", 2, 2, argCount);
     return BOOL_VAL(mapEquals(args[0], args[1]));
 }
@@ -208,14 +214,85 @@ static Value lxMapDelete(int argCount, Value *args) {
     return NUMBER_VAL(deleted);
 }
 
+// ENV
+
+static Value lxEnvGet(int argCount, Value *args) {
+    CHECK_ARITY("ENV#[]", 2, 2, argCount);
+    Value key = args[1];
+    CHECK_ARG_IS_INSTANCE_OF(key, lxStringClass, 1);
+    const char *ckey = VAL_TO_STRING(key)->chars;
+    char *val = getenv(ckey);
+    if (val == NULL) {
+        return NIL_VAL;
+    } else {
+        return newStringInstance(copyString(val, strlen(val)));
+    }
+}
+
+static Value lxEnvSet(int argCount, Value *args) {
+    CHECK_ARITY("ENV#[]=", 3, 3, argCount);
+    Value key = args[1];
+    Value val = args[2];
+    CHECK_ARG_IS_INSTANCE_OF(key, lxStringClass, 1);
+    CHECK_ARG_IS_INSTANCE_OF(val, lxStringClass, 2);
+    const char *ckey = VAL_TO_STRING(key)->chars;
+    const char *cval = VAL_TO_STRING(val)->chars;
+    int last = errno;
+    if (setenv(ckey, cval, 1) != 0) {
+        int err = errno;
+        errno = last;
+        throwErrorFmt(lxErrClass, "Error setting environment variable: %s",
+                strerror(err));
+    }
+    return val;
+}
+
+static Value lxEnvAll(int argCount, Value *args) {
+    CHECK_ARITY("ENV#all", 1, 1, argCount);
+    char **envp = environ;
+    Value mapVal = newMap();
+    Table *map = MAP_GETHIDDEN(mapVal);
+    while (*envp) {
+        fprintf(stderr, "ENV var: %s\n", *envp);
+        char *eq = strchr(*envp, '=');
+        if (!eq) {
+            throwErrorFmt(lxErrClass, "Invalid environment variable found, contains no '='?");
+        }
+        size_t varLen = strlen(*envp);
+        ObjString *nameStr = copyString(*envp, (int)(eq-*envp));
+        ObjString *valStr = copyString(eq+1, (*envp+varLen)-eq-1);
+        Value name = newStringInstance(nameStr);
+        Value val = newStringInstance(valStr);
+        tableSet(map, name, val);
+        envp++;
+    }
+    return mapVal;
+}
+
+static Value lxEnvDelete(int argCount, Value *args) {
+    CHECK_ARITY("ENV#delete", 2, -1, argCount);
+    for (int i = 1; i < argCount; i++) {
+        Value name = args[i];
+        CHECK_ARG_IS_INSTANCE_OF(name, lxStringClass, i);
+        const char *cname = VAL_TO_STRING(name)->chars;
+        int last = errno;
+        if (unsetenv(cname) != 0) {
+            int err = errno;
+            errno = last;
+            throwErrorFmt(lxErrClass, "Error deleting environment variable: %s", strerror(err));
+        }
+    }
+    return BOOL_VAL(true);
+}
+
 void Init_MapClass() {
     ObjClass *mapClass = addGlobalClass("Map", lxObjClass);
     lxMapClass = mapClass;
 
     addNativeMethod(mapClass, "init", lxMapInit);
-    addNativeMethod(mapClass, "opIndexGet", lxMapOpIndexGet);
-    addNativeMethod(mapClass, "opIndexSet", lxMapOpIndexSet);
-    addNativeMethod(mapClass, "opEquals", lxMapOpEquals);
+    addNativeMethod(mapClass, "opIndexGet", lxMapGet);
+    addNativeMethod(mapClass, "opIndexSet", lxMapSet);
+    addNativeMethod(mapClass, "opEquals", lxMapEquals);
     addNativeMethod(mapClass, "keys", lxMapKeys);
     addNativeMethod(mapClass, "values", lxMapValues);
     addNativeMethod(mapClass, "toString", lxMapToString);
@@ -224,4 +301,14 @@ void Init_MapClass() {
     addNativeMethod(mapClass, "hasKey", lxMapHasKey);
     addNativeMethod(mapClass, "slice", lxMapSlice);
     addNativeMethod(mapClass, "delete", lxMapDelete);
+
+    lxEnvClass = newClass(internedString("ENV", 3), lxObjClass);
+    lxEnv = newInstance(lxEnvClass);
+
+    addNativeMethod(lxEnvClass, "opIndexGet", lxEnvGet);
+    addNativeMethod(lxEnvClass, "opIndexSet", lxEnvSet);
+    addNativeMethod(lxEnvClass, "all", lxEnvAll);
+    addNativeMethod(lxEnvClass, "delete", lxEnvDelete);
+
+    tableSet(&vm.globals, OBJ_VAL(internedString("ENV", 3)), OBJ_VAL(lxEnv));
 }
