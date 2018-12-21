@@ -99,6 +99,7 @@ extern Scanner scanner; // main scanner
 
 // init/reinit scanner
 void initScanner(Scanner *scan, const char *src);
+void freeScanner(Scanner *scan);
 void resetScanner(Scanner *scan);
 const char *tokTypeStr(TokenType ttype);
 Token scanToken(void);

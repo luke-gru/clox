@@ -406,6 +406,11 @@ void initScanner(Scanner *scan, const char *src) {
   setScanner(scan);
 }
 
+void freeScanner(Scanner *scan) {
+    initScanner(scan, NULL);
+    setScanner(NULL);
+}
+
 Scanner *getScanner(void) {
     return current;
 }

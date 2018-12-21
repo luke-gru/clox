@@ -1588,28 +1588,30 @@ static void emitNode(Node *n) {
 
 int compile_src(char *src, Chunk *chunk, CompileErr *err) {
     initScanner(&scanner, src);
-    initParser(&parser);
-    Node *program = parse(&parser);
+    Parser p;
+    initParser(&p);
+    Node *program = parse(&p);
+    freeScanner(&scanner);
     if (CLOX_OPTION_T(parseOnly)) {
-        *err = parser.hadError ? COMPILE_ERR_SYNTAX :
+        *err = p.hadError ? COMPILE_ERR_SYNTAX :
             COMPILE_ERR_NONE;
-        if (parser.hadError) {
-            outputParserErrors(&parser, stderr);
-            freeParser(&parser);
+        if (p.hadError) {
+            outputParserErrors(&p, stderr);
+            freeParser(&p);
             return -1;
         }
         return 0;
-    } else if (parser.hadError) {
-        outputParserErrors(&parser, stderr);
-        freeParser(&parser); // TODO: throw SyntaxError
+    } else if (p.hadError) {
+        outputParserErrors(&p, stderr);
+        freeParser(&p); // TODO: throw SyntaxError
         *err = COMPILE_ERR_SYNTAX;
         return -1;
     }
-    freeParser(&parser);
+    ASSERT(program);
+    freeParser(&p);
     Compiler mainCompiler;
     top = &mainCompiler;
     initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, chunk);
-    ASSERT(program);
     emitNode(program);
     ObjFunction *prog = endCompiler();
     *chunk = prog->chunk; // copy
@@ -1641,10 +1643,6 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
     }
     char *buf = calloc(st.st_size+1, 1);
     ASSERT_MEM(buf);
-    if (buf == NULL) {
-        *err = COMPILE_ERR_ERRNO;
-        return -1;
-    }
     res = (int)read(fd, buf, st.st_size);
     if (res == -1) {
         *err = COMPILE_ERR_ERRNO;
@@ -1652,7 +1650,8 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
         return res;
     }
     res = compile_src(buf, chunk, err);
-    free(buf);
+    // NOTE: buf not freed, because tokens from scanner still point to file
+    // buffer, and is also used in VM loop.
     return res;
 }
 
