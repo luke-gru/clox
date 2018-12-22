@@ -1969,6 +1969,9 @@ static InterpretResult vm_run() {
           if (IS_INSTANCE(instanceVal)) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
               Obj *callable = instanceFindMethod(inst, mname);
+              if (!callable && numArgs == 0) {
+                  callable = instanceFindGetter(inst, mname);
+              }
               if (!callable) {
                   ObjString *className = inst->klass->name;
                   const char *classStr = className->chars ? className->chars : "(anon)";
@@ -1979,6 +1982,9 @@ static InterpretResult vm_run() {
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);
+              /*if (!callable && numArgs == 0) {*/
+                  /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
+              /*}*/
               if (!callable) {
                   ObjString *className = klass->name;
                   const char *classStr = className ? className->chars : "(anon)";
@@ -1990,6 +1996,9 @@ static InterpretResult vm_run() {
           } else if (IS_MODULE(instanceVal)) {
               ObjModule *mod = AS_MODULE(instanceVal);
               Obj *callable = moduleFindStaticMethod(mod, mname);
+              /*if (!callable && numArgs == 0) {*/
+                  /*callable = instanceFindGetter((ObjInstance*)mod, mname);*/
+              /*}*/
               if (!callable) {
                   ObjString *modName = mod->name;
                   const char *modStr = modName ? modName->chars : "(anon)";
