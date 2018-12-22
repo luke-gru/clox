@@ -1390,6 +1390,33 @@ static Node *primary() {
         TRACE_END("primary");
         return arr;
     }
+    if (check(TOKEN_PERCENT) && peekTokN(1).type == TOKEN_LEFT_BRACE) {
+        TRACE_START("mapExpr");
+        advance(); advance();
+        Token lbrackTok = current->previous;
+        node_type_t mapType = {
+            .type = NODE_EXPR,
+            .kind = MAP_EXPR,
+        };
+        Node *map = createNode(mapType, lbrackTok, NULL);
+        while (true) {
+            if (check(TOKEN_RIGHT_BRACE)) break;
+            Node *key = expression();
+            nodeAddChild(map, key);
+            consume(TOKEN_COLON, "Expected colon after key in map literal");
+            Node *val = expression();
+            nodeAddChild(map, val);
+            if (match(TOKEN_COMMA)) {
+                // continue
+            } else {
+                break;
+            }
+        }
+        consume(TOKEN_RIGHT_BRACE, "Expected '}' to end map literal");
+        TRACE_END("mapExpr");
+        TRACE_END("primary");
+        return map;
+    }
     if (match(TOKEN_LEFT_PAREN)) {
         TRACE_END("groupExpr");
         Token lparenTok = current->previous;

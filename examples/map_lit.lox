@@ -1,0 +1,6 @@
+var m = %{1:2, 2:4, '4': 8};
+print m._class;
+
+__END__
+-- expect: --
+<class Map>

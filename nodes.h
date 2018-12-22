@@ -13,7 +13,8 @@ typedef enum eExprType {
     LOGICAL_EXPR,
     GROUPING_EXPR,
     LITERAL_EXPR,
-    ARRAY_EXPR,
+    ARRAY_EXPR, // []
+    MAP_EXPR, // %{}
     INDEX_GET_EXPR,
     INDEX_SET_EXPR,
     UNARY_EXPR,
@@ -34,6 +35,7 @@ static const char *exprTypeNames[] = {
     "GROUPING_EXPR",
     "LITERAL_EXPR",
     "ARRAY_EXPR",
+    "MAP_EXPR",
     "INDEX_GET_EXPR",
     "INDEX_SET_EXPR",
     "UNARY_EXPR",

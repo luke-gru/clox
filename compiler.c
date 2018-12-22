@@ -1183,7 +1183,7 @@ static void emitNode(Node *n) {
         return;
     }
     case ARRAY_EXPR: {
-        Token arrayTok = syntheticToken("Array");
+        Token arrayTok = syntheticToken("Array"); // TODO: what if Array is shadowed? Maybe create OP_ARRAY instead
         namedVariable(arrayTok, VAR_GET);
         emitChildren(n);
         CallInfo *callInfoData = ALLOCATE(CallInfo, 1);
@@ -1196,6 +1196,17 @@ static void emitNode(Node *n) {
         uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
         emitOp2(OP_CALL, (uint8_t)n->children->length, callInfoConstSlot);
         return;
+    }
+    case MAP_EXPR: {
+        ASSERT(n->children->length % 2 == 0);
+        if (n->children->length >= UINT8_MAX) {
+            // TODO: fix
+            error("Too many key-value pairs in map literal");
+        }
+        vec_reverse(n->children);
+        emitChildren(n);
+        emitOp1(OP_MAP, (uint8_t)n->children->length);
+        break;
     }
     case IF_STMT: {
         emitNode(n->children->data[0]); // condition

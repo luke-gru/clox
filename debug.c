@@ -99,6 +99,8 @@ const char *opName(OpCode code) {
         return "OP_INVOKE";
     case OP_STRING:
         return "OP_STRING";
+    case OP_MAP:
+        return "OP_MAP";
     case OP_SPLAT_ARRAY:
         return "OP_SPLAT_ARRAY";
     case OP_GET_THIS:
@@ -291,6 +293,16 @@ static int stringInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
     return i+3;
+}
+
+static int printMapInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+    uint8_t keyValLen = chunk->code[i + 1];
+    fprintf(f, "%-16s    len=%03d\n", op, keyValLen);
+    return i+2;
+}
+
+static int mapInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    return i+2;
 }
 
 static int printLocalVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
@@ -502,6 +514,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
             return printConstantInstruction(f, opName(byte), chunk, i);
         case OP_STRING:
             return printStringInstruction(f, opName(byte), chunk, i);
+        case OP_MAP:
+            return printMapInstruction(f, opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
         case OP_SET_UPVALUE:
@@ -590,6 +604,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             return constantInstruction(buf, opName(byte), chunk, i);
         case OP_STRING:
             return stringInstruction(buf, opName(byte), chunk, i);
+        case OP_MAP:
+            return mapInstruction(buf, opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
         case OP_SET_UPVALUE:

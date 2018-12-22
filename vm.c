@@ -2263,6 +2263,19 @@ static InterpretResult vm_run() {
           }
           break;
       }
+      case OP_MAP: {
+          uint8_t numKeyVals = READ_BYTE();
+          DBG_ASSERT(numKeyVals % 2 == 0);
+          Value mapVal = newMap();
+          Table *map = MAP_GETHIDDEN(mapVal);
+          for (int i = 0; i < numKeyVals; i+=2) {
+              Value key = pop();
+              Value val = pop();
+              tableSet(map, key, val);
+          }
+          push(mapVal);
+          break;
+      }
       // exit interpreter, or evaluation context if in eval() or
       // loadScript/requireScript
       case OP_LEAVE: {
