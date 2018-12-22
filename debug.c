@@ -273,7 +273,7 @@ static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
 static int printStringInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
     uint8_t isStatic = chunk->code[i + 2];
-    fprintf(f, "%-16s %4d '", op, constantIdx);
+    fprintf(f, "%-16s %04d '", op, constantIdx);
     Value constant = getConstant(chunk, constantIdx);
     printValue(f, constant,  false);
     fprintf(f, "' (static=%u)\n", isStatic);
@@ -287,7 +287,7 @@ static int stringInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     ObjString *constantStr = AS_STRING(constant);
     char *constantCStr = constantStr->chars;
     char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+20, 1);
-    sprintf(cbuf, "%s\t%4d\t'%s' (static=%d)\n", op, constantIdx, constantCStr, isStatic);
+    sprintf(cbuf, "%s\t%04d\t'%s' (static=%d)\n", op, constantIdx, constantCStr, isStatic);
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
     return i+3;
@@ -352,7 +352,7 @@ static int closureInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec
 static int printJumpInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t jumpOffset = chunk->code[i + 1];
     /*ASSERT(jumpOffset != 0); // should have been patched*/
-    fprintf(f, "%-16s %04" PRId8 " (addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
+    fprintf(f, "%-16s\t%04" PRId8 "\t(addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
     return i+2;
 }
 
@@ -402,10 +402,10 @@ static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
 
 // TODO: make it like printCallInstruction (show callInfo)
 static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
-    char *cbuf = calloc(strlen(op)+1+10, 1);
+    char *cbuf = calloc(strlen(op)+1+11, 1);
     ASSERT_MEM(cbuf);
     uint8_t numArgs = chunk->code[i + 1];
-    sprintf(cbuf, "%s\t(argc=%d)\n", op, numArgs);
+    sprintf(cbuf, "%s\t(argc=%02d)\n", op, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
     return i+3;
@@ -451,12 +451,14 @@ static int checkKeywordInstruction(ObjString *buf, char *op, Chunk *chunk, int i
 
 static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
+    uint8_t varNameIdx = chunk->code[i + 2];
+    Value varName = getConstant(chunk, varNameIdx);
     char *cbuf = calloc(strlen(op)+1+12, 1);
     ASSERT_MEM(cbuf);
-    sprintf(cbuf, "%s\t[slot %03" PRId8 "]\n", op, slotIdx);
+    sprintf(cbuf, "%s\t'%s' [slot %03" PRId8 "]\n", op, VAL_TO_STRING(varName)->chars, slotIdx);
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
-    return i+2;
+    return i+3;
 }
 
 // instruction has no operands

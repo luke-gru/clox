@@ -195,7 +195,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
     } else if (IS_NUMBER(value)) {
         char buftemp[50] = { '\0' };
         double d = AS_NUMBER(value);
-        snprintf(buftemp, 50, "%g", d); // ex: "1.20"
+        snprintf(buftemp, 50, "%g", d); // ex: "1.2"
         char *buf = calloc(strlen(buftemp)+1, 1);
         ASSERT_MEM(buf);
         strcpy(buf, buftemp);
@@ -292,7 +292,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
     if (ret) {
         return ret;
     }
-    UNREACHABLE("error");
+    UNREACHABLE("error: invalid type given %s", typeOfVal(value));
 }
 
 const char *typeOfVal(Value val) {
