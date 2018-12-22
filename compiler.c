@@ -1073,12 +1073,12 @@ static void emitNode(Node *n) {
     case STMTLIST_STMT:
     case GROUPING_EXPR: {
         emitChildren(n);
-        return;
+        break;
     }
     case EXPR_STMT: {
         emitChildren(n);
         emitOp0(OP_POP);
-        return;
+        break;
     }
     case BINARY_EXPR: {
         emitChildren(n);
@@ -1111,7 +1111,7 @@ static void emitNode(Node *n) {
         } else {
             UNREACHABLE("invalid binary expr node (token: %s)", tokStr(&n->tok));
         }
-        return;
+        break;
     }
     case LOGICAL_EXPR: {
         if (n->tok.type == TOKEN_AND) {
@@ -1130,7 +1130,7 @@ static void emitNode(Node *n) {
         } else {
             UNREACHABLE("invalid logical expression node (token: %s)", tokStr(&n->tok));
         }
-        return;
+        break;
     }
     case UNARY_EXPR: {
         emitNode(n->children->data[0]);
@@ -1141,7 +1141,7 @@ static void emitNode(Node *n) {
         } else {
             UNREACHABLE("invalid unary expr node (token: %s)", tokStr(&n->tok));
         }
-        return;
+        break;
     }
     case LITERAL_EXPR: {
         if (n->tok.type == TOKEN_NUMBER) {
@@ -1180,28 +1180,25 @@ static void emitNode(Node *n) {
         } else {
             UNREACHABLE("invalid literal expr node (token: %s)", tokStr(&n->tok));
         }
-        return;
+        break;
     }
     case ARRAY_EXPR: {
-        Token arrayTok = syntheticToken("Array"); // TODO: what if Array is shadowed? Maybe create OP_ARRAY instead
-        namedVariable(arrayTok, VAR_GET);
+        if (n->children->length >= UINT8_MAX) {
+            // TODO: fix
+            error("Too many elements in array literal");
+            return;
+        }
+        vec_reverse(n->children);
         emitChildren(n);
-        CallInfo *callInfoData = ALLOCATE(CallInfo, 1);
-        ASSERT_MEM(callInfoData);
-        callInfoData->nameTok = arrayTok;
-        callInfoData->argc = n->children->length;
-        callInfoData->numKwargs = 0;
-        ObjInternal *callInfoObj = newInternalObject(callInfoData, sizeof(CallInfo), NULL, NULL);
-        hideFromGC((Obj*)callInfoObj);
-        uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
-        emitOp2(OP_CALL, (uint8_t)n->children->length, callInfoConstSlot);
-        return;
+        emitOp1(OP_ARRAY, (uint8_t)n->children->length);
+        break;
     }
     case MAP_EXPR: {
         ASSERT(n->children->length % 2 == 0);
         if (n->children->length >= UINT8_MAX) {
             // TODO: fix
             error("Too many key-value pairs in map literal");
+            return;
         }
         vec_reverse(n->children);
         emitChildren(n);
@@ -1319,6 +1316,7 @@ static void emitNode(Node *n) {
     case BREAK_STMT: {
         if (loopStart == -1) {
             error("'break' can only be used in loops ('while' or 'for' loops)");
+            return;
         }
         Insn *in = emitJump(OP_JUMP);
         in->flags |= INSN_FL_BREAK;
@@ -1327,6 +1325,7 @@ static void emitNode(Node *n) {
     case CONTINUE_STMT: {
         if (loopStart == -1) {
             error("'continue' can only be used in loops ('while' or 'for' loops)");
+            return;
         }
         emitLoop(loopStart);
         break;
@@ -1334,7 +1333,7 @@ static void emitNode(Node *n) {
     case PRINT_STMT: {
         emitChildren(n);
         emitOp0(OP_PRINT);
-        return;
+        break;
     }
     case VAR_STMT: {
         if (n->children->length > 0) {
@@ -1349,7 +1348,7 @@ static void emitNode(Node *n) {
         } else {
             emitOp2(OP_SET_LOCAL, (uint8_t)arg, identifierConstant(&n->tok));
         }
-        return;
+        break;
     }
     case VARIABLE_EXPR: {
         namedVariable(n->tok, VAR_GET);

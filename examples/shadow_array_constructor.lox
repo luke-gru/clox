@@ -1,0 +1,11 @@
+fun shouldntError() {
+  var Array = true; // shadow constructor
+  var a = [];
+  return a;
+}
+
+print shouldntError();
+
+__END__
+-- expect: --
+[]

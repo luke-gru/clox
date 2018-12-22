@@ -99,6 +99,8 @@ const char *opName(OpCode code) {
         return "OP_INVOKE";
     case OP_STRING:
         return "OP_STRING";
+    case OP_ARRAY:
+        return "OP_ARRAY";
     case OP_MAP:
         return "OP_MAP";
     case OP_SPLAT_ARRAY:
@@ -295,6 +297,17 @@ static int stringInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+3;
 }
 
+static int printArrayInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+    uint8_t keyValLen = chunk->code[i + 1];
+    fprintf(f, "%-16s    len=%03d\n", op, keyValLen);
+    return i+2;
+}
+
+static int arrayInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    // TODO
+    return i+2;
+}
+
 static int printMapInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t keyValLen = chunk->code[i + 1];
     fprintf(f, "%-16s    len=%03d\n", op, keyValLen);
@@ -302,6 +315,7 @@ static int printMapInstruction(FILE *f, char *op, Chunk *chunk, int i) {
 }
 
 static int mapInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    // TODO
     return i+2;
 }
 
@@ -514,6 +528,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
             return printConstantInstruction(f, opName(byte), chunk, i);
         case OP_STRING:
             return printStringInstruction(f, opName(byte), chunk, i);
+        case OP_ARRAY:
+            return printArrayInstruction(f, opName(byte), chunk, i);
         case OP_MAP:
             return printMapInstruction(f, opName(byte), chunk, i);
         case OP_GET_LOCAL:
@@ -604,6 +620,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             return constantInstruction(buf, opName(byte), chunk, i);
         case OP_STRING:
             return stringInstruction(buf, opName(byte), chunk, i);
+        case OP_ARRAY:
+            return arrayInstruction(buf, opName(byte), chunk, i);
         case OP_MAP:
             return mapInstruction(buf, opName(byte), chunk, i);
         case OP_GET_LOCAL:

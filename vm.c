@@ -2263,6 +2263,17 @@ static InterpretResult vm_run() {
           }
           break;
       }
+      case OP_ARRAY: {
+          uint8_t numEls = READ_BYTE();
+          Value aryVal = newArray();
+          ValueArray *ary = ARRAY_GETHIDDEN(aryVal);
+          for (int i = 0; i < numEls; i++) {
+              Value el = pop();
+              writeValueArrayEnd(ary, el);
+          }
+          push(aryVal);
+          break;
+      }
       case OP_MAP: {
           uint8_t numKeyVals = READ_BYTE();
           DBG_ASSERT(numKeyVals % 2 == 0);

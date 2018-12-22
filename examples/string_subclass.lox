@@ -1,0 +1,14 @@
+class MyBuf < String {
+  init(*args) {
+    super.init(*args);
+    this.buf = [];
+  }
+}
+
+var s = MyBuf("stringish");
+print s;
+print s.buf;
+
+__END__
+stringish!
+[]

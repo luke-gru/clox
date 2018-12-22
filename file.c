@@ -11,6 +11,7 @@
 
 ObjClass *lxFileClass;
 
+// TODO: make File a subclass of IO, and use per-IO object buffers
 static char fileReadBuf[4096];
 
 // Does this file exist and is it accessible? If not, returns errno from stat()

@@ -53,6 +53,7 @@ typedef enum {
     OP_PRINT,
 
     OP_STRING,
+    OP_ARRAY,
     OP_MAP,
     OP_ITER,
     OP_ITER_NEXT,

@@ -38,12 +38,11 @@ static Value lxStringToString(int argCount, Value *args) {
     return *args;
 }
 
-// ex: print("hi " + "there");
+// ex: print "hi " + "there";
 static Value lxStringOpAdd(int argCount, Value *args) {
     CHECK_ARITY("String#opAdd", 2, 2, argCount);
     Value self = *args;
     Value rhs = args[1];
-    // TODO: maybe coerce into String with String() constructor?
     if (!IS_A_STRING(rhs)) {
         throwErrorFmt(lxTypeErrClass, "String#+ (opAdd) called with non-string argument. Type: %s",
                 typeOfVal(rhs));
