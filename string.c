@@ -131,9 +131,15 @@ static Value lxStringOpEquals(int argCount, Value *args) {
     return BOOL_VAL(stringEquals(args[0], args[1]));
 }
 
+static Value lxStringGetSize(int argCount, Value *args) {
+    ObjString *str = STRING_GETHIDDEN(*args);
+    return NUMBER_VAL(str->length);
+}
+
 void Init_StringClass() {
     ObjClass *stringClass = addGlobalClass("String", lxObjClass);
     addNativeMethod(stringClass, "init", lxStringInit);
+    // methods
     addNativeMethod(stringClass, "toString", lxStringToString);
     addNativeMethod(stringClass, "opAdd", lxStringOpAdd);
     addNativeMethod(stringClass, "opIndexGet", lxStringOpIndexGet);
@@ -144,5 +150,8 @@ void Init_StringClass() {
     addNativeMethod(stringClass, "insertAt", lxStringInsertAt);
     addNativeMethod(stringClass, "substr", lxStringSubstr);
     addNativeMethod(stringClass, "dup", lxStringDup);
+
+    // getters
+    addNativeGetter(stringClass, "size", lxStringGetSize);
     lxStringClass = stringClass;
 }

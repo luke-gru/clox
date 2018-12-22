@@ -7,21 +7,22 @@ craftinginterpreters (craftinginterpreters.com) by Bob Nystrom.
 I've followed along, but added my own features as well.
 
 Added features:
-* Splatted (rest) arguments
+* Splatted (rest) parameters and arguments
 * Default arguments
 * Keyword arguments
 * Mutable strings
 * Modules
 * Integrated debugger
 * Integrated REPL
-* Multi-process integration with fork() syscall
+* Multi-process support using fork() syscall
 * Basic multi-threading with libpthread and a global VM lock
 * try/catch blocks
 * Iterators and foreach() statement
 * String interpolation
+* Map literals
 
 Some internal differences:
-* creation of AST before compilation phase
+* creation of AST before compilation phase (separate parser/compiler)
 * bytecode optimization passes (including constant folding)
 * Easy way to create objects in C functions without having to hide
 them from GC, even if they're not pushed to operand stack (aka rooted).
@@ -30,9 +31,12 @@ Future features:
 * Support for regex
 * Add some standard library and networking support
 * Improve threading story, add mutex objects to start with
+* Support non-ascii strings
+* Add constants (no redefinitions, will given compiler or runtime error)
 
 OS/compiler support:
-* Only tested on linux, uses fork() and libpthread, as well as C99 features.
+* Only tested on linux (Ubuntu 16.04), uses fork() and libpthread, as well as C99 features.
+* Not C++ compliant
 
 Examples:
 See examples folder. These are also tests run by the ./bin/test_examples

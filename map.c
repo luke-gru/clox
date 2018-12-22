@@ -214,6 +214,11 @@ static Value lxMapDelete(int argCount, Value *args) {
     return NUMBER_VAL(deleted);
 }
 
+static Value lxMapGetSize(int argCount, Value *args) {
+    Table *map = MAP_GETHIDDEN(*args);
+    return NUMBER_VAL(map->count);
+}
+
 // ENV
 
 static Value lxEnvGet(int argCount, Value *args) {
@@ -299,6 +304,7 @@ void Init_MapClass() {
     lxMapClass = mapClass;
 
     addNativeMethod(mapClass, "init", lxMapInit);
+    // methods
     addNativeMethod(mapClass, "opIndexGet", lxMapGet);
     addNativeMethod(mapClass, "opIndexSet", lxMapSet);
     addNativeMethod(mapClass, "opEquals", lxMapEquals);
@@ -310,6 +316,9 @@ void Init_MapClass() {
     addNativeMethod(mapClass, "hasKey", lxMapHasKey);
     addNativeMethod(mapClass, "slice", lxMapSlice);
     addNativeMethod(mapClass, "delete", lxMapDelete);
+
+    // getters
+    addNativeGetter(mapClass, "size", lxMapGetSize);
 
     lxEnvClass = newClass(internedString("ENV", 3), lxObjClass);
     lxEnv = newInstance(lxEnvClass);

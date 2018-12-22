@@ -202,12 +202,18 @@ static Value lxArrayOpEquals(int argCount, Value *args) {
     return BOOL_VAL(arrayEquals(args[0], args[1]));
 }
 
+static Value lxArrayGetSize(int argCount, Value *args) {
+    ValueArray *ary = ARRAY_GETHIDDEN(*args);
+    return NUMBER_VAL(ary->count);
+}
+
 void Init_ArrayClass() {
     // class Array
     ObjClass *arrayClass = addGlobalClass("Array", lxObjClass);
     lxAryClass = arrayClass;
 
     addNativeMethod(arrayClass, "init", lxArrayInit);
+    // methods
     addNativeMethod(arrayClass, "push", lxArrayPush);
     addNativeMethod(arrayClass, "pop", lxArrayPop);
     addNativeMethod(arrayClass, "pushFront", lxArrayPushFront);
@@ -219,4 +225,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "toString", lxArrayToString);
     addNativeMethod(arrayClass, "iter", lxArrayIter);
     addNativeMethod(arrayClass, "clear", lxArrayClear);
+
+    // getters
+    addNativeGetter(arrayClass, "size", lxArrayGetSize);
 }
