@@ -6,6 +6,8 @@
 
 ObjClass *lxAryClass;
 
+extern ObjNative *nativeArrayInit;
+
 static void markInternalAry(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
@@ -36,9 +38,9 @@ static void freeInternalAry(Obj *internalObj) {
 
 // ex: var a = Array();
 //     var b = ["hi", 2, Map()];
-Value lxArrayInit(int argCount, Value *args) {
-    // TODO: call super?
+static Value lxArrayInit(int argCount, Value *args) {
     CHECK_ARITY("Array#init", 1, -1, argCount);
+    callSuper(0, NULL, NULL);
     Value self = *args;
     DBG_ASSERT(IS_AN_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
@@ -120,7 +122,7 @@ static Value lxArrayClear(int argCount, Value *args) {
 static Value lxArrayToString(int argCount, Value *args) {
     CHECK_ARITY("Array#toString", 1, 1, argCount);
     Value self = *args;
-    Obj* selfObj = AS_OBJ(self);
+    Obj *selfObj = AS_OBJ(self);
     Value ret = newStringInstance(copyString("[", 1));
     ObjString *bufRet = STRING_GETHIDDEN(ret);
     ValueArray *ary = ARRAY_GETHIDDEN(self);
@@ -212,7 +214,7 @@ void Init_ArrayClass() {
     ObjClass *arrayClass = addGlobalClass("Array", lxObjClass);
     lxAryClass = arrayClass;
 
-    addNativeMethod(arrayClass, "init", lxArrayInit);
+    nativeArrayInit = addNativeMethod(arrayClass, "init", lxArrayInit);
     // methods
     addNativeMethod(arrayClass, "push", lxArrayPush);
     addNativeMethod(arrayClass, "pop", lxArrayPop);

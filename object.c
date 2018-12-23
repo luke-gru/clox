@@ -321,6 +321,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     vec_init(&klass->v_includedMods);
     klass->name = name;
     klass->superclass = superclass;
+    // TODO: call lxClassInit
     return klass;
 }
 
@@ -336,6 +337,7 @@ ObjModule *newModule(ObjString *name) {
     initTable(&mod->getters);
     initTable(&mod->setters);
     mod->name = name;
+    // TODO: call lxModuleInit
     return mod;
 }
 
@@ -367,6 +369,7 @@ ObjNative *newNative(ObjString *name, NativeFn function) {
     );
     native->function = function;
     native->name = name;
+    native->klass = NULL;
     return native;
 }
 
@@ -567,10 +570,10 @@ ValueArray *arrayGetHidden(Value aryVal) {
 }
 
 Value newArray(void) {
+    DBG_ASSERT(nativeArrayInit);
     ObjInstance *instance = newInstance(lxAryClass);
-    Value ary = OBJ_VAL(instance);
-    lxArrayInit(1, &ary);
-    return ary;
+    callVMMethod(instance, OBJ_VAL(nativeArrayInit), 0, NULL);
+    return pop();
 }
 
 // duplicates a string instance
@@ -582,14 +585,11 @@ Value dupStringInstance(Value instance) {
 // creates a new string instance, using `buf` as underlying storage
 Value newStringInstance(ObjString *buf) {
     ASSERT(buf);
-    ObjInstance *ret = newInstance(lxStringClass);
-    Value retVal = OBJ_VAL(ret);
-    Value args[2];
+    DBG_ASSERT(nativeStringInit);
+    ObjInstance *instance = newInstance(lxStringClass);
     Value bufVal = OBJ_VAL(buf);
-    args[0] = retVal;
-    args[1] = bufVal;
-    lxStringInit(2, args);
-    return retVal;
+    callVMMethod(instance, OBJ_VAL(nativeStringInit), 1, &bufVal);
+    return pop();
 }
 
 void clearString(Value string) {
@@ -634,7 +634,7 @@ Value stringIndexGet(Value self, int index) {
     ObjString *buf = STRING_GETHIDDEN(self);
     if (index >= buf->length) {
         return newStringInstance(copyString("", 0));
-    } else if (index < 0) { // FIXME: handle
+    } else if (index < 0) { // TODO: make it works from end of str?
         throwArgErrorFmt("%s", "index cannot be negative");
     } else {
         return newStringInstance(copyString(buf->chars+index, 1));
@@ -645,7 +645,7 @@ Value stringIndexSet(Value self, int index, char c) {
     ObjString *buf = STRING_GETHIDDEN(self);
     if (index >= buf->length) {
         throwArgErrorFmt("%s", "index too big");
-    } else if (index < 0) { // FIXME: handle
+    } else if (index < 0) { // TODO: make it work from end of str?
         throwArgErrorFmt("%s", "index cannot be negative");
     } else {
         buf->chars[index] = c;
@@ -745,10 +745,10 @@ bool arrayEquals(Value self, Value other) {
 }
 
 Value newMap(void) {
+    DBG_ASSERT(nativeMapInit);
     ObjInstance *instance = newInstance(lxMapClass);
-    Value map = OBJ_VAL(instance);
-    lxMapInit(1, &map);
-    return map;
+    callVMMethod(instance, OBJ_VAL(nativeMapInit), 0, NULL);
+    return pop();
 }
 
 bool mapGet(Value mapVal, Value key, Value *ret) {

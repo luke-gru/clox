@@ -19,7 +19,7 @@ interpreter
 * Add signal trap handlers (`trap(signame, fun() { })`)
 * Add Mutex class, mutexes for thread synchronization
 * release GVL after performing n instructions, or add timer thread
-* Add String#length, String#replace(other)
+* Add String#replace(other)
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Make nil, true, false instances?
 * Make variable lookup work as lookup in Environment tables, not statically
@@ -35,7 +35,8 @@ associated class, and calls the superclass method.
 * Allow debugger to list local variables, global variables, etc.
 * Add constants to language
 * Add socket class in io.c, make it work with multi-threading
-* Allow getters to be called like methods (when given 0 args)
+* Allow getters to be called like methods (when given 0 args) [PARTIAL]
+  - works for instances, not classes or modules (ex: Array.name())
 
 Bugs
 ----

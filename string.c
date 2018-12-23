@@ -6,11 +6,13 @@
 
 ObjClass *lxStringClass;
 
+extern ObjNative *nativeStringInit;
+
 // ex: var s = "string";
 // ex: var s2 = String("string");
 Value lxStringInit(int argCount, Value *args) {
-    // TODO: call super?
     CHECK_ARITY("String#init", 1, 2, argCount);
+    callSuper(0, NULL, NULL);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (argCount == 2) {
@@ -138,7 +140,7 @@ static Value lxStringGetSize(int argCount, Value *args) {
 
 void Init_StringClass() {
     ObjClass *stringClass = addGlobalClass("String", lxObjClass);
-    addNativeMethod(stringClass, "init", lxStringInit);
+    nativeStringInit = addNativeMethod(stringClass, "init", lxStringInit);
     // methods
     addNativeMethod(stringClass, "toString", lxStringToString);
     addNativeMethod(stringClass, "opAdd", lxStringOpAdd);

@@ -8,6 +8,8 @@
 
 ObjClass *lxMapClass;
 
+extern ObjNative *nativeMapInit;
+
 ObjClass *lxEnvClass;
 ObjInstance *lxEnv;
 extern char **environ; // defined in unistd.h
@@ -29,9 +31,9 @@ static void freeInternalMap(Obj *internalObj) {
     FREE(Table, map);
 }
 
-Value lxMapInit(int argCount, Value *args) {
-    // TODO: call super?
+static Value lxMapInit(int argCount, Value *args) {
     CHECK_ARITY("Map#init", 1, -1, argCount);
+    callSuper(0, NULL, NULL);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalMap = newInternalObject(
@@ -246,8 +248,8 @@ static Value lxEnvSet(int argCount, Value *args) {
     if (setenv(ckey, cval, 1) != 0) {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error setting environment variable: %s",
-                strerror(err));
+        throwErrorFmt(lxErrClass, "Error setting environment variable '%s': %s",
+                ckey, strerror(err));
     }
     return val;
 }
@@ -257,10 +259,10 @@ static Value createEnvMap(void) {
     Value mapVal = newMap();
     Table *map = MAP_GETHIDDEN(mapVal);
     while (*envp) {
-        fprintf(stderr, "ENV var: %s\n", *envp);
         char *eq = strchr(*envp, '=');
         if (!eq) {
-            throwErrorFmt(lxErrClass, "Invalid environment variable found, contains no '='?");
+            throwErrorFmt(lxErrClass, "Invalid environment variable found: '%s'. "
+                    "Contains no '='?", *envp);
         }
         size_t varLen = strlen(*envp);
         ObjString *nameStr = copyString(*envp, (int)(eq-*envp));
@@ -293,7 +295,8 @@ static Value lxEnvDelete(int argCount, Value *args) {
         if (unsetenv(cname) != 0) {
             int err = errno;
             errno = last;
-            throwErrorFmt(lxErrClass, "Error deleting environment variable: %s", strerror(err));
+            throwErrorFmt(lxErrClass, "Error deleting environment variable '%s': %s",
+                    cname, strerror(err));
         }
     }
     return BOOL_VAL(true);
@@ -303,7 +306,7 @@ void Init_MapClass() {
     ObjClass *mapClass = addGlobalClass("Map", lxObjClass);
     lxMapClass = mapClass;
 
-    addNativeMethod(mapClass, "init", lxMapInit);
+    nativeMapInit = addNativeMethod(mapClass, "init", lxMapInit);
     // methods
     addNativeMethod(mapClass, "opIndexGet", lxMapGet);
     addNativeMethod(mapClass, "opIndexSet", lxMapSet);

@@ -44,6 +44,8 @@ Value lxJoinThread(int argCount, Value *args);
 Value lxAtExit(int argCount, Value *args);
 
 // class Object
+
+Value lxObjectInit(int argCount, Value *args);
 Value lxObjectGetClass(int argCount, Value *args);
 Value lxObjectGetObjectId(int argCount, Value *args);
 Value lxObjectDup(int argCount, Value *args);
@@ -59,13 +61,13 @@ Value lxClassGetName(int argCount, Value *args);
 //Value lxClassAncestors(int argCount, Value *args);
 
 // class String
-Value lxStringInit(int argCount, Value *args);
+ObjNative *nativeStringInit;
 
 // class Array
-Value lxArrayInit(int argCount, Value *args);
+ObjNative *nativeArrayInit;
 
 // class Map
-Value lxMapInit(int argCount, Value *args);
+ObjNative *nativeMapInit;
 
 // class Iterator
 Value lxIteratorInit(int argCount, Value *args);
@@ -100,7 +102,7 @@ void Init_ProcessModule(void);
 void addGlobalFunction(const char *name, NativeFn func);
 ObjClass *addGlobalClass(const char *name, ObjClass *super);
 ObjModule *addGlobalModule(const char *name);
-void addNativeMethod(void *klass, const char *name, NativeFn func);
-void addNativeGetter(void *klass, const char *name, NativeFn func);
-void addNativeSetter(void *klass, const char *name, NativeFn func);
+ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func);
+ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func);
+ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func);
 #endif

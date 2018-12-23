@@ -1,0 +1,11 @@
+class Object {
+  init() {
+    this.answer = 42;
+  }
+}
+
+s = "str";
+print s.answer;
+__END__
+-- expect: --
+42

@@ -131,6 +131,7 @@ Value lxLoadPath; // load path for loadScript/requireScript (-L flag)
 static void defineNativeClasses(void) {
     // class Object
     ObjClass *objClass = addGlobalClass("Object", NULL);
+    addNativeMethod(objClass, "init", lxObjectInit);
     addNativeMethod(objClass, "dup", lxObjectDup);
     addNativeGetter(objClass, "_class", lxObjectGetClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
@@ -212,6 +213,7 @@ static void defineNativeClasses(void) {
     Init_IOModule();
 }
 
+// NOTE: this initialization function can create Lox runtime objects
 static void defineGlobalVariables(void) {
     lxLoadPath = newArray();
     ObjString *loadPathStr = internedString("loadPath", 8);
@@ -315,6 +317,7 @@ static inline bool isInLoadedScript(void) {
 
 // reset (clear) value stack for current execution context
 void resetStack(void) {
+    ASSERT(EC);
     EC->stackTop = EC->stack;
     EC->frameCount = 0;
 }
@@ -330,12 +333,11 @@ static void initMainThread(void) {
     vm.mainThread = NULL;
 
     Value mainThread = newThread();
-    Value threadList = newArray();
-    arrayPush(threadList, mainThread);
 
     vm.curThread = AS_INSTANCE(mainThread);
     vm.mainThread = AS_INSTANCE(mainThread);
-    vm.threads = AS_INSTANCE(threadList);
+    vec_init(&vm.threads);
+    vec_push(&vm.threads, vm.curThread);
 
     acquireGVL();
     threadSetStatus(mainThread, THREAD_RUNNING);
@@ -395,9 +397,15 @@ void initVM() {
     memset(&rootVMLoopJumpBuf, 0, sizeof(rootVMLoopJumpBuf));
     rootVMLoopJumpBufSet = false;
 
+    // these init functions can create lox objects (until popFrame)
+    pushFrame();
     defineGlobalVariables();
     initMainThread();
+    popFrame();
+
     resetStack();
+    // don't pop EC here, we'll pop it in freeVM()
+
     turnGCOn();
     vmRunLvl = 0;
     VM_DEBUG("initVM() end");
@@ -452,7 +460,9 @@ void freeVM(void) {
     pthread_mutex_destroy(&vm.GVLock);
     vm.curThread = NULL;
     vm.mainThread = NULL;
-    vm.threads = NULL;
+    vec_deinit(&vm.threads);
+
+    while (EC) { pop_EC(); }
 
     VM_DEBUG("freeVM() end");
 }
@@ -611,6 +621,19 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
 static inline CallFrame *getFrame(void) {
     ASSERT(EC->frameCount >= 1);
     return &EC->frames[EC->frameCount-1];
+}
+
+void debugFrame() {
+    CallFrame *frame = getFrame();
+    const char *fnName = frame->isCCall ? frame->nativeFunc->name->chars :
+        frame->closure->function->name->chars;
+    fprintf(stderr, "CallFrame:\n");
+    fprintf(stderr, "  name: %s\n", fnName);
+    fprintf(stderr, "  native? %c\n", frame->isCCall ? 't' : 'f');
+    fprintf(stderr, "  method? %c\n", frame->instance ? 't' : 'f');
+    if (frame->klass) {
+        fprintf(stderr, "  class: %s\n", frame->klass->name ? frame->klass->name->chars : "(anon)");
+    }
 }
 
 static inline CallFrame *getFrameOrNull(void) {
@@ -804,13 +827,13 @@ static void defineMethod(ObjString *name) {
         const char *klassName = klass->name ? klass->name->chars : "(anon)";
         (void)klassName;
         VM_DEBUG("defining method '%s' in class '%s'", name->chars, klassName);
-        ASSERT(tableSet(&klass->methods, OBJ_VAL(name), method));
+        tableSet(&klass->methods, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         const char *modName = mod->name ? mod->name->chars : "(anon)";
         (void)modName;
         VM_DEBUG("defining method '%s' in module '%s'", name->chars, modName);
-        ASSERT(tableSet(&mod->methods, OBJ_VAL(name), method));
+        tableSet(&mod->methods, OBJ_VAL(name), method);
     }
     pop(); // function
 }
@@ -829,7 +852,7 @@ static void defineStaticMethod(ObjString *name) {
         singletonClass = moduleSingletonClass(mod);
     }
     VM_DEBUG("defining static method '%s#%s'", singletonClass->name->chars, name->chars);
-    ASSERT(tableSet(&singletonClass->methods, OBJ_VAL(name), method));
+    tableSet(&singletonClass->methods, OBJ_VAL(name), method);
     pop(); // function
 }
 
@@ -841,11 +864,11 @@ static void defineGetter(ObjString *name) {
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG("defining getter '%s'", name->chars);
-        ASSERT(tableSet(&klass->getters, OBJ_VAL(name), method));
+        tableSet(&klass->getters, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         VM_DEBUG("defining getter '%s'", name->chars);
-        ASSERT(tableSet(&mod->getters, OBJ_VAL(name), method));
+        tableSet(&mod->getters, OBJ_VAL(name), method);
     }
     pop(); // function
 }
@@ -857,11 +880,11 @@ static void defineSetter(ObjString *name) {
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG("defining setter '%s'", name->chars);
-        ASSERT(tableSet(&klass->setters, OBJ_VAL(name), method));
+        tableSet(&klass->setters, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         VM_DEBUG("defining setter '%s'", name->chars);
-        ASSERT(tableSet(&mod->setters, OBJ_VAL(name), method));
+        tableSet(&mod->setters, OBJ_VAL(name), method);
     }
     pop(); // function
 }
@@ -872,12 +895,15 @@ static void defineSetter(ObjString *name) {
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
     VM_DEBUG("Calling VM method");
     push(OBJ_VAL(instance));
+    Value *oldThis = vm.thisValue;
+    setThis(0);
     for (int i = 0; i < argCount; i++) {
         ASSERT(args);
         push(args[i]);
     }
     VM_DEBUG("call begin");
     callCallable(callable, argCount, true, NULL); // pushes return value to stack
+    vm.thisValue = oldThis;
     VM_DEBUG("call end");
     return peek(0);
 }
@@ -981,7 +1007,6 @@ static bool checkFunctionArity(ObjFunction *func, int argCount) {
             throwArgErrorFmt("Expected %d-%d arguments but got %d.",
                     arityMin, arityMax, argCount);
         }
-        return false;
     }
     return true;
 }
@@ -994,6 +1019,12 @@ static bool checkFunctionArity(ObjFunction *func, int argCount) {
 static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo *callInfo) {
     ObjClosure *closure = NULL;
     Value instanceVal;
+    ObjInstance *instance = NULL;
+    ObjClass *frameClass = NULL;
+    if (isMethod) {
+        instance = AS_INSTANCE(EC->stackTop[-argCount-1]);
+        frameClass = instance->klass; // TODO: make class the callable's class, not the instance class
+    }
     if (IS_CLOSURE(callable)) {
         closure = AS_CLOSURE(callable);
         if (!isMethod) {
@@ -1004,7 +1035,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         const char *klassName = klass->name ? klass->name->chars : "(anon)";
         (void)klassName;
         VM_DEBUG("calling callable class %s", klassName);
-        ObjInstance *instance = newInstance(klass);
+        instance = newInstance(klass);
+        frameClass = klass;
         instanceVal = OBJ_VAL(instance);
         /*ASSERT(IS_CLASS(EC->stackTop[-argCount - 1])); this holds true if the # of args is correct for the function */
         EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
@@ -1021,6 +1053,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 ASSERT(nativeInit->function);
                 pushNativeFrame(nativeInit);
                 CallFrame *newFrame = getFrame();
+                DBG_ASSERT(instance);
+                newFrame->instance = instance;
+                newFrame->klass = frameClass;
                 nativeInit->function(argCount+1, EC->stackTop-argCount-1);
                 newFrame->slots = EC->stackTop-argCount-1;
                 if (returnedFromNativeErr) {
@@ -1044,11 +1079,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
             VM_DEBUG("calling non-native initializer with %d args", argCount);
             ASSERT(IS_CLOSURE(initializer));
             closure = AS_CLOSURE(initializer);
-        } else if (argCount > 0) {
-            throwArgErrorFmt("Expected 0 arguments (Object#init) but got %d.", argCount);
-            return false;
         } else {
-            return true; // new instance is on the top of the stack
+            throwArgErrorFmt("init() method not found?", argCount);
         }
     } else if (IS_BOUND_METHOD(callable)) {
         VM_DEBUG("calling bound method with %d args", argCount);
@@ -1060,10 +1092,18 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     } else if (IS_NATIVE_FUNCTION(callable)) {
         VM_DEBUG("Calling native %s with %d args", isMethod ? "method" : "function", argCount);
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
-        if (isMethod) argCount++;
+        if (isMethod) {
+            argCount++;
+            if (!instance) {
+                instance = AS_INSTANCE(*(EC->stackTop-argCount));
+                frameClass = instance->klass;
+            }
+        }
         captureNativeError();
         pushNativeFrame(native);
         CallFrame *newFrame = getFrame();
+        newFrame->instance = instance;
+        newFrame->klass = frameClass;
         Value val = native->function(argCount, EC->stackTop-argCount);
         newFrame->slots = EC->stackTop-argCount;
         if (returnedFromNativeErr) {
@@ -1095,8 +1135,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // non-native function/method call
     ASSERT(closure);
     ObjFunction *func = closure->function;
-    bool arityOK = checkFunctionArity(func, argCount);
-    if (!arityOK) return false;
+    checkFunctionArity(func, argCount);
 
     vec_nodep_t *params = (vec_nodep_t*)nodeGetData(func->funcNode);
     ASSERT(params);
@@ -1212,6 +1251,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // add frame
     VM_DEBUG("%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
+    frame->instance = instance;
+    if (instance && !frameClass) frameClass = instance->klass;
+    frame->klass = frameClass;
     if (funcOffset > 0) {
         VM_DEBUG("Func offset due to optargs: %d", (int)funcOffset);
     }
@@ -1245,6 +1287,56 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     }
 
     return ret;
+}
+
+static Obj *findMethod(ObjClass *klass, ObjString *methodName) {
+    Value method;
+    while (klass) {
+        if (tableGet(&klass->methods, OBJ_VAL(methodName), &method)) {
+            return AS_OBJ(method);
+        }
+        klass = klass->superclass;
+    }
+    return NULL;
+}
+
+// API for calling 'super' in native C methods
+Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
+    (void)cinfo; // TODO: use
+    CallFrame *frame = getFrame();
+    DBG_ASSERT(frame->instance);
+    DBG_ASSERT(frame->klass);
+    if (!frame->isCCall) {
+        throwErrorFmt(lxErrClass, "callSuper must be called from native C function!");
+    }
+    ObjNative *method = frame->nativeFunc;
+    ASSERT(method);
+    Obj *klass = method->klass;
+    if (!klass) {
+        throwErrorFmt(lxErrClass, "No class found for callSuper, current frame must be a method!");
+    }
+    ObjString *methodName = method->name;
+    ASSERT(methodName);
+    if (klass->type == OBJ_T_MODULE) {
+        // TODO
+    } else if (klass->type == OBJ_T_CLASS) {
+        if ((ObjClass*)klass == lxObjClass) {
+            return NIL_VAL;
+        }
+        ObjClass *superClass = ((ObjClass*)klass)->superclass; // TODO: look in modules too
+        if (!superClass) {
+            throwErrorFmt(lxErrClass, "No superclass found for callSuper");
+        }
+        Obj *superMethod = findMethod(superClass, methodName);
+        if (!superMethod) {
+            throwErrorFmt(lxErrClass, "No super method found for callSuper");
+        }
+        callVMMethod(frame->instance, OBJ_VAL(superMethod), argCount, args);
+        return pop();
+    } else {
+        UNREACHABLE("bug");
+    }
+    return NIL_VAL;
 }
 
 /**

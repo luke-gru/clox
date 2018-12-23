@@ -69,7 +69,8 @@ typedef struct ObjFunction {
   // and needs to be read by the VM, or serialized/loaded to/from disk.
   Chunk chunk;
   ObjString *name;
-  bool isMethod;
+  Obj *klass; // ObjClass* or ObjModule* (if method)
+  bool isMethod; // TODO: remove
   bool isSingletonMethod;
   Node *funcNode;
 } ObjFunction;
@@ -103,6 +104,7 @@ typedef struct ObjNative {
   Obj object;
   NativeFn function;
   ObjString *name;
+  Obj *klass; // class or module, if a method
 } ObjNative;
 
 typedef struct ObjClass ObjClass; // fwd decl

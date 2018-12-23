@@ -26,9 +26,11 @@ extern unsigned inCCall;
 typedef struct CallFrame {
     // Non-native function fields
     ObjClosure *closure; // if call frame is from compiled code, this is set
-    uint8_t *ip;
+    uint8_t *ip; // ip into closure's bytecode chunk, if callable is not a C function
     int start; // starting instruction offset in parent (for throw/catch)
     Value *slots; // local variables and function arguments
+    ObjInstance *instance; // if function is a method
+    ObjClass *klass;
 
     // Native (C) function fields
     bool isCCall; // native call, callframe created for C (native) function call
@@ -118,7 +120,7 @@ typedef struct VM {
     pthread_mutex_t GVLock; // global VM lock
     ObjInstance *curThread;
     ObjInstance *mainThread;
-    ObjInstance *threads; // array of current threads
+    vec_void_t threads; // list of current thread ObjInstance pointers
 } VM; // singleton
 
 extern VM vm;
@@ -143,29 +145,22 @@ Value VMEval(const char *src, const char *filename, int lineno);
 Value VMEvalNoThrow(const char *src, const char *filename, int lineno);
 Value *getLastValue(void);
 
+// script loading
 bool VMLoadedScript(char *fname);
 
+// operand stack
 void push(Value value); // push onto operand stack
 Value pop(void); // pop top of operand stack
 Value peek(unsigned);
-
-NORETURN void repl(void);
 void resetStack(void); // reset operand stack
 
-// debug
-void printVMStack(FILE *f);
-void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given strings to this buffer, if given
-void unsetPrintBuf(void);
-int VMNumStackFrames(void);
-int VMNumCallFrames(void);
-const char *callFrameName(CallFrame *frame);
+NORETURN void repl(void);
 
 // errors
 void setBacktrace(Value err);
 NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...);
 #define throwArgErrorFmt(format, ...) throwErrorFmt(lxArgErrClass, format, __VA_ARGS__)
 NORETURN void throwError(Value err);
-
 ErrTagInfo *addErrInfo(ObjClass *errClass);
 typedef void* (vm_cb_func)(void*);
 void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status);
@@ -180,18 +175,31 @@ Value callVMMethod(
     ObjInstance *instance, Value callable,
     int argCount, Value *args
 );
+Value callSuper(int argCount, Value *args, CallInfo *cinfo);
 
-Value createIterator(Value iterable);
-
+// call frames
 void popFrame(void);
 CallFrame *pushFrame(void);
 
-void runAtExitHooks(void);
-NORETURN void stopVM(int status);
+// iterators
+Value createIterator(Value iterable);
 
 // threads
 void acquireGVL(void);
 void releaseGVL(void);
 void thread_debug(int lvl, const char *format, ...);
+
+// debug
+void printVMStack(FILE *f);
+void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given strings to this buffer, if given
+void unsetPrintBuf(void);
+int VMNumStackFrames(void);
+int VMNumCallFrames(void);
+const char *callFrameName(CallFrame *frame);
+void debugFrame(void);
+
+// exiting
+void runAtExitHooks(void);
+NORETURN void stopVM(int status);
 
 #endif

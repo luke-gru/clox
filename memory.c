@@ -505,6 +505,7 @@ void collectGarbage(void) {
         }
         for (int i = 0; i < ctx->frameCount; i++) {
             grayObject((Obj*)ctx->frames[i].closure);
+            grayObject((Obj*)ctx->frames[i].instance);
             numFramesFound++;
         }
     }
@@ -524,7 +525,10 @@ void collectGarbage(void) {
     GC_TRACE_DEBUG(3, "Open upvalues found: %d", numOpenUpsFound);
 
     GC_TRACE_DEBUG(2, "Marking VM threads");
-    grayObject((Obj*)vm.threads);
+    ObjInstance *thread = NULL; int ti = 0;
+    vec_foreach(&vm.threads, thread, ti) {
+        grayObject((Obj*)thread);
+    }
 
     GC_TRACE_DEBUG(2, "Marking globals (%d found)", vm.globals.count);
     // Mark the global roots.

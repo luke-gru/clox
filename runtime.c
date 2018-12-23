@@ -43,22 +43,28 @@ ObjModule *addGlobalModule(const char *name) {
     return mod;
 }
 
-void addNativeMethod(void *klass, const char *name, NativeFn func) {
+ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
     ObjString *mname = internedString(name, strlen(name));
     ObjNative *natFn = newNative(mname, func);
+    natFn->klass = (Obj*)klass; // class or module
     tableSet(&((ObjModule*)klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
+    return natFn;
 }
 
-void addNativeGetter(void *klass, const char *name, NativeFn func) {
+ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
     ObjString *mname = internedString(name, strlen(name));
     ObjNative *natFn = newNative(mname, func);
+    natFn->klass = (Obj*)klass; // class or module
     tableSet(&((ObjModule*)klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
+    return natFn;
 }
 
-void addNativeSetter(void *klass, const char *name, NativeFn func) {
+ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
     ObjString *mname = internedString(name, strlen(name));
     ObjNative *natFn = newNative(mname, func);
+    natFn->klass = (Obj*)klass; // class or module
     tableSet(&((ObjModule*)klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
+    return natFn;
 }
 
 // Does this file exist and is it readable?
@@ -134,13 +140,13 @@ static void enteredNewThread() {
     threadSetStatus(thread, THREAD_RUNNING);
     threadSetId(thread, pthread_self());
     vm.curThread = AS_INSTANCE(thread);
-    arrayPush(OBJ_VAL(vm.threads), thread);
+    vec_push(&vm.threads, vm.curThread);
     // TODO: set other threads to STOPPED?
 }
 
 static void exitingThread() {
     threadSetStatus(OBJ_VAL(vm.curThread), THREAD_STOPPED);
-    arrayDelete(OBJ_VAL(vm.threads), OBJ_VAL(vm.curThread));
+    vec_remove(&vm.threads, vm.curThread);
     vm.curThread = NULL;
 }
 
@@ -201,7 +207,8 @@ Value lxThreadInit(int argCount, Value *args) {
     ObjInternal *internalObj = newInternalObject(NULL, sizeof(LxThread), NULL, NULL);
     LxThread *th = ALLOCATE(LxThread, 1); // GCed by default GC free of internalObject
     internalObj->data = th;
-    tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)), OBJ_VAL(internalObj));
+    tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)),
+            OBJ_VAL(internalObj));
     return self;
 }
 
@@ -285,6 +292,11 @@ Value lxLoadScript(int argCount, Value *args) {
     return loadScriptHelper(fname, false);
 }
 
+Value lxObjectInit(int argCount, Value *args) {
+    CHECK_ARITY("Object#init", 1, 1, argCount);
+    return *args;
+}
+
 // ex: var o = Object(); print o._class;
 Value lxObjectGetClass(int argCount, Value *args) {
     Value self = *args;
@@ -331,7 +343,7 @@ Value lxModuleInit(int argCount, Value *args) {
     Value self = *args;
     ASSERT(!IS_INSTANCE(self));
     CHECK_ARITY("Module#init", 1, 2, argCount);
-    if (argCount == 1) { return self; } // anonymous module
+    if (argCount == 1) { return self; } // anonymous (unnamed) module
     Value name = args[1];
     CHECK_ARG_IS_A(name, lxStringClass, 1);
     ObjString *nameStr = STRING_GETHIDDEN(name);
