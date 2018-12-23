@@ -18,7 +18,7 @@ static void usage(int exitstatus) {
 }
 
 int main(int argc, char *argv[]) {
-    initOptions();
+    initOptions(argc, argv);
     char *fname = NULL;
     char **argvp = argv+1;
     int i = 0;

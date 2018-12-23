@@ -127,6 +127,7 @@ ObjClass *lxSyntaxErrClass;
 ObjClass *lxLoadErrClass;
 
 Value lxLoadPath; // load path for loadScript/requireScript (-L flag)
+Value lxArgv;
 
 static void defineNativeClasses(void) {
     // class Object
@@ -228,6 +229,16 @@ static void defineGlobalVariables(void) {
             arrayPush(lxLoadPath, newStringInstance(str));
             beg = end+1;
         }
+    }
+
+    lxArgv = newArray();
+    ObjString *argvStr = internedString("ARGV", 4);
+    tableSet(&vm.globals, OBJ_VAL(argvStr), lxArgv);
+    for (int i = 0; i < origArgc; i++) {
+        Value arg = newStringInstance(
+                copyString(origArgv[i], strlen(origArgv[i]))
+        );
+        arrayPush(lxArgv, arg);
     }
 }
 

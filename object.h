@@ -164,6 +164,7 @@ extern ObjClass *lxSyntaxErrClass;
 extern ObjClass *lxLoadErrClass;
 
 extern Value lxLoadPath;
+extern Value lxArgv;
 
 typedef struct ObjInstance {
   Obj object;

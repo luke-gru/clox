@@ -5,6 +5,8 @@
 #include "nodes.h"
 
 static CloxOptions options;
+int origArgc;
+char **origArgv;
 
 char *boolOptNames[] = {
     "printAST",
@@ -33,10 +35,12 @@ char *intOptNames[] = {
     NULL
 };
 
-void initOptions(void) {
+void initOptions(int argc, char **argv) {
     if (options._inited) {
         return;
     }
+    origArgc = argc;
+    origArgv = argv;
     options.printAST = false;
     options.debugTokens = false;
     options.debugBytecode = false;
@@ -111,7 +115,6 @@ static void enableAllTraceOptions(void) {
 // Assumes *argv is not NULL. Returns the amount to increment
 // idx by in the caller's code.
 int parseOption(char **argv, int i) {
-    initOptions();
     if (strcmp(argv[i], "-L") == 0) {
         if (argv[i+1]) {
             char *path = calloc(strlen(argv[i+1])+2, 1);

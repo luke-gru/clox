@@ -28,7 +28,10 @@ typedef struct sCloxOptions {
     bool _inited; // internal use, if singleton is inited
 } CloxOptions; // [singleton]
 
-void initOptions(void);
+int origArgc;
+char **origArgv;
+
+void initOptions(int argc, char **argv);
 CloxOptions *getOptions(void);
 bool findOption(const char *optName, const char *typeName);
 

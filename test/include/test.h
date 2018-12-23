@@ -156,7 +156,7 @@ static inline void _SKIP_TEST(const char *fnname) {
 }
 
 static inline void parseTestOptions(int argc, char *argv[]) {
-    initOptions();
+    initOptions(argc, argv);
     int i = 0;
     int incrOpt = 0;
     vec_str_t *onlies = calloc(sizeof(vec_str_t), 1);

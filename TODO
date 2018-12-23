@@ -30,7 +30,8 @@ compiled lookup
 * Throw SyntaxError from invalid compile/parse if given flag
 * Add Process module, with static methods 'waitall'
 * Add callSuper(argCount, *args) C API function that looks at current call frame, sees the
-associated class, and calls the superclass method.
+associated class, and calls the superclass method. [PARTIAL], doesn't work
+with modules
 * Allow throwing strings, maybe wrap them in Error class
 * Allow debugger to list local variables, global variables, etc.
 * Add constants to language
