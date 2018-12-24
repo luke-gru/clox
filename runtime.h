@@ -23,6 +23,7 @@
 #define CHECK_ARG_IS_A(value, klass, argnum) checkArgIsA(value, klass, argnum)
 
 extern const char pathSeparator;
+extern bool isClassHierarchyCreated;
 
 // Error-checking functions with macros
 bool checkArity(int min, int max, int actual);
@@ -49,9 +50,11 @@ Value lxObjectInit(int argCount, Value *args);
 Value lxObjectGetClass(int argCount, Value *args);
 Value lxObjectGetObjectId(int argCount, Value *args);
 Value lxObjectDup(int argCount, Value *args);
+ObjNative *nativeObjectInit;
 
 // class Module
 Value lxModuleInit(int argCount, Value *args);
+ObjNative *nativeModuleInit;
 
 // class Class
 Value lxClassInit(int argCount, Value *args);
@@ -59,6 +62,7 @@ Value lxClassInclude(int argCount, Value *args);
 Value lxClassGetSuperclass(int argCount, Value *args);
 Value lxClassGetName(int argCount, Value *args);
 //Value lxClassAncestors(int argCount, Value *args);
+ObjNative *nativeClassInit;
 
 // class String
 ObjNative *nativeStringInit;
@@ -74,9 +78,11 @@ Value lxIteratorInit(int argCount, Value *args);
 Value lxIteratorNext(int argCount, Value *args);
 //Value lxIteratorRewind(int argCount, Value *args);
 //Value lxIteratorIsAtEnd(int argCount, Value *args);
+ObjNative *nativeIteratorInit;
 
 // class Thread
 Value lxThreadInit(int argCount, Value *args);
+ObjNative *nativeThreadInit;
 
 // module GC
 Value lxGCStats(int argCount, Value *args);
@@ -84,6 +90,7 @@ Value lxGCCollect(int argCount, Value *args);
 
 // class Error
 Value lxErrInit(int argCount, Value *args);
+ObjNative *nativeErrorInit;
 
 // class String
 void Init_StringClass(void);

@@ -129,10 +129,21 @@ ObjClass *lxLoadErrClass;
 Value lxLoadPath; // load path for loadScript/requireScript (-L flag)
 Value lxArgv;
 
+ObjNative *nativeObjectInit = NULL;
+ObjNative *nativeThreadInit = NULL;
+ObjNative *nativeIteratorInit = NULL;
+ObjNative *nativeErrorInit = NULL;
+ObjNative *nativeClassInit = NULL;
+ObjNative *nativeModuleInit = NULL;
+
+bool isClassHierarchyCreated = false;
+
 static void defineNativeClasses(void) {
     // class Object
+    isClassHierarchyCreated = false;
+
     ObjClass *objClass = addGlobalClass("Object", NULL);
-    addNativeMethod(objClass, "init", lxObjectInit);
+    nativeObjectInit = addNativeMethod(objClass, "init", lxObjectInit);
     addNativeMethod(objClass, "dup", lxObjectDup);
     addNativeGetter(objClass, "_class", lxObjectGetClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
@@ -155,12 +166,12 @@ static void defineNativeClasses(void) {
     Init_StringClass();
 
     // class Class
-    addNativeMethod(classClass, "init", lxClassInit);
+    nativeClassInit = addNativeMethod(classClass, "init", lxClassInit);
     addNativeMethod(classClass, "include", lxClassInclude);
     addNativeGetter(classClass, "_superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
 
-    addNativeMethod(modClass, "init", lxModuleInit);
+    nativeModuleInit = addNativeMethod(modClass, "init", lxModuleInit);
 
     Init_ArrayClass();
 
@@ -169,13 +180,13 @@ static void defineNativeClasses(void) {
     // class Iterator
     ObjClass *iterClass = addGlobalClass("Iterator", objClass);
     lxIteratorClass = iterClass;
-    addNativeMethod(iterClass, "init", lxIteratorInit);
+    nativeIteratorInit = addNativeMethod(iterClass, "init", lxIteratorInit);
     addNativeMethod(iterClass, "next", lxIteratorNext);
 
     // class Error
     ObjClass *errClass = addGlobalClass("Error", objClass);
     lxErrClass = errClass;
-    addNativeMethod(errClass, "init", lxErrInit);
+    nativeErrorInit = addNativeMethod(errClass, "init", lxErrInit);
 
     // class ArgumentError
     ObjClass *argErrClass = addGlobalClass("ArgumentError", errClass);
@@ -200,6 +211,7 @@ static void defineNativeClasses(void) {
     // class Thread
     ObjClass *threadClass = addGlobalClass("Thread", objClass);
     lxThreadClass = threadClass;
+    nativeThreadInit = addNativeMethod(threadClass, "init", lxThreadInit);
 
     // module GC
     ObjModule *GCModule = addGlobalModule("GC");
@@ -212,6 +224,7 @@ static void defineNativeClasses(void) {
     Init_ProcessModule();
     Init_FileClass();
     Init_IOModule();
+    isClassHierarchyCreated = true;
 }
 
 // NOTE: this initialization function can create Lox runtime objects
@@ -262,12 +275,8 @@ Value createIterator(Value iterable) {
     ASSERT(isIterableType(iterable));
     if (IS_AN_ARRAY(iterable) || IS_A_MAP(iterable)) {
         ObjInstance *iterObj = newInstance(lxIteratorClass);
-        Value iter = OBJ_VAL(iterObj);
-        Value args[2];
-        args[0] = iter;
-        args[1] = iterable;
-        lxIteratorInit(2, args);
-        return iter;
+        callVMMethod(iterObj, OBJ_VAL(nativeIteratorInit), 1, &iterable);
+        return pop();
     } else if (IS_INSTANCE(iterable)) {
         ObjString *iterId = internedString("iter", 4);
         ObjInstance *instance = AS_INSTANCE(iterable);
@@ -387,15 +396,9 @@ void initVM() {
     vm.initString = internedString("init", 4);
     vm.fileString = internedString("__FILE__", 8);
     vm.dirString = internedString("__DIR__", 7);
-    defineNativeFunctions();
-    defineNativeClasses();
+
     vec_init(&vm.hiddenObjs);
     vec_init(&vm.stackObjects);
-
-    vec_init(&vm.exitHandlers);
-
-    initDebugger(&vm.debugger);
-
     vm.lastErrorThrown = NIL_VAL;
     vm.hadError = false;
     vm.errInfo = NULL;
@@ -408,10 +411,17 @@ void initVM() {
     memset(&rootVMLoopJumpBuf, 0, sizeof(rootVMLoopJumpBuf));
     rootVMLoopJumpBufSet = false;
 
-    // these init functions can create lox objects (until popFrame)
+    vec_init(&vm.exitHandlers);
+
+    initDebugger(&vm.debugger);
+
     pushFrame();
+
+    defineNativeFunctions();
+    defineNativeClasses();
     defineGlobalVariables();
     initMainThread();
+
     popFrame();
 
     resetStack();
@@ -457,6 +467,7 @@ void freeVM(void) {
     freeTable(&vm.globals);
     freeTable(&vm.strings);
     freeObjects();
+    isClassHierarchyCreated = false;
     vm.objects = NULL;
 
     vec_clear(&vm.v_ecs);
@@ -1313,6 +1324,7 @@ static Obj *findMethod(ObjClass *klass, ObjString *methodName) {
 
 // API for calling 'super' in native C methods
 Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
+    if (!isClassHierarchyCreated) return NIL_VAL;
     (void)cinfo; // TODO: use
     CallFrame *frame = getFrame();
     DBG_ASSERT(frame->instance);
@@ -1917,6 +1929,9 @@ static InterpretResult vm_run() {
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
           ASSERT(slot >= 0);
+          // make sure we don't clobber the unpack array with the setting of
+          // this variable
+          ASSERT(getFrame()->slots+slot > EC->stackTop-1);
           getFrame()->slots[slot] = unpackValue(peek(0), unpackIdx); // locals are popped at end of scope by VM
           break;
       }
@@ -2179,7 +2194,7 @@ static InterpretResult vm_run() {
       }
       case OP_ITER_NEXT: {
           Value iterator = peek(0);
-          ASSERT(isIterator(iterator)); // FIXME: throw TypeError
+          ASSERT(isIterator(iterator));
           Value next = iteratorNext(iterator);
           ASSERT(!IS_UNDEF(next));
           push(next);

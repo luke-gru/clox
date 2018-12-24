@@ -1277,7 +1277,7 @@ static void emitNode(Node *n) {
         vec_byte_t v_slots;
         vec_init(&v_slots);
         int numVars = n->children->length - 2;
-        current->localCount++; // the iterator value
+        current->localCount++; // the iterator
         int i = 0;
         for (i = 0; i < numVars; i++) {
             Token varName = n->children->data[i]->tok;
@@ -1288,7 +1288,7 @@ static void emitNode(Node *n) {
         emitNode(n->children->data[i]);
         i++;
 
-        emitOp0(OP_ITER); // push iterator value to stack
+        emitOp0(OP_ITER); // push iterator to stack
         int beforeIterNext = currentIseq()->byteCount+2;
         emitOp0(OP_ITER_NEXT);
         Insn *iterDone = emitJump(OP_JUMP_IF_FALSE_PEEK); // TODO: op_jump_if_undef?

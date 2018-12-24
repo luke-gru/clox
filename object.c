@@ -321,7 +321,11 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     vec_init(&klass->v_includedMods);
     klass->name = name;
     klass->superclass = superclass;
-    // TODO: call lxClassInit
+    // during initial class hierarchy setup this is NULL
+    if (nativeClassInit && isClassHierarchyCreated) {
+        callVMMethod((ObjInstance*)klass, OBJ_VAL(nativeClassInit), 0, NULL);
+        pop();
+    }
     return klass;
 }
 
@@ -337,7 +341,11 @@ ObjModule *newModule(ObjString *name) {
     initTable(&mod->getters);
     initTable(&mod->setters);
     mod->name = name;
-    // TODO: call lxModuleInit
+    // during initial class hierarchy setup this is NULL
+    if (nativeModuleInit && isClassHierarchyCreated) {
+        callVMMethod((ObjInstance*)mod, OBJ_VAL(nativeModuleInit), 0, NULL);
+        pop();
+    }
     return mod;
 }
 
@@ -933,9 +941,8 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
 
 Value newThread(void) {
     ObjInstance *instance = newInstance(lxThreadClass);
-    Value th = OBJ_VAL(instance);
-    lxThreadInit(1, &th);
-    return th;
+    callVMMethod(instance, OBJ_VAL(nativeThreadInit), 0, NULL);
+    return pop();
 }
 
 LxThread *threadGetInternal(Value thread) {

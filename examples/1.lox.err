@@ -1,3 +1,4 @@
-foreach (k, v in ENV.all()) {
+foreach (k, v in ENV) {
   print k;
+  print v;
 }

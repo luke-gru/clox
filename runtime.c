@@ -202,6 +202,7 @@ Value lxJoinThread(int argCount, Value *args) {
 
 Value lxThreadInit(int argCount, Value *args) {
     CHECK_ARITY("Thread#init", 1, 1, argCount);
+    callSuper(0, NULL, NULL);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = newInternalObject(NULL, sizeof(LxThread), NULL, NULL);
@@ -339,10 +340,10 @@ Value lxObjectDup(int argCount, Value *args) {
 
 // ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
-    // TODO: call super?
+    CHECK_ARITY("Module#init", 1, 2, argCount);
     Value self = *args;
     ASSERT(!IS_INSTANCE(self));
-    CHECK_ARITY("Module#init", 1, 2, argCount);
+    callSuper(0, NULL, NULL);
     if (argCount == 1) { return self; } // anonymous (unnamed) module
     Value name = args[1];
     CHECK_ARG_IS_A(name, lxStringClass, 1);
@@ -356,14 +357,12 @@ Value lxModuleInit(int argCount, Value *args) {
 
 // ex: var c = Class("MyClass", Object);
 Value lxClassInit(int argCount, Value *args) {
-    // TODO: call super?
     CHECK_ARITY("Class#init", 1, 3, argCount);
     Value self = *args;
     ASSERT(!IS_INSTANCE(self));
+    callSuper(0, NULL, NULL);
     ObjClass *klass = AS_CLASS(self);
     if (argCount == 1) {
-        klass->name = NULL;
-        klass->superclass = lxObjClass;
         return self;
     }
     Value arg1 = args[1]; // name or superclass
@@ -454,6 +453,7 @@ static void freeInternalIter(Obj *internalObj) {
 
 Value lxIteratorInit(int argCount, Value *args) {
     CHECK_ARITY("Iterator#init", 2, 2, argCount);
+    callSuper(0, NULL, NULL);
     Value self = args[0];
     Value iterable = args[1];
     ObjInstance *selfObj = AS_INSTANCE(self);
@@ -517,8 +517,8 @@ Value lxIteratorNext(int argCount, Value *args) {
 
 
 Value lxErrInit(int argCount, Value *args) {
-    // TODO: call super?
     CHECK_ARITY("Error#init", 1, 2, argCount);
+    callSuper(0, NULL, NULL);
     Value self = args[0];
     Value msg;
     if (argCount == 2) {
