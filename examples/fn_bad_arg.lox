@@ -1,4 +1,11 @@
-requireScript(1);
+var err = nil;
+try {
+  requireScript(1);
+} catch (ArgumentError e) {
+  err = e;
+}
+print typeof(err);
 
 __END__
--- expect: ArgumentError --
+-- expect: --
+instance

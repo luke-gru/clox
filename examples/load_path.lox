@@ -2,7 +2,7 @@ print loadPath;
 try {
   loadScript("anon_fun.lox");
 } catch (LoadError e) {
-  print e.message;
+  print e._class;
 }
 loadPath.push(__DIR__);
 print requireScript("anon_fun.lox");
@@ -11,7 +11,7 @@ print requireScript("anon_fun.lox");
 __END__
 -- expect: --
 []
-File 'anon_fun.lox' not found
+<class LoadError>
 3
 callbacks:
 1

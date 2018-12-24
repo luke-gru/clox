@@ -14,6 +14,8 @@ print "joined";
 
 __END__
 -- expect: --
+in main thread
+sleeping
 0
 1
 2
@@ -24,4 +26,5 @@ __END__
 7
 8
 9
+done sleeping
 joined

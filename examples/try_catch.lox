@@ -4,32 +4,24 @@ fun throws(throwExpr) {
 }
 
 try {
-  throws("hi");
-} catch ("hi") {
+  throws(Error("hi"));
+} catch (Error) {
   print "caught hi";
 } catch ("other") {
   print "caught other";
 }
 
-class Error {
-  init(msg) {
-    this.msg = msg;
-  }
-}
 class ErrorB < Error {}
 
 try {
   throws(ErrorB("uh oh"));
 } catch (Error err) {
-  print "caught Error: msg: " + err.msg;
+  print "caught Error: msg: " + err.message;
 }
 
-throw "error";
-
 __END__
--- expect: RuntimeError --
 -- expect: --
 throwing
-hi
 caught hi
+throwing
 caught Error: msg: uh oh

@@ -1,0 +1,17 @@
+class NonString {
+  toString() {
+    return 3; // should return string
+  }
+}
+
+var err = nil;
+try {
+  print NonString();
+} catch (TypeError e) {
+  err = e;
+}
+print typeof(err);
+
+__END__
+-- expect: --
+instance

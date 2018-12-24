@@ -139,9 +139,9 @@ ObjNative *nativeModuleInit = NULL;
 bool isClassHierarchyCreated = false;
 
 static void defineNativeClasses(void) {
-    // class Object
     isClassHierarchyCreated = false;
 
+    // class Object
     ObjClass *objClass = addGlobalClass("Object", NULL);
     nativeObjectInit = addNativeMethod(objClass, "init", lxObjectInit);
     addNativeMethod(objClass, "dup", lxObjectDup);

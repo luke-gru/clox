@@ -10,5 +10,6 @@ print s;
 print s.buf;
 
 __END__
-stringish!
+-- expect: --
+stringish
 []

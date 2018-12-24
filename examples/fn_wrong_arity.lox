@@ -2,8 +2,14 @@ fun add(a,b) {
   return a + b;
 }
 
-print add(1,2,3);
+var err = nil;
+try {
+  print add(1,2,3);
+} catch (ArgumentError e) {
+  err = e;
+}
+print typeof(err);
 
 __END__
--- expect: ArgumentError --
--- noexpect: --
+-- expect: --
+instance

@@ -40,9 +40,6 @@ static ObjString *fileExpectStr(FILE *f) {
 }
 
 static int stringDiff(ObjString *actual, ObjString *expect) {
-    if (strlen(actual->chars) != strlen(expect->chars)) {
-        return -1;
-    }
     return strcmp(actual->chars, expect->chars);
 }
 
@@ -60,6 +57,8 @@ static int test_run_example_files(void) {
     Chunk chunk;
     const char *filePrefix = "./examples/";
     size_t filePrefixLen = strlen(filePrefix);
+    vec_str_t vfiles_failed;
+    vec_init(&vfiles_failed);
     while ((ent = readdir(d))) {
         if (ent->d_type != DT_REG) { // reg. file
             continue;
@@ -91,6 +90,7 @@ static int test_run_example_files(void) {
         int compres = compile_file(fbuf, &chunk, &cerr);
         if (compres != 0 || cerr != COMPILE_ERR_NONE) {
             fprintf(stderr, "Error during compilation\n");
+            vec_push(&vfiles_failed, strdup(fbuf));
             freeVM();
             numErrors++;
             fclose(f);
@@ -99,13 +99,13 @@ static int test_run_example_files(void) {
         fprintf(stdout, "Running file '%s'...\n", ent->d_name);
         ObjString *outputStr = hiddenString("", 0);
         setPrintBuf(outputStr, true);
+        unhideFromGC((Obj*)outputStr);
         InterpretResult ires = interpret(&chunk, ent->d_name);
         if (ires != INTERPRET_OK) {
             fprintf(stderr, "Error during interpretation: (%d)\n", ires);
+            vec_push(&vfiles_failed, strdup(fbuf));
             numErrors++;
             fclose(f);
-            unhideFromGC((Obj*)outputStr);
-            freeObject((Obj*)outputStr, true);
             freeVM();
             continue;
         }
@@ -122,13 +122,11 @@ static int test_run_example_files(void) {
             fprintf(stderr, "---- Actual: ----\n");
             fprintf(stderr, "%s\n", outputStr->chars);
             fprintf(stderr, "Failure\n");
+            vec_push(&vfiles_failed, strdup(fbuf));
             numErrors++;
         }
-        unhideFromGC((Obj*)outputStr);
-        freeObject((Obj*)outputStr, true);
         if (outputExpect) {
             unhideFromGC((Obj*)outputExpect);
-            freeObject((Obj*)outputExpect, true);
         }
         fclose(f);
         freeVM();
@@ -139,9 +137,19 @@ static int test_run_example_files(void) {
         T_ASSERT(numEntsFound > 0);
     }
 
+    if (numErrors > 0) {
+        fprintf(stderr, "Errors found in the following files:\n");
+        char *file = NULL; int fidx = 0;
+        vec_foreach(&vfiles_failed, file, fidx) {
+            fprintf(stderr, "  %d) error in file '%s'\n", fidx+1, file);
+            free(file);
+        }
+    }
+
     T_ASSERT_EQ(0, numErrors);
     T_ASSERT(numSuccesses > 0);
 cleanup:
+    vec_deinit(&vfiles_failed);
     return 0;
 }
 
