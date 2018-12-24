@@ -204,6 +204,7 @@ static Value lxArrayOpEquals(int argCount, Value *args) {
     return BOOL_VAL(arrayEquals(args[0], args[1]));
 }
 
+// FIXME: figure out how to hash this properly
 static Value lxArrayHashKey(int argCount, Value *args) {
     CHECK_ARITY("Array#hashKey", 1, 1, argCount);
     Value self = *args;

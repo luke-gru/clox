@@ -783,7 +783,7 @@ void setBacktrace(Value err) {
 }
 
 static inline bool isThrowable(Value val) {
-    return IS_INSTANCE(val) && !IS_A_STRING(val);
+    return IS_AN_ERROR(val);
 }
 
 // FIXME: use v_includedMods
@@ -2405,8 +2405,12 @@ static InterpretResult vm_run() {
       }
       case OP_THROW: {
           Value throwable = pop();
+          if (IS_A_STRING(throwable)) {
+              Value msg = throwable;
+              throwable = newError(lxErrClass, msg);
+          }
           if (!isThrowable(throwable)) {
-              throwErrorFmt(lxTypeErrClass, "Tried to throw unthrowable value, must be an instance. "
+              throwErrorFmt(lxTypeErrClass, "Tried to throw unthrowable value, must be a subclass of Error. "
                   "Type found: %s", typeOfVal(throwable)
               );
           }

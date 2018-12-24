@@ -25,7 +25,7 @@ interpreter
 compiled lookup
 * Integrate regexes from regex.c
 * Allow more constants in a chunk (more than 256 bytes)
-* Allow bigger jumps (more than 1 byte offsets)
+* Allow bigger jumps (more than 1 byte offsets) [GIT BRANCH]
 * Throw SyntaxError from invalid compile/parse if given flag
 * Add Process module, with static methods 'waitall'
 * Add callSuper(argCount, *args) C API function that looks at current call frame, sees the
@@ -52,6 +52,7 @@ when evaling.
 file lookup, not pwd when calling loadScript/requireScript
 * Debugger bugs, not evaluating variables in context of function
 * Map with array or map key doesn't work (hashKey() method for objects)
+* Bug in examples/anon_fun.lox, var i is set global (see bytecode)
 
 Optimizations
 -------------
