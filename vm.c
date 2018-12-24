@@ -146,6 +146,8 @@ static void defineNativeClasses(void) {
     nativeObjectInit = addNativeMethod(objClass, "init", lxObjectInit);
     addNativeMethod(objClass, "dup", lxObjectDup);
     addNativeMethod(objClass, "extend", lxObjectExtend);
+    addNativeMethod(objClass, "hashKey", lxObjectHashKey);
+    addNativeMethod(objClass, "opEquals", lxObjectOpEquals);
     addNativeGetter(objClass, "_class", lxObjectGetClass);
     addNativeGetter(objClass, "_singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
@@ -786,12 +788,13 @@ static inline bool isThrowable(Value val) {
 
 // FIXME: use v_includedMods
 static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
+    ObjClass *givenClass = klass;
     if (klass == obj->klass && obj->singletonKlass) {
         klass = obj->singletonKlass;
     }
     Value key = OBJ_VAL(propName);
     while (klass) {
-        if ((!lookInGivenClass) && klass == obj->klass) {
+        if (!lookInGivenClass && klass == givenClass) {
             klass = klass->superclass; // FIXME: work in modules
             continue;
         }
@@ -846,6 +849,9 @@ static void defineMethod(ObjString *name) {
     ASSERT(IS_CLOSURE(method));
     Value classOrMod = peek(1);
     ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
+    ObjFunction *func = AS_CLOSURE(method)->function;
+    func->klass = AS_OBJ(classOrMod);
+    func->isMethod = true;
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         const char *klassName = klass->name ? klass->name->chars : "(anon)";
@@ -865,18 +871,15 @@ static void defineMethod(ObjString *name) {
 static void defineStaticMethod(ObjString *name) {
     Value method = peek(0); // function
     ASSERT(IS_CLOSURE(method));
+    ObjFunction *func = AS_CLOSURE(method)->function;
     Value classOrMod = peek(1);
     ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
-    ObjClass *singletonClass = NULL;
-    if (IS_CLASS(classOrMod)) {
-        ObjClass *klass = AS_CLASS(classOrMod);
-        singletonClass = classSingletonClass(klass);
-    } else {
-        ObjModule *mod = AS_MODULE(classOrMod);
-        singletonClass = moduleSingletonClass(mod);
-    }
-    VM_DEBUG("defining static method '%s#%s'", singletonClass->name->chars, name->chars);
-    tableSet(&singletonClass->methods, OBJ_VAL(name), method);
+    func->klass = AS_OBJ(classOrMod);
+    func->isSingletonMethod = true;
+    func->isMethod = true;
+    ObjClass *metaClass = singletonClass(AS_OBJ(classOrMod));
+    VM_DEBUG("defining static method '%s#%s'", metaClass->name->chars, name->chars);
+    tableSet(&metaClass->methods, OBJ_VAL(name), method);
     pop(); // function
 }
 
@@ -930,6 +933,48 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     vm.thisValue = oldThis;
     VM_DEBUG("call end");
     return peek(0);
+}
+
+Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
+    if (obj->type == OBJ_T_INSTANCE) {
+        ObjInstance *instance = (ObjInstance*)obj;
+        Obj *callable = instanceFindMethod(instance, methodName);
+        if (!callable && argCount == 0) {
+            callable = instanceFindGetter(instance, methodName);
+        }
+        if (!callable) {
+            ObjString *className = instance->klass->name;
+            const char *classStr = className->chars ? className->chars : "(anon)";
+            throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, methodName->chars);
+        }
+        callVMMethod(instance, OBJ_VAL(callable), argCount, args);
+        return pop();
+    } else if (obj->type == OBJ_T_CLASS) {
+        ObjClass *klass = (ObjClass*)obj;
+        Obj *callable = classFindStaticMethod(klass, methodName);
+        /*if (!callable && numArgs == 0) {*/
+        /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
+        /*}*/
+        if (!callable) {
+            ObjString *className = klass->name;
+            const char *classStr = className ? className->chars : "(anon)";
+            throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, methodName->chars);
+        }
+        callVMMethod((ObjInstance*)klass, OBJ_VAL(callable), argCount, args);
+        return pop();
+    } else if (obj->type == OBJ_T_MODULE) {
+        ObjModule *mod = (ObjModule*)obj;
+        Obj *callable = moduleFindStaticMethod(mod, methodName);
+        if (!callable) {
+            ObjString *modName = mod->name;
+            const char *modStr = modName ? modName->chars : "(anon)";
+            throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, methodName->chars);
+        }
+        callVMMethod((ObjInstance*)mod, OBJ_VAL(callable), argCount, args);
+        return pop();
+    } else {
+        throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfObj(obj));
+    }
 }
 
 static void unwindErrInfo(CallFrame *frame) {
@@ -2151,12 +2196,13 @@ static InterpretResult vm_run() {
           break;
       }
       case OP_GET_SUPER: {
-          // FIXME: top of stack should contain class or module of the 'super' call
           Value methodName = READ_CONSTANT();
           ASSERT(vm.thisValue);
           Value instanceVal = *vm.thisValue;
           ASSERT(IS_INSTANCE(instanceVal)); // FIXME: get working for classes (singleton methods)
-          ObjClass *klass = AS_INSTANCE(instanceVal)->klass;
+          ObjClass *klass = (ObjClass*)getFrame()->closure->function->klass;
+          ASSERT(klass); // TODO: get working for module functions that call super
+          ASSERT(((Obj*) klass)->type == OBJ_T_CLASS);
           Value method;
           bool found = lookupMethod(
               AS_INSTANCE(instanceVal), klass,

@@ -355,6 +355,19 @@ Value lxObjectExtend(int argCount, Value *args) {
     return self;
 }
 
+Value lxObjectHashKey(int argCount, Value *args) {
+    CHECK_ARITY("Object#hashKey", 1, 1, argCount);
+    Value self = *args;
+    char buf[20] = {'\0'};
+    sprintf(buf, "%p", AS_OBJ(self));
+    return NUMBER_VAL(hashString(buf, strlen(buf))); // hash the pointer string of Obj*
+}
+
+Value lxObjectOpEquals(int argCount, Value *args) {
+    CHECK_ARITY("Object#opEquals", 2, 2, argCount);
+    return BOOL_VAL(AS_OBJ(args[0]) == AS_OBJ(args[1])); // pointer equality
+}
+
 // ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
     CHECK_ARITY("Module#init", 1, 2, argCount);

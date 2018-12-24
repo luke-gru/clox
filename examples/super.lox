@@ -22,8 +22,6 @@ var s2 = Snake("Leo", "blue");
 print s.color;
 print s;
 print s.computedcolor();
-//print s == s2;
-//print s == s;
 
 class A {
   method() {
@@ -43,11 +41,25 @@ class B < A {
 
 class C < B {}
 
+print "";
 C().test(); // "A method"
+
+/*print "";*/
+/*module D {*/
+  /*method() {*/
+    /*print "from D";*/
+    /*super.method();*/
+  /*}*/
+/*}*/
+/*B.include(D);*/
+/*C().test();*/
+/*from D*/
+/*A method*/
 
 __END__
 -- expect: --
 red
 <instance Snake>
 my color: red
+
 A method

@@ -28,6 +28,7 @@ void freeTable(Table *table) {
 }
 
 static uint32_t findEntry(Entry *entries, int capacityMask, Value key) {
+    // NOTE: valHash() can call method `hashKey()` `key`
     uint32_t index = valHash(key) & capacityMask;
 
     // We don't worry about an infinite loop here because resize() ensures

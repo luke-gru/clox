@@ -1,0 +1,15 @@
+print %{1:2}.hashKey() == %{1:2}.hashKey();
+print %{1:3}.hashKey() == %{1:2}.hashKey();
+print [1,2].hashKey() == [1,3].hashKey();
+m = %{%{1:2}:100};
+print m[%{1:2}];
+m[[200]] = 400;
+print m[[200]];
+
+__END__
+-- expect: --
+true
+false
+false
+100
+400

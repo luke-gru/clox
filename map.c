@@ -168,6 +168,24 @@ static Value lxMapEquals(int argCount, Value *args) {
     return BOOL_VAL(mapEquals(args[0], args[1]));
 }
 
+// FIXME: figure out how to hash this properly
+static Value lxMapHashKey(int argCount, Value *args) {
+    CHECK_ARITY("Map#hashKey", 1, 1, argCount);
+    Value self = *args;
+    Obj *selfObj = AS_OBJ(self);
+    uint32_t hash = 166779; // XXX: no reason for this number
+    Table *map = MAP_GETHIDDEN(self);
+    Entry e; int idx = 0;
+    TABLE_FOREACH(map, e, idx) {
+        if (AS_OBJ(e.key) == selfObj || AS_OBJ(e.value) == selfObj) { // avoid infinite recursion
+            hash = hash ^ 16667; // XXX: no reason for this number
+            continue;
+        }
+        hash = hash ^ (valHash(e.key) ^ valHash(e.value));
+    }
+    return NUMBER_VAL(hash);
+}
+
 static Value lxMapClear(int argCount, Value *args) {
     CHECK_ARITY("Map#clear", 1, 1, argCount);
     Value self = args[0];
@@ -311,6 +329,7 @@ void Init_MapClass() {
     addNativeMethod(mapClass, "opIndexGet", lxMapGet);
     addNativeMethod(mapClass, "opIndexSet", lxMapSet);
     addNativeMethod(mapClass, "opEquals", lxMapEquals);
+    addNativeMethod(mapClass, "hashKey", lxMapHashKey);
     addNativeMethod(mapClass, "keys", lxMapKeys);
     addNativeMethod(mapClass, "values", lxMapValues);
     addNativeMethod(mapClass, "toString", lxMapToString);

@@ -319,6 +319,13 @@ uint32_t valHash(Value val) {
                 return hash;
             }
         } else {
+            if (IS_INSTANCE(val)) {
+                Value hashKey = callMethod(AS_OBJ(val), internedString("hashKey", 7), 0, NULL);
+                if (!IS_NUMBER(hashKey)) {
+                    throwErrorFmt(lxTypeErrClass, "%s", "return of hashKey() method must be a number!");
+                }
+                return (uint32_t)AS_NUMBER(hashKey);
+            }
             char buf[20] = {'\0'};
             sprintf(buf, "%p", AS_OBJ(val));
             return hashString(buf, strlen(buf)); // hash the pointer string
@@ -338,28 +345,24 @@ uint32_t valHash(Value val) {
     }
 }
 
-static bool isCompatibleTypes(Value a, Value b) {
-    return ((IS_STRING(a) && IS_A_STRING(b)) ||
-            (IS_A_STRING(a) && IS_STRING(b)));
-}
-
 bool valEqual(Value a, Value b) {
-    if (a.type != a.type && !isCompatibleTypes(a, b)) return false;
     switch (a.type) {
         case VAL_T_BOOL:
-            return AS_BOOL(a) == AS_BOOL(b);
+            return b.type == VAL_T_BOOL && AS_BOOL(a) == AS_BOOL(b);
         case VAL_T_NIL:
-            return true;
+            return b.type == VAL_T_NIL;
         case VAL_T_NUMBER:
-            return AS_NUMBER(a) == AS_NUMBER(b);
+            return b.type == VAL_T_NUMBER && AS_NUMBER(a) == AS_NUMBER(b);
         case VAL_T_OBJ: {
-            Obj *aObj = AS_OBJ(a);
-            Obj *bObj = AS_OBJ(b);
-            if (IS_STRING(a) || IS_A_STRING(a)) {
+            // internal string equality (ObjString)
+            if (IS_STRING(a) && IS_STRING(b)) {
                 return strcmp(VAL_TO_STRING(a)->chars,
                         VAL_TO_STRING(b)->chars) == 0;
             }
-            return aObj == bObj; // pointer equality
+            if (IS_INSTANCE_LIKE(a)) { // including lox strings
+                return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b));
+            }
+            UNREACHABLE_RETURN(false);
         }
         case VAL_T_UNDEF: return false;
         default: UNREACHABLE("");

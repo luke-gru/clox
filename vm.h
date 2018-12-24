@@ -30,7 +30,7 @@ typedef struct CallFrame {
     int start; // starting instruction offset in parent (for throw/catch)
     Value *slots; // local variables and function arguments
     ObjInstance *instance; // if function is a method
-    ObjClass *klass;
+    ObjClass *klass; // if function is a method
 
     // Native (C) function fields
     bool isCCall; // native call, callframe created for C (native) function call
@@ -170,11 +170,19 @@ void popErrInfo(void);
 void errorPrintScriptBacktrace(const char *format, ...);
 
 // calling functions/methods
+// low-level call function, arguments must be pushed to stack
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
+// higher-level call function, but callable must be provided. Return value is
+// pushed to stack
 Value callVMMethod(
     ObjInstance *instance, Value callable,
     int argCount, Value *args
 );
+// high-level call function: instance and method name given, if no method then
+// error is raised. Value is returned, popped from stack.
+Value callMethod(Obj *instance, ObjString *methodName, int argCount, Value *args);
+// Must be called from native C callframe only. Value is returned, popped from
+// stack
 Value callSuper(int argCount, Value *args, CallInfo *cinfo);
 
 // call frames

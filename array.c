@@ -204,6 +204,22 @@ static Value lxArrayOpEquals(int argCount, Value *args) {
     return BOOL_VAL(arrayEquals(args[0], args[1]));
 }
 
+static Value lxArrayHashKey(int argCount, Value *args) {
+    CHECK_ARITY("Array#hashKey", 1, 1, argCount);
+    Value self = *args;
+    uint32_t hash = 16679; // XXX: no reason for this number
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    Value el; int idx = 0;
+    VALARRAY_FOREACH(ary, el, idx) {
+        if (AS_OBJ(el) == AS_OBJ(self)) { // avoid infinite recursion
+            hash = hash ^ 1667; // XXX: no reason for this number
+            continue;
+        }
+        hash = hash ^ valHash(el);
+    }
+    return NUMBER_VAL(hash);
+}
+
 static Value lxArrayGetSize(int argCount, Value *args) {
     ValueArray *ary = ARRAY_GETHIDDEN(*args);
     return NUMBER_VAL(ary->count);
@@ -227,6 +243,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "toString", lxArrayToString);
     addNativeMethod(arrayClass, "iter", lxArrayIter);
     addNativeMethod(arrayClass, "clear", lxArrayClear);
+    addNativeMethod(arrayClass, "hashKey", lxArrayHashKey);
 
     // getters
     addNativeGetter(arrayClass, "size", lxArrayGetSize);

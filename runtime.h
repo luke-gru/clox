@@ -52,6 +52,8 @@ Value lxObjectGetSingletonClass(int argCount, Value *args);
 Value lxObjectGetObjectId(int argCount, Value *args);
 Value lxObjectDup(int argCount, Value *args);
 Value lxObjectExtend(int argCount, Value *args);
+Value lxObjectHashKey(int argCount, Value *args);
+Value lxObjectOpEquals(int argCount, Value *args);
 ObjNative *nativeObjectInit;
 
 // class Module
