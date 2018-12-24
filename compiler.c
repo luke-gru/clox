@@ -1265,6 +1265,7 @@ static void emitNode(Node *n) {
         if (incrExpr) {
             emitNode(incrExpr);
         }
+        emitOp0(OP_POP);
         emitLoop(beforeTest);
         patchJump(forJump, -1, NULL);
         patchBreaks(forJump, currentIseq()->tail);
@@ -1291,7 +1292,8 @@ static void emitNode(Node *n) {
         emitOp0(OP_ITER); // push iterator to stack
         int beforeIterNext = currentIseq()->byteCount+2;
         emitOp0(OP_ITER_NEXT);
-        Insn *iterDone = emitJump(OP_JUMP_IF_FALSE_PEEK); // TODO: op_jump_if_undef?
+        // TODO: op_jump_if_undef? Otherwise, nil or false marks end of iteration
+        Insn *iterDone = emitJump(OP_JUMP_IF_FALSE_PEEK);
         uint8_t slotNum = 0; int slotIdx = 0;
         int setOp = numVars > 1 ? OP_UNPACK_SET_LOCAL : OP_SET_LOCAL;
         vec_foreach(&v_slots, slotNum, slotIdx) {
