@@ -891,6 +891,30 @@ const char *instanceClassName(ObjInstance *obj) {
     return klass->name->chars;
 }
 
+ObjClass *singletonClass(Obj *obj) {
+    switch (obj->type) {
+        case OBJ_T_INSTANCE:
+            return instanceSingletonClass((ObjInstance*)obj);
+        case OBJ_T_CLASS:
+            return classSingletonClass((ObjClass*)obj);
+        case OBJ_T_MODULE:
+            return moduleSingletonClass((ObjModule*)obj);
+        default:
+            UNREACHABLE_RETURN(NULL);
+    }
+}
+
+ObjClass *instanceSingletonClass(ObjInstance *inst) {
+    if (inst->singletonKlass) {
+        return inst->singletonKlass;
+    }
+    ObjString *name = valueToString(OBJ_VAL(inst), copyString);
+    pushCString(name, " (meta)", 7);
+    ObjClass *meta = newClass(name, inst->klass);
+    inst->singletonKlass = meta;
+    return meta;
+}
+
 ObjClass *classSingletonClass(ObjClass *klass) {
     if (klass->singletonKlass) {
         return klass->singletonKlass;
@@ -925,17 +949,6 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
     ObjClass *meta = newClass(name, lxClassClass);
     mod->singletonKlass = meta;
     unhideFromGC((Obj*)name);
-    return meta;
-}
-
-ObjClass *instanceSingletonClass(ObjInstance *inst) {
-    if (inst->singletonKlass) {
-        return inst->singletonKlass;
-    }
-    ObjString *name = valueToString(OBJ_VAL(inst), copyString);
-    pushCString(name, " (meta)", 7);
-    ObjClass *meta = newClass(name, inst->klass);
-    inst->singletonKlass = meta;
     return meta;
 }
 

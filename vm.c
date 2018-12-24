@@ -145,7 +145,9 @@ static void defineNativeClasses(void) {
     ObjClass *objClass = addGlobalClass("Object", NULL);
     nativeObjectInit = addNativeMethod(objClass, "init", lxObjectInit);
     addNativeMethod(objClass, "dup", lxObjectDup);
+    addNativeMethod(objClass, "extend", lxObjectExtend);
     addNativeGetter(objClass, "_class", lxObjectGetClass);
+    addNativeGetter(objClass, "_singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
     lxObjClass = objClass;
 
@@ -1651,7 +1653,7 @@ static InterpretResult vm_run() {
         ASSERT(vmRunLvl == 0);
         int jumpRes = setjmp(rootVMLoopJumpBuf);
         rootVMLoopJumpBufSet = true;
-        if (jumpRes == JUMP_SET) { // jump is set
+        if (jumpRes == JUMP_SET) {
             VM_DEBUG("VM set rootVMLoopJumpBuf");
         } else {
             VM_DEBUG("VM caught error in rootVMLoopJumpBuf");

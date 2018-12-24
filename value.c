@@ -232,7 +232,8 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
                     throwErrorFmt(lxTypeErrClass, "TypeError, toString() returned non-string, is a: %s", typeOfVal(stringVal));
                     UNREACHABLE_RETURN(NULL);
                 }
-                ret = VAL_TO_STRING(stringVal);
+                char *cbuf = VAL_TO_STRING(stringVal)->chars;
+                ret = stringConstructor(cbuf, strlen(cbuf));
                 pop(); // stringVal
             } else {
                 ObjClass *klass = inst->klass;

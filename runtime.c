@@ -309,6 +309,11 @@ Value lxObjectGetClass(int argCount, Value *args) {
     }
 }
 
+Value lxObjectGetSingletonClass(int argCount, Value *args) {
+    Value self = *args;
+    return OBJ_VAL(singletonClass(AS_OBJ(self)));
+}
+
 // ex: print o.objectId
 Value lxObjectGetObjectId(int argCount, Value *args) {
     Value self = *args;
@@ -326,7 +331,7 @@ Value lxObjectDup(int argCount, Value *args) {
         throwErrorFmt(lxTypeErrClass, "Cannot call dup() on a %s", typeOfVal(self));
     }
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInstance *newObj = newInstance(selfObj->klass);
+    ObjInstance *newObj = newInstance(selfObj->klass); // XXX: Call initialize on new instance?
     Entry e; int idx = 0;
     TABLE_FOREACH(&selfObj->fields, e, idx) {
         tableSet(&newObj->fields, e.key, e.value);
@@ -336,6 +341,18 @@ Value lxObjectDup(int argCount, Value *args) {
         tableSet(&newObj->hiddenFields, e.key, e.value);
     }
     return OBJ_VAL(newObj);
+}
+
+Value lxObjectExtend(int argCount, Value *args) {
+    CHECK_ARITY("Object#extend", 2, 2, argCount);
+    Value self = *args;
+    Obj *obj = AS_OBJ(self);
+    ObjClass *klass = singletonClass(obj);
+    Value includeArgs[2];
+    includeArgs[0] = OBJ_VAL(klass);
+    includeArgs[1] = args[1];
+    lxClassInclude(2, includeArgs); // TODO: call method
+    return self;
 }
 
 // ex: var m = Module("MyMod");

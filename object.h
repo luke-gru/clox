@@ -384,6 +384,7 @@ bool isSubclass(ObjClass *subklass, ObjClass *superklass);
 const char *instanceClassName(ObjInstance *obj);
 
 // metaclasses
+ObjClass *singletonClass(Obj *obj);
 ObjClass *classSingletonClass(ObjClass *klass);
 ObjClass *moduleSingletonClass(ObjModule *mod);
 ObjClass *instanceSingletonClass(ObjInstance *instance);
