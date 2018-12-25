@@ -22,6 +22,8 @@ typedef enum {
     OP_BITOR,
     OP_BITAND,
     OP_BITXOR,
+    OP_SHOVEL_L,
+    OP_SHOVEL_R,
     OP_NEGATE,
     OP_NOT,
 

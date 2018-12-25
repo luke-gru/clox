@@ -1003,8 +1003,9 @@ static Node *addition() {
 static Node *bitManip() {
     TRACE_START("bitManip");
     Node *left = multiplication();
-    while (match(TOKEN_PIPE) || match(TOKEN_AMP) || match(TOKEN_CARET)) {
-        TRACE_START("binaryExpr (|,&,^)");
+    while (match(TOKEN_PIPE) || match(TOKEN_AMP) || match(TOKEN_CARET) ||
+            match(TOKEN_SHOVEL_L) || match(TOKEN_SHOVEL_R)) {
+        TRACE_START("binaryExpr (|,&,^,<<,>>)");
         Token byteTok = current->previous;
         node_type_t binT = {
             .type = NODE_EXPR,
@@ -1015,7 +1016,7 @@ static Node *bitManip() {
         nodeAddChild(n, left);
         nodeAddChild(n, right);
         left = n;
-        TRACE_END("binaryExpr (|,&,^)");
+        TRACE_END("binaryExpr (|,&,^,<<,>>)");
     }
     TRACE_END("bitManip");
     return left;

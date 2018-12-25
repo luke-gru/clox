@@ -33,6 +33,8 @@ typedef enum {
   TOKEN_PIPE, // |
   TOKEN_AMP, // &
   TOKEN_CARET, // ^
+  TOKEN_SHOVEL_L, // <<
+  TOKEN_SHOVEL_R, // >>
 
   TOKEN_IDENTIFIER,
   TOKEN_STRING_SQUOTE,

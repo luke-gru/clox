@@ -322,6 +322,8 @@ static bool isBinOp(Insn *in) {
         case OP_BITOR:
         case OP_BITAND:
         case OP_BITXOR:
+        case OP_SHOVEL_L:
+        case OP_SHOVEL_R:
             return true;
         default:
             return false;
@@ -366,6 +368,13 @@ static Value foldConstant(Iseq *seq, Insn *cur, Insn *bin, Insn *ain) {
             return NUMBER_VAL((double)((int)aNum & (int)bNum));
         case OP_BITXOR:
             return NUMBER_VAL((double)((int)aNum ^ (int)bNum));
+        case OP_SHOVEL_L: {
+            // TODO: detect overflow for doubles
+            double num = (double)((int)aNum << (int)bNum);
+            return NUMBER_VAL(num);
+        }
+        case OP_SHOVEL_R:
+            return NUMBER_VAL((double)((int)aNum >> (int)bNum));
         default:
             UNREACHABLE("bug");
     }
@@ -1108,6 +1117,10 @@ static void emitNode(Node *n) {
             emitOp0(OP_BITAND);
         } else if (n->tok.type == TOKEN_CARET) {
             emitOp0(OP_BITXOR);
+        } else if (n->tok.type == TOKEN_SHOVEL_L) {
+            emitOp0(OP_SHOVEL_L);
+        } else if (n->tok.type == TOKEN_SHOVEL_R) {
+            emitOp0(OP_SHOVEL_R);
         } else {
             UNREACHABLE("invalid binary expr node (token: %s)", tokStr(&n->tok));
         }
@@ -1155,6 +1168,9 @@ static void emitNode(Node *n) {
             // hex number
             } else if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'x' || numStr[1] == 'X')) {
                 d = strtod(numStr, NULL);
+            // binary number
+            } else if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'b' || numStr[1] == 'B')) {
+                d = (double)strtol(numStr+2, NULL, 2);
             } else {
                 d = strtod(numStr, NULL);
             }

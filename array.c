@@ -234,6 +234,7 @@ void Init_ArrayClass() {
     nativeArrayInit = addNativeMethod(arrayClass, "init", lxArrayInit);
     // methods
     addNativeMethod(arrayClass, "push", lxArrayPush);
+    addNativeMethod(arrayClass, "opShovelLeft", lxArrayPush);
     addNativeMethod(arrayClass, "pop", lxArrayPop);
     addNativeMethod(arrayClass, "pushFront", lxArrayPushFront);
     addNativeMethod(arrayClass, "popFront", lxArrayPopFront);

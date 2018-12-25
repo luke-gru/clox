@@ -66,6 +66,10 @@ static bool isHex(char c) {
         (c >= 'A' && c <= 'F');
 }
 
+static bool isBinary(char c) {
+    return (c == '0' || c == '1');
+}
+
 static bool isOct(char c) {
     return (c >= '0' && c <= '7');
 }
@@ -230,6 +234,12 @@ static Token number(char cur) {
       while (isHex(peek())) advance();
       return makeToken(TOKEN_NUMBER);
   }
+  // binary number (ex: 0b0010)
+  if (cur == '0' && ((next = peek()) == 'b' || next == 'B')) {
+      advance();
+      while (isBinary(peek())) advance();
+      return makeToken(TOKEN_NUMBER);
+  }
   // decimal number
   while (isDigit(peek())) advance();
 
@@ -377,10 +387,12 @@ Token scanToken(void) {
 
     case '<':
       if (match('=')) return makeToken(TOKEN_LESS_EQUAL);
+      if (match('<')) return makeToken(TOKEN_SHOVEL_L);
       return makeToken(TOKEN_LESS);
 
     case '>':
       if (match('=')) return makeToken(TOKEN_GREATER_EQUAL);
+      if (match('>')) return makeToken(TOKEN_SHOVEL_R);
       return makeToken(TOKEN_GREATER);
 
     case '"': return doubleQuotedString();

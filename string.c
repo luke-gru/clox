@@ -148,6 +148,7 @@ void Init_StringClass() {
     addNativeMethod(stringClass, "opIndexSet", lxStringOpIndexSet);
     addNativeMethod(stringClass, "opEquals", lxStringOpEquals);
     addNativeMethod(stringClass, "push", lxStringPush);
+    addNativeMethod(stringClass, "opShovelLeft", lxStringPush);
     addNativeMethod(stringClass, "clear", lxStringClear);
     addNativeMethod(stringClass, "insertAt", lxStringInsertAt);
     addNativeMethod(stringClass, "substr", lxStringSubstr);

@@ -51,6 +51,10 @@ const char *opName(OpCode code) {
         return "OP_BITAND";
     case OP_BITXOR:
         return "OP_BITXOR";
+    case OP_SHOVEL_L:
+        return "OP_SHOVEL_L";
+    case OP_SHOVEL_R:
+        return "OP_SHOVEL_R";
     case OP_NEGATE:
         return "OP_NEGATE";
     case OP_NOT:
@@ -565,6 +569,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_BITOR:
         case OP_BITAND:
         case OP_BITXOR:
+        case OP_SHOVEL_L:
+        case OP_SHOVEL_R:
         case OP_LESS:
         case OP_GREATER:
         case OP_GREATER_EQUAL:
@@ -657,6 +663,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_BITOR:
         case OP_BITAND:
         case OP_BITXOR:
+        case OP_SHOVEL_L:
+        case OP_SHOVEL_R:
         case OP_LESS:
         case OP_GREATER:
         case OP_GREATER_EQUAL:

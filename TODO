@@ -36,8 +36,6 @@ with modules
 * Add socket class in io.c, make it work with multi-threading
 * Allow getters to be called like methods (when given 0 args) [PARTIAL]
   - works for instances, not classes or modules (ex: Array.name())
-* Unsigned binary constants, with 0b010101010
-* bitshift right/left with `<<` and `>>`
 * Add '+=', '-=', '*=', '/=', '%=', '|=', '^=', '&=', maybe '--' and '++'
 * Allow '?' or '!' at end of method name?
 
