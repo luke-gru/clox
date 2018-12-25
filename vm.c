@@ -1681,6 +1681,10 @@ static ObjString *methodNameForBinop(OpCode code) {
         return internedString("opMul", 5);
     case OP_DIVIDE:
         return internedString("opDiv", 5);
+    case OP_SHOVEL_L:
+        return internedString("opShovelLeft", 12);
+    case OP_SHOVEL_R:
+        return internedString("opShovelRight", 13);
     default:
         return NULL;
     }
@@ -1745,7 +1749,7 @@ static InterpretResult vm_run() {
           }\
           callCallable(OBJ_VAL(callable), 1, true, NULL);\
       } else {\
-          throwErrorFmt(lxTypeErrClass, "binary operation type error, lhs=%s, rhs=%s", typeOfVal(a), typeOfVal(b));\
+          throwErrorFmt(lxTypeErrClass, "binary operation type error, op=%s, lhs=%s, rhs=%s", #op, typeOfVal(a), typeOfVal(b));\
       }\
     } while (0)
 
@@ -1798,42 +1802,8 @@ static InterpretResult vm_run() {
       case OP_BITOR:    BINARY_OP(|,OP_BITOR, int); break;
       case OP_BITAND:   BINARY_OP(&,OP_BITAND, int); break;
       case OP_BITXOR:   BINARY_OP(^,OP_BITXOR, int); break;
-      case OP_SHOVEL_L: {
-        Value rhs = peek(0);
-        Value lhs = peek(1);
-        if (IS_NUMBER(lhs) && IS_NUMBER(rhs)) {
-            pop(); pop();
-            push(NUMBER_VAL((int)AS_NUMBER(lhs) << (int)AS_NUMBER(rhs)));
-            break;
-        }
-        if (IS_INSTANCE_LIKE(lhs)) {
-            pop(); pop();
-            Value ret = callMethod(AS_OBJ(lhs), internedString("opShovelLeft", 12), 1, &rhs);
-            push(ret);
-            break;
-        } else {
-            pop(); pop();
-            throwErrorFmt(lxTypeErrClass, "Type %s does not support '<<'", typeOfVal(lhs));
-        }
-      }
-      case OP_SHOVEL_R: {
-        Value rhs = peek(0);
-        Value lhs = peek(1);
-        if (IS_NUMBER(lhs) && IS_NUMBER(rhs)) {
-            pop(); pop();
-            push(NUMBER_VAL((int)AS_NUMBER(lhs) >> (int)AS_NUMBER(rhs)));
-            break;
-        }
-        if (IS_INSTANCE_LIKE(lhs)) {
-            pop(); pop();
-            Value ret = callMethod(AS_OBJ(lhs), internedString("opShovelRight", 13), 1, &rhs);
-            push(ret);
-            break;
-        } else {
-            pop(); pop();
-            throwErrorFmt(lxTypeErrClass, "Type %s does not support '>>'", typeOfVal(lhs));
-        }
-      }
+      case OP_SHOVEL_L: BINARY_OP(<<,OP_SHOVEL_L,int); break;
+      case OP_SHOVEL_R: BINARY_OP(>>,OP_SHOVEL_R,int); break;
       case OP_NEGATE: {
         Value val = pop();
         if (!IS_NUMBER(val)) {

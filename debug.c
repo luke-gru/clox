@@ -423,8 +423,12 @@ static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     ObjInternal *obj = AS_INTERNAL(callInfoVal);
     CallInfo *callInfo = internalGetData(obj);
     ASSERT(callInfo);
+    char *callName = tokStr(&callInfo->nameTok);
+    if (strcmp(callName, "}") == 0) { // when `fun() { ... }(args)`
+        callName = "(anon)";
+    }
     fprintf(f, "%-16s    (name=%s, argc=%d, kwargs=%d, splat=%d)\n",
-        op, tokStr(&callInfo->nameTok), callInfo->argc,
+        op, callName, callInfo->argc,
         callInfo->numKwargs, callInfo->usesSplat ? 1 : 0
     );
     return i+3;
@@ -441,7 +445,7 @@ static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+3;
 }
 
-// OTDO: show callInfo
+// TODO: show callInfo
 static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t methodNameArg = chunk->code[i + 1];
     Value methodName = getConstant(chunk, methodNameArg);
