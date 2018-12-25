@@ -15,11 +15,38 @@ Value TBL_EMPTY_KEY = {
     .as = { .number = (double)0.00 }
 };
 
+Entry TBL_EMPTY_ENTRY = {
+    .key = {
+        .type = VAL_T_UNDEF,
+        .as = { .number = (double)0.00 }
+    },
+    .value = NIL_VAL
+};
+
 void initTable(Table *table) {
     table->count = 0;
     // There are, at most, capacityMask+1 existing entry pointers in the table
     table->capacityMask = -1;
     table->entries = NULL;
+}
+
+void initTableWithCapa(Table *table, size_t capa) {
+    if (capa == 0) {
+        initTable(table);
+        return;
+    }
+    table->count = 0;
+    // There are, at most, capacityMask+1 existing entry pointers in the table
+    table->capacityMask = (int)(capa-1);
+    Entry *entries = ALLOCATE(Entry, capa);
+    for (size_t i = 0 ; i < capa; i++) {
+        memcpy(entries+i, &TBL_EMPTY_ENTRY, sizeof(Entry));
+    }
+    table->entries = entries;
+}
+
+size_t tableCapacity(Table *table) {
+    return (size_t)(table->capacityMask+1);
 }
 
 void freeTable(Table *table) {
@@ -59,8 +86,7 @@ static void resize(Table *table, int capacityMask) {
     /*fprintf(stderr, "Resize\n");*/
     Entry *entries = ALLOCATE(Entry, capacityMask + 1);
     for (int i = 0; i <= capacityMask; i++) {
-        entries[i].key = TBL_EMPTY_KEY;
-        entries[i].value = NIL_VAL;
+        memcpy(entries+i, &TBL_EMPTY_ENTRY, sizeof(Entry));
     }
 
     table->count = 0;

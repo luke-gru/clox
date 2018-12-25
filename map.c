@@ -273,6 +273,26 @@ static Value lxMapDelete(int argCount, Value *args) {
     return NUMBER_VAL(deleted);
 }
 
+static Value lxMapRehash(int argCount, Value *args) {
+    CHECK_ARITY("Map#rehash", 1, 1, argCount);
+    Value self = args[0];
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    Table *mapOld = MAP_GETHIDDEN(self);
+    Table *mapNew = ALLOCATE(Table, 1);
+    initTableWithCapa(mapNew, tableCapacity(mapOld));
+    Entry e; int idx = 0;
+    TABLE_FOREACH(mapOld, e, idx) {
+        tableSet(mapNew, e.key, e.value);
+    }
+    Value internalVal;
+    ASSERT(tableGet(&selfObj->hiddenFields, OBJ_VAL(internedString("map", 3)), &internalVal));
+    ObjInternal *internal = AS_INTERNAL(internalVal);
+    internal->data = mapNew;
+    freeTable(mapOld);
+    FREE(Table, mapOld);
+    return self;
+}
+
 static Value lxMapGetSize(int argCount, Value *args) {
     Table *map = MAP_GETHIDDEN(*args);
     return NUMBER_VAL(map->count);
@@ -379,6 +399,7 @@ void Init_MapClass() {
     addNativeMethod(mapClass, "slice", lxMapSlice);
     addNativeMethod(mapClass, "merge", lxMapMerge);
     addNativeMethod(mapClass, "delete", lxMapDelete);
+    addNativeMethod(mapClass, "rehash", lxMapRehash);
 
     // getters
     addNativeGetter(mapClass, "size", lxMapGetSize);

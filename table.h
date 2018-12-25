@@ -18,7 +18,9 @@ typedef struct Table {
 typedef void (*TableEntryCb)(Entry *e);
 
 void initTable(Table *table);
+void initTableWithCapa(Table *table, size_t capa);
 void freeTable(Table *table); // free internal table structures, not table itself
+
 
 // fills given Value with found value, if any
 bool tableGet(Table *table, Value key, Value *value);
@@ -27,6 +29,8 @@ bool tableDelete(Table *table, Value key);
 void tableAddAll(Table *from, Table *to);
 void tableEachEntry(Table *table, TableEntryCb func);
 Entry tableNthEntry(Table *table, int n, int *entryIdx);
+
+size_t tableCapacity(Table *table);
 
 // NOTE: condition with value '555' uses this value just so that the rhs of
 // the expression results in a valid test expression, instead of just the

@@ -1,0 +1,26 @@
+var key = "key";
+var m = %{key: "val"};
+
+print m["key"];
+
+key << "s";
+
+print "";
+print m[key];
+print m["keys"];
+
+print "";
+m.rehash();
+print m[key];
+print m["keys"];
+
+
+__END__
+-- expect: --
+val
+
+nil
+nil
+
+val
+val
