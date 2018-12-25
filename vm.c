@@ -1093,10 +1093,13 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     ObjClass *frameClass = NULL;
     if (isMethod) {
         instance = AS_INSTANCE(EC->stackTop[-argCount-1]);
-        DBG_ASSERT(IS_INSTANCE_LIKE(OBJ_VAL(instance)));
+        if (!isInstanceLikeObj((Obj*)instance)) {
+            throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfObj((Obj*)instance));
+        }
         frameClass = instance->klass; // TODO: make class the callable's class, not the instance class
     } else {
-        DBG_ASSERT(isCallable(EC->stackTop[-argCount-1])); // should be same as `callable`
+        // wrong usage of callCallable, callable should be on stack, below the arguments
+        ASSERT(isCallable(EC->stackTop[-argCount-1])); // should be same as `callable`
     }
     if (IS_CLOSURE(callable)) { // lox function
         closure = AS_CLOSURE(callable);

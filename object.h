@@ -396,6 +396,7 @@ static inline bool isObjType(Value value, ObjType type) {
   return IS_OBJ(value) && AS_OBJ(value)->type == type;
 }
 const char *typeOfObj(Obj *obj);
+bool isInstanceLikeObj(Obj *obj);
 
 typedef bool (*obj_type_p)(Obj*);
 bool is_obj_function_p(Obj*);

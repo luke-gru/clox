@@ -170,19 +170,22 @@ void popErrInfo(void);
 void errorPrintScriptBacktrace(const char *format, ...);
 
 // calling functions/methods
-// low-level call function, arguments must be pushed to stack
-bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info);
+// low-level call function, arguments must be pushed to stack, including
+// callable if it's not a method, or the instance if it is. Argcount does not
+// include the instance, if it's a method. `cinfo` can be NULL.
+bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *cinfo);
 // higher-level call function, but callable must be provided. Return value is
-// pushed to stack
+// pushed to stack. argCount does not include instance.
 Value callVMMethod(
     ObjInstance *instance, Value callable,
     int argCount, Value *args
 );
 // high-level call function: instance and method name given, if no method then
-// error is raised. Value is returned, popped from stack.
+// error is raised. Value is returned, popped from stack. argCount does not
+// include instance.
 Value callMethod(Obj *instance, ObjString *methodName, int argCount, Value *args);
 // Must be called from native C callframe only. Value is returned, popped from
-// stack
+// stack. `args` does not include `self`, and `cinfo` can be NULL.
 Value callSuper(int argCount, Value *args, CallInfo *cinfo);
 
 // call frames

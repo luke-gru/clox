@@ -983,6 +983,17 @@ pthread_t threadGetId(Value thread) {
     return th->tid;
 }
 
+bool isInstanceLikeObj(Obj *obj) {
+    switch (obj->type) {
+        case OBJ_T_INSTANCE:
+        case OBJ_T_CLASS:
+        case OBJ_T_MODULE:
+            return true;
+        default:
+            return false;
+    }
+}
+
 bool is_obj_function_p(Obj *obj) {
     return obj->type == OBJ_T_FUNCTION;
 }

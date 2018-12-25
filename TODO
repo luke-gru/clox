@@ -41,7 +41,6 @@ with modules
 * Allow blocks given to any method/function, like Ruby?
 * Disallow property get/set outside of class like Ruby? Also, make property
 get/set a different sigil maybe, like @prop.
-* Add random()
 * Add Tempfile class with finalizer to remove file
 
 Bugs

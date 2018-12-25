@@ -346,6 +346,15 @@ static Value lxFileSeek(int argCount, Value *args) {
     return NUMBER_VAL(pos);
 }
 
+static Value lxFileRewind(int argCount, Value *args) {
+    CHECK_ARITY("File#rewind", 1, 1, argCount);
+    Value seekArgs[2] = {
+        NUMBER_VAL(0),
+        NUMBER_VAL(SEEK_SET)
+    };
+    return callMethod(AS_OBJ(*args), internedString("seek", 4), 2, seekArgs);
+}
+
 void Init_FileClass(void) {
     ObjClass *fileClass = addGlobalClass("File", lxObjClass);
     ObjClass *fileStatic = classSingletonClass(fileClass);
@@ -361,6 +370,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileClass, "unlink", lxFileUnlink);
     addNativeMethod(fileClass, "rename", lxFileRename);
     addNativeMethod(fileClass, "seek", lxFileSeek);
+    addNativeMethod(fileClass, "rewind", lxFileRewind);
 
     Value fileClassVal = OBJ_VAL(fileClass);
     // TODO: make constants instead of properties
