@@ -57,6 +57,27 @@ static Value lxArrayInit(int argCount, Value *args) {
     return self;
 }
 
+static Value lxArrayDup(int argCount, Value *args) {
+    CHECK_ARITY("Array#dup", 1, 1, argCount);
+    Value self = *args;
+    Value dup = callSuper(0, NULL, NULL);
+    ObjInstance *dupObj = AS_INSTANCE(dup);
+    ObjInternal *internalObj = newInternalObject(NULL, 0, markInternalAry, freeInternalAry);
+    ValueArray *selfAry = ARRAY_GETHIDDEN(self);
+    ValueArray *dupAry = ALLOCATE(ValueArray, 1);
+    initValueArray(dupAry);
+    internalObj->data = dupAry;
+    internalObj->dataSz = sizeof(ValueArray);
+    tableSet(&dupObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), OBJ_VAL(internalObj));
+
+    // XXX: might be slow to dup large arrays, should bulk copy memory using memcpy or similar
+    Value el; int idx = 0;
+    VALARRAY_FOREACH(selfAry, el, idx) {
+        writeValueArrayEnd(dupAry, el);
+    }
+    return dup;
+}
+
 // ex: a.push(1);
 static Value lxArrayPush(int argCount, Value *args) {
     CHECK_ARITY("Array#push", 2, 2, argCount);
@@ -233,6 +254,7 @@ void Init_ArrayClass() {
 
     nativeArrayInit = addNativeMethod(arrayClass, "init", lxArrayInit);
     // methods
+    addNativeMethod(arrayClass, "dup", lxArrayDup);
     addNativeMethod(arrayClass, "push", lxArrayPush);
     addNativeMethod(arrayClass, "opShovelLeft", lxArrayPush);
     addNativeMethod(arrayClass, "pop", lxArrayPop);

@@ -72,6 +72,30 @@ static Value lxMapInit(int argCount, Value *args) {
     return self;
 }
 
+static Value lxMapDup(int argCount, Value *args) {
+    CHECK_ARITY("Map#dup", 1, 1, argCount);
+    Value dup = callSuper(0, NULL, NULL);
+    ObjInstance *dupObj = AS_INSTANCE(dup);
+    Value orig = *args;
+    Table *mapOrig = MAP_GETHIDDEN(orig);
+
+    ObjInternal *internalMap = newInternalObject(
+        NULL, sizeof(Table), markInternalMap, freeInternalMap
+    );
+    Table *mapDup = ALLOCATE(Table, 1);
+    initTable(mapDup);
+    internalMap->data = mapDup;
+    tableSet(&dupObj->hiddenFields, OBJ_VAL(
+        internedString("map", 3)), OBJ_VAL(internalMap));
+
+    Entry e; int idx = 0;
+    TABLE_FOREACH(mapOrig, e, idx) {
+        tableSet(mapDup, e.key, e.value);
+    }
+
+    return dup;
+}
+
 static Value lxMapToString(int argCount, Value *args) {
     CHECK_ARITY("Map#toString", 1, 1, argCount);
     Value self = args[0];
@@ -221,6 +245,21 @@ static Value lxMapSlice(int argCount, Value *args) {
     return ret;
 }
 
+static Value lxMapMerge(int argCount, Value *args) {
+    CHECK_ARITY("Map#merge", 2, 2, argCount);
+    Value self = args[0];
+    Value other = args[1];
+    Table *otherMap = MAP_GETHIDDEN(other);
+    CHECK_ARG_IS_A(other, lxMapClass, 1);
+    Value ret = callMethod(AS_OBJ(self), internedString("dup", 3), 0, NULL);
+    Table *retMap = MAP_GETHIDDEN(ret);
+    Entry e; int idx = 0;
+    TABLE_FOREACH(otherMap, e, idx) {
+        tableSet(retMap, e.key, e.value);
+    }
+    return ret;
+}
+
 static Value lxMapDelete(int argCount, Value *args) {
     CHECK_ARITY("Map#delete", 2, -1, argCount);
     Value self = args[0];
@@ -326,6 +365,7 @@ void Init_MapClass() {
 
     nativeMapInit = addNativeMethod(mapClass, "init", lxMapInit);
     // methods
+    addNativeMethod(mapClass, "dup", lxMapDup);
     addNativeMethod(mapClass, "opIndexGet", lxMapGet);
     addNativeMethod(mapClass, "opIndexSet", lxMapSet);
     addNativeMethod(mapClass, "opEquals", lxMapEquals);
@@ -337,6 +377,7 @@ void Init_MapClass() {
     addNativeMethod(mapClass, "clear", lxMapClear);
     addNativeMethod(mapClass, "hasKey", lxMapHasKey);
     addNativeMethod(mapClass, "slice", lxMapSlice);
+    addNativeMethod(mapClass, "merge", lxMapMerge);
     addNativeMethod(mapClass, "delete", lxMapDelete);
 
     // getters
