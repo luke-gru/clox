@@ -9,6 +9,13 @@
 
 #define TABLE_MAX_LOAD 0.75
 
+
+/**
+ * TODO: if two different values hash to the same number, the first is
+ * overridden. This is an implementation issue, `table->entries` should be a 2
+ * dimensional array, backed by a dynamic array for each hash bucket.
+ */
+
 // sentinel value for NULL key
 Value TBL_EMPTY_KEY = {
     .type = VAL_T_UNDEF,
@@ -55,7 +62,7 @@ void freeTable(Table *table) {
 }
 
 static uint32_t findEntry(Entry *entries, int capacityMask, Value key) {
-    // NOTE: valHash() can call method `hashKey()` `key`
+    // NOTE: valHash() can call method `hashKey()` if key is an instance
     uint32_t index = valHash(key) & capacityMask;
 
     // We don't worry about an infinite loop here because resize() ensures
@@ -63,6 +70,7 @@ static uint32_t findEntry(Entry *entries, int capacityMask, Value key) {
     for (;;) {
         Entry *entry = &entries[index];
 
+        // NOTE: valEqual() can call `opEquals()` if entry key is an instance
         if ((entry->key.type == VAL_T_UNDEF) || (valEqual(entry->key, key))) {
             return index;
         }
