@@ -11,7 +11,7 @@ Added features:
 * Default arguments
 * Keyword arguments
 * Mutable strings
-* Modules
+* Modules similar to Ruby's
 * Integrated debugger
 * Integrated REPL
 * Multi-process support using fork() syscall
@@ -19,7 +19,7 @@ Added features:
 * try/catch blocks
 * Iterators and foreach() statement
 * String interpolation
-* Map literals
+* Map (hash/dict) literals
 
 Some internal differences:
 * creation of AST before compilation phase (separate parser/compiler)

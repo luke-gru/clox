@@ -113,18 +113,67 @@ static Value lxFileReadStatic(int argCount, Value *args) {
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
     ObjString *fnameStr = VAL_TO_STRING(fname);
     checkFileExists(fnameStr->chars);
-    // TODO: release and re-acquire GVL for fopen, or is it fast enough?
     FILE *f = checkFopen(fnameStr->chars, "r");
     ObjString *retBuf = copyString("", 0);
     Value ret = newStringInstance(retBuf);
-    size_t nread;
-    // TODO: release GVL() and make fileReadBuf per-thread
+    size_t nread = 0;
+    releaseGVL();
     while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
+        acquireGVL();
         pushCString(retBuf, fileReadBuf, nread);
+        releaseGVL();
     }
+    acquireGVL();
     checkFerror(f, "reading", fnameStr->chars);
     checkFclose(f);
     return ret;
+}
+
+static Value lxFileReadLinesStatic(int argCount, Value *args) {
+    CHECK_ARITY("File.readLines", 2, 2, argCount);
+    Value fname = args[1];
+    CHECK_ARG_IS_A(fname, lxStringClass, 1);
+    ObjString *fnameStr = VAL_TO_STRING(fname);
+    checkFileExists(fnameStr->chars);
+    FILE *f = checkFopen(fnameStr->chars, "r");
+    Value ary = newArray();
+    size_t nread = 0;
+    releaseGVL();
+    Value line;
+    bool leftoverLine = false;
+    while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
+        acquireGVL();
+        size_t nleft = nread;
+        char *bufp = fileReadBuf;
+        char *bufpStart = bufp;
+        while (nleft > 0 && *bufp) {
+            while (*bufp != '\0' && *bufp != '\n') {
+                bufp++;
+                if (nleft == 0) break;
+            }
+            if (*bufp == '\n') bufp++;
+            size_t len = bufp - bufpStart;
+            if (leftoverLine) {
+                pushCString(STRING_GETHIDDEN(line), bufpStart, len);
+                leftoverLine = false;
+            } else {
+                line = newStringInstance(copyString(bufpStart, len));
+                arrayPush(ary, line);
+            }
+            nleft -= len;
+            if (!*bufp) {
+                ASSERT(nleft == 0);
+                leftoverLine = true;
+                break; // read more data, reached end of buffer
+            }
+            bufpStart = bufp;
+        }
+        releaseGVL();
+    }
+    acquireGVL();
+    checkFerror(f, "reading", fnameStr->chars);
+    checkFclose(f);
+    return ary;
 }
 
 static void markInternalFile(Obj *obj) {
@@ -284,6 +333,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "create", lxFileCreateStatic);
     addNativeMethod(fileStatic, "open", lxFileOpenStatic);
     addNativeMethod(fileStatic, "read", lxFileReadStatic);
+    addNativeMethod(fileStatic, "readLines", lxFileReadLinesStatic);
     addNativeMethod(fileClass, "init", lxFileInit);
     addNativeMethod(fileClass, "write", lxFileWrite);
     addNativeMethod(fileClass, "close", lxFileClose);
