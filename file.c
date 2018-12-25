@@ -326,6 +326,26 @@ static Value lxFileRename(int argCount, Value *args) {
     }
 }
 
+static Value lxFileSeek(int argCount, Value *args) {
+    CHECK_ARITY("File#seek", 3, 3, argCount);
+    Value self = args[0];
+    Value offsetVal = args[1];
+    Value whenceVal = args[2];
+    CHECK_ARG_BUILTIN_TYPE(offsetVal, IS_NUMBER_FUNC, "number", 1);
+    CHECK_ARG_BUILTIN_TYPE(whenceVal, IS_NUMBER_FUNC, "number", 2);
+    off_t offset = (off_t)AS_NUMBER(offsetVal);
+    off_t whence = (off_t)AS_NUMBER(whenceVal);
+    LxFile *f = FILE_GETHIDDEN(self);
+    int last = errno;
+    off_t pos = lseek(f->fd, offset, whence);
+    if (pos == -1) {
+        int err = errno;
+        errno = last;
+        throwErrorFmt(lxErrClass, "Error during file seek: %s", strerror(err));
+    }
+    return NUMBER_VAL(pos);
+}
+
 void Init_FileClass(void) {
     ObjClass *fileClass = addGlobalClass("File", lxObjClass);
     ObjClass *fileStatic = classSingletonClass(fileClass);
@@ -340,8 +360,10 @@ void Init_FileClass(void) {
     addNativeMethod(fileClass, "path", lxFilePath);
     addNativeMethod(fileClass, "unlink", lxFileUnlink);
     addNativeMethod(fileClass, "rename", lxFileRename);
+    addNativeMethod(fileClass, "seek", lxFileSeek);
 
     Value fileClassVal = OBJ_VAL(fileClass);
+    // TODO: make constants instead of properties
     setProp(fileClassVal, internedString("RDONLY", 6), NUMBER_VAL(O_RDONLY));
     setProp(fileClassVal, internedString("WRONLY", 6), NUMBER_VAL(O_WRONLY));
     setProp(fileClassVal, internedString("RDWR", 4), NUMBER_VAL(O_RDWR));
@@ -353,6 +375,19 @@ void Init_FileClass(void) {
     setProp(fileClassVal, internedString("SYNC", 4), NUMBER_VAL(O_SYNC));
     setProp(fileClassVal, internedString("TRUNC", 5), NUMBER_VAL(O_TRUNC));
     setProp(fileClassVal, internedString("EXCL", 4), NUMBER_VAL(O_EXCL));
+
+    setProp(fileClassVal, internedString("SEEK_SET", 8), NUMBER_VAL(SEEK_SET));
+    setProp(fileClassVal, internedString("SEEK_CUR", 8), NUMBER_VAL(SEEK_CUR));
+    setProp(fileClassVal, internedString("SEEK_END", 8), NUMBER_VAL(SEEK_END));
+#ifndef SEEK_DATA
+#define SEEK_DATA 0
+#endif
+    setProp(fileClassVal, internedString("SEEK_DATA", 9), NUMBER_VAL(SEEK_DATA));
+#ifndef SEEK_HOLE
+#define SEEK_HOLE 0
+#endif
+    setProp(fileClassVal, internedString("SEEK_HOLE", 9), NUMBER_VAL(SEEK_HOLE));
+
 
     lxFileClass = fileClass;
 }

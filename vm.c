@@ -108,6 +108,7 @@ static void defineNativeFunctions(void) {
     addGlobalFunction("atExit", lxAtExit);
     addGlobalFunction("newThread", lxNewThread);
     addGlobalFunction("joinThread", lxJoinThread);
+    Init_rand();
 }
 
 // Builtin classes initialized below
@@ -1080,8 +1081,8 @@ static bool checkFunctionArity(ObjFunction *func, int argCount) {
     return true;
 }
 
-// Arguments are expected to be pushed on to stack by caller. Argcount
-// does NOT include the instance argument, ex: a method with no arguments will have an
+// Arguments are expected to be pushed on to stack by caller, including the
+// callable object. Argcount does NOT include the instance argument, ex: a method with no arguments will have an
 // argCount of 0. If the callable is a class (constructor), this function creates the
 // new instance and puts it in the proper spot in the stack. The return value
 // is pushed to the stack.
@@ -1092,12 +1093,15 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     ObjClass *frameClass = NULL;
     if (isMethod) {
         instance = AS_INSTANCE(EC->stackTop[-argCount-1]);
+        DBG_ASSERT(IS_INSTANCE_LIKE(OBJ_VAL(instance)));
         frameClass = instance->klass; // TODO: make class the callable's class, not the instance class
+    } else {
+        DBG_ASSERT(isCallable(EC->stackTop[-argCount-1])); // should be same as `callable`
     }
-    if (IS_CLOSURE(callable)) {
+    if (IS_CLOSURE(callable)) { // lox function
         closure = AS_CLOSURE(callable);
         if (!isMethod) {
-            EC->stackTop[-argCount - 1] = callable;
+            EC->stackTop[-argCount - 1] = callable; // should already be the callable, but just in case
         }
     } else if (IS_CLASS(callable)) {
         ObjClass *klass = AS_CLASS(callable);
@@ -1161,12 +1165,17 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     } else if (IS_NATIVE_FUNCTION(callable)) {
         VM_DEBUG("Calling native %s with %d args", isMethod ? "method" : "function", argCount);
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
+        int argCountActual = argCount; // includes the callable on the stack, or the receiver if it's a method
         if (isMethod) {
             argCount++;
+            argCountActual++;
             if (!instance) {
                 instance = AS_INSTANCE(*(EC->stackTop-argCount));
+                DBG_ASSERT(((Obj*)instance)->type == OBJ_T_INSTANCE);
                 frameClass = instance->klass;
             }
+        } else {
+            argCountActual++;
         }
         captureNativeError();
         pushNativeFrame(native);
@@ -1174,7 +1183,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         newFrame->instance = instance;
         newFrame->klass = frameClass;
         Value val = native->function(argCount, EC->stackTop-argCount);
-        newFrame->slots = EC->stackTop-argCount;
+        newFrame->slots = EC->stackTop-argCountActual;
         if (returnedFromNativeErr) {
             VM_DEBUG("Returned from native function with error");
             returnedFromNativeErr = false;
@@ -1201,7 +1210,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     }
 
     VM_DEBUG("doCallCallable found closure");
-    // non-native function/method call
+    // non-native function/method (defined in lox code)
     ASSERT(closure);
     ObjFunction *func = closure->function;
     checkFunctionArity(func, argCount);
@@ -2717,6 +2726,7 @@ void runAtExitHooks(void) {
     ObjClosure *func = NULL;
     int i = 0;
     vec_foreach_rev(&vm.exitHandlers, func, i) {
+        push(OBJ_VAL(func));
         callCallable(OBJ_VAL(func), 0, false, NULL);
         pop();
     }

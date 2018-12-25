@@ -5,7 +5,7 @@ Features
 --------
 
 * Add Array#deleteAt
-* add iterNext() support for iterators
+* add iterNext() support for iterator-like objects
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in ruby.
 * Saving/loading bytecode to disk
@@ -31,13 +31,18 @@ compiled lookup
 * Add callSuper(argCount, *args) C API function that looks at current call frame, sees the
 associated class, and calls the superclass method. [PARTIAL], doesn't work
 with modules
-* Allow debugger to list local variables, global variables, etc.
+* Allow debugger (first, native function maybe?) to list local variables, global variables, etc.
 * Add constants to language
 * Add socket class in io.c, make it work with multi-threading
 * Allow getters to be called like methods (when given 0 args) [PARTIAL]
-  - works for instances, not classes or modules (ex: Array.name())
+  works for instances, not classes or modules (ex: Array.name())
 * Add '+=', '-=', '*=', '/=', '%=', '|=', '^=', '&=', maybe '--' and '++'
 * Allow '?' or '!' at end of method name?
+* Allow blocks given to any method/function, like Ruby?
+* Disallow property get/set outside of class like Ruby? Also, make property
+get/set a different sigil maybe, like @prop.
+* Add random()
+* Add Tempfile class with finalizer to remove file
 
 Bugs
 ----
@@ -52,7 +57,6 @@ when evaling.
 * loadScript/requireScript should use pwd of lox process during startup for
 file lookup, not pwd when calling loadScript/requireScript
 * Debugger bugs, not evaluating variables in context of function
-* Map with array or map key doesn't work (hashKey() method for objects)
 * Bug in examples/anon_fun.lox, var i is set global (see bytecode)
 
 Optimizations

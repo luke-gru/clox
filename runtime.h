@@ -108,6 +108,8 @@ void Init_IOModule(void);
 void Init_FileClass(void);
 // module Process
 void Init_ProcessModule(void);
+// random()/srandom() functions
+void Init_rand(void);
 
 // API for adding classes/modules/methods
 void addGlobalFunction(const char *name, NativeFn func);

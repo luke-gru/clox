@@ -1,0 +1,17 @@
+var m = %{};
+/*m.defaultValue(0);*/
+for (var i = 0; i < 1000; i = i + 1) {
+  var rand = random(10); // 0-9
+  if (m.hasKey(rand)) {
+    m[rand] = m[rand] + 1;
+  } else {
+    m[rand] = 1;
+  }
+}
+
+for (var i = 0; i < 10; i = i + 1) {
+  print "${i}: ${m[i]}";
+}
+
+__END__
+-- noexpect: --
