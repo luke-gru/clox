@@ -149,6 +149,9 @@ static void defineNativeClasses(void) {
     addNativeMethod(objClass, "extend", lxObjectExtend);
     addNativeMethod(objClass, "hashKey", lxObjectHashKey);
     addNativeMethod(objClass, "opEquals", lxObjectOpEquals);
+    addNativeMethod(objClass, "freeze", lxObjectFreeze);
+    addNativeMethod(objClass, "unfreeze", lxObjectUnfreeze);
+    addNativeMethod(objClass, "isFrozen", lxObjectIsFrozen);
     addNativeGetter(objClass, "_class", lxObjectGetClass);
     addNativeGetter(objClass, "_singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
@@ -2452,7 +2455,13 @@ static InterpretResult vm_run() {
           ASSERT(IS_STRING(strLit));
           uint8_t isStatic = READ_BYTE();
           push(OBJ_VAL(lxStringClass));
-          push(OBJ_VAL(dupString(AS_STRING(strLit))));
+          ObjString *buf = AS_STRING(strLit);
+          if (isStatic) {
+            buf->isStatic = true;
+            push(OBJ_VAL(buf));
+          } else {
+            push(OBJ_VAL(dupString(buf)));
+          }
           bool ret = callCallable(peek(1), 1, false, NULL);
           ASSERT(ret); // the string instance is pushed to top of stack
           if (isStatic == 1) {

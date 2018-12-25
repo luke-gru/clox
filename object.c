@@ -65,6 +65,20 @@ void objFreeze(Obj *obj) {
     obj->isFrozen = true;
 }
 
+void objUnfreeze(Obj *obj) {
+    ASSERT(obj);
+    if (obj->type == OBJ_T_INSTANCE) {
+        ObjInstance *instance = (ObjInstance*)obj;
+        if (instance->klass == lxStringClass) {
+            ObjString *buf = STRING_GETHIDDEN(OBJ_VAL(obj));
+            if (buf->isStatic) {
+                throwErrorFmt(lxErrClass, "Tried to unfreeze static String");
+            }
+        }
+    }
+    obj->isFrozen = false;
+}
+
 bool isFrozen(Obj *obj) {
     ASSERT(obj);
     return obj->isFrozen;
@@ -74,9 +88,7 @@ uint32_t hashString(char *key, int length) {
     // FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
     uint32_t hash = 2166136261u;
 
-    // This is O(n) on the length of the string, but we only call this when a new
-    // string is created. Since the creation is also O(n) (to copy/initialize all
-    // the bytes), we allow this here.
+    // This is O(n) on the length of the string, but we only call this lazily.
     for (int i = 0; i < length; i++) {
         hash ^= key[i];
         hash *= 16777619;
@@ -651,12 +663,19 @@ Value stringIndexGet(Value self, int index) {
 
 Value stringIndexSet(Value self, int index, char c) {
     ObjString *buf = STRING_GETHIDDEN(self);
+    if (isFrozen(AS_OBJ(self))) {
+        throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
+    }
     if (index >= buf->length) {
         throwArgErrorFmt("%s", "index too big");
     } else if (index < 0) { // TODO: make it work from end of str?
         throwArgErrorFmt("%s", "index cannot be negative");
     } else {
+        char oldC = buf->chars[index];
         buf->chars[index] = c;
+        if (oldC != c) {
+            buf->hash = 0;
+        }
     }
     return self;
 }

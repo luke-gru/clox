@@ -298,6 +298,26 @@ Value lxObjectInit(int argCount, Value *args) {
     return *args;
 }
 
+Value lxObjectFreeze(int argCount, Value *args) {
+    CHECK_ARITY("Object#freeze", 1, 1, argCount);
+    Obj *obj = AS_OBJ(*args);
+    objFreeze(obj);
+    return *args;
+}
+
+Value lxObjectUnfreeze(int argCount, Value *args) {
+    CHECK_ARITY("Object#unfreeze", 1, 1, argCount);
+    Obj *obj = AS_OBJ(*args);
+    objUnfreeze(obj);
+    return *args;
+}
+
+Value lxObjectIsFrozen(int argCount, Value *args) {
+    CHECK_ARITY("Object#isFrozen", 1, 1, argCount);
+    Obj *obj = AS_OBJ(*args);
+    return BOOL_VAL(isFrozen(obj));
+}
+
 // ex: var o = Object(); print o._class;
 Value lxObjectGetClass(int argCount, Value *args) {
     Value self = *args;

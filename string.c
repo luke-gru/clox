@@ -123,6 +123,7 @@ static Value lxStringOpIndexSet(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 1);
     Value chrStr = args[1];
     CHECK_ARG_IS_A(chrStr, lxStringClass, 3);
+    // TODO: allow string longer than 1 char, or check size of given string
     char chr = VAL_TO_STRING(chrStr)->chars[0];
     stringIndexSet(self, AS_NUMBER(index), chr);
     return self;

@@ -315,6 +315,7 @@ uint32_t hashString(char *key, int length);
 
 // misc
 void objFreeze(Obj*);
+void objUnfreeze(Obj*);
 bool isFrozen(Obj*);
 void  setProp(Value self, ObjString *propName, Value val);
 Value getProp(Value self, ObjString *propName);

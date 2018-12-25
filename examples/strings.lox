@@ -16,6 +16,16 @@ print s3;
 print s3.substr(4, 100) == s4;
 print s3[0];
 
+var static = s'static';
+print static.isFrozen();
+var err = nil;
+try {
+  static.unfreeze();
+} catch (Error e) {
+  err = e;
+}
+print typeof(err);
+
 __END__
 -- expect: --
 string1
@@ -29,3 +39,5 @@ happy day
 Oh, happy day
 true
 O
+true
+instance
