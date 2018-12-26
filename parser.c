@@ -832,11 +832,26 @@ static Node *blockStmts() {
     return blockNode;
 }
 
+static bool checkAssignOp() {
+    if (peekTokN(1).type == TOKEN_EQUAL) {
+        return check(TOKEN_PLUS) ||
+               check(TOKEN_MINUS) ||
+               check(TOKEN_SLASH) ||
+               check(TOKEN_STAR) ||
+               check(TOKEN_PERCENT) ||
+               check(TOKEN_SHOVEL_L) ||
+               check(TOKEN_SHOVEL_R) ||
+               check(TOKEN_PIPE) ||
+               check(TOKEN_CARET) ||
+               check(TOKEN_AMP);
+    }
+    return false;
+}
+
 static Node *assignment() {
     TRACE_START("assignment");
     Node *lval = logicOr();
-    // TODO: support +=, -=, /=, *=
-    if (match(TOKEN_EQUAL)) {
+    if (match(TOKEN_EQUAL)) { // regular assignment
         Token eqTok = current->previous;
         Node *rval = assignment(); // assignment goes right to left in precedence (a = (b = c))
         Node *ret = NULL;
@@ -886,6 +901,25 @@ static Node *assignment() {
         } else {
             errorAtCurrent("invalid assignment lvalue");
         }
+        TRACE_END("assignment");
+        return ret;
+    } else if (checkAssignOp()) {
+        if (nodeKind(lval) != VARIABLE_EXPR) {
+            errorAtCurrent("invalid assignment lvalue");
+        }
+        TRACE_START("assignExpr (binAssignOp)");
+        advance(); // past binary op
+        Token opTok = current->previous;
+        advance(); // past equal
+        Node *rval = assignment(); // assignment goes right to left in precedence (a *= (b += c))
+        node_type_t opT = {
+            .type = NODE_EXPR,
+            .kind = BINARY_ASSIGN_EXPR,
+        };
+        Node *ret = createNode(opT, opTok, NULL);
+        nodeAddChild(ret, lval);
+        nodeAddChild(ret, rval);
+        TRACE_END("assignExpr (binAssignOp)");
         TRACE_END("assignment");
         return ret;
     }
@@ -982,7 +1016,8 @@ static Node *comparison() {
 static Node *addition() {
     TRACE_START("addition");
     Node *left = bitManip();
-    while (match(TOKEN_PLUS) || match(TOKEN_MINUS)) {
+    while ((check(TOKEN_PLUS) || check(TOKEN_MINUS)) && peekTokN(1).type != TOKEN_EQUAL) {
+        advance();
         TRACE_START("binaryExpr (+/-)");
         Token addTok = current->previous;
         node_type_t addT = {
@@ -1003,8 +1038,10 @@ static Node *addition() {
 static Node *bitManip() {
     TRACE_START("bitManip");
     Node *left = multiplication();
-    while (match(TOKEN_PIPE) || match(TOKEN_AMP) || match(TOKEN_CARET) ||
-            match(TOKEN_SHOVEL_L) || match(TOKEN_SHOVEL_R)) {
+    while ((check(TOKEN_PIPE) || check(TOKEN_AMP) || check(TOKEN_CARET) ||
+            check(TOKEN_SHOVEL_L) || check(TOKEN_SHOVEL_R)) &&
+            peekTokN(1).type != TOKEN_EQUAL) {
+        advance();
         TRACE_START("binaryExpr (|,&,^,<<,>>)");
         Token byteTok = current->previous;
         node_type_t binT = {
@@ -1025,7 +1062,9 @@ static Node *bitManip() {
 static Node *multiplication() {
     TRACE_START("multiplication");
     Node *left = unary();
-    while (match(TOKEN_STAR) || match(TOKEN_SLASH) || match(TOKEN_PERCENT)) {
+    while ((check(TOKEN_STAR) || check(TOKEN_SLASH) || check(TOKEN_PERCENT)) &&
+            peekTokN(1).type != TOKEN_EQUAL) {
+        advance();
         TRACE_START("binaryExpr");
         Token mulTok = current->previous;
         node_type_t mulT = {

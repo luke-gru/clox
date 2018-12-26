@@ -2586,6 +2586,7 @@ static void *vm_run_protect(void *arg) {
     return NULL;
 }
 
+// NOTE: `filename` may be on stack in caller, must be copied to use
 InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();

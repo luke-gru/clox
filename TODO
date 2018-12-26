@@ -37,13 +37,13 @@ with modules
 * Add socket class in io.c, make it work with multi-threading
 * Allow getters to be called like methods (when given 0 args) [PARTIAL]
   works for instances, not classes or modules (ex: Array.name())
-* Add '+=', '-=', '*=', '/=', '%=', '|=', '^=', '&=', maybe '--' and '++'
 * Allow '?' or '!' at end of method name?
 * Allow blocks given to any method/function, like Ruby?
 * Disallow property get/set outside of class like Ruby? Also, make property
 get/set a different sigil maybe, like @prop.
 * Add method privacy (private/public)
 * Add defineMethod() function
+* Allow dynamically loading lox extensions, which can be '.so' files.
 
 Bugs
 ----

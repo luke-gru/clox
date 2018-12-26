@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 #include "runtime.h"
 #include "object.h"
 #include "value.h"
@@ -217,11 +218,13 @@ Value lxThreadInit(int argCount, Value *args) {
     return self;
 }
 
+#define SCRIPT_PATH_MAX (PATH_MAX+1)
+#define SCRIPT_DIR_MAX (PATH_MAX+1-100)
 static Value loadScriptHelper(Value fname, bool checkLoaded) {
     char *cfile = VAL_TO_STRING(fname)->chars;
     bool isAbsFile = cfile[0] == pathSeparator;
-    char pathbuf[300] = { '\0' };
-    char curdir[250] = { '\0' };
+    char pathbuf[SCRIPT_PATH_MAX] = { '\0' };
+    char curdir[SCRIPT_DIR_MAX] = { '\0' };
     bool triedCurdir = false;
     bool fileFound = false;
     if (isAbsFile) {
@@ -235,11 +238,11 @@ static Value loadScriptHelper(Value fname, bool checkLoaded) {
                 continue;
             }
             char *dir = VAL_TO_STRING(el)->chars;
-            memset(pathbuf, 0, 300);
+            memset(pathbuf, 0, SCRIPT_PATH_MAX);
             memcpy(pathbuf, dir, strlen(dir));
-            if (strncmp(pathbuf, ".", 1) == 0) {
+            if (strncmp(pathbuf, ".", 1) == 0) { // "./path/to/file.lox"
                 if (!curdir[0] && !triedCurdir) {
-                    char *cwdres = getcwd(curdir, 250);
+                    char *cwdres = getcwd(curdir, SCRIPT_DIR_MAX);
                     triedCurdir = true;
                     if (cwdres == NULL) {
                         fprintf(stderr,
@@ -254,8 +257,15 @@ static Value loadScriptHelper(Value fname, bool checkLoaded) {
                 strncat(pathbuf, &pathSeparator, 1);
             }
             strcat(pathbuf, cfile);
-            if (!fileReadable(pathbuf)) {
-                continue;
+            bool isReadable = false;
+readableCheck:
+            isReadable = fileReadable(pathbuf);
+            if (!isReadable) {
+                if (!strstr(pathbuf, ".lox") && strlen(pathbuf)+4 < SCRIPT_PATH_MAX) {
+                    strcat(pathbuf, ".lox");
+                    goto readableCheck;
+                }
+                continue; // look in other directories for file
             }
             fileFound = true;
             break;

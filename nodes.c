@@ -92,6 +92,19 @@ static char *outputBinaryExpr(Node *n, int indentLevel) {
     return buf;
 }
 
+static char *outputBinaryAssignExpr(Node *n, int indentLevel) {
+    char *op = tokStr(&n->tok);
+    Node *lhs = vec_first(n->children);
+    Node *rhs = n->children->data[1];
+    char *lhsOut = outputASTString(lhs, indentLevel);
+    char *rhsOut = outputASTString(rhs, indentLevel);
+    char *fmt = "(%s= %s %s)";
+    char *buf = calloc(strlen(op)+1+strlen(lhsOut)+strlen(rhsOut)+5, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, fmt, op, lhsOut, rhsOut);
+    return buf;
+}
+
 // or/and
 static char *outputLogicalExpr(Node *n, int indentLevel) {
     return outputBinaryExpr(n, indentLevel);
@@ -616,6 +629,8 @@ char *outputASTString(Node *node, int indentLevel) {
             switch(node->type.kind) {
                 case BINARY_EXPR:
                     return outputBinaryExpr(node, indentLevel);
+                case BINARY_ASSIGN_EXPR:
+                    return outputBinaryAssignExpr(node, indentLevel);
                 case LOGICAL_EXPR:
                     return outputLogicalExpr(node, indentLevel);
                 case GROUPING_EXPR:

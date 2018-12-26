@@ -1090,7 +1090,8 @@ static void emitNode(Node *n) {
         emitOp0(OP_POP);
         break;
     }
-    case BINARY_EXPR: {
+    case BINARY_EXPR:
+    case BINARY_ASSIGN_EXPR: {
         emitChildren(n);
         if (n->tok.type == TOKEN_PLUS) {
             emitOp0(OP_ADD);
@@ -1124,6 +1125,10 @@ static void emitNode(Node *n) {
             emitOp0(OP_SHOVEL_R);
         } else {
             UNREACHABLE("invalid binary expr node (token: %s)", tokStr(&n->tok));
+        }
+        if (nodeKind(n) == BINARY_ASSIGN_EXPR) {
+            Node *varNode = vec_first(n->children);
+            namedVariable(varNode->tok, VAR_SET);
         }
         break;
     }

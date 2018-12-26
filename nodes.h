@@ -27,6 +27,7 @@ typedef enum eExprType {
     THIS_EXPR,
     SUPER_EXPR,
     SPLAT_EXPR,
+    BINARY_ASSIGN_EXPR, // 19
 } ExprType;
 
 static const char *exprTypeNames[] = {
@@ -48,11 +49,13 @@ static const char *exprTypeNames[] = {
     "THIS_EXPR",
     "SUPER_EXPR",
     "SPLAT_EXPR",
+    "BINARY_ASSIGN_EXPR",
     NULL
 };
 
+#define STMT_TYPE_ENUM_FIRST 25
 typedef enum eStmtType {
-    EXPR_STMT = 20,
+    EXPR_STMT = STMT_TYPE_ENUM_FIRST,
     PRINT_STMT,
     VAR_STMT,
     BLOCK_STMT,
@@ -164,8 +167,8 @@ int nodeKind(Node *n); // the actual node kind
 char *outputASTString(Node *node, int indentLevel);
 
 static inline const char *nodeKindStr(int nKind) {
-    if (nKind >= 20) {
-        return stmtTypeNames[nKind-20];
+    if (nKind >= STMT_TYPE_ENUM_FIRST) {
+        return stmtTypeNames[nKind-STMT_TYPE_ENUM_FIRST];
     } else {
         return exprTypeNames[nKind-1];
     }

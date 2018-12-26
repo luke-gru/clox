@@ -1,0 +1,28 @@
+var a = 1;
+a += 1;
+print a;
+
+a *= 2;
+print a;
+
+a -= 1;
+print a;
+
+print "";
+b  = 0b0000;
+b |= 0b0001;
+print b;
+b |= 0b0111;
+print b;
+b &= 0b1110;
+print b;
+
+__END__
+-- expect: --
+2
+4
+3
+
+1
+7
+6
