@@ -105,6 +105,7 @@ typedef struct ObjNative {
   NativeFn function;
   ObjString *name;
   Obj *klass; // class or module, if a method
+  bool isStatic; // if static method
 } ObjNative;
 
 typedef struct ObjClass ObjClass; // fwd decl
@@ -127,6 +128,7 @@ typedef struct ObjClass {
 
   ObjClass *superclass;
   vec_void_t v_includedMods; // pointers to ObjModule
+  Obj *singletonOf;  // if singleton class
 } ObjClass;
 
 typedef struct ObjModule {

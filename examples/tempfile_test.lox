@@ -1,0 +1,22 @@
+loadPath << "lib";
+if (!requireScript("tempfile.lox")) {
+  throw "fail";
+}
+var t = Tempfile.create();
+var tpath = t.path();
+t.write("a temp file");
+t.close();
+print File.exists(tpath);
+var contents = File.read(tpath);
+print contents;
+t = nil;
+// make sure finalizer is called
+GC.collect();
+GC.collect();
+print File.exists(tpath);
+
+__END__
+-- expect: --
+true
+a temp file
+false

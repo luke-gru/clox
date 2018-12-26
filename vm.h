@@ -82,7 +82,7 @@ typedef struct VM {
     Obj *objects; // linked list of heap objects
     ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
     Value *lastValue;
-    Value *thisValue;
+    Obj *thisObj;
     Table globals; // global variables
     Table strings; // interned strings
     ObjString *initString;

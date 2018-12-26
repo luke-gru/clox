@@ -1,0 +1,34 @@
+class Tempfile {
+  this.TMP_DIR = "/tmp";
+
+  class create() {
+    var num = random() % 100000;
+    var pid = Process.pid();
+    var fname = "${this.TMP_DIR}/${pid}-${num}";
+    return this(File.open(fname, File.RDWR|File.CREAT|File.EXCL, 0c664));
+  }
+
+  init(file) {
+    this.file = file;
+    GC.setFinalizer(this.file, fun(f) {
+      try {
+        f.close();
+        f.unlink();
+      } catch (Error e) {
+        print e.message; // TODO: print to stderr
+      }
+    });
+  }
+
+  write(str) {
+    return this.file.write(str);
+  }
+
+  close() {
+    return this.file.close();
+  }
+
+  path() {
+    return this.file.path();
+  }
+}

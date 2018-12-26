@@ -41,6 +41,7 @@ LxFile *fileGetHidden(Value file) {
 
 void fileClose(Value file) {
     LxFile *f = FILE_GETHIDDEN(file);
+    ASSERT(f);
     if (f->isOpen) {
         int res = 0;
         int last = errno;
@@ -256,6 +257,13 @@ static Value lxFileOpenStatic(int argCount, Value *args) {
     return file;
 }
 
+static Value lxFileExistsStatic(int argCount, Value *args) {
+    CHECK_ARITY("File.exists", 2, 2, argCount);
+    Value fname = args[1];
+    CHECK_ARG_IS_A(fname, lxStringClass, 1);
+    return BOOL_VAL(fileExists(VAL_TO_STRING(fname)->chars) == 0);
+}
+
 static void checkFileWritable(LxFile *f) {
     if (!f->isOpen) {
         throwErrorFmt(lxErrClass, "File '%s' is not open", f->name->chars);
@@ -277,6 +285,7 @@ static Value lxFileWrite(int argCount, Value *args) {
     return NUMBER_VAL(written);
 }
 
+// Close the file, if it isn't already closed
 static Value lxFileClose(int argCount, Value *args) {
     CHECK_ARITY("File#close", 1, 1, argCount);
     Value self = args[0];
@@ -361,6 +370,7 @@ void Init_FileClass(void) {
 
     addNativeMethod(fileStatic, "create", lxFileCreateStatic);
     addNativeMethod(fileStatic, "open", lxFileOpenStatic);
+    addNativeMethod(fileStatic, "exists", lxFileExistsStatic);
     addNativeMethod(fileStatic, "read", lxFileReadStatic);
     addNativeMethod(fileStatic, "readLines", lxFileReadLinesStatic);
     addNativeMethod(fileClass, "init", lxFileInit);

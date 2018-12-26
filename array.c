@@ -247,12 +247,27 @@ static Value lxArrayGetSize(int argCount, Value *args) {
     return NUMBER_VAL(ary->count);
 }
 
+static Value lxArrayWrapStatic(int argCount, Value *args) {
+    CHECK_ARITY("Array.wrap", 2, 2, argCount);
+    if (IS_AN_ARRAY(args[1])) {
+        return args[1];
+    } else {
+        Value ary = newArray();
+        arrayPush(ary, args[1]);
+        return ary;
+    }
+}
+
 void Init_ArrayClass() {
     // class Array
     ObjClass *arrayClass = addGlobalClass("Array", lxObjClass);
+    ObjClass *arrayStatic = classSingletonClass(arrayClass);
     lxAryClass = arrayClass;
 
     nativeArrayInit = addNativeMethod(arrayClass, "init", lxArrayInit);
+    // static methods
+    addNativeMethod(arrayStatic, "wrap", lxArrayWrapStatic);
+
     // methods
     addNativeMethod(arrayClass, "dup", lxArrayDup);
     addNativeMethod(arrayClass, "push", lxArrayPush);

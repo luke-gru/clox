@@ -47,6 +47,10 @@ ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
     ObjString *mname = internedString(name, strlen(name));
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
+    natFn->isStatic = false;
+    if (klass && natFn->klass->type == OBJ_T_CLASS) {
+        natFn->isStatic = ((ObjClass*)klass)->singletonOf != NULL;
+    }
     tableSet(&((ObjModule*)klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
     return natFn;
 }

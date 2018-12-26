@@ -326,6 +326,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     klass->klass = lxClassClass;
     klass->singletonKlass = NULL;
     klass->finalizerFunc = NULL;
+    klass->singletonOf = NULL;
     initTable(&klass->fields);
     initTable(&klass->hiddenFields);
     initTable(&klass->methods);
@@ -393,6 +394,7 @@ ObjNative *newNative(ObjString *name, NativeFn function) {
     native->function = function;
     native->name = name;
     native->klass = NULL;
+    native->isStatic = false;
     return native;
 }
 
@@ -938,6 +940,7 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     ObjString *name = valueToString(OBJ_VAL(inst), copyString);
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, inst->klass);
+    meta->singletonOf = (Obj*)inst;
     inst->singletonKlass = meta;
     return meta;
 }
@@ -955,8 +958,9 @@ ObjClass *classSingletonClass(ObjClass *klass) {
     }
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, klass->superclass);
+    meta->singletonOf = (Obj*)klass;
     klass->singletonKlass = meta;
-    klass->superclass = meta;
+    /*klass->superclass = meta;*/
     return meta;
 }
 
@@ -975,6 +979,7 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, lxClassClass);
     mod->singletonKlass = meta;
+    meta->singletonOf = (Obj*)mod;
     unhideFromGC((Obj*)name);
     return meta;
 }

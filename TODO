@@ -43,9 +43,11 @@ with modules
 * Disallow property get/set outside of class like Ruby? Also, make property
 get/set a different sigil maybe, like @prop.
 * Add Tempfile class with finalizer to remove file
+* Empty function seems to mess with compiler.c (segfaults)
 
 Bugs
 ----
+* Method lookup bugged for static methods, don't look in superclass statics
 * Method lookup is bugged, instances get methods from static methods
 * Bug in iterators for ENV and maps in general, it looks like (1.lox.err)
 * Fix method lookup, look in modules for instances and classes/modules as well

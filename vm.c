@@ -397,7 +397,7 @@ void initVM() {
     vec_init(&vm.loadedScripts);
 
     vm.lastValue = NULL;
-    vm.thisValue = NULL;
+    vm.thisObj = NULL;
     initTable(&vm.globals);
     initTable(&vm.strings); // interned strings
     vm.inited = true; // NOTE: VM has to be inited before creation of strings
@@ -473,7 +473,7 @@ void freeVM(void) {
     vm.printBuf = NULL;
     vm.printToStdout = true;
     vm.lastValue = NULL;
-    vm.thisValue = NULL;
+    vm.thisObj = NULL;
     vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
     vec_deinit(&vm.loadedScripts);
@@ -556,7 +556,7 @@ Value peek(unsigned n) {
 
 static inline void setThis(unsigned n) {
     ASSERT((EC->stackTop-n) > EC->stack);
-    vm.thisValue = (EC->stackTop-1-n);
+    vm.thisObj = AS_OBJ(*(EC->stackTop-1-n));
 }
 
 Value *getLastValue(void) {
@@ -928,7 +928,7 @@ static void defineSetter(ObjString *name) {
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
     VM_DEBUG("Calling VM method");
     push(OBJ_VAL(instance));
-    Value *oldThis = vm.thisValue;
+    Obj *oldThis = vm.thisObj;
     setThis(0);
     for (int i = 0; i < argCount; i++) {
         ASSERT(args);
@@ -936,7 +936,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     }
     VM_DEBUG("call begin");
     callCallable(callable, argCount, true, NULL); // pushes return value to stack
-    vm.thisValue = oldThis;
+    vm.thisObj = oldThis;
     VM_DEBUG("call end");
     return peek(0);
 }
@@ -1020,6 +1020,11 @@ void popFrame(void) {
     memset(frame, 0, sizeof(*frame));
     EC->frameCount--;
     frame = getFrameOrNull();
+    if (frame && frame->instance) {
+        vm.thisObj = (Obj*)frame->instance;
+    } else {
+        vm.thisObj = NULL;
+    }
     ASSERT_VALID_STACK();
 }
 
@@ -1121,19 +1126,22 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         if (!isMethod) {
             EC->stackTop[-argCount - 1] = callable; // should already be the callable, but just in case
         }
-    } else if (IS_CLASS(callable)) {
+    } else if (IS_CLASS(callable)) { // initializer
         ObjClass *klass = AS_CLASS(callable);
         const char *klassName = klass->name ? klass->name->chars : "(anon)";
         (void)klassName;
         VM_DEBUG("calling callable class %s", klassName);
-        instance = newInstance(klass);
+        instance = newInstance(klass); // setup the new instance object
         frameClass = klass;
         instanceVal = OBJ_VAL(instance);
+        Obj *oldThis = vm.thisObj;
+        vm.thisObj = (Obj*)instance;
         /*ASSERT(IS_CLASS(EC->stackTop[-argCount - 1])); this holds true if the # of args is correct for the function */
         EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
         // Call the initializer, if there is one.
         Value initializer;
         Obj *init = instanceFindMethod(instance, vm.initString);
+        isMethod = true;
         if (init) {
             VM_DEBUG("callable is initializer for class %s", klassName);
             initializer = OBJ_VAL(init);
@@ -1148,6 +1156,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
                 nativeInit->function(argCount+1, EC->stackTop-argCount-1);
+                vm.thisObj = oldThis;
                 newFrame->slots = EC->stackTop-argCount-1;
                 if (returnedFromNativeErr) {
                     returnedFromNativeErr = false;
@@ -1881,6 +1890,11 @@ static InterpretResult vm_run() {
           }
           break;
       }
+      case OP_NOT: {
+          Value val = pop();
+          push(BOOL_VAL(!isTruthy(val)));
+          break;
+      }
       case OP_GREATER_EQUAL: {
           Value rhs = pop();
           Value lhs = pop();
@@ -2158,6 +2172,7 @@ static InterpretResult vm_run() {
           ObjString *mname = AS_STRING(methodName);
           uint8_t numArgs = READ_BYTE();
           Value callInfoVal = READ_CONSTANT();
+          Obj *oldThis = vm.thisObj;
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           if (lastSplatNumArgs > 0) {
               numArgs += (lastSplatNumArgs-1);
@@ -2177,6 +2192,7 @@ static InterpretResult vm_run() {
               }
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
+              vm.thisObj = oldThis;
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);
@@ -2191,6 +2207,7 @@ static InterpretResult vm_run() {
               EC->stackTop[-numArgs-1] = instanceVal;
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
+              vm.thisObj = oldThis;
           } else if (IS_MODULE(instanceVal)) {
               ObjModule *mod = AS_MODULE(instanceVal);
               Obj *callable = moduleFindStaticMethod(mod, mname);
@@ -2205,6 +2222,7 @@ static InterpretResult vm_run() {
               EC->stackTop[-numArgs-1] = instanceVal;
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
+              vm.thisObj = oldThis;
           } else {
               throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfVal(instanceVal));
           }
@@ -2212,8 +2230,8 @@ static InterpretResult vm_run() {
           break;
       }
       case OP_GET_THIS: {
-          ASSERT(vm.thisValue);
-          push(*vm.thisValue);
+          ASSERT(vm.thisObj);
+          push(OBJ_VAL(vm.thisObj));
           break;
       }
       case OP_SPLAT_ARRAY: {
@@ -2230,8 +2248,8 @@ static InterpretResult vm_run() {
       }
       case OP_GET_SUPER: {
           Value methodName = READ_CONSTANT();
-          ASSERT(vm.thisValue);
-          Value instanceVal = *vm.thisValue;
+          ASSERT(vm.thisObj);
+          Value instanceVal = OBJ_VAL(vm.thisObj);
           ASSERT(IS_INSTANCE(instanceVal)); // FIXME: get working for classes (singleton methods)
           ObjClass *klass = (ObjClass*)getFrame()->closure->function->klass;
           ASSERT(klass); // TODO: get working for module functions that call super

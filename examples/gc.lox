@@ -9,8 +9,9 @@ while (i < 500) {
   i = i + 1;
 }
 print "collecting GC";
-GC.collect();
-GC.collect();
+for (var j = 0; j < 4; j = j + 1) {
+  GC.collect();
+}
 var bytesAfter = GC.stats()['bytes'];
 /*print bytesAfter;*/
 print bytesAfter <= bytesBefore;

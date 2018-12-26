@@ -1,0 +1,38 @@
+/**
+ * Tests that the value of `this` is tracked properly
+ */
+fun buildMyObj() {
+    return MyObj(MyObj("name", "other"), "other");
+}
+
+class MyObj {
+  class create() {
+    return this(Array.wrap("name"), "other");
+  }
+
+  init(name, other) {
+    this.name = name;
+    this.other = other;
+  }
+}
+
+var mo = buildMyObj();
+print mo;
+print mo.name;
+print mo.other;
+
+print "";
+var mo2 = MyObj.create();
+print mo2;
+print mo2.name;
+print mo2.other;
+
+__END__
+-- expect: --
+<instance MyObj>
+<instance MyObj>
+other
+
+<instance MyObj>
+[name]
+other

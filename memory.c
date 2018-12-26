@@ -22,12 +22,18 @@
 #define TRACE_GC_FUNC_END(lvl, func) trace_gc_func_end(lvl, func);
 #endif
 
+static bool inGC = false;
+static bool GCOn = true;
+
 static void gc_trace_mark(int lvl, Obj *obj) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
     fprintf(stderr, "[GC]: marking %s object at %p", typeOfObj(obj), obj);
     if (obj->type != OBJ_T_UPVALUE && obj->type != OBJ_T_INTERNAL) {
         fprintf(stderr, ", value => ");
-        printValue(stderr, OBJ_VAL(obj), false);
+        bool oldGC = inGC;
+        inGC = false;
+        printValue(stderr, OBJ_VAL(obj), false); // can allocate objects, must be `inGC`
+        inGC = oldGC;
     }
     fprintf(stderr, "\n");
 }
@@ -39,7 +45,10 @@ static void gc_trace_free(int lvl, Obj *obj) {
         fprintf(stderr, "type => upvalue");
     } else {
         fprintf(stderr, "type => %s, value => ", typeOfObj(obj));
-        printValue(stderr, OBJ_VAL(obj), false);
+        bool oldGC = inGC;
+        inGC = false;
+        printValue(stderr, OBJ_VAL(obj), false); // can allocate objects, must be `inGC`
+        inGC = oldGC;
     }
     fprintf(stderr, "\n");
 }
@@ -62,9 +71,6 @@ static inline void trace_gc_func_end(int lvl, const char *funcName) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
     fprintf(stderr, "[GC]: </%s>\n", funcName);
 }
-
-static bool inGC = false;
-static bool GCOn = true;
 
 // Main memory management function used by both ALLOCATE/FREE (see memory.h)
 // NOTE: memory is NOT initialized (see man 3 realloc)
@@ -122,6 +128,7 @@ void grayObject(Obj *obj) {
         // Not using reallocate() here because we don't want to trigger the GC
         // inside a GC!
         vm.grayStack = realloc(vm.grayStack, sizeof(Obj*) * vm.grayCapacity);
+        ASSERT_MEM(vm.grayStack);
     }
     vm.grayStack[vm.grayCount++] = obj;
     TRACE_GC_FUNC_END(4, "grayObject");
@@ -256,6 +263,9 @@ void blackenObject(Obj *obj) {
             break;
         }
         default: {
+            // XXX: this does happen sometimes when calling GC.collect() multiple times (4+).
+            // Until I fix this, this return is necessary.
+            return;
             UNREACHABLE("Unknown object type: %d", obj->type);
         }
     }
@@ -264,6 +274,7 @@ void blackenObject(Obj *obj) {
 
 void freeObject(Obj *obj, bool unlink) {
     if (obj == NULL) return;
+    if (!obj->isLinked) return; // NOTE: not sure why needed, segfault sometimes if check not here (running bin/test_examples)
     if (obj->type == OBJ_T_NONE) {
         GC_TRACE_DEBUG(5, "freeObject called on OBJ_T_NONE: %p", obj);
         return; // already freed
@@ -387,6 +398,7 @@ void freeObject(Obj *obj, bool unlink) {
         case OBJ_T_INSTANCE: {
             ObjInstance *instance = (ObjInstance*)obj;
             if (instance->finalizerFunc) {
+                ASSERT(isCallable(OBJ_VAL(instance->finalizerFunc)));
                 GC_TRACE_DEBUG(3, "Calling finalizer for instance");
                 Value instanceVal = OBJ_VAL(instance);
                 inGC = false; // so we can allocate objects in the function
@@ -484,6 +496,15 @@ void unhideFromGC(Obj *obj) {
         vec_remove(&vm.hiddenObjs, obj);
         obj->noGC = false;
     }
+}
+
+// Don't free callable objects, because they might be used in finalizers.
+// Also, don't free internal objects, because they might be used in
+// finalizers by the object getting finalized, and don't free internal
+// strings because they're used as keys into hidden fields to access
+// the internal objects.
+static bool skipFreeInPhase1(Obj *obj) {
+    return isCallable(OBJ_VAL(obj)) || obj->type == OBJ_T_INTERNAL || obj->type == OBJ_T_STRING;
 }
 
 // single-phase mark and sweep
@@ -621,6 +642,7 @@ void collectGarbage(void) {
     while (vm.grayCount > 0) {
         // Pop an item from the gray stack.
         Obj *marked = vm.grayStack[--vm.grayCount];
+        DBG_ASSERT(marked);
         blackenObject(marked);
     }
     GC_TRACE_DEBUG(3, "Done blackening references");
@@ -630,11 +652,18 @@ void collectGarbage(void) {
     Obj *object = vm.objects;
     vec_void_t vvisited;
     vec_init(&vvisited);
+    vec_void_t vSecondPhase;
+    vec_init(&vSecondPhase);
     int iter = 0;
     unsigned long numObjectsFreed = 0;
     unsigned long numObjectsKept = 0;
     unsigned long numObjectsHiddenNotMarked = 0;
     bool cycleFound = false; (void)cycleFound;
+    int phase = 1;
+
+#define VEC_NEXTOBJ(vecp) ((vecp)->length == 0 ? NULL : vec_pop(vecp))
+
+freeLoop:
     while (object != NULL) {
         ASSERT(object->type > OBJ_T_NONE);
         ASSERT(object->isLinked);
@@ -642,18 +671,33 @@ void collectGarbage(void) {
         vec_find(&vvisited, object, idx);
         if (idx != -1) {
             const char *otypeStr = typeOfObj(object); (void)otypeStr;
-            GC_TRACE_DEBUG(3, "Found cycle during free process (iter=%d, p=%p, otype=%s), stopping", iter, *object, otypeStr);
+            GC_TRACE_DEBUG(3, "Found cycle during free process (phase=%d, iter=%d, p=%p, otype=%s), stopping", phase, iter, object, otypeStr);
             cycleFound = true;
-            break; // found cycles, dangerous (FIXME: proper cycle detection)
+            object = object->next;
+            iter++;
+            continue;
         }
+        GC_TRACE_DEBUG(5, "Free phase=%d, iter=%d, p=%p", phase, iter, object);
         vec_push(&vvisited, object);
         if (!object->isDark && !object->noGC) {
             // This object wasn't marked, so remove it from the list and free it.
             Obj *unreached = object;
             object = unreached->next;
+            if (phase == 1 && skipFreeInPhase1(unreached)) {
+                vec_push(&vSecondPhase, unreached);
+                iter++;
+                continue;
+            } else if (phase == 2) {
+                freeObject(unreached, true);
+                numObjectsFreed++;
+                object = VEC_NEXTOBJ(&vSecondPhase);
+                iter++;
+                continue;
+            }
             freeObject(unreached, true);
             numObjectsFreed++;
         } else {
+            ASSERT(phase == 1);
             if (object->noGC && !object->isDark) {
                 numObjectsHiddenNotMarked++;
             }
@@ -665,7 +709,16 @@ void collectGarbage(void) {
         }
         iter++;
     }
+    if (phase == 1) {
+        vec_clear(&vvisited);
+        phase = 2;
+        iter = 0;
+        object = VEC_NEXTOBJ(&vSecondPhase);
+        goto freeLoop;
+    }
+
     vec_deinit(&vvisited);
+    vec_deinit(&vSecondPhase);
     GC_TRACE_DEBUG(2, "done FREE process");
     GC_TRACE_DEBUG(3, "%lu objects freed, %lu objects kept, %lu unmarked hidden objects, cycle found: %s",
             numObjectsFreed, numObjectsKept, numObjectsHiddenNotMarked,
@@ -694,8 +747,7 @@ void freeObjects(void) {
         if (object->noGC) {
             unhideFromGC(object);
         }
-        // don't free callable objects, because they might be used in finalizers
-        if (!isCallable(OBJ_VAL(object))) {
+        if (!skipFreeInPhase1(object)) {
             freeObject(object, true);
         }
         object = next;
