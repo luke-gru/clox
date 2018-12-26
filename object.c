@@ -325,6 +325,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     );
     klass->klass = lxClassClass;
     klass->singletonKlass = NULL;
+    klass->finalizerFunc = NULL;
     initTable(&klass->fields);
     initTable(&klass->hiddenFields);
     initTable(&klass->methods);
@@ -347,6 +348,7 @@ ObjModule *newModule(ObjString *name) {
     );
     mod->klass = lxModuleClass;
     mod->singletonKlass = NULL;
+    mod->finalizerFunc = NULL;
     initTable(&mod->fields);
     initTable(&mod->hiddenFields);
     initTable(&mod->methods);
@@ -377,6 +379,7 @@ ObjInstance *newInstance(ObjClass *klass) {
     );
     obj->klass = klass;
     obj->singletonKlass = NULL;
+    obj->finalizerFunc = NULL;
     initTable(&obj->fields);
     initTable(&obj->hiddenFields);
     return obj;
@@ -536,6 +539,11 @@ Obj *moduleFindStaticMethod(ObjModule *mod, ObjString *name) {
 
 void *internalGetData(ObjInternal *obj) {
     return obj->data;
+}
+
+void setObjectFinalizer(ObjInstance *obj, Obj *callable) {
+    ASSERT(isCallable(OBJ_VAL(callable)));
+    obj->finalizerFunc = callable;
 }
 
 const char *typeOfObj(Obj *obj) {

@@ -168,6 +168,9 @@ void blackenObject(Obj *obj) {
             if (klass->superclass) {
                 grayObject((Obj*)klass->superclass);
             }
+            if (klass->finalizerFunc) {
+                grayObject(klass->finalizerFunc);
+            }
             grayTable(&klass->fields);
             grayTable(&klass->hiddenFields);
             grayTable(&klass->methods);
@@ -186,6 +189,9 @@ void blackenObject(Obj *obj) {
             }
             if (mod->name) {
                 grayObject((Obj*)mod->name);
+            }
+            if (mod->finalizerFunc) {
+                grayObject(mod->finalizerFunc);
             }
 
             grayTable(&mod->fields);
@@ -224,6 +230,9 @@ void blackenObject(Obj *obj) {
             grayObject((Obj*)instance->klass);
             if (instance->singletonKlass) {
                 grayObject((Obj*)instance->singletonKlass);
+            }
+            if (instance->finalizerFunc) {
+                grayObject(instance->finalizerFunc);
             }
             grayTable(&instance->fields);
             grayTable(&instance->hiddenFields);
@@ -312,6 +321,13 @@ void freeObject(Obj *obj, bool unlink) {
         }
         case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
+            if (klass->finalizerFunc) {
+                GC_TRACE_DEBUG(3, "Calling finalizer for class");
+                Value classVal = OBJ_VAL(klass);
+                inGC = false; // so we can allocate objects in the function
+                callFunctionValue(OBJ_VAL(klass->finalizerFunc), 1, &classVal);
+                inGC = true;
+            }
             GC_TRACE_DEBUG(5, "Freeing class methods/getters/setters tables");
             klass->name = NULL;
             freeTable(&klass->fields);
@@ -326,6 +342,13 @@ void freeObject(Obj *obj, bool unlink) {
         }
         case OBJ_T_MODULE: {
             ObjModule *mod = (ObjModule*)obj;
+            if (mod->finalizerFunc) {
+                GC_TRACE_DEBUG(3, "Calling finalizer for module");
+                Value modVal = OBJ_VAL(mod);
+                inGC = false; // so we can allocate objects in the function
+                callFunctionValue(OBJ_VAL(mod->finalizerFunc), 1, &modVal);
+                inGC = true;
+            }
             GC_TRACE_DEBUG(5, "Freeing module methods/getters/setters tables");
             mod->name = NULL;
             freeTable(&mod->fields);
@@ -363,6 +386,13 @@ void freeObject(Obj *obj, bool unlink) {
         }
         case OBJ_T_INSTANCE: {
             ObjInstance *instance = (ObjInstance*)obj;
+            if (instance->finalizerFunc) {
+                GC_TRACE_DEBUG(3, "Calling finalizer for instance");
+                Value instanceVal = OBJ_VAL(instance);
+                inGC = false; // so we can allocate objects in the function
+                callFunctionValue(OBJ_VAL(instance->finalizerFunc), 1, &instanceVal);
+                inGC = true;
+            }
             GC_TRACE_DEBUG(5, "Freeing instance fields table: p=%p", &instance->fields);
             freeTable(&instance->fields);
             GC_TRACE_DEBUG(5, "Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
@@ -657,15 +687,25 @@ void collectGarbage(void) {
 // or whether it was created by the a C stack space allocation function.
 void freeObjects(void) {
     GC_TRACE_DEBUG(2, "freeObjects -> begin FREEing all objects");
+    inGC = true;
     Obj *object = vm.objects;
     while (object != NULL) {
         Obj *next = object->next;
         if (object->noGC) {
             unhideFromGC(object);
         }
-        // don't unlink because this is done in freeVM() anyway,
-        // and this function should only be called from there.
-        freeObject(object, false);
+        // don't free callable objects, because they might be used in finalizers
+        if (!isCallable(OBJ_VAL(object))) {
+            freeObject(object, true);
+        }
+        object = next;
+    }
+
+    object = vm.objects;
+    // now finalizers and objects created in finalizers can be freed
+    while (object != NULL) {
+        Obj *next = object->next;
+        freeObject(object, true);
         object = next;
     }
 
@@ -677,4 +717,5 @@ void freeObjects(void) {
     }
     GC_TRACE_DEBUG(2, "/freeObjects");
     numRootsLastGC = 0;
+    inGC = false;
 }

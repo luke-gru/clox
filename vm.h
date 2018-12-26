@@ -184,6 +184,9 @@ Value callVMMethod(
 // error is raised. Value is returned, popped from stack. argCount does not
 // include instance.
 Value callMethod(Obj *instance, ObjString *methodName, int argCount, Value *args);
+// Nothing should be pushed to stack. On return, value is popped from stack.
+// Callable should not be a method.
+Value callFunctionValue(Value callable, int argCount, Value *args);
 // Must be called from native C callframe only. Value is returned, popped from
 // stack. `args` does not include `self`, and `cinfo` can be NULL.
 Value callSuper(int argCount, Value *args, CallInfo *cinfo);

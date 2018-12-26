@@ -597,6 +597,21 @@ Value lxGCCollect(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+Value lxGCSetFinalizer(int argCount, Value *args) {
+    CHECK_ARITY("GC.setFinalizer", 3, 3, argCount);
+    Value objVal = args[1];
+    if (!IS_INSTANCE_LIKE(objVal)) {
+        throwErrorFmt(lxErrClass, "Finalizer can only be set on instances");
+    }
+    Value callable = args[2];
+    if (!isCallable(callable)) {
+        throwErrorFmt(lxErrClass, "Finalizer must be a callable");
+    }
+    setObjectFinalizer(AS_INSTANCE(objVal), AS_OBJ(callable));
+    ASSERT(AS_INSTANCE(objVal)->finalizerFunc == AS_OBJ(callable));
+    return NIL_VAL;
+}
+
 bool checkArity(int min, int max, int actual) {
     return min <= actual && (max >= actual || max == -1);
 }

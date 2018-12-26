@@ -110,7 +110,6 @@ static int test_run_example_files(void) {
             continue;
         }
         runAtExitHooks();
-        resetStack();
         ObjString *outputExpect = fileExpectStr(f);
         if (outputExpect == NULL || stringDiff(outputStr, outputExpect) == 0) {
             fprintf(stdout, "Success\n");

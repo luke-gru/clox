@@ -94,6 +94,7 @@ ObjNative *nativeThreadInit;
 // module GC
 Value lxGCStats(int argCount, Value *args);
 Value lxGCCollect(int argCount, Value *args);
+Value lxGCSetFinalizer(int argCount, Value *args);
 
 // class Error
 Value lxErrInit(int argCount, Value *args);

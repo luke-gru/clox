@@ -1,0 +1,8 @@
+obj = Object();
+GC.setFinalizer(obj, fun(obj) {
+  print "in finalizer!";
+});
+
+__END__
+-- noexpect: --
+in finalizer!

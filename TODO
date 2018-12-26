@@ -6,6 +6,7 @@ Features
 
 * Add Array#deleteAt
 * Add Map#replace(other)
+* Add String#replace(other)
 * add iterNext() support for iterator-like objects
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in ruby.
@@ -19,7 +20,6 @@ interpreter
 * Add signal trap handlers (`trap(signame, fun() { })`)
 * Add Mutex class, mutexes for thread synchronization
 * release GVL after performing n instructions, or add timer thread
-* Add String#replace(other)
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Make nil, true, false instances?
 * Make variable lookup work as lookup in Environment tables, not statically

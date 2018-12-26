@@ -226,6 +226,7 @@ static void defineNativeClasses(void) {
     ObjClass *GCClassStatic = moduleSingletonClass(GCModule);
     addNativeMethod(GCClassStatic, "stats", lxGCStats);
     addNativeMethod(GCClassStatic, "collect", lxGCCollect);
+    addNativeMethod(GCClassStatic, "setFinalizer", lxGCSetFinalizer);
     lxGCModule = GCModule;
 
     // order of initialization not important here
@@ -447,17 +448,8 @@ void freeVM(void) {
         return;
     }
     VM_DEBUG("freeVM() start");
-    vm.initString = NULL;
-    vm.fileString = NULL;
-    vm.dirString = NULL;
-    vm.hadError = false;
-    vm.printBuf = NULL;
-    vm.printToStdout = true;
-    vm.lastValue = NULL;
-    vm.thisValue = NULL;
-    vm.openUpvalues = NULL;
-    vec_deinit(&vm.hiddenObjs);
-    vec_deinit(&vm.loadedScripts);
+
+    freeObjects();
 
     freeDebugger(&vm.debugger);
 
@@ -471,10 +463,20 @@ void freeVM(void) {
     memset(&rootVMLoopJumpBuf, 0, sizeof(rootVMLoopJumpBuf));
     rootVMLoopJumpBufSet = false;
 
-    vec_deinit(&vm.stackObjects);
     freeTable(&vm.globals);
     freeTable(&vm.strings);
-    freeObjects();
+    vec_deinit(&vm.stackObjects);
+    vm.initString = NULL;
+    vm.fileString = NULL;
+    vm.dirString = NULL;
+    vm.hadError = false;
+    vm.printBuf = NULL;
+    vm.printToStdout = true;
+    vm.lastValue = NULL;
+    vm.thisValue = NULL;
+    vm.openUpvalues = NULL;
+    vec_deinit(&vm.hiddenObjs);
+    vec_deinit(&vm.loadedScripts);
     isClassHierarchyCreated = false;
     vm.objects = NULL;
 
@@ -979,6 +981,16 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
     } else {
         throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfObj(obj));
     }
+}
+
+Value callFunctionValue(Value callable, int argCount, Value *args) {
+    ASSERT(isCallable(callable)); // TODO: throw error?
+    push(callable);
+    for (int i = 0; i < argCount; i++) {
+        push(args[i]);
+    }
+    callCallable(callable, argCount, false, NULL);
+    return pop();
 }
 
 static void unwindErrInfo(CallFrame *frame) {
@@ -2742,14 +2754,13 @@ void runAtExitHooks(void) {
         callCallable(OBJ_VAL(func), 0, false, NULL);
         pop();
     }
-    vm.exited = true;
 }
 
 // FIXME: only exit the current thread. Stop the VM only if it's main thread.
 NORETURN void stopVM(int status) {
     runAtExitHooks();
-    resetStack();
     freeVM();
+    vm.exited = true;
     _exit(status);
 }
 

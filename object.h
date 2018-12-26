@@ -8,8 +8,8 @@
 #include "table.h"
 
 typedef enum ObjType {
-  OBJ_T_NONE = 0,
-  OBJ_T_STRING, // internal string value. Strings in lox are instances
+  OBJ_T_NONE = 0, // should never appear
+  OBJ_T_STRING,   // internal string value only, Strings in lox are instances
   OBJ_T_FUNCTION,
   OBJ_T_INSTANCE, // includes Strings, Arrays, Maps
   OBJ_T_CLASS,
@@ -70,7 +70,7 @@ typedef struct ObjFunction {
   Chunk chunk;
   ObjString *name;
   Obj *klass; // ObjClass* or ObjModule* (if method)
-  bool isMethod; // TODO: remove
+  bool isMethod; // TODO: remove, redundant (see `klass`)
   bool isSingletonMethod;
   Node *funcNode;
 } ObjFunction;
@@ -111,13 +111,14 @@ typedef struct ObjClass ObjClass; // fwd decl
 typedef struct ObjModule ObjModule; // fwd decl
 typedef struct ObjClass {
 
-  // NOTE: same fields, in same order, as instance. Can be cast to an
-  // instance. Also, can be cast to an ObjModule
+  // NOTE: same fields, in same order, as ObjInstance. Can be cast to an
+  // ObjInstance. Also, can be cast to an ObjModule.
   Obj object;
   ObjClass *klass; // always lxClassClass
   ObjClass *singletonKlass;
   Table fields;
   Table hiddenFields;
+  Obj *finalizerFunc;
 
   ObjString *name;
   Table methods;
@@ -130,13 +131,14 @@ typedef struct ObjClass {
 
 typedef struct ObjModule {
 
-  // NOTE: same fields, in same order, as instance. Can be cast to an
-  // instance.
+  // NOTE: same fields, in same order, as ObjInstance. Can be cast to an
+  // ObjInstance, as well as an ObjClass.
   Obj object;
   ObjClass *klass; // always lxModuleClass
   ObjClass *singletonKlass;
   Table fields;
   Table hiddenFields;
+  Obj *finalizerFunc;
 
   ObjString *name;
   Table methods;
@@ -172,6 +174,7 @@ typedef struct ObjInstance {
   ObjClass *singletonKlass;
   Table fields;
   Table hiddenFields;
+  Obj *finalizerFunc; // ObjClosure* or ObjNative*
 } ObjInstance;
 
 typedef struct ObjBoundMethod {
@@ -186,6 +189,7 @@ typedef enum ThreadStatus {
     THREAD_RUNNING,
     THREAD_ZOMBIE
 } ThreadStatus;
+
 typedef struct LxThread {
     pthread_t tid;
     ThreadStatus status;
@@ -196,7 +200,7 @@ typedef struct LxFile {
     int fd;
     int oflags; // open flags
     bool isOpen;
-    ObjString *name; // copied
+    ObjString *name; // copied (owned value)
 } LxFile;
 
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))
@@ -321,6 +325,7 @@ void  setProp(Value self, ObjString *propName, Value val);
 Value getProp(Value self, ObjString *propName);
 Value getHiddenProp(Value self, ObjString *propName);
 void *internalGetData(ObjInternal *obj);
+void setObjectFinalizer(ObjInstance *obj, Obj *callable);
 
 // arrays
 Value       newArray(void);
