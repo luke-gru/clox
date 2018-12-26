@@ -245,6 +245,8 @@ static Value lxMapSlice(int argCount, Value *args) {
     return ret;
 }
 
+// Returns a new Map, with the key-values from `self` and `other`.
+// If both contain the same key, the value from `other` is taken.
 static Value lxMapMerge(int argCount, Value *args) {
     CHECK_ARITY("Map#merge", 2, 2, argCount);
     Value self = args[0];
@@ -260,10 +262,31 @@ static Value lxMapMerge(int argCount, Value *args) {
     return ret;
 }
 
+// See `Map#merge`, but modifies receiver instead of returning new Map.
+static Value lxMapMergeWith(int argCount, Value *args) {
+    CHECK_ARITY("Map#mergeWith", 2, 2, argCount);
+    Value self = args[0];
+    Value other = args[1];
+    Table *myMap = MAP_GETHIDDEN(self);
+    Table *otherMap = MAP_GETHIDDEN(other);
+    CHECK_ARG_IS_A(other, lxMapClass, 1);
+    if (isFrozen(AS_OBJ(self))) {
+        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
+    }
+    Entry e; int idx = 0;
+    TABLE_FOREACH(otherMap, e, idx) {
+        tableSet(myMap, e.key, e.value);
+    }
+    return self;
+}
+
 static Value lxMapDelete(int argCount, Value *args) {
     CHECK_ARITY("Map#delete", 2, -1, argCount);
     Value self = args[0];
     Table *map = MAP_GETHIDDEN(self);
+    if (isFrozen(AS_OBJ(self))) {
+        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
+    }
     int deleted = 0;
     for (int i = 1; i < argCount; i++) {
         if (tableDelete(map, args[i])) {
@@ -277,6 +300,9 @@ static Value lxMapRehash(int argCount, Value *args) {
     CHECK_ARITY("Map#rehash", 1, 1, argCount);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
+    }
     Table *mapOld = MAP_GETHIDDEN(self);
     Table *mapNew = ALLOCATE(Table, 1);
     initTableWithCapa(mapNew, tableCapacity(mapOld));
@@ -398,6 +424,7 @@ void Init_MapClass() {
     addNativeMethod(mapClass, "hasKey", lxMapHasKey);
     addNativeMethod(mapClass, "slice", lxMapSlice);
     addNativeMethod(mapClass, "merge", lxMapMerge);
+    addNativeMethod(mapClass, "mergeWith", lxMapMergeWith);
     addNativeMethod(mapClass, "delete", lxMapDelete);
     addNativeMethod(mapClass, "rehash", lxMapRehash);
 
