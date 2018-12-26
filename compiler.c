@@ -663,6 +663,7 @@ static void emitChildren(Node *n) {
     nodeDepth++;
     int lastWidth = nodeWidth;
     nodeWidth = 0;
+    ASSERT(n->children);
     vec_foreach(n->children, stmt, i) {
         emitNode(stmt);
     }
@@ -1380,6 +1381,7 @@ static void emitNode(Node *n) {
     }
     case BLOCK_STMT: {
         pushScope(COMPILE_SCOPE_BLOCK);
+        ASSERT(n->children);
         emitChildren(n); // 1 child, list of statements
         popScope(COMPILE_SCOPE_BLOCK);
         break;

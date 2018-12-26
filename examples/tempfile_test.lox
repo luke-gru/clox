@@ -9,8 +9,12 @@ t.close();
 print File.exists(tpath);
 var contents = File.read(tpath);
 print contents;
-t = nil;
+// finalizer shouldn't be called, object is still rooted
+GC.collect();
+GC.collect();
+print File.exists(tpath);
 // make sure finalizer is called
+t = nil;
 GC.collect();
 GC.collect();
 print File.exists(tpath);
@@ -19,4 +23,5 @@ __END__
 -- expect: --
 true
 a temp file
+true
 false

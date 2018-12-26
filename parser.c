@@ -399,8 +399,8 @@ static Node *statement() {
         if (match(TOKEN_SEMICOLON)) {
             // leave NULL
         } else {
-            if (match(TOKEN_VAR)) {
-                initializer = statement();
+            if (check(TOKEN_VAR)) {
+                initializer = declaration();
             } else {
                 initializer = expressionStatement();
             }
