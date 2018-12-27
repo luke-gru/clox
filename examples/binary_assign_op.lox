@@ -17,6 +17,13 @@ print b;
 b &= 0b1110;
 print b;
 
+/*FIXME*/
+/*print "";*/
+/*var o = Object();*/
+/*o.num = 1;*/
+/*o.num += 1;*/
+/*print o.num;*/
+
 __END__
 -- expect: --
 2

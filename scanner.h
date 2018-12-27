@@ -97,6 +97,7 @@ typedef struct Scanner {
   int line;
   int indent;
   bool scriptEnded; // seen `__END__` keyword
+  bool afterDot; // last token seen was TOKEN_PERIOD, to allow keywords as property names
 } Scanner;
 
 extern Scanner scanner; // main scanner

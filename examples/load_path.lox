@@ -2,7 +2,7 @@ print loadPath;
 try {
   loadScript("anon_fun.lox");
 } catch (LoadError e) {
-  print e._class;
+  print e.class;
 }
 loadPath.push(__DIR__);
 print requireScript("anon_fun.lox");

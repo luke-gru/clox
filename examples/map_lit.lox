@@ -1,5 +1,5 @@
 var m = %{1:2, 2:4, '4': 8};
-print m._class;
+print m.class;
 
 __END__
 -- expect: --

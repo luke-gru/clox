@@ -120,20 +120,25 @@ static void strReplace(char *str, char *substr, char replace) {
 }
 
 static Token makeToken(TokenType type) {
-  Token token;
-  token.type = type;
-  token.start = current->tokenStart;
-  token.length = (int)(current->current - current->tokenStart);
-  token.lexeme = NULL; // only created on demand, see tokStr()
-  token.line = current->line;
-  token.alloced = false;
-  if (CLOX_OPTION_T(debugTokens)) {
-      fprintf(stderr, "Tok: %s -> '%s'\n", tokTypeStr(type), tokStr(&token));
-  }
-  if (type == TOKEN_END_SCRIPT) {
-      current->scriptEnded = true;
-      return makeToken(TOKEN_EOF);
-  }
+    Token token;
+    token.type = type;
+    token.start = current->tokenStart;
+    token.length = (int)(current->current - current->tokenStart);
+    token.lexeme = NULL; // only created on demand, see tokStr()
+    token.line = current->line;
+    token.alloced = false;
+    if (CLOX_OPTION_T(debugTokens)) {
+        fprintf(stderr, "Tok: %s -> '%s'\n", tokTypeStr(type), tokStr(&token));
+    }
+    if (type == TOKEN_END_SCRIPT) {
+        current->scriptEnded = true;
+        return makeToken(TOKEN_EOF);
+    }
+    if (type == TOKEN_DOT) {
+        current->afterDot = true;
+    } else {
+        current->afterDot = false;
+    }
   return token;
 }
 
@@ -197,11 +202,13 @@ static Token identifier() {
 
   // See if the identifier is a reserved word.
   size_t length = current->current - current->tokenStart;
-  for (Keyword *keyword = keywords; keyword->name != NULL; keyword++) {
-    if (length == keyword->length &&
-        memcmp(current->tokenStart, keyword->name, length) == 0) {
-      type = keyword->type;
-      break;
+  if (!current->afterDot) {
+    for (Keyword *keyword = keywords; keyword->name != NULL; keyword++) {
+      if (length == keyword->length &&
+          memcmp(current->tokenStart, keyword->name, length) == 0) {
+        type = keyword->type;
+        break;
+      }
     }
   }
 
@@ -343,6 +350,7 @@ static Token singleQuotedString(bool isStatic) {
 }
 
 Token scanToken(void) {
+  again:
   skipWhitespace();
 
   current->tokenStart = current->current;
@@ -368,7 +376,14 @@ Token scanToken(void) {
     case ';': return makeToken(TOKEN_SEMICOLON);
     case ':': return makeToken(TOKEN_COLON);
     case ',': return makeToken(TOKEN_COMMA);
-    case '.': return makeToken(TOKEN_DOT);
+    case '.': {
+        if (current->afterDot) {
+            advance();
+            goto again;
+        } else {
+            return makeToken(TOKEN_DOT);
+        }
+    }
     case '-': return makeToken(TOKEN_MINUS);
     case '+': return makeToken(TOKEN_PLUS);
     case '/': return makeToken(TOKEN_SLASH);
@@ -417,6 +432,7 @@ void initScanner(Scanner *scan, const char *src) {
   scan->line = 1;
   scan->indent = 0;
   scan->scriptEnded = false;
+  scan->afterDot = false;
   setScanner(scan);
 }
 

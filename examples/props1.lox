@@ -1,6 +1,6 @@
 var o = Object();
-print o._class;
-print o._class._class;
+print o.class;
+print o.class.class;
 
 __END__
 -- expect: --

@@ -3,7 +3,7 @@ try {
   class LOL < S { }
 } catch (TypeError e) {
   print e.message;
-  print e._class.name;
+  print e.class.name;
 }
 
 __END__

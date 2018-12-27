@@ -60,6 +60,7 @@ when evaling.
 file lookup, not pwd when calling loadScript/requireScript
 * Debugger bugs, not evaluating variables in context of function
 * Empty anon function expression seems to mess with compiler.c (segfaults)
+* +=, -=, etc. doesn't for non-variables, like this.prop +=1, or other lvalues
 
 Optimizations
 -------------

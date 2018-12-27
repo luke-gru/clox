@@ -332,7 +332,7 @@ Value lxObjectIsFrozen(int argCount, Value *args) {
     return BOOL_VAL(isFrozen(obj));
 }
 
-// ex: var o = Object(); print o._class;
+// ex: var o = Object(); print o.class;
 Value lxObjectGetClass(int argCount, Value *args) {
     Value self = *args;
     ObjClass *klass = AS_INSTANCE(self)->klass;
