@@ -44,7 +44,6 @@ get/set a different sigil maybe, like @prop.
 * Add method privacy (private/public)
 * Add defineMethod() function
 * Allow dynamically loading lox extensions, which can be '.so' files.
-* Print time in GC when debugging to see what takes the most time (profiling)
 
 Bugs
 ----

@@ -42,10 +42,10 @@ static void stopGCRunProfileTimer(struct timeval *timeStart) {
     struct timeval timeEnd;
     gettimeofday(&timeEnd, NULL);
     struct timeval tdiff = { .tv_sec = 0, .tv_usec = 0 };
-    tdiff.tv_sec = timeEnd.tv_sec - timeStart->tv_sec;
-    tdiff.tv_usec = timeEnd.tv_usec - timeStart->tv_usec;
-    GCProf.totalGCTime.tv_sec += tdiff.tv_sec;
-    GCProf.totalGCTime.tv_usec += tdiff.tv_usec;
+    timersub(&timeEnd, timeStart, &tdiff);
+    struct timeval tres;
+    timeradd(&GCProf.totalGCTime, &tdiff, &tres);
+    GCProf.totalGCTime = tres; // copy
 }
 
 static void printGenerationInfo() {
@@ -57,9 +57,15 @@ static void printGenerationInfo() {
 
 void printGCProfile() {
     fprintf(stderr, "Total runs: %lu\n", GCProf.totalRuns);
+    time_t secs = GCProf.totalGCTime.tv_sec;
+    suseconds_t msecs = GCProf.totalGCTime.tv_usec;
+    suseconds_t millis = (msecs / 1000);
+    while (millis > 1000) {
+        secs += 1;
+        millis = millis / 1000;
+    }
     fprintf(stderr, "Total GC time: %ld secs, %ld ms\n",
-            GCProf.totalGCTime.tv_sec,
-            GCProf.totalGCTime.tv_usec/10);
+            secs, (long)millis);
 }
 
 void GCPromote(Obj *obj, unsigned short gen) {
@@ -145,8 +151,10 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     } else if (vm.bytesAllocated > vm.nextGCThreshhold && newSize > oldSize) {
         if (GCOn) {
             GC_TRACE_DEBUG(2, "Collecting garbage. Allocated: %ld KB. Threshhold: %ld KB", vm.bytesAllocated / 1024, vm.nextGCThreshhold / 1024);
+            collectGarbage();
+        } else {
+            GC_TRACE_DEBUG(2, "Garbage collection skipped (GC off)");
         }
-        collectGarbage();
     }
 
     if (newSize == 0) { // freeing

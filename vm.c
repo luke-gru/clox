@@ -242,7 +242,7 @@ static void defineNativeClasses(void) {
 static void defineGlobalVariables(void) {
     lxLoadPath = newArray();
     ObjString *loadPathStr = internedString("loadPath", 8);
-    tableSet(&vm.globals, OBJ_VAL(loadPathStr), lxLoadPath);
+    ASSERT(tableSet(&vm.globals, OBJ_VAL(loadPathStr), lxLoadPath));
     // populate load path from -L option given to commandline
     char *lpath = GET_OPTION(initialLoadPath);
     if (lpath && strlen(lpath) > 0) {
@@ -255,13 +255,12 @@ static void defineGlobalVariables(void) {
         }
     }
 
-    lxArgv = newArray();
     ObjString *argvStr = internedString("ARGV", 4);
-    tableSet(&vm.globals, OBJ_VAL(argvStr), lxArgv);
+    lxArgv = newArray();
+    ASSERT(tableSet(&vm.globals, OBJ_VAL(argvStr), lxArgv));
     for (int i = 0; i < origArgc; i++) {
-        Value arg = newStringInstance(
-                copyString(origArgv[i], strlen(origArgv[i]))
-        );
+        ObjString *argStr = copyString(origArgv[i], strlen(origArgv[i]));
+        Value arg = newStringInstance(argStr);
         hideFromGC(AS_OBJ(arg));
         arrayPush(lxArgv, arg);
         // FIXME: for some reason, GC fails sometimes when we don't hide this.
@@ -2554,7 +2553,7 @@ static void setupPerScriptROGlobals(char *filename) {
     Value fileString = newStringInstance(file);
     hideFromGC(AS_OBJ(fileString));
     // NOTE: this can trigger GC, so we hide the value first
-    tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), fileString);
+    ASSERT(tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), fileString));
     unhideFromGC(AS_OBJ(fileString));
 
     if (filename[0] == pathSeparator) {
@@ -2564,7 +2563,7 @@ static void setupPerScriptROGlobals(char *filename) {
         Value dirVal = newStringInstance(dir);
         hideFromGC(AS_OBJ(dirVal));
         // NOTE: this can trigger GC, so we hide the value first
-        tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), dirVal);
+        ASSERT(tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), dirVal));
         unhideFromGC(AS_OBJ(dirVal));
     } else {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), NIL_VAL);

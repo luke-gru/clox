@@ -133,7 +133,7 @@ ObjString *internedString(char *chars, int length) {
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (!interned) {
         interned = copyString(chars, length);
-        tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL);
+        ASSERT(tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL));
         interned->isInterned = true;
         objFreeze((Obj*)interned);
         GCPromote((Obj*)interned, GC_GEN_MAX);
