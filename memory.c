@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/time.h>
 
 #include "common.h"
 #include "memory.h"
@@ -25,6 +27,49 @@
 static bool inGC = false;
 static bool GCOn = true;
 
+GCProfile GCProf = {
+    .totalGCTime = {
+        .tv_sec = 0,
+        .tv_usec = 0,
+    },
+    .totalRuns = 0
+};
+
+static void startGCRunProfileTimer(struct timeval *timeStart) {
+    gettimeofday(timeStart, NULL);
+}
+static void stopGCRunProfileTimer(struct timeval *timeStart) {
+    struct timeval timeEnd;
+    gettimeofday(&timeEnd, NULL);
+    struct timeval tdiff = { .tv_sec = 0, .tv_usec = 0 };
+    tdiff.tv_sec = timeEnd.tv_sec - timeStart->tv_sec;
+    tdiff.tv_usec = timeEnd.tv_usec - timeStart->tv_usec;
+    GCProf.totalGCTime.tv_sec += tdiff.tv_sec;
+    GCProf.totalGCTime.tv_usec += tdiff.tv_usec;
+}
+
+static void printGenerationInfo() {
+    fprintf(stderr, "Generation info:\n");
+    for (int i = 0; i <= GC_GEN_MAX; i++) {
+        fprintf(stderr, "Gen %d: %lu\n", i, GCProf.generations[i]);
+    }
+}
+
+void printGCProfile() {
+    fprintf(stderr, "Total runs: %lu\n", GCProf.totalRuns);
+    fprintf(stderr, "Total GC time: %ld secs, %ld ms\n",
+            GCProf.totalGCTime.tv_sec,
+            GCProf.totalGCTime.tv_usec/10);
+}
+
+void GCPromote(Obj *obj, unsigned short gen) {
+    if (gen > GC_GEN_MAX) gen = GC_GEN_MAX;
+    unsigned short oldGen = obj->GCGen;
+    GCProf.generations[oldGen]--;
+    GCProf.generations[gen]++;
+    obj->GCGen = gen;
+}
+
 static void gc_trace_mark(int lvl, Obj *obj) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
     fprintf(stderr, "[GC]: marking %s object at %p", typeOfObj(obj), obj);
@@ -48,6 +93,13 @@ static void gc_trace_free(int lvl, Obj *obj) {
         bool oldGC = inGC;
         inGC = false;
         printValue(stderr, OBJ_VAL(obj), false); // can allocate objects, must be `inGC`
+        if (obj->type == OBJ_T_INSTANCE) {
+            const char *className = "(anon)";
+            if (((ObjInstance*) obj)->klass->name) {
+                className = ((ObjInstance*) obj)->klass->name->chars;
+            }
+            fprintf(stderr, ", class => %s", className);
+        }
         inGC = oldGC;
     }
     fprintf(stderr, "\n");
@@ -91,6 +143,9 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     if (OPTION_T(stressGC) && newSize > 0) {
         collectGarbage();
     } else if (vm.bytesAllocated > vm.nextGCThreshhold && newSize > oldSize) {
+        if (GCOn) {
+            GC_TRACE_DEBUG(2, "Collecting garbage. Allocated: %ld KB. Threshhold: %ld KB", vm.bytesAllocated / 1024, vm.nextGCThreshhold / 1024);
+        }
         collectGarbage();
     }
 
@@ -102,12 +157,31 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     }
 
     void *ret = realloc(previous, newSize);
-    ASSERT_MEM(ret);
+    if (!ret) {
+        collectGarbage(); // NOTE: GCOn could be false here if set by user
+        // try again after potentially freeing memory
+        void *ret = realloc(previous, newSize);
+        if (!ret) {
+            fprintf(stderr, "Out of memory!\n");
+            _exit(1);
+        }
+    }
     if (newSize > 0) {
         GC_TRACE_DEBUG(10, "  allocated %p", ret);
     }
     TRACE_GC_FUNC_END(10, "reallocate");
     return ret;
+}
+
+static inline void INC_GEN(Obj *obj) {
+    if (obj->GCGen == GC_GEN_MAX) return;
+    obj->GCGen++;
+    GCProf.generations[obj->GCGen-1]--;
+    GCProf.generations[obj->GCGen]++;
+}
+
+static inline bool IS_YOUNG(Obj *obj) {
+    return obj->GCGen <= GC_GEN_YOUNG_MAX;
 }
 
 void grayObject(Obj *obj) {
@@ -122,8 +196,10 @@ void grayObject(Obj *obj) {
     }
     GC_TRACE_MARK(4, obj);
     obj->isDark = true;
+    INC_GEN(obj);
     // add object to gray stack
     if (vm.grayCapacity < vm.grayCount+1) {
+        GC_TRACE_DEBUG(5, "Allocating more space for grayStack");
         vm.grayCapacity = GROW_CAPACITY(vm.grayCapacity);
         // Not using reallocate() here because we don't want to trigger the GC
         // inside a GC!
@@ -154,14 +230,14 @@ void blackenObject(Obj *obj) {
     TRACE_GC_FUNC_START(4, "blackenObject");
     switch (obj->type) {
         case OBJ_T_BOUND_METHOD: {
-            GC_TRACE_DEBUG(5, "Blackening bound method");
+            GC_TRACE_DEBUG(5, "Blackening bound method %p", obj);
             ObjBoundMethod *method = (ObjBoundMethod*)obj;
             grayValue(method->receiver);
             grayObject(method->callable);
             break;
         }
         case OBJ_T_CLASS: {
-            GC_TRACE_DEBUG(5, "Blackening class");
+            GC_TRACE_DEBUG(5, "Blackening class %p", obj);
             ObjClass *klass = (ObjClass*)obj;
             if (klass->name) {
                 grayObject((Obj*)klass->name);
@@ -186,18 +262,22 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_MODULE: {
-            GC_TRACE_DEBUG(5, "Blackening module");
             ObjModule *mod = (ObjModule*)obj;
+            GC_TRACE_DEBUG(5, "Blackening module %p", mod);
             if (mod->klass) {
+                GC_TRACE_DEBUG(8, "Graying module class");
                 grayObject((Obj*)mod->klass);
             }
             if (mod->singletonKlass) {
+                GC_TRACE_DEBUG(8, "Graying module singleton class");
                 grayObject((Obj*)mod->singletonKlass);
             }
             if (mod->name) {
+                GC_TRACE_DEBUG(8, "Graying module name");
                 grayObject((Obj*)mod->name);
             }
             if (mod->finalizerFunc) {
+                GC_TRACE_DEBUG(8, "Graying module finalizer");
                 grayObject(mod->finalizerFunc);
             }
 
@@ -209,7 +289,7 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_FUNCTION: {
-            GC_TRACE_DEBUG(5, "Blackening function");
+            GC_TRACE_DEBUG(5, "Blackening function %p", obj);
             ObjFunction *func = (ObjFunction*)obj;
             if (func->name) {
                 grayObject((Obj*)func->name);
@@ -217,7 +297,7 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_CLOSURE: {
-            GC_TRACE_DEBUG(5, "Blackening closure");
+            GC_TRACE_DEBUG(5, "Blackening closure %p", obj);
             ObjClosure *closure = (ObjClosure*)obj;
             grayObject((Obj*)closure->function);
             for (int i = 0; i < closure->upvalueCount; i++) {
@@ -226,13 +306,13 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_NATIVE_FUNCTION: {
-            GC_TRACE_DEBUG(5, "Blackening native function");
+            GC_TRACE_DEBUG(5, "Blackening native function %p", obj);
             ObjNative *native = (ObjNative*)obj;
             grayObject((Obj*)native->name);
             break;
         }
         case OBJ_T_INSTANCE: {
-            GC_TRACE_DEBUG(5, "Blackening instance");
+            GC_TRACE_DEBUG(5, "Blackening instance %p", obj);
             ObjInstance *instance = (ObjInstance*)obj;
             grayObject((Obj*)instance->klass);
             if (instance->singletonKlass) {
@@ -246,7 +326,7 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_INTERNAL: {
-            GC_TRACE_DEBUG(5, "Blackening internal object");
+            GC_TRACE_DEBUG(5, "Blackening internal object %p", obj);
             ObjInternal *internal = (ObjInternal*)obj;
             if (internal->markFunc) {
                 internal->markFunc(obj);
@@ -254,18 +334,17 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_UPVALUE: {
-            GC_TRACE_DEBUG(5, "Blackening upvalue object");
+            GC_TRACE_DEBUG(5, "Blackening upvalue object %p", obj);
             grayValue(((ObjUpvalue*)obj)->closed);
             break;
         }
         case OBJ_T_STRING: { // no references
-            GC_TRACE_DEBUG(5, "Blackening internal string");
+            GC_TRACE_DEBUG(5, "Blackening internal string %p", obj);
             break;
         }
         default: {
             // XXX: this does happen sometimes when calling GC.collect() multiple times (4+).
             // Until I fix this, this return is necessary.
-            return;
             UNREACHABLE("Unknown object type: %d", obj->type);
         }
     }
@@ -321,6 +400,8 @@ void freeObject(Obj *obj, bool unlink) {
             vm.objects = NULL;
         }
     }
+
+    GCProf.generations[obj->GCGen]--;
 
     switch (obj->type) {
         case OBJ_T_BOUND_METHOD: {
@@ -507,6 +588,9 @@ static bool skipFreeInPhase1(Obj *obj) {
     return isCallable(OBJ_VAL(obj)) || obj->type == OBJ_T_INTERNAL || obj->type == OBJ_T_STRING;
 }
 
+/*static void GCMark(bool fullMark) {*/
+/*}*/
+
 // single-phase mark and sweep
 // TODO: divide work up into mark and sweep phases to limit GC pauses
 void collectGarbage(void) {
@@ -518,13 +602,19 @@ void collectGarbage(void) {
         fprintf(stderr, "[BUG]: GC tried to start during a GC run?\n");
         ASSERT(0);
     }
+    struct timeval tRunStart;
+    startGCRunProfileTimer(&tRunStart);
+
     GC_TRACE_DEBUG(1, "Collecting garbage");
     inGC = true;
     size_t before = vm.bytesAllocated; (void)before;
     GC_TRACE_DEBUG(2, "GC begin");
 
     GC_TRACE_DEBUG(2, "Marking VM stack roots");
-    if (GET_OPTION(traceGCLvl) >= 2) printVMStack(stderr);
+    if (GET_OPTION(traceGCLvl) >= 2) {
+        printGenerationInfo();
+        printVMStack(stderr);
+    }
     // Mark stack roots up the stack for every execution context
     VMExecContext *ctx = NULL; int k = 0;
     vec_foreach(&vm.v_ecs, ctx, k) {
@@ -582,7 +672,6 @@ void collectGarbage(void) {
     }
 
     GC_TRACE_DEBUG(2, "Marking globals (%d found)", vm.globals.count);
-    // Mark the global roots.
     grayTable(&vm.globals);
     GC_TRACE_DEBUG(2, "Marking interned strings (%d found)", vm.strings.count);
     grayTable(&vm.strings);
@@ -616,7 +705,7 @@ void collectGarbage(void) {
     int numHiddenFound = 0;
     vec_foreach(&vm.hiddenObjs, objPtr, j) {
         if (((Obj*)objPtr)->noGC) {
-            GC_TRACE_DEBUG(3, "Hidden root found: %p", objPtr);
+            GC_TRACE_DEBUG(5, "Hidden root found: %p", objPtr);
             /*GC_TRACE_MARK(3, objPtr);*/
             numHiddenFound++;
             grayObject((Obj*)objPtr);
@@ -727,12 +816,14 @@ freeLoop:
     // Adjust the heap size based on live memory.
     vm.nextGCThreshhold = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;
 
-    GC_TRACE_DEBUG(3, "collected %ld bytes (from %ld to %ld) next GC at %ld bytes\n",
-        before - vm.bytesAllocated, before, vm.bytesAllocated, vm.nextGCThreshhold);
-    GC_TRACE_DEBUG(3, "stats: roots found: %d, hidden roots found: %d\n",
+    GC_TRACE_DEBUG(3, "Collected %ld KB (from %ld to %ld) next GC at %ld KB",
+        (before - vm.bytesAllocated)/1024, before/1024, vm.bytesAllocated/1024, vm.nextGCThreshhold/1024);
+    GC_TRACE_DEBUG(3, "Stats: roots found: %d, hidden roots found: %d",
         numRootsLastGC, numHiddenRoots);
-    inGC = false;
     GC_TRACE_DEBUG(1, "Done collecting garbage");
+    stopGCRunProfileTimer(&tRunStart);
+    GCProf.totalRuns++;
+    inGC = false;
 }
 
 
@@ -740,6 +831,11 @@ freeLoop:
 // or whether it was created by the a C stack space allocation function.
 void freeObjects(void) {
     GC_TRACE_DEBUG(2, "freeObjects -> begin FREEing all objects");
+    if (GET_OPTION(traceGCLvl) >= 2) {
+        printGenerationInfo();
+    }
+    struct timeval tRunStart;
+    startGCRunProfileTimer(&tRunStart);
     inGC = true;
     Obj *object = vm.objects;
     while (object != NULL) {
@@ -769,5 +865,7 @@ void freeObjects(void) {
     }
     GC_TRACE_DEBUG(2, "/freeObjects");
     numRootsLastGC = 0;
+    stopGCRunProfileTimer(&tRunStart);
+    GCProf.totalRuns++;
     inGC = false;
 }

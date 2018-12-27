@@ -23,6 +23,10 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->isDark = true; // don't collect right away, wait at least 1 round of GC
     object->isFrozen = false;
 
+    if (inCCall > 0) {
+        vec_push(&vm.stackObjects, object);
+    }
+
     // prepend new object to linked list
     object->next = vm.objects;
     if (vm.objects) {
@@ -33,17 +37,15 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->isLinked = true;
     object->objectId = (size_t)object;
     object->noGC = false;
-
-    if (inCCall > 0) {
-        vec_push(&vm.stackObjects, object);
-    }
+    object->GCGen = 0;
+    GCProf.generations[object->noGC]++;
 
     return object;
 }
 
 /**
  * Allocate a new lox string object with given characters and length
- * NOTE: length here is strlen(chars). Interns it right away.
+ * NOTE: length here is strlen(chars).
  */
 static ObjString *allocateString(char *chars, int length) {
     if (!vm.inited) {
@@ -134,6 +136,7 @@ ObjString *internedString(char *chars, int length) {
         tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL);
         interned->isInterned = true;
         objFreeze((Obj*)interned);
+        GCPromote((Obj*)interned, GC_GEN_MAX);
     }
     return interned;
 }
@@ -323,7 +326,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     ObjClass *klass = ALLOCATE_OBJ(
         ObjClass, OBJ_T_CLASS
     );
-    klass->klass = lxClassClass;
+    klass->klass = lxClassClass; // this is NULL when creating object hierarchy in initVM
     klass->singletonKlass = NULL;
     klass->finalizerFunc = NULL;
     klass->singletonOf = NULL;
@@ -333,7 +336,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     initTable(&klass->getters);
     initTable(&klass->setters);
     vec_init(&klass->v_includedMods);
-    klass->name = name;
+    klass->name = name; // can be NULL
     klass->superclass = superclass;
     // during initial class hierarchy setup this is NULL
     if (nativeClassInit && isClassHierarchyCreated) {
@@ -347,6 +350,7 @@ ObjModule *newModule(ObjString *name) {
     ObjModule *mod = ALLOCATE_OBJ(
         ObjModule, OBJ_T_MODULE
     );
+    ASSERT(lxModuleClass);
     mod->klass = lxModuleClass;
     mod->singletonKlass = NULL;
     mod->finalizerFunc = NULL;
@@ -355,7 +359,7 @@ ObjModule *newModule(ObjString *name) {
     initTable(&mod->methods);
     initTable(&mod->getters);
     initTable(&mod->setters);
-    mod->name = name;
+    mod->name = name; // can be NULL
     // during initial class hierarchy setup this is NULL
     if (nativeModuleInit && isClassHierarchyCreated) {
         callVMMethod((ObjInstance*)mod, OBJ_VAL(nativeModuleInit), 0, NULL);
@@ -848,7 +852,6 @@ ObjString *stringGetHidden(Value instance) {
     ObjInstance *inst = AS_INSTANCE(instance);
     Value stringVal;
     if (tableGet(&inst->hiddenFields, OBJ_VAL(internedString("buf", 3)), &stringVal)) {
-        DBG_ASSERT(IS_STRING(stringVal));
         return (ObjString*)AS_OBJ(stringVal);
     } else {
         return NULL;
@@ -937,11 +940,12 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     if (inst->singletonKlass) {
         return inst->singletonKlass;
     }
-    ObjString *name = valueToString(OBJ_VAL(inst), copyString);
+    ObjString *name = valueToString(OBJ_VAL(inst), hiddenString);
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, inst->klass);
     meta->singletonOf = (Obj*)inst;
     inst->singletonKlass = meta;
+    unhideFromGC((Obj*)name);
     return meta;
 }
 

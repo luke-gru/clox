@@ -19,19 +19,20 @@ typedef enum ObjType {
   OBJ_T_UPVALUE,
   OBJ_T_CLOSURE,
   OBJ_T_INTERNAL,
+  OBJ_T_LAST, // should never happen
 } ObjType;
 
 // basic object structure that all objects (values of VAL_T_OBJ type)
 typedef struct Obj {
   ObjType type;
-  // GC fields
   Obj *next;
   Obj *prev;
   size_t objectId;
+  // GC fields
+  unsigned short GCGen;
   bool isLinked; // is this object linked into vm.objects?
   bool isDark; // is this object marked?
   bool noGC; // don't collect this object
-
   // Other fields
   bool isFrozen;
 } Obj;

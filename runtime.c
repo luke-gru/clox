@@ -611,6 +611,16 @@ Value lxGCCollect(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+Value lxGCOff(int argCount, Value *args) {
+    bool prevOn = turnGCOff();
+    return BOOL_VAL(prevOn);
+}
+
+Value lxGCOn(int argCount, Value *args) {
+    bool prevOn = turnGCOn();
+    return BOOL_VAL(prevOn);
+}
+
 Value lxGCSetFinalizer(int argCount, Value *args) {
     CHECK_ARITY("GC.setFinalizer", 3, 3, argCount);
     Value objVal = args[1];

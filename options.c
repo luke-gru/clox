@@ -8,7 +8,7 @@ static CloxOptions options;
 int origArgc;
 char **origArgv;
 
-char *boolOptNames[] = {
+char *boolOptNames[] = { // order doesn't matter
     "printAST",
     "traceParserCalls",
     "traceVMExecution",
@@ -19,18 +19,20 @@ char *boolOptNames[] = {
     "traceCompiler",
     "disableBcodeOptimizer",
     "disableGC",
+    "profileGC",
+    "stressGC",
     "parseOnly",
     "compileOnly",
     NULL
 };
 
-char *stringOptNames[] = {
+char *stringOptNames[] = { // order doesn't matter
     "initialLoadPath",
     "initialScript",
     NULL
 };
 
-char *intOptNames[] = {
+char *intOptNames[] = { // order doesn't matter
     "traceGCLvl",
     NULL
 };
@@ -56,6 +58,7 @@ void initOptions(int argc, char **argv) {
     options.disableBcodeOptimizer = false;
 
     options.disableGC = false;
+    options.profileGC = false;
     options.stressGC = false;
 
     options.initialLoadPath = "";
@@ -154,6 +157,9 @@ int parseOption(char **argv, int i) {
         return 1;
     }
     if (strcmp(argv[i], "-DTRACE_GC_LVL") == 0) {
+        if (!argv[i+1]) {
+            return 1;
+        }
         char *lvlStr = argv[++i];
         int lvl = atoi(lvlStr);
         if (lvl < 0) lvl = 0;
@@ -192,6 +198,10 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "--disable-GC") == 0) {
         SET_OPTION(disableGC, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--profile-GC") == 0) {
+        SET_OPTION(profileGC, true);
         return 1;
     }
     if (strcmp(argv[i], "--stress-GC") == 0) {

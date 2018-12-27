@@ -5,6 +5,9 @@
 #include "object.h"
 #include "value.h"
 
+#define GC_GEN_YOUNG_MAX 2
+#define GC_GEN_MAX 5
+
 #define xstr(a) #a
 
 // NOTE: zeroes the memory
@@ -34,6 +37,14 @@
 
 #define xfree free
 
+typedef struct GCProfile {
+    struct timeval totalGCTime;
+    unsigned long totalRuns;
+    unsigned long generations[GC_GEN_MAX+1];
+} GCProfile;
+
+extern GCProfile GCProf;
+
 void *reallocate(void *previous, size_t oldSize, size_t newSize);
 
 void grayObject(Obj *obj); // non-recursively mark object as live
@@ -43,10 +54,14 @@ void freeObject(Obj *obj, bool doUnlink);
 void blackenObject(Obj *obj); // recursively mark object's references
 void freeObjects(void); // free all vm.objects. Used at end of VM lifecycle
 
+void GCPromote(Obj *obj, unsigned short gen);
+
 bool turnGCOff(void);
 bool turnGCOn(void);
 void setGCOnOff(bool turnOn);
 void hideFromGC(Obj *obj);
 void unhideFromGC(Obj *obj);
+
+void printGCProfile(void);
 
 #endif

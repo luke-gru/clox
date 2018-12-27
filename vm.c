@@ -226,6 +226,8 @@ static void defineNativeClasses(void) {
     ObjClass *GCClassStatic = moduleSingletonClass(GCModule);
     addNativeMethod(GCClassStatic, "stats", lxGCStats);
     addNativeMethod(GCClassStatic, "collect", lxGCCollect);
+    addNativeMethod(GCClassStatic, "on", lxGCOn);
+    addNativeMethod(GCClassStatic, "off", lxGCOff);
     addNativeMethod(GCClassStatic, "setFinalizer", lxGCSetFinalizer);
     lxGCModule = GCModule;
 
@@ -260,7 +262,11 @@ static void defineGlobalVariables(void) {
         Value arg = newStringInstance(
                 copyString(origArgv[i], strlen(origArgv[i]))
         );
+        hideFromGC(AS_OBJ(arg));
         arrayPush(lxArgv, arg);
+        // FIXME: for some reason, GC fails sometimes when we don't hide this.
+        // Really not sure why, we are marking vm.globals.
+        /*unhideFromGC(AS_OBJ(arg));*/
     }
 }
 
@@ -323,7 +329,7 @@ static inline void push_EC(void) {
     memset(ectx, 0, sizeof(*ectx));
     initTable(&ectx->roGlobals);
     vec_push(&vm.v_ecs, ectx);
-    vm.ec = ectx;
+    vm.ec = ectx; // EC = ectx
 }
 
 // Pop the current execution context and use the one created before
@@ -2545,13 +2551,21 @@ static InterpretResult vm_run() {
 
 static void setupPerScriptROGlobals(char *filename) {
     ObjString *file = copyString(filename, strlen(filename));
-    tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), newStringInstance(file));
+    Value fileString = newStringInstance(file);
+    hideFromGC(AS_OBJ(fileString));
+    // NOTE: this can trigger GC, so we hide the value first
+    tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), fileString);
+    unhideFromGC(AS_OBJ(fileString));
 
     if (filename[0] == pathSeparator) {
         char *lastSep = rindex(filename, pathSeparator);
         int len = lastSep - filename;
         ObjString *dir = copyString(filename, len);
-        tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), newStringInstance(dir));
+        Value dirVal = newStringInstance(dir);
+        hideFromGC(AS_OBJ(dirVal));
+        // NOTE: this can trigger GC, so we hide the value first
+        tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), dirVal);
+        unhideFromGC(AS_OBJ(dirVal));
     } else {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), NIL_VAL);
     }
@@ -2779,6 +2793,9 @@ void runAtExitHooks(void) {
 NORETURN void stopVM(int status) {
     runAtExitHooks();
     freeVM();
+    if (GET_OPTION(profileGC)) {
+        printGCProfile();
+    }
     vm.exited = true;
     _exit(status);
 }

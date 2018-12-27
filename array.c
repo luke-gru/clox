@@ -16,11 +16,11 @@ static void markInternalAry(Obj *internalObj) {
     ASSERT(valAry);
     for (int i = 0; i < valAry->count; i++) {
         Value val = valAry->values[i];
-        // XXX: this is needed for GC code not to segfault for some reason,
-        // need to investigate. It especially happens after multiple (3) calls
-        // to GC.collect().
-        if (!IS_OBJ(val)) continue;
-        if (AS_OBJ(val)->type <= OBJ_T_INTERNAL) {
+        if (!IS_OBJ(val)) { // non-object values don't need marking
+            continue;
+        }
+        // FIXME: this check is needed here due to bug in GC
+        if (AS_OBJ(val)->type < OBJ_T_LAST) {
             blackenObject(AS_OBJ(val));
         }
     }
@@ -45,11 +45,13 @@ static Value lxArrayInit(int argCount, Value *args) {
     DBG_ASSERT(IS_AN_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = newInternalObject(NULL, 0, markInternalAry, freeInternalAry);
+    hideFromGC((Obj*)internalObj);
     ValueArray *ary = ALLOCATE(ValueArray, 1);
     initValueArray(ary);
     internalObj->data = ary;
     internalObj->dataSz = sizeof(ValueArray);
     tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), OBJ_VAL(internalObj));
+    unhideFromGC((Obj*)internalObj);
     for (int i = 1; i < argCount; i++) {
         writeValueArrayEnd(ary, args[i]);
     }
