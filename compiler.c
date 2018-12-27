@@ -56,6 +56,7 @@ typedef enum {
     CONST_T_NUMLIT = 1,
     CONST_T_STRLIT,
     CONST_T_CODE,
+    CONST_T_CACHE, // method cache
     CONST_T_CALLINFO
 } ConstType;
 
@@ -115,6 +116,11 @@ static Iseq *currentIseq() {
     return &current->iseq;
 }
 
+static void initMethodCache(MethodCache *cache, Node *callNode) {
+    cache->numEntries = 0;
+    cache->callNode = callNode;
+}
+
 static Insn *emitInsn(Insn in) {
     COMP_TRACE("emitInsn: %s", opName(in.code));
     in.lineno = curTok ? curTok->line : 0;
@@ -161,6 +167,18 @@ static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
     in.operands[1] = op2;
     in.operands[2] = op3;
     in.numOperands = 3;
+    in.flags = 0;
+    return emitInsn(in);
+}
+static Insn *emitOp4(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3, uint8_t op4) {
+    Insn in;
+    memset(&in, 0, sizeof(in));
+    in.code = code;
+    in.operands[0] = op1;
+    in.operands[1] = op2;
+    in.operands[2] = op3;
+    in.operands[3] = op4;
+    in.numOperands = 4;
     in.flags = 0;
     return emitInsn(in);
 }
@@ -1509,7 +1527,6 @@ static void emitNode(Node *n) {
                 emitNode(arg);
             }
             CallInfo *callInfoData = ALLOCATE(CallInfo, 1);
-            ASSERT_MEM(callInfoData);
             callInfoData->nameTok = n->tok;
             callInfoData->argc = argc;
             callInfoData->numKwargs = numKwargs;
@@ -1523,7 +1540,14 @@ static void emitNode(Node *n) {
             ObjInternal *callInfoObj = newInternalObject(callInfoData, sizeof(CallInfo), NULL, NULL);
             hideFromGC((Obj*)callInfoObj);
             uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
-            emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
+
+            MethodCache *methodCache = ALLOCATE(MethodCache, 1);
+            initMethodCache(methodCache, n);
+            ObjInternal *methodCacheObj = newInternalObject(methodCache, sizeof(MethodCache), NULL, NULL);
+            hideFromGC((Obj*)methodCacheObj);
+            uint8_t methodCacheSlot = makeConstant(OBJ_VAL(methodCacheObj), CONST_T_CACHE);
+
+            emitOp4(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot, methodCacheSlot);
         } else {
             emitNode(lhs); // the function itself
             i = 0;

@@ -1,0 +1,25 @@
+var s = "a string";
+var m = Map();
+for (var i = 0; i < 100000; i+=1) {
+  /*if (i == 500) {*/
+    /*print "redefining";*/
+    /*class String {*/
+      /*size() {*/
+        /*print "and called!";*/
+      /*}*/
+    /*}*/
+  /*}*/
+  /*if (i == 501) {*/
+    /*class String {*/
+      /*size() {*/
+      /*}*/
+    /*}*/
+  /*}*/
+  var poly;
+  if (i % 2 == 0) {
+    poly = s;
+  } else {
+    poly = m;
+  }
+  poly.toString();
+}

@@ -96,6 +96,7 @@ typedef struct ObjClosure {
   ObjFunction *function;
   ObjUpvalue **upvalues;
   int upvalueCount; // always same as function->upvalueCount
+  unsigned long methodCacheId;
 } ObjClosure;
 
 typedef Value (*NativeFn)(int argCount, Value *args);
@@ -106,6 +107,7 @@ typedef struct ObjNative {
   ObjString *name;
   Obj *klass; // class or module, if a method
   bool isStatic; // if static method
+  unsigned long methodCacheId;
 } ObjNative;
 
 typedef struct ObjClass ObjClass; // fwd decl

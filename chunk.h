@@ -41,7 +41,7 @@ typedef struct NodeLvl {
     int width;
 } NodeLvl;
 
-#define MAX_INSN_SIZE 4
+#define MAX_INSN_SIZE 5
 #define INSN_FL_NUMBER 1
 #define INSN_FL_BREAK 2
 // single instruction

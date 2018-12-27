@@ -452,7 +452,7 @@ static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     char *methodNameStr = AS_CSTRING(methodName);
     uint8_t numArgs = chunk->code[i+2];
     fprintf(f, "%-16s    ('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
-    return i+4;
+    return i+5;
 }
 
 // TODO: show callInfo
@@ -466,7 +466,7 @@ static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     sprintf(cbuf, "%s\t('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
-    return i+4;
+    return i+5;
 }
 
 static int printCheckKeywordInstruction(FILE *f, char *op, Chunk *chunk, int i) {

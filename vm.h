@@ -133,6 +133,24 @@ typedef enum {
   INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
 
+typedef struct MethodCacheEntry {
+    ObjClass *klass;
+    Obj *method; // ObjNative* or ObjClosure*
+    unsigned long methodCacheId;
+} MethodCacheEntry;
+
+// polymorphic method cache
+#define METHOD_CACHE_MAX_ENTRIES 4
+typedef struct MethodCache {
+    Node *callNode;
+    short numEntries;
+    MethodCacheEntry entries[METHOD_CACHE_MAX_ENTRIES];
+} MethodCache;
+unsigned long methodCacheIdNext(void);
+Obj *methodCacheFindMethod(MethodCache *cache, ObjClass *klass);
+bool methodCacheInsertMethod(MethodCache *cache, ObjClass *klass, Obj *method);
+void redefinedMethodClearCache(Obj *klass, ObjString *mname, Value oldMethod);
+
 // setup
 void initSighandlers(void);
 

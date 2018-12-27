@@ -375,6 +375,82 @@ static void initMainThread(void) {
     THREAD_DEBUG(1, "Main thread initialized");
 }
 
+static unsigned long vmMethodCacheSerial = 0;
+unsigned long methodCacheIdNext() {
+    return ++vmMethodCacheSerial;
+}
+
+static inline unsigned long OBJ_METHOD_CACHE_ID(Obj *method) {
+    if (method->type == OBJ_T_NATIVE_FUNCTION) {
+        return (((ObjNative*) method)->methodCacheId);
+    } else if (method->type == OBJ_T_CLOSURE) { // closure
+        return (((ObjClosure*) method)->methodCacheId);
+    }
+    UNREACHABLE_RETURN(0);
+}
+
+static inline unsigned int OBJ_METHOD_CACHE_ID_SET(Obj *method) {
+    unsigned long cacheId = methodCacheIdNext();
+    if (method->type == OBJ_T_NATIVE_FUNCTION) {
+        ((ObjNative*) method)->methodCacheId = cacheId;
+    } else { // closure
+        ((ObjClosure*) method)->methodCacheId = cacheId;
+    }
+    return cacheId;
+}
+
+Obj *methodCacheFindMethod(MethodCache *cache, ObjClass *klass) {
+    MethodCacheEntry e;
+    for (int i = 0; i < cache->numEntries; i++) {
+        e = cache->entries[i];
+        if (e.klass == klass) {
+            unsigned long methodCacheId = OBJ_METHOD_CACHE_ID(e.method);
+            if (e.methodCacheId == methodCacheId) {
+                DBG_ASSERT(methodCacheId > 0);
+                return e.method;
+            } else {
+                return NULL;
+            }
+        }
+    }
+    return NULL;
+}
+
+bool methodCacheInsertMethod(MethodCache *cache, ObjClass *klass, Obj *method) {
+    MethodCacheEntry e;
+    for (int i = 0; i < cache->numEntries; i++) {
+        e = cache->entries[i];
+        if (e.klass == klass) {
+            e.method = method;
+            unsigned long oldId = e.methodCacheId;
+            e.methodCacheId = OBJ_METHOD_CACHE_ID(method);
+            DBG_ASSERT(e.methodCacheId > 0);
+            return oldId != e.methodCacheId;
+        }
+    }
+    if (cache->numEntries < METHOD_CACHE_MAX_ENTRIES) {
+        e.klass = klass;
+        e.method = method;
+        e.methodCacheId = OBJ_METHOD_CACHE_ID(method);
+        DBG_ASSERT(e.methodCacheId > 0);
+        cache->entries[cache->numEntries] = e;
+        cache->numEntries++;
+        return true;
+    }
+    return false;
+}
+
+// FIXME: has to go down subclass hierarchy, for instance: if
+// redefined Object#toString(), has to invalidate all toString()
+// methods from Object on down.
+void redefinedMethodClearCache(Obj *klass, ObjString *mname, Value oldMethod) {
+    if (IS_NATIVE_FUNCTION(oldMethod)) {
+        AS_NATIVE_FUNCTION(oldMethod)->methodCacheId = methodCacheIdNext();
+    } else {
+        AS_CLOSURE(oldMethod)->methodCacheId = methodCacheIdNext();
+    }
+}
+
 void initVM() {
     if (vm.inited) {
         VM_WARN("initVM: VM already initialized");
@@ -427,6 +503,7 @@ void initVM() {
     pushFrame();
 
     defineNativeFunctions();
+    vmMethodCacheSerial = 0;
     defineNativeClasses();
     defineGlobalVariables();
     initMainThread();
@@ -450,6 +527,7 @@ void freeVM(void) {
     VM_DEBUG("freeVM() start");
 
     freeObjects();
+    vmMethodCacheSerial = 0;
 
     freeDebugger(&vm.debugger);
 
@@ -858,17 +936,26 @@ static void defineMethod(ObjString *name) {
     ObjFunction *func = AS_CLOSURE(method)->function;
     func->klass = AS_OBJ(classOrMod);
     func->isMethod = true;
+    AS_CLOSURE(method)->methodCacheId = methodCacheIdNext();
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         const char *klassName = klass->name ? klass->name->chars : "(anon)";
         (void)klassName;
         VM_DEBUG("defining method '%s' in class '%s'", name->chars, klassName);
+        Value existingMethod;
+        if (tableGet(&klass->methods, OBJ_VAL(name), &existingMethod)) {
+            redefinedMethodClearCache((Obj*)klass, name, existingMethod);
+        }
         tableSet(&klass->methods, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         const char *modName = mod->name ? mod->name->chars : "(anon)";
         (void)modName;
         VM_DEBUG("defining method '%s' in module '%s'", name->chars, modName);
+        Value existingMethod;
+        if (tableGet(&mod->methods, OBJ_VAL(name), &existingMethod)) {
+            redefinedMethodClearCache((Obj*)mod, name, existingMethod);
+        }
         tableSet(&mod->methods, OBJ_VAL(name), method);
     }
     pop(); // function
@@ -883,8 +970,13 @@ static void defineStaticMethod(ObjString *name) {
     func->klass = AS_OBJ(classOrMod);
     func->isSingletonMethod = true;
     func->isMethod = true;
+    AS_CLOSURE(method)->methodCacheId = methodCacheIdNext();
     ObjClass *metaClass = singletonClass(AS_OBJ(classOrMod));
     VM_DEBUG("defining static method '%s#%s'", metaClass->name->chars, name->chars);
+    Value existingMethod;
+    if (tableGet(&metaClass->methods, OBJ_VAL(name), &existingMethod)) {
+        redefinedMethodClearCache((Obj*)metaClass, name, existingMethod);
+    }
     tableSet(&metaClass->methods, OBJ_VAL(name), method);
     pop(); // function
 }
@@ -2171,17 +2263,31 @@ static InterpretResult vm_run() {
           Value methodName = READ_CONSTANT();
           ObjString *mname = AS_STRING(methodName);
           uint8_t numArgs = READ_BYTE();
+
           Value callInfoVal = READ_CONSTANT();
-          Obj *oldThis = vm.thisObj;
+          Value methodCacheVal = READ_CONSTANT();
+
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
+          MethodCache *methodCache = internalGetData(AS_INTERNAL(methodCacheVal));
+
           if (lastSplatNumArgs > 0) {
               numArgs += (lastSplatNumArgs-1);
               lastSplatNumArgs = -1;
           }
+          Obj *oldThis = vm.thisObj;
           Value instanceVal = peek(numArgs);
+          Obj *callable = NULL;
+          Obj *cachedMethod = methodCacheFindMethod(methodCache, AS_INSTANCE(instanceVal)->klass);
+          if (cachedMethod) callable = cachedMethod;
+
           if (IS_INSTANCE(instanceVal)) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
-              Obj *callable = instanceFindMethod(inst, mname);
+              if (!callable) {
+                  callable = instanceFindMethod(inst, mname);
+              }
+              if (!cachedMethod && callable) {
+                  methodCacheInsertMethod(methodCache, inst->klass, callable);
+              }
               if (!callable && numArgs == 0) {
                   callable = instanceFindGetter(inst, mname);
               }

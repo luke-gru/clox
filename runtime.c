@@ -52,6 +52,11 @@ ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
     if (klass && natFn->klass->type == OBJ_T_CLASS) {
         natFn->isStatic = ((ObjClass*)klass)->singletonOf != NULL;
     }
+    natFn->methodCacheId = methodCacheIdNext();
+    Value existingMethod;
+    if (tableGet(&((ObjModule*)klass)->methods, OBJ_VAL(mname), &existingMethod)) {
+        redefinedMethodClearCache((Obj*)klass, mname, existingMethod);
+    }
     tableSet(&((ObjModule*)klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
     return natFn;
 }

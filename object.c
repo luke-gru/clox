@@ -308,6 +308,7 @@ ObjClosure *newClosure(ObjFunction *func) {
     closure->function = func;
     closure->upvalues = upvalues;
     closure->upvalueCount = func->upvalueCount;
+    closure->methodCacheId = 0;
     return closure;
 }
 
@@ -395,6 +396,7 @@ ObjNative *newNative(ObjString *name, NativeFn function) {
     native->name = name;
     native->klass = NULL;
     native->isStatic = false;
+    native->methodCacheId = 0;
     return native;
 }
 
