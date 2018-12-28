@@ -176,6 +176,7 @@ void addHeap() {
             fprintf(stderr, "can't alloc new heap list\n");
             _exit(1);
         }
+        memset(heapList, 0, newHeapListSz);
         GCStats.totalAllocated += newHeapListSz;
     }
 
@@ -196,6 +197,25 @@ void addHeap() {
         freeList = (ObjAny*)obj;
         p++;
     } // freeList points to last free entry in list, linked backwards
+}
+
+
+void freeHeap(ObjAny *heap) {
+    int i = 0;
+    ObjAny *curHeap = NULL;
+    int heapIdx = -1;
+    for (i = 0; i < heapListSize; i++) {
+        curHeap = heapList[i];
+        if (curHeap && curHeap == heap) {
+            heapIdx = i;
+        }
+    }
+    ASSERT(heapIdx != -1);
+    memmove(heapList+heapIdx, heapList+heapIdx+1, heapListSize-heapIdx-1);
+    xfree(heap); // free the heap
+    heapsUsed--;
+    GCStats.totalAllocated -= (sizeof(ObjAny)*HEAP_SLOTS);
+    GCStats.heapSize -= (sizeof(ObjAny)*HEAP_SLOTS);
 }
 
 Obj *getNewObject(ObjType type, size_t sz) {
@@ -819,38 +839,39 @@ void collectGarbage(void) {
     ObjAny *p, *pend;
 
     int phase = 1; // call finalizers in phase 1
+    vec_void_t vFreeHeaps;
+    vec_init(&vFreeHeaps);
     freeList = NULL; // build up a new free list in phase 2
     if (activeFinalizers == 0) {
         phase = 2;
     }
+    bool hasOtherFreeishHeap = false;
 freeLoop:
-    if (phase == 2) {
-        while (vm.grayCount > 0) {
-            // Pop an item from the gray stack.
-            Obj *marked = vm.grayStack[--vm.grayCount];
-            DBG_ASSERT(marked);
-            blackenObject(marked);
-        }
-    }
     for (int i = 0; i < heapsUsed; i++) {
         ObjAny *newFreeList = NULL;
         if (phase == 2) newFreeList = freeList;
         p = heapList[i];
+        ASSERT(p);
         pend = p + HEAP_SLOTS;
 
+        int objectsFree = 0;
         while (p < pend) {
             Obj *obj = (Obj*)p;
-            if (!obj->isDark && !obj->noGC) { // free unmarked, reclaim
-                if (phase == 2) {
+            if (obj->type == OBJ_T_NONE) {
+                if (phase == 2) objectsFree++;
+                p++;
+                continue;
+            }
+            if (!obj->isDark && !obj->noGC) {
+                if (phase == 2) { // phase 2, reclaim unmarked objects
                     numObjectsFreed++;
                     obj->nextFree = newFreeList;
                     freeObject(obj);
                     newFreeList = p;
                     numObjectsFreed++;
-                } else { // phase 1, blacken finalizer objects, call finalizer
+                } else { // phase 1, call finalizers
                     ASSERT(phase == 1);
                     if (hasFinalizer(obj)) {
-                        grayObject(obj);
                         ASSERT(((ObjInstance*) obj)->finalizerFunc->type != OBJ_T_NONE);
                         callFinalizer(obj);
                         if (activeFinalizers == 0) {
@@ -871,7 +892,16 @@ freeLoop:
             }
             p++;
         }
-        if (phase == 2) freeList = newFreeList;
+
+        if (phase == 2) {
+            freeList = newFreeList;
+            if (objectsFree == HEAP_SLOTS) {
+                vec_push(&vFreeHeaps, heapList[i]);
+            } else if (objectsFree >= (HEAP_SLOTS/2)) {
+                hasOtherFreeishHeap = true;
+            }
+        }
+
     }
     if (phase == 1) {
         phase = 2; i = 0;
@@ -879,7 +909,17 @@ freeLoop:
         goto freeLoop;
     }
 
-    if (numObjectsFreed < FREE_MIN) {
+    bool freedHeap = false;
+    if (vFreeHeaps.length > 0 && hasOtherFreeishHeap) {
+        ObjAny *heap; int heapIdx = 0;
+        vec_foreach(&vFreeHeaps, heap, heapIdx) {
+            ASSERT(heap);
+            freeHeap(heap);
+        }
+        freedHeap = true;
+    }
+
+    if (!freedHeap && numObjectsFreed < FREE_MIN) {
         addHeap();
     }
 
