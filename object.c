@@ -327,7 +327,8 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     initTable(&klass->methods);
     initTable(&klass->getters);
     initTable(&klass->setters);
-    vec_init(&klass->v_includedMods);
+    klass->v_includedMods = ALLOCATE(vec_void_t, 1);
+    vec_init(klass->v_includedMods);
     klass->name = name; // can be NULL
     klass->superclass = superclass;
     // during initial class hierarchy setup this is NULL
@@ -425,7 +426,7 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     Value nameVal = OBJ_VAL(name);
     while (klass) {
         ObjModule *mod = NULL; int i = 0;
-        vec_foreach_rev(&klass->v_includedMods, mod, i) {
+        vec_foreach_rev(klass->v_includedMods, mod, i) {
             if (tableGet(&mod->methods, nameVal, &method)) {
                 return AS_OBJ(method);
             }
@@ -447,7 +448,7 @@ Obj *instanceFindGetter(ObjInstance *obj, ObjString *name) {
     Value nameVal = OBJ_VAL(name);
     while (klass) {
         ObjModule *mod = NULL; int i = 0;
-        vec_foreach_rev(&klass->v_includedMods, mod, i) {
+        vec_foreach_rev(klass->v_includedMods, mod, i) {
             if (tableGet(&mod->getters, nameVal, &getter)) {
                 return AS_OBJ(getter);
             }
@@ -469,7 +470,7 @@ Obj *instanceFindSetter(ObjInstance *obj, ObjString *name) {
     Value nameVal = OBJ_VAL(name);
     while (klass) {
         ObjModule *mod = NULL; int i = 0;
-        vec_foreach_rev(&klass->v_includedMods, mod, i) {
+        vec_foreach_rev(klass->v_includedMods, mod, i) {
             if (tableGet(&mod->setters, nameVal, &setter)) {
                 return AS_OBJ(setter);
             }
@@ -1022,6 +1023,60 @@ bool isInstanceLikeObj(Obj *obj) {
             return true;
         default:
             return false;
+    }
+}
+
+size_t sizeofObjType(ObjType type) {
+    switch (type) {
+        case OBJ_T_STRING:
+            return sizeof(ObjString);
+        case OBJ_T_FUNCTION:
+            return sizeof(ObjFunction);
+        case OBJ_T_INSTANCE:
+            return sizeof(ObjInstance);
+        case OBJ_T_CLASS:
+            return sizeof(ObjClass);
+        case OBJ_T_MODULE:
+            return sizeof(ObjModule);
+        case OBJ_T_NATIVE_FUNCTION:
+            return sizeof(ObjNative);
+        case OBJ_T_BOUND_METHOD:
+            return sizeof(ObjBoundMethod);
+        case OBJ_T_UPVALUE:
+            return sizeof(ObjUpvalue);
+        case OBJ_T_CLOSURE:
+            return sizeof(ObjClosure);
+        case OBJ_T_INTERNAL:
+            return sizeof(ObjInternal);
+        default:
+            UNREACHABLE_RETURN(0);
+    }
+}
+
+const char *objTypeName(ObjType type) {
+    switch (type) {
+        case OBJ_T_NONE:
+            return "T_NONE";
+        case OBJ_T_STRING:
+            return "T_STRING";
+        case OBJ_T_FUNCTION:
+            return "T_FUNCTION";
+        case OBJ_T_CLASS:
+            return "T_CLASS";
+        case OBJ_T_MODULE:
+            return "T_MODULE";
+        case OBJ_T_NATIVE_FUNCTION:
+            return "T_NATIVE_FUNCTION";
+        case OBJ_T_BOUND_METHOD:
+            return "T_BOUND_METHOD";
+        case OBJ_T_UPVALUE:
+            return "T_UPVALUE";
+        case OBJ_T_CLOSURE:
+            return "T_CLOSURE";
+        case OBJ_T_INTERNAL:
+            return "T_INTERNAL";
+        default:
+            UNREACHABLE_RETURN("invalid type");
     }
 }
 

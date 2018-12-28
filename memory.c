@@ -24,6 +24,14 @@
 #define TRACE_GC_FUNC_END(lvl, func) trace_gc_func_end(lvl, func);
 #endif
 
+#define HEAPLIST_INCREMENT 10
+#define FREE_MIN 500
+#define HEAP_SLOTS 10000
+static ObjAny **heapList;
+static int heapListSize = 0;
+static ObjAny *freeList;
+static int heapsUsed = 0;
+
 static bool inGC = false;
 static bool GCOn = true;
 static bool dontGC = false;
@@ -59,12 +67,24 @@ static void printGenerationInfo() {
     }
 }
 
+static void printObjTypeSizes() {
+    int type = OBJ_T_NONE;
+    while (type < OBJ_T_LAST) {
+        fprintf(stderr, "%s size: %ld\n", objTypeName(type), sizeofObjType(type));
+        type++;
+    }
+}
+
 static void printGCStats() {
     fprintf(stderr, "GC Stats\n");
+    printObjTypeSizes();
+    fprintf(stderr, "ObjAny size: %ld b\n", sizeof(ObjAny));
     fprintf(stderr, "Total allocated: %ld KB\n", GCStats.totalAllocated/1024);
     fprintf(stderr, "Heap size: %ld KB\n", GCStats.heapSize/1024);
     fprintf(stderr, "Heap used: %ld KB\n", GCStats.heapUsed/1024);
     fprintf(stderr, "Heap used waste: %ld KB\n", GCStats.heapUsedWaste/1024);
+    fprintf(stderr, "# heaps used: %d\n", heapsUsed);
+    fprintf(stderr, "# objects: %ld\n", GCStats.heapUsed/sizeof(ObjAny));
 }
 
 void printGCProfile() {
@@ -141,14 +161,6 @@ static inline void trace_gc_func_end(int lvl, const char *funcName) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
     fprintf(stderr, "[GC]: </%s>\n", funcName);
 }
-
-#define HEAPLIST_INCREMENT 10
-#define FREE_MIN 500
-#define HEAP_SLOTS 10000
-static ObjAny **heapList;
-static int heapListSize = 0;
-static ObjAny *freeList;
-static int heapsUsed = 0;
 
 void addHeap() {
     ObjAny *p, *pend;
@@ -427,31 +439,9 @@ void blackenObject(Obj *obj) {
     TRACE_GC_FUNC_END(4, "blackenObject");
 }
 
+
 static size_t sizeofObj(Obj *obj) {
-    switch (obj->type) {
-        case OBJ_T_STRING:
-            return sizeof(ObjString);
-        case OBJ_T_FUNCTION:
-            return sizeof(ObjFunction);
-        case OBJ_T_INSTANCE:
-            return sizeof(ObjInstance);
-        case OBJ_T_CLASS:
-            return sizeof(ObjClass);
-        case OBJ_T_MODULE:
-            return sizeof(ObjModule);
-        case OBJ_T_NATIVE_FUNCTION:
-            return sizeof(ObjNative);
-        case OBJ_T_BOUND_METHOD:
-            return sizeof(ObjBoundMethod);
-        case OBJ_T_UPVALUE:
-            return sizeof(ObjUpvalue);
-        case OBJ_T_CLOSURE:
-            return sizeof(ObjClosure);
-        case OBJ_T_INTERNAL:
-            return sizeof(ObjInternal);
-        default:
-            UNREACHABLE_RETURN(0);
-    }
+    return sizeofObjType(obj->type);
 }
 
 void freeObject(Obj *obj) {
@@ -500,7 +490,8 @@ void freeObject(Obj *obj) {
             freeTable(&klass->methods);
             freeTable(&klass->getters);
             freeTable(&klass->setters);
-            vec_deinit(&klass->v_includedMods);
+            vec_deinit(klass->v_includedMods);
+            FREE_SIZE(VEC_SZ, klass->v_includedMods);
             GC_TRACE_DEBUG(5, "Freeing class: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;

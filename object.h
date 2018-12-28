@@ -63,7 +63,6 @@ typedef struct ObjFunction {
   Obj object;
   int arity; // number of required args
   int numDefaultArgs; // number of optional default args
-  bool hasRestArg;
   int numKwargs;
   int upvalueCount;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
@@ -71,9 +70,10 @@ typedef struct ObjFunction {
   Chunk chunk;
   ObjString *name;
   Obj *klass; // ObjClass* or ObjModule* (if method)
+  Node *funcNode;
   bool isMethod; // TODO: remove, redundant (see `klass`)
   bool isSingletonMethod;
-  Node *funcNode;
+  bool hasRestArg;
 } ObjFunction;
 
 typedef struct ObjUpvalue ObjUpvalue;
@@ -128,7 +128,7 @@ typedef struct ObjClass {
   Table setters;
 
   ObjClass *superclass;
-  vec_void_t v_includedMods; // pointers to ObjModule
+  vec_void_t *v_includedMods; // pointers to ObjModule
   Obj *singletonOf;  // if singleton class
 } ObjClass;
 
@@ -423,6 +423,9 @@ static inline bool isObjType(Value value, ObjType type) {
 }
 const char *typeOfObj(Obj *obj);
 bool isInstanceLikeObj(Obj *obj);
+size_t sizeofObjType(ObjType type);
+const char *objTypeName(ObjType type);
+
 
 typedef bool (*obj_type_p)(Obj*);
 bool is_obj_function_p(Obj*);

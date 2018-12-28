@@ -457,9 +457,9 @@ Value lxClassInclude(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(modVal, IS_MODULE_FUNC, "module", 1);
     ObjModule *mod = AS_MODULE(modVal);
     int alreadyIncluded = -1;
-    vec_find(&klass->v_includedMods, mod, alreadyIncluded);
+    vec_find(klass->v_includedMods, mod, alreadyIncluded);
     if (alreadyIncluded == -1) {
-        vec_push(&klass->v_includedMods, mod);
+        vec_push(klass->v_includedMods, mod);
     }
     return modVal;
 }

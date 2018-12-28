@@ -20,12 +20,15 @@ Added features:
 * Iterators and foreach() statement
 * String interpolation
 * Map (hash/dict) literals
+* Object finalizers
 
 Some internal differences:
 * creation of AST before compilation phase (separate parser/compiler)
 * bytecode optimization passes (including constant folding)
 * Easy way to create objects in C functions without having to hide
 them from GC, even if they're not pushed to operand stack (aka rooted).
+* Faster garbage collector with managed heaps (but also wastes more memory
+right now)
 
 Future features:
 * Support for regex
@@ -33,6 +36,8 @@ Future features:
 * Improve threading story, add mutex objects to start with
 * Support non-ascii strings
 * Add constants (no redefinitions, will given compiler or runtime error)
+* Improve managed heaps memory waste
+* Add generational GC
 
 OS/compiler support:
 * Only tested on linux (Ubuntu 16.04), uses fork() and libpthread, as well as C99 features.

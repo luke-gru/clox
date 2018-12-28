@@ -13,6 +13,7 @@
 
 #define VEC_VERSION "0.2.1"
 
+#define VEC_SZ (sizeof(void*)+(sizeof(int)*2))
 
 #define vec_unpack_(v)\
   (char**)&(v)->data, &(v)->length, &(v)->capacity, sizeof(*(v)->data)

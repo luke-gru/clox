@@ -15,7 +15,6 @@
     /*fprintf(stderr, "Allocating %d %s\n", (int)count, xstr(type)) > 0 ? \*/\
     (type*)reallocate(NULL, 0, sizeof(type) * (count)) /*: NULL */
 
-
 #define FREE(type, pointer) \
     reallocate(pointer, sizeof(type), 0)
 
