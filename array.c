@@ -7,6 +7,7 @@
 ObjClass *lxAryClass;
 
 extern ObjNative *nativeArrayInit;
+static ObjString *aryStr;
 
 static void markInternalAry(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
@@ -50,7 +51,7 @@ static Value lxArrayInit(int argCount, Value *args) {
     initValueArray(ary);
     internalObj->data = ary;
     internalObj->dataSz = sizeof(ValueArray);
-    tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), OBJ_VAL(internalObj));
+    tableSet(selfObj->hiddenFields, OBJ_VAL(aryStr), OBJ_VAL(internalObj));
     unhideFromGC((Obj*)internalObj);
     for (int i = 1; i < argCount; i++) {
         writeValueArrayEnd(ary, args[i]);
@@ -70,7 +71,7 @@ static Value lxArrayDup(int argCount, Value *args) {
     initValueArray(dupAry);
     internalObj->data = dupAry;
     internalObj->dataSz = sizeof(ValueArray);
-    tableSet(dupObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), OBJ_VAL(internalObj));
+    tableSet(dupObj->hiddenFields, OBJ_VAL(aryStr), OBJ_VAL(internalObj));
 
     // XXX: might be slow to dup large arrays, should bulk copy memory using memcpy or similar
     Value el; int idx = 0;
@@ -199,7 +200,7 @@ static Value lxArrayOpIndexSet(int argCount, Value *args) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
     Value internalObjVal;
-    ASSERT(tableGet(selfObj->hiddenFields, OBJ_VAL(internedString("ary", 3)), &internalObjVal));
+    ASSERT(tableGet(selfObj->hiddenFields, OBJ_VAL(aryStr), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     int idx = (int)AS_NUMBER(num);
@@ -261,6 +262,8 @@ static Value lxArrayWrapStatic(int argCount, Value *args) {
 }
 
 void Init_ArrayClass() {
+    aryStr = internedString("ary", 3);
+
     // class Array
     ObjClass *arrayClass = addGlobalClass("Array", lxObjClass);
     ObjClass *arrayStatic = classSingletonClass(arrayClass);

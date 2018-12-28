@@ -10,6 +10,8 @@ ObjClass *lxMapClass;
 
 extern ObjNative *nativeMapInit;
 
+static ObjString *mapStr;
+
 ObjClass *lxEnvClass;
 ObjInstance *lxEnv;
 extern char **environ; // defined in unistd.h
@@ -42,8 +44,7 @@ static Value lxMapInit(int argCount, Value *args) {
     Table *map = ALLOCATE(Table, 1);
     initTable(map);
     internalMap->data = map;
-    tableSet(selfObj->hiddenFields, OBJ_VAL(
-        internedString("map", 3)), OBJ_VAL(internalMap));
+    tableSet(selfObj->hiddenFields, OBJ_VAL(mapStr), OBJ_VAL(internalMap));
 
     if (argCount == 1) {
         return self;
@@ -85,8 +86,7 @@ static Value lxMapDup(int argCount, Value *args) {
     Table *mapDup = ALLOCATE(Table, 1);
     initTable(mapDup);
     internalMap->data = mapDup;
-    tableSet(dupObj->hiddenFields, OBJ_VAL(
-        internedString("map", 3)), OBJ_VAL(internalMap));
+    tableSet(dupObj->hiddenFields, OBJ_VAL(mapStr), OBJ_VAL(internalMap));
 
     Entry e; int idx = 0;
     TABLE_FOREACH(mapOrig, e, idx) {
@@ -311,7 +311,7 @@ static Value lxMapRehash(int argCount, Value *args) {
         tableSet(mapNew, e.key, e.value);
     }
     Value internalVal;
-    ASSERT(tableGet(selfObj->hiddenFields, OBJ_VAL(internedString("map", 3)), &internalVal));
+    ASSERT(tableGet(selfObj->hiddenFields, OBJ_VAL(mapStr), &internalVal));
     ObjInternal *internal = AS_INTERNAL(internalVal);
     internal->data = mapNew;
     freeTable(mapOld);
@@ -406,6 +406,8 @@ static Value lxEnvDelete(int argCount, Value *args) {
 }
 
 void Init_MapClass() {
+    mapStr = internedString("map", 3);
+
     ObjClass *mapClass = addGlobalClass("Map", lxObjClass);
     lxMapClass = mapClass;
 

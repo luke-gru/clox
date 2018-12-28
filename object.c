@@ -166,7 +166,8 @@ bool objStringEquals(ObjString *a, ObjString *b) {
 
 // Copies `chars`, adds them to end of string.
 // NOTE: don't use this function on a ObjString that is already a key
-// for a table, it won't retrieve the value in the table anymore.
+// for a table, it won't retrieve the value in the table anymore unless
+// it's rehashed.
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     ASSERT(!((Obj*)string)->isFrozen);

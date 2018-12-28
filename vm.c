@@ -265,7 +265,7 @@ static void defineGlobalVariables(void) {
         arrayPush(lxArgv, arg);
         // FIXME: for some reason, GC fails sometimes when we don't hide this.
         // Really not sure why, we are marking vm.globals.
-        /*unhideFromGC(AS_OBJ(arg));*/
+        unhideFromGC(AS_OBJ(arg));
     }
 }
 

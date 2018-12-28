@@ -61,8 +61,6 @@ file lookup, not pwd when calling loadScript/requireScript
 * Debugger bugs, not evaluating variables in context of function
 * Empty anon function expression seems to mess with compiler.c (segfaults)
 * +=, -=, etc. doesn't for non-variables, like this.prop +=1, or other lvalues
-* Fix GC error with ARGV array, we have to hide the elements for some reason
-* Make GC faster (see examples/gc.rb versus examples/gc.lox)
 
 Optimizations
 -------------
@@ -73,3 +71,4 @@ Optimizations
 * different GC strategies, maybe support copying GC and/or generational GC
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results
+* Make GC faster by keeping empty heaps around longer

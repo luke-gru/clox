@@ -8,6 +8,8 @@ ObjClass *lxStringClass;
 
 extern ObjNative *nativeStringInit;
 
+static ObjString *bufStr;
+
 // ex: var s = "string";
 // ex: var s2 = String("string");
 Value lxStringInit(int argCount, Value *args) {
@@ -27,10 +29,10 @@ Value lxStringInit(int argCount, Value *args) {
             internalStrVal = OBJ_VAL(str);
         }
         ASSERT(IS_STRING(internalStrVal));
-        tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
+        tableSet(selfObj->hiddenFields, OBJ_VAL(bufStr), internalStrVal);
     } else { // empty string
         Value internalStrVal = OBJ_VAL(copyString("", 0));
-        tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
+        tableSet(selfObj->hiddenFields, OBJ_VAL(bufStr), internalStrVal);
     }
     return self;
 }
@@ -74,7 +76,7 @@ static Value lxStringDup(int argCount, Value *args) {
     Value ret = lxObjectDup(argCount, args);
     ObjInstance *retInst = AS_INSTANCE(ret);
     ObjString *buf = STRING_GETHIDDEN(ret);
-    tableSet(retInst->hiddenFields, OBJ_VAL(internedString("buf", 3)), OBJ_VAL(dupString(buf)));
+    tableSet(retInst->hiddenFields, OBJ_VAL(bufStr), OBJ_VAL(dupString(buf)));
     return ret;
 }
 
@@ -158,4 +160,6 @@ void Init_StringClass() {
     // getters
     addNativeGetter(stringClass, "size", lxStringGetSize);
     lxStringClass = stringClass;
+
+    bufStr = internedString("buf", 3);
 }
