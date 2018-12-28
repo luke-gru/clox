@@ -424,6 +424,7 @@ void initVM() {
     vec_init(&vm.exitHandlers);
 
     initDebugger(&vm.debugger);
+    vm.instructionStepperOn = CLOX_OPTION_T(stepVMExecution);
 
     pushFrame();
 
@@ -453,6 +454,7 @@ void freeVM(void) {
     freeObjects();
 
     freeDebugger(&vm.debugger);
+    vm.instructionStepperOn = false;
 
     inCCall = 0;
     cCallThrew = false;
@@ -1826,6 +1828,27 @@ static InterpretResult vm_run() {
     }
 #endif
 
+#ifndef NDEBUG
+    char *stepLine = NULL;
+    size_t stepLineSz = 0;
+    // interactive VM instruction stepper
+    if (CLOX_OPTION_T(stepVMExecution) && vm.instructionStepperOn) {
+        fprintf(stderr, "STEPPER> ");
+        while (getline(&stepLine, &stepLineSz, stdin)) {
+            if (strcmp("c\n", stepLine) == 0) {
+                vm.instructionStepperOn = false;
+                xfree(stepLine);
+                break;
+            } else if (strcmp("n\n", stepLine) == 0) {
+                xfree(stepLine);
+                break;
+            } else {
+                fprintf(stderr, "Unknown command!\n");
+            }
+        }
+    }
+#endif
+
     uint8_t instruction = READ_BYTE();
     switch (instruction) {
       case OP_CONSTANT: { // numbers, code chunks
@@ -2028,8 +2051,12 @@ static InterpretResult vm_run() {
           ASSERT(slot >= 0);
           // make sure we don't clobber the unpack array with the setting of
           // this variable
-          ASSERT(getFrame()->slots+slot > EC->stackTop-1);
-          getFrame()->slots[slot] = unpackValue(peek(0), unpackIdx); // locals are popped at end of scope by VM
+          int peekIdx = 0;
+          while (getFrame()->slots+slot > EC->stackTop-1) {
+              push(NIL_VAL);
+              peekIdx++;
+          }
+          getFrame()->slots[slot] = unpackValue(peek(peekIdx+unpackIdx), unpackIdx); // locals are popped at end of scope by VM
           break;
       }
       case OP_GET_LOCAL: {

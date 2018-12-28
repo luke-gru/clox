@@ -104,6 +104,7 @@ typedef struct VM {
     vec_val_t loadedScripts;
 
     Debugger debugger;
+    bool instructionStepperOn;
 
     bool inited;
 

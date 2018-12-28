@@ -49,7 +49,6 @@ Bugs
 ----
 * Method lookup bugged for static methods, don't look in superclass statics
 * Method lookup is bugged, instances get methods from static methods
-* Bug in iterators for ENV and maps in general, it looks like (1.lox.err)
 * Fix method lookup, look in modules for instances and classes/modules as well
 as singleton classes, etc.
 * super() bug in examples/super.lox (super doesn's look in modules for method)

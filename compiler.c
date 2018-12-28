@@ -753,6 +753,21 @@ static int addLocal(Token name) {
     return current->localCount-1;
 }
 
+static int addFakeLocal() {
+    ASSERT(current->scopeDepth > 0);
+    if (current->localCount >= UINT8_MAX) {
+        error("Too many local variables");
+        return -1;
+    }
+    Token name = syntheticToken("_");
+    Local local = {
+        .name = name,
+        .depth = current->scopeDepth,
+    };
+    current->locals[current->localCount] = local;
+    current->localCount++;
+    return current->localCount-1;
+}
 
 // Returns argument to give to SET_LOCAL/SET_GLOBAL, an identifier index or
 // a local slot index.
@@ -1075,6 +1090,10 @@ static void emitFunction(Node *n, FunctionType ftype) {
     }
 }
 
+static void pushVarSlots() {
+    addFakeLocal();
+}
+
 static void emitNode(Node *n) {
     if (current->hadError) return;
     curTok = &n->tok;
@@ -1300,7 +1319,9 @@ static void emitNode(Node *n) {
         vec_byte_t v_slots;
         vec_init(&v_slots);
         int numVars = n->children->length - 2;
-        current->localCount++; // the iterator
+        pushVarSlots(); // don't overwrite the iterator with the variables
+        if (numVars > 1)
+            pushVarSlots(); // the iterator value
         int i = 0;
         for (i = 0; i < numVars; i++) {
             Token varName = n->children->data[i]->tok;
@@ -1323,12 +1344,20 @@ static void emitNode(Node *n) {
             uint8_t nameIdx = identifierConstant(&name);
             if (setOp == OP_SET_LOCAL) {
                 emitOp2(setOp, slotNum, nameIdx);
-            } else {
+            } else { // SET_UNPACK
                 emitOp3(setOp, slotNum, (uint8_t)slotIdx, nameIdx);
             }
         }
-        emitOp0(OP_POP); // pop the iterator value
+        if (numVars == 1) {
+            emitOp0(OP_POP); // pop the iterator value
+        }
         emitNode(n->children->data[i]); // foreach block
+        if (numVars > 1) {
+            for (int j = 0; j < numVars; j++) {
+                emitOp0(OP_POP); // pop the iterator values
+            }
+            emitOp0(OP_POP); // pop the iterator value array, for unpack
+        }
         emitLoop(beforeIterNext);
         popScope(COMPILE_SCOPE_BLOCK);
         patchJump(iterDone, -1, NULL);

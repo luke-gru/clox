@@ -1,0 +1,17 @@
+var i = 0;
+var k;
+var v;
+foreach (k, v in ENV) {
+  if (i == 0) {
+    print k.class;
+    print v.class;
+  }
+  i += 1;
+}
+print i > 0;
+
+__END__
+-- expect: --
+<class String>
+<class String>
+true

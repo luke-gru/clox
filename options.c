@@ -12,6 +12,7 @@ char *boolOptNames[] = { // order doesn't matter
     "printAST",
     "traceParserCalls",
     "traceVMExecution",
+    "stepVMExecution",
     "debugVM",
     "debugThreads",
     "debugTokens",
@@ -51,6 +52,7 @@ void initOptions(int argc, char **argv) {
 
     options.traceParserCalls = false;
     options.traceVMExecution = false;
+    options.stepVMExecution = false;
     options.traceCompiler = false;
 
     options.parseOnly = false;
@@ -153,6 +155,11 @@ int parseOption(char **argv, int i) {
         return 1;
     }
     if (strcmp(argv[i], "-DTRACE_VM_EXECUTION") == 0) {
+        SET_OPTION(traceVMExecution, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "-DSTEP_VM_EXECUTION") == 0) {
+        SET_OPTION(stepVMExecution, true);
         SET_OPTION(traceVMExecution, true);
         return 1;
     }
