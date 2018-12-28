@@ -52,7 +52,7 @@ ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
     if (klass && natFn->klass->type == OBJ_T_CLASS) {
         natFn->isStatic = ((ObjClass*)klass)->singletonOf != NULL;
     }
-    tableSet(&((ObjModule*)klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
+    tableSet(((ObjModule*)klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
     return natFn;
 }
 
@@ -60,7 +60,7 @@ ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
     ObjString *mname = internedString(name, strlen(name));
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
-    tableSet(&((ObjModule*)klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
+    tableSet(((ObjModule*)klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
     return natFn;
 }
 
@@ -68,7 +68,7 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
     ObjString *mname = internedString(name, strlen(name));
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
-    tableSet(&((ObjModule*)klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
+    tableSet(((ObjModule*)klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
     return natFn;
 }
 
@@ -213,7 +213,7 @@ Value lxThreadInit(int argCount, Value *args) {
     ObjInternal *internalObj = newInternalObject(NULL, sizeof(LxThread), NULL, NULL);
     LxThread *th = ALLOCATE(LxThread, 1); // GCed by default GC free of internalObject
     internalObj->data = th;
-    tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)),
+    tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)),
             OBJ_VAL(internalObj));
     return self;
 }
@@ -367,12 +367,12 @@ Value lxObjectDup(int argCount, Value *args) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInstance *newObj = newInstance(selfObj->klass); // XXX: Call initialize on new instance?
     Entry e; int idx = 0;
-    TABLE_FOREACH(&selfObj->fields, e, idx) {
-        tableSet(&newObj->fields, e.key, e.value);
+    TABLE_FOREACH(selfObj->fields, e, idx) {
+        tableSet(newObj->fields, e.key, e.value);
     }
     idx = 0;
-    TABLE_FOREACH(&selfObj->hiddenFields, e, idx) {
-        tableSet(&newObj->hiddenFields, e.key, e.value);
+    TABLE_FOREACH(selfObj->hiddenFields, e, idx) {
+        tableSet(newObj->hiddenFields, e.key, e.value);
     }
     return OBJ_VAL(newObj);
 }
@@ -528,7 +528,7 @@ Value lxIteratorInit(int argCount, Value *args) {
     ObjInternal *internalIter = newInternalObject(
         iter, sizeof(Iterator), markInternalIter, freeInternalIter
     );
-    tableSet(&selfObj->hiddenFields,
+    tableSet(selfObj->hiddenFields,
             OBJ_VAL(internedString("iter", 4)),
             OBJ_VAL(internalIter));
     return self;
@@ -539,7 +539,7 @@ Value lxIteratorNext(int argCount, Value *args) {
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
     Value internalIter;
-    ASSERT(tableGet(&selfObj->hiddenFields,
+    ASSERT(tableGet(selfObj->hiddenFields,
             OBJ_VAL(internedString("iter", 4)),
             &internalIter));
     ObjInternal *internalObj = AS_INTERNAL(internalIter);

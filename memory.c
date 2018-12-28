@@ -342,11 +342,11 @@ void blackenObject(Obj *obj) {
             if (klass->finalizerFunc) {
                 grayObject(klass->finalizerFunc);
             }
-            grayTable(&klass->fields);
-            grayTable(&klass->hiddenFields);
-            grayTable(&klass->methods);
-            grayTable(&klass->getters);
-            grayTable(&klass->setters);
+            grayTable(klass->fields);
+            grayTable(klass->hiddenFields);
+            grayTable(klass->methods);
+            grayTable(klass->getters);
+            grayTable(klass->setters);
             break;
         }
         case OBJ_T_MODULE: {
@@ -369,11 +369,11 @@ void blackenObject(Obj *obj) {
                 grayObject(mod->finalizerFunc);
             }
 
-            grayTable(&mod->fields);
-            grayTable(&mod->hiddenFields);
-            grayTable(&mod->methods);
-            grayTable(&mod->getters);
-            grayTable(&mod->setters);
+            grayTable(mod->fields);
+            grayTable(mod->hiddenFields);
+            grayTable(mod->methods);
+            grayTable(mod->getters);
+            grayTable(mod->setters);
             break;
         }
         case OBJ_T_FUNCTION: {
@@ -409,8 +409,8 @@ void blackenObject(Obj *obj) {
             if (instance->finalizerFunc) {
                 grayObject(instance->finalizerFunc);
             }
-            grayTable(&instance->fields);
-            grayTable(&instance->hiddenFields);
+            grayTable(instance->fields);
+            grayTable(instance->hiddenFields);
             break;
         }
         case OBJ_T_INTERNAL: {
@@ -485,11 +485,12 @@ void freeObject(Obj *obj) {
             ObjClass *klass = (ObjClass*)obj;
             GC_TRACE_DEBUG(5, "Freeing class methods/getters/setters tables");
             klass->name = NULL;
-            freeTable(&klass->fields);
-            freeTable(&klass->hiddenFields);
-            freeTable(&klass->methods);
-            freeTable(&klass->getters);
-            freeTable(&klass->setters);
+            freeTable(klass->fields);
+            freeTable(klass->hiddenFields);
+            freeTable(klass->methods);
+            freeTable(klass->getters);
+            freeTable(klass->setters);
+            FREE_ARRAY(Table, klass->fields, 5);
             vec_deinit(klass->v_includedMods);
             FREE_SIZE(VEC_SZ, klass->v_includedMods);
             GC_TRACE_DEBUG(5, "Freeing class: p=%p", obj);
@@ -500,11 +501,12 @@ void freeObject(Obj *obj) {
             ObjModule *mod = (ObjModule*)obj;
             GC_TRACE_DEBUG(5, "Freeing module methods/getters/setters tables");
             mod->name = NULL;
-            freeTable(&mod->fields);
-            freeTable(&mod->hiddenFields);
-            freeTable(&mod->methods);
-            freeTable(&mod->getters);
-            freeTable(&mod->setters);
+            freeTable(mod->fields);
+            freeTable(mod->hiddenFields);
+            freeTable(mod->methods);
+            freeTable(mod->getters);
+            freeTable(mod->setters);
+            FREE_ARRAY(Table, mod->fields, 5);
             GC_TRACE_DEBUG(5, "Freeing module: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;
@@ -536,9 +538,10 @@ void freeObject(Obj *obj) {
         case OBJ_T_INSTANCE: {
             ObjInstance *instance = (ObjInstance*)obj;
             GC_TRACE_DEBUG(5, "Freeing instance fields table: p=%p", &instance->fields);
-            freeTable(&instance->fields);
+            freeTable(instance->fields);
             GC_TRACE_DEBUG(5, "Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
-            freeTable(&instance->hiddenFields);
+            freeTable(instance->hiddenFields);
+            FREE_ARRAY(Table, instance->fields, 2);
             GC_TRACE_DEBUG(5, "Freeing ObjInstance: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;

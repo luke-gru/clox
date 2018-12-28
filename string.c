@@ -27,10 +27,10 @@ Value lxStringInit(int argCount, Value *args) {
             internalStrVal = OBJ_VAL(str);
         }
         ASSERT(IS_STRING(internalStrVal));
-        tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
+        tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
     } else { // empty string
         Value internalStrVal = OBJ_VAL(copyString("", 0));
-        tableSet(&selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
+        tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("buf", 3)), internalStrVal);
     }
     return self;
 }
@@ -74,7 +74,7 @@ static Value lxStringDup(int argCount, Value *args) {
     Value ret = lxObjectDup(argCount, args);
     ObjInstance *retInst = AS_INSTANCE(ret);
     ObjString *buf = STRING_GETHIDDEN(ret);
-    tableSet(&retInst->hiddenFields, OBJ_VAL(internedString("buf", 3)), OBJ_VAL(dupString(buf)));
+    tableSet(retInst->hiddenFields, OBJ_VAL(internedString("buf", 3)), OBJ_VAL(dupString(buf)));
     return ret;
 }
 

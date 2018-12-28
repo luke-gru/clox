@@ -30,7 +30,7 @@ static int fileExists(char *fname) {
 LxFile *fileGetHidden(Value file) {
     ObjInstance *inst = AS_INSTANCE(file);
     Value internalVal;
-    if (tableGet(&inst->hiddenFields, OBJ_VAL(internedString("f", 1)), &internalVal)) {
+    if (tableGet(inst->hiddenFields, OBJ_VAL(internedString("f", 1)), &internalVal)) {
         DBG_ASSERT(IS_INTERNAL(internalVal));
         LxFile *f = (LxFile*)internalGetData(AS_INTERNAL(internalVal));
         return f;
@@ -202,7 +202,7 @@ static LxFile *initFile(Value fileVal, ObjString *fname, int fd, int flags) {
     file->oflags = flags;
     file->isOpen = true;
     internalObj->data = file;
-    tableSet(&fileObj->hiddenFields, OBJ_VAL(internedString("f", 1)), OBJ_VAL(internalObj));
+    tableSet(fileObj->hiddenFields, OBJ_VAL(internedString("f", 1)), OBJ_VAL(internalObj));
     unhideFromGC((Obj*)internalObj);
     return file;
 }

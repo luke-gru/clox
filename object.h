@@ -118,14 +118,14 @@ typedef struct ObjClass {
   Obj object;
   ObjClass *klass; // always lxClassClass
   ObjClass *singletonKlass;
-  Table fields;
-  Table hiddenFields;
   Obj *finalizerFunc;
+  Table *fields;
+  Table *hiddenFields;
 
+  Table *methods;
+  Table *getters;
+  Table *setters;
   ObjString *name;
-  Table methods;
-  Table getters;
-  Table setters;
 
   ObjClass *superclass;
   vec_void_t *v_includedMods; // pointers to ObjModule
@@ -139,14 +139,14 @@ typedef struct ObjModule {
   Obj object;
   ObjClass *klass; // always lxModuleClass
   ObjClass *singletonKlass;
-  Table fields;
-  Table hiddenFields;
   Obj *finalizerFunc;
+  Table *fields;
+  Table *hiddenFields;
 
+  Table *methods;
+  Table *getters;
+  Table *setters;
   ObjString *name;
-  Table methods;
-  Table getters;
-  Table setters;
 } ObjModule;
 
 extern ObjClass *lxObjClass;
@@ -175,9 +175,9 @@ typedef struct ObjInstance {
   Obj object;
   ObjClass *klass;
   ObjClass *singletonKlass;
-  Table fields;
-  Table hiddenFields;
   Obj *finalizerFunc; // ObjClosure* or ObjNative*
+  Table *fields;
+  Table *hiddenFields;
 } ObjInstance;
 
 typedef struct ObjBoundMethod {

@@ -322,11 +322,17 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     klass->singletonKlass = NULL;
     klass->finalizerFunc = NULL;
     klass->singletonOf = NULL;
-    initTable(&klass->fields);
-    initTable(&klass->hiddenFields);
-    initTable(&klass->methods);
-    initTable(&klass->getters);
-    initTable(&klass->setters);
+    void *tablesMem = (void*)ALLOCATE(Table, 5);
+    klass->fields = (Table*)tablesMem;
+    klass->hiddenFields = tablesMem + sizeof(Table);
+    klass->methods = tablesMem + sizeof(Table)*2;
+    klass->getters = tablesMem + sizeof(Table)*3;
+    klass->setters = tablesMem + sizeof(Table)*4;
+    initTable(klass->fields);
+    initTable(klass->hiddenFields);
+    initTable(klass->methods);
+    initTable(klass->getters);
+    initTable(klass->setters);
     klass->v_includedMods = ALLOCATE(vec_void_t, 1);
     vec_init(klass->v_includedMods);
     klass->name = name; // can be NULL
@@ -347,11 +353,17 @@ ObjModule *newModule(ObjString *name) {
     mod->klass = lxModuleClass;
     mod->singletonKlass = NULL;
     mod->finalizerFunc = NULL;
-    initTable(&mod->fields);
-    initTable(&mod->hiddenFields);
-    initTable(&mod->methods);
-    initTable(&mod->getters);
-    initTable(&mod->setters);
+    void *tablesMem = ALLOCATE(Table, 5);
+    mod->fields = (Table*)tablesMem;
+    mod->hiddenFields = tablesMem + sizeof(Table);
+    mod->methods = tablesMem + sizeof(Table)*2;
+    mod->getters = tablesMem + sizeof(Table)*3;
+    mod->setters = tablesMem + sizeof(Table)*4;
+    initTable(mod->fields);
+    initTable(mod->hiddenFields);
+    initTable(mod->methods);
+    initTable(mod->getters);
+    initTable(mod->setters);
     mod->name = name; // can be NULL
     // during initial class hierarchy setup this is NULL
     if (nativeModuleInit && isClassHierarchyCreated) {
@@ -378,8 +390,11 @@ ObjInstance *newInstance(ObjClass *klass) {
     obj->klass = klass;
     obj->singletonKlass = NULL;
     obj->finalizerFunc = NULL;
-    initTable(&obj->fields);
-    initTable(&obj->hiddenFields);
+    void *tablesMem = ALLOCATE(Table, 2);
+    obj->fields = (Table*)tablesMem;
+    obj->hiddenFields = tablesMem + sizeof(Table);
+    initTable(obj->fields);
+    initTable(obj->hiddenFields);
     return obj;
 }
 
@@ -427,11 +442,11 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     while (klass) {
         ObjModule *mod = NULL; int i = 0;
         vec_foreach_rev(klass->v_includedMods, mod, i) {
-            if (tableGet(&mod->methods, nameVal, &method)) {
+            if (tableGet(mod->methods, nameVal, &method)) {
                 return AS_OBJ(method);
             }
         }
-        if (tableGet(&klass->methods, nameVal, &method)) {
+        if (tableGet(klass->methods, nameVal, &method)) {
             return AS_OBJ(method);
         }
         klass = klass->superclass;
@@ -449,11 +464,11 @@ Obj *instanceFindGetter(ObjInstance *obj, ObjString *name) {
     while (klass) {
         ObjModule *mod = NULL; int i = 0;
         vec_foreach_rev(klass->v_includedMods, mod, i) {
-            if (tableGet(&mod->getters, nameVal, &getter)) {
+            if (tableGet(mod->getters, nameVal, &getter)) {
                 return AS_OBJ(getter);
             }
         }
-        if (tableGet(&klass->getters, nameVal, &getter)) {
+        if (tableGet(klass->getters, nameVal, &getter)) {
             return AS_OBJ(getter);
         }
         klass = klass->superclass;
@@ -471,11 +486,11 @@ Obj *instanceFindSetter(ObjInstance *obj, ObjString *name) {
     while (klass) {
         ObjModule *mod = NULL; int i = 0;
         vec_foreach_rev(klass->v_includedMods, mod, i) {
-            if (tableGet(&mod->setters, nameVal, &setter)) {
+            if (tableGet(mod->setters, nameVal, &setter)) {
                 return AS_OBJ(setter);
             }
         }
-        if (tableGet(&klass->setters, nameVal, &setter)) {
+        if (tableGet(klass->setters, nameVal, &setter)) {
             return AS_OBJ(setter);
         }
         klass = klass->superclass;
@@ -499,7 +514,7 @@ Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
     Value method;
     // look up in singleton class hierarchy
     while (klass) {
-        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
+        if (tableGet(klass->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
         klass = klass->superclass;
@@ -507,7 +522,7 @@ Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
     // not found, look up in class `Class` instance methods, to Object
     klass = lxClassClass;
     while (klass) {
-        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
+        if (tableGet(klass->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
         klass = klass->superclass;
@@ -520,7 +535,7 @@ Obj *moduleFindStaticMethod(ObjModule *mod, ObjString *name) {
     Value method;
     // look up in singleton class hierarchy
     while (klass) {
-        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
+        if (tableGet(klass->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
         klass = klass->superclass;
@@ -528,7 +543,7 @@ Obj *moduleFindStaticMethod(ObjModule *mod, ObjString *name) {
     // not found, look up in class `Module` instance methods, to Object
     klass = lxModuleClass;
     while (klass) {
-        if (tableGet(&klass->methods, OBJ_VAL(name), &method)) {
+        if (tableGet(klass->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
         klass = klass->superclass;
@@ -593,7 +608,7 @@ ValueArray *arrayGetHidden(Value aryVal) {
     ASSERT(IS_AN_ARRAY(aryVal));
     ObjInstance *inst = AS_INSTANCE(aryVal);
     Value internalObjVal;
-    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(internedString("ary", 3)), &internalObjVal));
+    ASSERT(tableGet(inst->hiddenFields, OBJ_VAL(internedString("ary", 3)), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     return ary;
@@ -837,7 +852,7 @@ Table *mapGetHidden(Value mapVal) {
     ASSERT(IS_A_MAP(mapVal));
     ObjInstance *inst = AS_INSTANCE(mapVal);
     Value internalObjVal;
-    ASSERT(tableGet(&inst->hiddenFields, OBJ_VAL(internedString("map", 3)), &internalObjVal));
+    ASSERT(tableGet(inst->hiddenFields, OBJ_VAL(internedString("map", 3)), &internalObjVal));
     Table *map = (Table*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(map);
     return map;
@@ -847,7 +862,7 @@ ObjString *stringGetHidden(Value instance) {
     ASSERT(IS_A_STRING(instance));
     ObjInstance *inst = AS_INSTANCE(instance);
     Value stringVal;
-    if (tableGet(&inst->hiddenFields, OBJ_VAL(internedString("buf", 3)), &stringVal)) {
+    if (tableGet(inst->hiddenFields, OBJ_VAL(internedString("buf", 3)), &stringVal)) {
         return (ObjString*)AS_OBJ(stringVal);
     } else {
         return NULL;
@@ -858,7 +873,7 @@ Value getProp(Value self, ObjString *propName) {
     ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
     Value ret;
-    if (tableGet(&inst->fields, OBJ_VAL(propName), &ret)) {
+    if (tableGet(inst->fields, OBJ_VAL(propName), &ret)) {
         return ret;
     } else {
         return NIL_VAL;
@@ -869,7 +884,7 @@ Value getHiddenProp(Value self, ObjString *propName) {
     ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
     Value ret;
-    if (tableGet(&inst->hiddenFields, OBJ_VAL(propName), &ret)) {
+    if (tableGet(inst->hiddenFields, OBJ_VAL(propName), &ret)) {
         return ret;
     } else {
         return NIL_VAL;
@@ -880,7 +895,7 @@ Value getHiddenProp(Value self, ObjString *propName) {
 void setProp(Value self, ObjString *propName, Value val) {
     ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
-    tableSet(&inst->fields, OBJ_VAL(propName), val);
+    tableSet(inst->fields, OBJ_VAL(propName), val);
 }
 
 bool instanceIsA(ObjInstance *inst, ObjClass *klass) {

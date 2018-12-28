@@ -805,7 +805,7 @@ static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName,
             klass = klass->superclass; // FIXME: work in modules
             continue;
         }
-        if (tableGet(&klass->methods, key, ret)) {
+        if (tableGet(klass->methods, key, ret)) {
             return true;
         }
         klass = klass->superclass;
@@ -819,7 +819,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
     Obj *method = NULL;
     Obj *getter = NULL;
-    if (tableGet(&obj->fields, OBJ_VAL(propName), &ret)) {
+    if (tableGet(obj->fields, OBJ_VAL(propName), &ret)) {
         return ret;
     } else if ((getter = instanceFindGetter(obj, propName))) {
         VM_DEBUG("getter found");
@@ -847,7 +847,7 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
         callVMMethod(obj, OBJ_VAL(setter), 1, &rval);
         pop();
     } else {
-        tableSet(&obj->fields, OBJ_VAL(propName), rval);
+        tableSet(obj->fields, OBJ_VAL(propName), rval);
     }
 }
 
@@ -864,13 +864,13 @@ static void defineMethod(ObjString *name) {
         const char *klassName = klass->name ? klass->name->chars : "(anon)";
         (void)klassName;
         VM_DEBUG("defining method '%s' in class '%s'", name->chars, klassName);
-        tableSet(&klass->methods, OBJ_VAL(name), method);
+        tableSet(klass->methods, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         const char *modName = mod->name ? mod->name->chars : "(anon)";
         (void)modName;
         VM_DEBUG("defining method '%s' in module '%s'", name->chars, modName);
-        tableSet(&mod->methods, OBJ_VAL(name), method);
+        tableSet(mod->methods, OBJ_VAL(name), method);
     }
     pop(); // function
 }
@@ -886,7 +886,7 @@ static void defineStaticMethod(ObjString *name) {
     func->isMethod = true;
     ObjClass *metaClass = singletonClass(AS_OBJ(classOrMod));
     VM_DEBUG("defining static method '%s#%s'", metaClass->name->chars, name->chars);
-    tableSet(&metaClass->methods, OBJ_VAL(name), method);
+    tableSet(metaClass->methods, OBJ_VAL(name), method);
     pop(); // function
 }
 
@@ -898,11 +898,11 @@ static void defineGetter(ObjString *name) {
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG("defining getter '%s'", name->chars);
-        tableSet(&klass->getters, OBJ_VAL(name), method);
+        tableSet(klass->getters, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         VM_DEBUG("defining getter '%s'", name->chars);
-        tableSet(&mod->getters, OBJ_VAL(name), method);
+        tableSet(mod->getters, OBJ_VAL(name), method);
     }
     pop(); // function
 }
@@ -914,11 +914,11 @@ static void defineSetter(ObjString *name) {
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG("defining setter '%s'", name->chars);
-        tableSet(&klass->setters, OBJ_VAL(name), method);
+        tableSet(klass->setters, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         VM_DEBUG("defining setter '%s'", name->chars);
-        tableSet(&mod->setters, OBJ_VAL(name), method);
+        tableSet(mod->setters, OBJ_VAL(name), method);
     }
     pop(); // function
 }
@@ -1398,7 +1398,7 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
 static Obj *findMethod(ObjClass *klass, ObjString *methodName) {
     Value method;
     while (klass) {
-        if (tableGet(&klass->methods, OBJ_VAL(methodName), &method)) {
+        if (tableGet(klass->methods, OBJ_VAL(methodName), &method)) {
             return AS_OBJ(method);
         }
         klass = klass->superclass;
