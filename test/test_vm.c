@@ -463,7 +463,7 @@ static int test_get_set_arbitrary_property() {
                 "p.name;";
     interp(src, true);
     Value *val = getLastValue();
-    printValue(stderr, *val, false);
+    printValue(stderr, *val, false, -1);
     T_ASSERT(IS_T_STRING(*val));
     T_ASSERT_STREQ("Gracie", INSTANCE_AS_CSTRING(*val));
 cleanup:

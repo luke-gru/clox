@@ -26,8 +26,9 @@
 
 static bool inGC = false;
 static bool GCOn = true;
+static bool dontGC = false;
 
-GCProfile GCProf = {
+struct sGCProfile GCProf = {
     .totalGCTime = {
         .tv_sec = 0,
         .tv_usec = 0,
@@ -48,11 +49,22 @@ static void stopGCRunProfileTimer(struct timeval *timeStart) {
     GCProf.totalGCTime = tres; // copy
 }
 
+struct sGCStats GCStats;
+int activeFinalizers = 0;
+
 static void printGenerationInfo() {
     fprintf(stderr, "Generation info:\n");
     for (int i = 0; i <= GC_GEN_MAX; i++) {
-        fprintf(stderr, "Gen %d: %lu\n", i, GCProf.generations[i]);
+        fprintf(stderr, "Gen %d: %lu\n", i, GCStats.generations[i]);
     }
+}
+
+static void printGCStats() {
+    fprintf(stderr, "GC Stats\n");
+    fprintf(stderr, "Total allocated: %ld KB\n", GCStats.totalAllocated/1024);
+    fprintf(stderr, "Heap size: %ld KB\n", GCStats.heapSize/1024);
+    fprintf(stderr, "Heap used: %ld KB\n", GCStats.heapUsed/1024);
+    fprintf(stderr, "Heap used waste: %ld KB\n", GCStats.heapUsedWaste/1024);
 }
 
 void printGCProfile() {
@@ -71,8 +83,8 @@ void printGCProfile() {
 void GCPromote(Obj *obj, unsigned short gen) {
     if (gen > GC_GEN_MAX) gen = GC_GEN_MAX;
     unsigned short oldGen = obj->GCGen;
-    GCProf.generations[oldGen]--;
-    GCProf.generations[gen]++;
+    GCStats.generations[oldGen]--;
+    GCStats.generations[gen]++;
     obj->GCGen = gen;
 }
 
@@ -83,7 +95,7 @@ static void gc_trace_mark(int lvl, Obj *obj) {
         fprintf(stderr, ", value => ");
         bool oldGC = inGC;
         inGC = false;
-        printValue(stderr, OBJ_VAL(obj), false); // can allocate objects, must be `inGC`
+        printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`
         inGC = oldGC;
     }
     fprintf(stderr, "\n");
@@ -98,7 +110,7 @@ static void gc_trace_free(int lvl, Obj *obj) {
         fprintf(stderr, "type => %s, value => ", typeOfObj(obj));
         bool oldGC = inGC;
         inGC = false;
-        printValue(stderr, OBJ_VAL(obj), false); // can allocate objects, must be `inGC`
+        printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`
         if (obj->type == OBJ_T_INSTANCE) {
             const char *className = "(anon)";
             if (((ObjInstance*) obj)->klass->name) {
@@ -130,7 +142,7 @@ static inline void trace_gc_func_end(int lvl, const char *funcName) {
     fprintf(stderr, "[GC]: </%s>\n", funcName);
 }
 
-#define HEAPS_INCREMENT 10
+#define HEAPLIST_INCREMENT 10
 #define FREE_MIN 500
 #define HEAP_SLOTS 10000
 static ObjAny **heapList;
@@ -143,7 +155,7 @@ void addHeap() {
 
     if (heapsUsed == heapListSize) {
         /* Realloc heaps */
-        heapListSize += HEAPS_INCREMENT;
+        heapListSize += HEAPLIST_INCREMENT;
         size_t newHeapListSz = heapListSize*sizeof(void*);
         heapList = (heapsUsed > 0) ?
             (ObjAny**)realloc(heapList, newHeapListSz) :
@@ -152,35 +164,41 @@ void addHeap() {
             fprintf(stderr, "can't alloc new heap list\n");
             _exit(1);
         }
+        GCStats.totalAllocated += newHeapListSz;
     }
 
-    p = heapList[heapsUsed++] = (ObjAny*)malloc(sizeof(ObjAny)*HEAP_SLOTS);
+    size_t heapSz = sizeof(ObjAny)*HEAP_SLOTS;
+    p = heapList[heapsUsed++] = (ObjAny*)malloc(heapSz);
     if (p == 0) {
         fprintf(stderr, "addHeap: can't alloc new heap\n");
         _exit(1);
     }
+    GCStats.totalAllocated += heapSz;
+    GCStats.heapSize += heapSz;
     pend = p + HEAP_SLOTS;
 
-    while (p < pend) {
-        ObjAny *obj = (ObjAny*)p;
-        obj->free.type = OBJ_T_NONE;
-        obj->as.basic.type = OBJ_T_NONE;
-        obj->free.nextFree = freeList;
-        freeList = obj;
+    while (p < pend) { // zero out new objects
+        Obj *obj = (Obj*)p;
+        obj->type = OBJ_T_NONE;
+        obj->nextFree = freeList;
+        freeList = (ObjAny*)obj;
         p++;
     } // freeList points to last free entry in list, linked backwards
 }
 
-Obj *getNewObject() {
+Obj *getNewObject(ObjType type, size_t sz) {
+    (void)type; // TODO: keep track of how many of each object type in GCStats struct
     Obj *obj = NULL;
 
 retry:
     if (freeList) {
-        obj = (Obj*)(freeList + sizeof(ObjAnyHeader));
-        freeList = freeList->free.nextFree;
+        obj = (Obj*)freeList;
+        freeList = obj->nextFree;
+        GCStats.heapUsed += sizeof(ObjAny);
+        GCStats.heapUsedWaste += (sizeof(ObjAny)-sz);
         return obj;
     }
-    if (!GCOn) {
+    if (!GCOn || dontGC) {
         addHeap();
     } else {
         collectGarbage(); // adds heap if needed at end of collection
@@ -194,26 +212,15 @@ retry:
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START(10, "reallocate");
     if (newSize > 0) {
-        ASSERT(!inGC); // if we're in GC phase we can't allocate memory
+        ASSERT(!inGC); // if we're in GC phase we shouldn't allocate memory
     }
 
     if (newSize > oldSize) {
-        vm.bytesAllocated += (newSize - oldSize);
+        GCStats.totalAllocated += (newSize - oldSize);
         GC_TRACE_DEBUG(12, "reallocate added %lu bytes", newSize-oldSize);
     } else {
-        vm.bytesAllocated -= (oldSize - newSize);
+        GCStats.totalAllocated -= (oldSize - newSize);
         GC_TRACE_DEBUG(12, "reallocate freed %lu bytes", oldSize-newSize);
-    }
-
-    if (OPTION_T(stressGC) && newSize > 0) {
-        collectGarbage();
-    } else if (vm.bytesAllocated > vm.nextGCThreshhold && newSize > oldSize) {
-        if (GCOn) {
-            GC_TRACE_DEBUG(2, "Collecting garbage. Allocated: %ld KB. Threshhold: %ld KB", vm.bytesAllocated / 1024, vm.nextGCThreshhold / 1024);
-            collectGarbage();
-        } else {
-            GC_TRACE_DEBUG(2, "Garbage collection skipped (GC off)");
-        }
     }
 
     if (newSize == 0) { // freeing
@@ -225,6 +232,7 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
 
     void *ret = realloc(previous, newSize);
     if (!ret) {
+        GC_TRACE_DEBUG(1, "REALLOC FAILED, trying GC");
         collectGarbage(); // NOTE: GCOn could be false here if set by user
         // try again after potentially freeing memory
         void *ret = realloc(previous, newSize);
@@ -243,8 +251,8 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
 static inline void INC_GEN(Obj *obj) {
     if (obj->GCGen == GC_GEN_MAX) return;
     obj->GCGen++;
-    GCProf.generations[obj->GCGen-1]--;
-    GCProf.generations[obj->GCGen]++;
+    GCStats.generations[obj->GCGen-1]--;
+    GCStats.generations[obj->GCGen]++;
 }
 
 static inline bool IS_YOUNG(Obj *obj) {
@@ -294,6 +302,7 @@ static void grayArray(ValueArray *ary) {
 
 // recursively gray an object's references
 void blackenObject(Obj *obj) {
+    if (obj->type == OBJ_T_NONE) return;
     TRACE_GC_FUNC_START(4, "blackenObject");
     switch (obj->type) {
         case OBJ_T_BOUND_METHOD: {
@@ -418,8 +427,34 @@ void blackenObject(Obj *obj) {
     TRACE_GC_FUNC_END(4, "blackenObject");
 }
 
-void freeObject(Obj objS) {
-    Obj *obj = &objS;
+static size_t sizeofObj(Obj *obj) {
+    switch (obj->type) {
+        case OBJ_T_STRING:
+            return sizeof(ObjString);
+        case OBJ_T_FUNCTION:
+            return sizeof(ObjFunction);
+        case OBJ_T_INSTANCE:
+            return sizeof(ObjInstance);
+        case OBJ_T_CLASS:
+            return sizeof(ObjClass);
+        case OBJ_T_MODULE:
+            return sizeof(ObjModule);
+        case OBJ_T_NATIVE_FUNCTION:
+            return sizeof(ObjNative);
+        case OBJ_T_BOUND_METHOD:
+            return sizeof(ObjBoundMethod);
+        case OBJ_T_UPVALUE:
+            return sizeof(ObjUpvalue);
+        case OBJ_T_CLOSURE:
+            return sizeof(ObjClosure);
+        case OBJ_T_INTERNAL:
+            return sizeof(ObjInternal);
+        default:
+            UNREACHABLE_RETURN(0);
+    }
+}
+
+void freeObject(Obj *obj) {
     if (obj->type == OBJ_T_NONE) {
         GC_TRACE_DEBUG(5, "freeObject called on OBJ_T_NONE: %p", obj);
         return; // already freed
@@ -444,25 +479,20 @@ void freeObject(Obj objS) {
 
     GC_TRACE_FREE(4, obj);
 
-    GCProf.generations[obj->GCGen]--;
+    GCStats.generations[obj->GCGen]--;
+    GCStats.heapUsed -= sizeof(ObjAny);
+    GCStats.heapUsedWaste -= (sizeof(ObjAny)-sizeofObj(obj));
 
     switch (obj->type) {
         case OBJ_T_BOUND_METHOD: {
             // NOTE: don't free the actual underlying function, we need this
             // to stick around if only the bound method needs freeing
             GC_TRACE_DEBUG(5, "Freeing bound method: p=%p", obj);
-            FREE(ObjBoundMethod, obj);
+            obj->type = OBJ_T_NONE;
             break;
         }
         case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
-            if (klass->finalizerFunc) {
-                GC_TRACE_DEBUG(3, "Calling finalizer for class");
-                Value classVal = OBJ_VAL(klass);
-                inGC = false; // so we can allocate objects in the function
-                callFunctionValue(OBJ_VAL(klass->finalizerFunc), 1, &classVal);
-                inGC = true;
-            }
             GC_TRACE_DEBUG(5, "Freeing class methods/getters/setters tables");
             klass->name = NULL;
             freeTable(&klass->fields);
@@ -472,17 +502,11 @@ void freeObject(Obj objS) {
             freeTable(&klass->setters);
             vec_deinit(&klass->v_includedMods);
             GC_TRACE_DEBUG(5, "Freeing class: p=%p", obj);
+            obj->type = OBJ_T_NONE;
             break;
         }
         case OBJ_T_MODULE: {
             ObjModule *mod = (ObjModule*)obj;
-            if (mod->finalizerFunc) {
-                GC_TRACE_DEBUG(3, "Calling finalizer for module");
-                Value modVal = OBJ_VAL(mod);
-                inGC = false; // so we can allocate objects in the function
-                callFunctionValue(OBJ_VAL(mod->finalizerFunc), 1, &modVal);
-                inGC = true;
-            }
             GC_TRACE_DEBUG(5, "Freeing module methods/getters/setters tables");
             mod->name = NULL;
             freeTable(&mod->fields);
@@ -491,6 +515,7 @@ void freeObject(Obj objS) {
             freeTable(&mod->getters);
             freeTable(&mod->setters);
             GC_TRACE_DEBUG(5, "Freeing module: p=%p", obj);
+            obj->type = OBJ_T_NONE;
             break;
         }
         case OBJ_T_FUNCTION: {
@@ -502,33 +527,29 @@ void freeObject(Obj objS) {
             // double free errors.
             /*freeChunk(&func->chunk);*/
             GC_TRACE_DEBUG(5, "Freeing ObjFunction: p=%p", obj);
+            obj->type = OBJ_T_NONE;
             break;
         }
         case OBJ_T_CLOSURE: {
             ObjClosure *closure = (ObjClosure*)obj;
             GC_TRACE_DEBUG(5, "Freeing ObjClosure: p=%p", closure);
             FREE_ARRAY(Value, closure->upvalues, closure->upvalueCount);
+            obj->type = OBJ_T_NONE;
             break;
         }
         case OBJ_T_NATIVE_FUNCTION: {
             GC_TRACE_DEBUG(5, "Freeing ObjNative: p=%p", obj);
+            obj->type = OBJ_T_NONE;
             break;
         }
         case OBJ_T_INSTANCE: {
             ObjInstance *instance = (ObjInstance*)obj;
-            if (instance->finalizerFunc) {
-                ASSERT(isCallable(OBJ_VAL(instance->finalizerFunc)));
-                GC_TRACE_DEBUG(3, "Calling finalizer for instance");
-                Value instanceVal = OBJ_VAL(instance);
-                inGC = false; // so we can allocate objects in the function
-                callFunctionValue(OBJ_VAL(instance->finalizerFunc), 1, &instanceVal);
-                inGC = true;
-            }
             GC_TRACE_DEBUG(5, "Freeing instance fields table: p=%p", &instance->fields);
             freeTable(&instance->fields);
             GC_TRACE_DEBUG(5, "Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
             freeTable(&instance->hiddenFields);
             GC_TRACE_DEBUG(5, "Freeing ObjInstance: p=%p", obj);
+            obj->type = OBJ_T_NONE;
             break;
         }
         case OBJ_T_INTERNAL: {
@@ -544,10 +565,12 @@ void freeObject(Obj objS) {
                 ASSERT(0);
             }
             GC_TRACE_DEBUG(5, "Freeing internal object: p=%p", internal);
+            obj->type = OBJ_T_NONE;
             break;
         }
         case OBJ_T_UPVALUE: {
             GC_TRACE_DEBUG(5, "Freeing upvalue: p=%p", obj);
+            obj->type = OBJ_T_NONE;
             break;
         }
         case OBJ_T_STRING: {
@@ -563,6 +586,7 @@ void freeObject(Obj objS) {
             string->chars = NULL;
             string->hash = 0;
             GC_TRACE_DEBUG(5, "Freeing ObjString: p=%p", obj);
+            obj->type = OBJ_T_NONE;
             break;
         }
         default: {
@@ -618,12 +642,30 @@ void unhideFromGC(Obj *obj) {
 // finalizers by the object getting finalized, and don't free internal
 // strings because they're used as keys into hidden fields to access
 // the internal objects.
-static bool skipFreeInPhase1(Obj *obj) {
-    return isCallable(OBJ_VAL(obj)) || obj->type == OBJ_T_INTERNAL || obj->type == OBJ_T_STRING;
+/*static bool skipFreeInPhase1(Obj *obj) {*/
+    /*return isCallable(OBJ_VAL(obj)) || obj->type == OBJ_T_INTERNAL || obj->type == OBJ_T_STRING;*/
+/*}*/
+
+static bool hasFinalizer(Obj *obj) {
+    if (obj->type != OBJ_T_INSTANCE && obj->type != OBJ_T_CLASS && obj->type != OBJ_T_MODULE) {
+        return false;
+    }
+    ObjInstance *instance = (ObjInstance*)obj;
+    return instance->finalizerFunc != NULL;
 }
 
-/*static void GCMark(bool fullMark) {*/
-/*}*/
+static void callFinalizer(Obj *obj) {
+    ObjInstance *instance = (ObjInstance*)obj;
+    Value instanceVal = OBJ_VAL(obj);
+    GC_TRACE_DEBUG(3, "Calling finalizer");
+    inGC = false; // so we can allocate objects in the function
+    dontGC = true;
+    callFunctionValue(OBJ_VAL(instance->finalizerFunc), 1, &instanceVal);
+    inGC = true;
+    dontGC = false;
+    instance->finalizerFunc = NULL;
+    activeFinalizers--;
+}
 
 // single-phase mark and sweep
 // TODO: divide work up into mark and sweep phases to limit GC pauses
@@ -641,11 +683,14 @@ void collectGarbage(void) {
 
     GC_TRACE_DEBUG(1, "Collecting garbage");
     inGC = true;
-    size_t before = vm.bytesAllocated; (void)before;
+    size_t before = GCStats.totalAllocated; (void)before;
     GC_TRACE_DEBUG(2, "GC begin");
+
+    GC_TRACE_DEBUG(2, "Marking finalizers");
 
     GC_TRACE_DEBUG(2, "Marking VM stack roots");
     if (GET_OPTION(traceGCLvl) >= 2) {
+        printGCStats();
         printGenerationInfo();
         printVMStack(stderr);
     }
@@ -772,37 +817,73 @@ void collectGarbage(void) {
 
     GC_TRACE_DEBUG(2, "Begin FREE process");
     // Collect the white (unmarked) objects.
-    int iter = 0;
+    int iter = 0; (void)iter;
     unsigned long numObjectsFreed = 0;
     unsigned long numObjectsKept = 0;
     unsigned long numObjectsHiddenNotMarked = 0; // got saved by NoGC flag
 
     ObjAny *p, *pend;
 
-    freeList = NULL;
+    int phase = 1; // call finalizers in phase 1
+    freeList = NULL; // build up a new free list in phase 2
+    if (activeFinalizers == 0) {
+        phase = 2;
+    }
+freeLoop:
+    if (phase == 2) {
+        while (vm.grayCount > 0) {
+            // Pop an item from the gray stack.
+            Obj *marked = vm.grayStack[--vm.grayCount];
+            DBG_ASSERT(marked);
+            blackenObject(marked);
+        }
+    }
     for (int i = 0; i < heapsUsed; i++) {
         ObjAny *newFreeList = NULL;
-        newFreeList = freeList;
+        if (phase == 2) newFreeList = freeList;
         p = heapList[i];
         pend = p + HEAP_SLOTS;
 
         while (p < pend) {
-            if (!p->as.basic.isDark && !p->as.basic.noGC) {
-                numObjectsFreed++;
-                p->free.type = OBJ_T_NONE;
-                p->free.nextFree = newFreeList;
-                freeObject(p->as.basic);
-                newFreeList = p;
-                numObjectsFreed++;
-            } else if (p->as.basic.noGC && !p->as.basic.isDark) {
-                numObjectsHiddenNotMarked++;
-            } else {
-                p->as.basic.isDark = false;
-                numObjectsKept++;
+            Obj *obj = (Obj*)p;
+            if (!obj->isDark && !obj->noGC) { // free unmarked, reclaim
+                if (phase == 2) {
+                    numObjectsFreed++;
+                    obj->nextFree = newFreeList;
+                    freeObject(obj);
+                    newFreeList = p;
+                    numObjectsFreed++;
+                } else { // phase 1, blacken finalizer objects, call finalizer
+                    ASSERT(phase == 1);
+                    if (hasFinalizer(obj)) {
+                        grayObject(obj);
+                        ASSERT(((ObjInstance*) obj)->finalizerFunc->type != OBJ_T_NONE);
+                        callFinalizer(obj);
+                        if (activeFinalizers == 0) {
+                            phase = 2; i = 0;
+                            goto freeLoop;
+                        }
+                    }
+                }
+            } else if (obj->noGC && !obj->isDark) { // keep
+                if (phase == 2) {
+                    numObjectsHiddenNotMarked++;
+                }
+            } else { // unmark for next run
+                if (phase == 2) {
+                    obj->isDark = false;
+                    numObjectsKept++;
+                }
             }
             p++;
         }
-        freeList = newFreeList; }
+        if (phase == 2) freeList = newFreeList;
+    }
+    if (phase == 1) {
+        phase = 2; i = 0;
+        freeList = NULL;
+        goto freeLoop;
+    }
 
     if (numObjectsFreed < FREE_MIN) {
         addHeap();
@@ -812,11 +893,8 @@ void collectGarbage(void) {
     GC_TRACE_DEBUG(3, "%lu objects freed, %lu objects kept, %lu unmarked hidden objects",
             numObjectsFreed, numObjectsKept, numObjectsHiddenNotMarked);
 
-    // Adjust the heap size based on live memory.
-    vm.nextGCThreshhold = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;
-
-    GC_TRACE_DEBUG(3, "Collected %ld KB (from %ld to %ld) next GC at %ld KB",
-        (before - vm.bytesAllocated)/1024, before/1024, vm.bytesAllocated/1024, vm.nextGCThreshhold/1024);
+    GC_TRACE_DEBUG(3, "Collected %ld KB (from %ld to %ld)",
+        (before - GCStats.totalAllocated)/1024, before/1024, GCStats.totalAllocated/1024);
     GC_TRACE_DEBUG(3, "Stats: roots found: %d, hidden roots found: %d",
         numRootsLastGC, numHiddenRoots);
     GC_TRACE_DEBUG(1, "Done collecting garbage");
@@ -826,11 +904,12 @@ void collectGarbage(void) {
 }
 
 
-// Force free all objects, regardless of noGC field on the object,
-// or whether it was created by the a C stack space allocation function.
+// Force free all objects, regardless of noGC field on the object.
+// Happens during VM shutdown.
 void freeObjects(void) {
     GC_TRACE_DEBUG(2, "freeObjects -> begin FREEing all objects");
     if (GET_OPTION(traceGCLvl) >= 2) {
+        printGCStats();
         printGenerationInfo();
     }
     struct timeval tRunStart;
@@ -838,29 +917,55 @@ void freeObjects(void) {
 
     ObjAny *p, *pend;
 
-    freeList = NULL;
+    int phase = 1;
+    if (activeFinalizers == 0) {
+        phase = 2;
+    }
+
+freeLoop:
     for (int i = 0; i < heapsUsed; i++) {
-        ObjAny *newFreeList = NULL;
-        int n = 0;
-        newFreeList = freeList;
         p = heapList[i];
         pend = p + HEAP_SLOTS;
 
         while (p < pend) {
-            if (p->free.type == OBJ_T_NONE) {
+            Obj *obj = (Obj*)p;
+            if (obj->type == OBJ_T_NONE) {
                 p++;
                 continue;
             }
-            if (p->as.basic.noGC) {
-                unhideFromGC((Obj*)p->as);
+            if (phase == 2) {
+                if (obj->noGC) {
+                    unhideFromGC(obj);
+                }
+                freeObject(obj);
+            } else { // phase 1
+                if (hasFinalizer(obj)) {
+                    ASSERT(((ObjInstance*) obj)->finalizerFunc->type != OBJ_T_NONE);
+                    callFinalizer(obj);
+                    if (activeFinalizers == 0) {
+                        phase = 2; i = 0;
+                        goto freeLoop;
+                    }
+                }
             }
-            freeObject((Obj*)p->as);
             p++;
         }
-        xfree(heapList[i]); // free the heap
+
+        if (phase == 2) {
+            xfree(heapList[i]); // free the heap
+            GCStats.totalAllocated -= (sizeof(ObjAny)*HEAP_SLOTS);
+            GCStats.heapSize -= (sizeof(ObjAny)*HEAP_SLOTS);
+        }
+    }
+    if (phase == 1) {
+        phase = 2;
+        goto freeLoop;
     }
 
-    if (heapList) xfree(heapList);
+    if (heapList) {
+        xfree(heapList);
+        GCStats.totalAllocated -= (sizeof(void*)*heapListSize);
+    }
     heapList = NULL;
     heapsUsed = 0;
     heapListSize = 0;
@@ -876,5 +981,9 @@ void freeObjects(void) {
     numRootsLastGC = 0;
     stopGCRunProfileTimer(&tRunStart);
     GCProf.totalRuns++;
+
+    ASSERT(GCStats.heapSize == 0);
+    ASSERT(GCStats.heapUsed == 0);
+    ASSERT(GCStats.heapUsedWaste == 0);
     inGC = false;
 }

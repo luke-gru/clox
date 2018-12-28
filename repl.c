@@ -157,9 +157,9 @@ NORETURN void repl(void) {
                 if (vm.ec->frameCount == 0) {
                     vm.ec->frameCount++;
                 }
-                printValue(stderr, *val, true);
+                printValue(stderr, *val, true, -1);
             } else {
-                printValue(stderr, NIL_VAL, false);
+                printValue(stderr, NIL_VAL, false, -1);
             }
             fprintf(stderr, "%s", "\n");
             freeLines(lines, numLines);

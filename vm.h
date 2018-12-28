@@ -92,8 +92,6 @@ typedef struct VM {
     bool printToStdout;
 
     // GC fields
-    size_t bytesAllocated;
-    size_t nextGCThreshhold;
     int grayCount;
     int grayCapacity;
     Obj **grayStack;

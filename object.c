@@ -17,7 +17,7 @@ extern unsigned inCCall;
 
 static Obj *allocateObject(size_t size, ObjType type) {
     ASSERT(vm.inited);
-    Obj *object = getNewObject();
+    Obj *object = getNewObject(type, size);
     ASSERT(type > OBJ_T_NONE);
     object->type = type;
     object->isDark = true; // don't collect right away, wait at least 1 round of GC
@@ -30,7 +30,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->objectId = (size_t)object;
     object->noGC = false;
     object->GCGen = 0;
-    GCProf.generations[object->noGC]++;
+    GCStats.generations[object->noGC]++;
 
     return object;
 }
@@ -195,12 +195,11 @@ void insertCString(ObjString *string, char *chars, int lenToAdd, int at) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     ASSERT(!((Obj*)string)->isFrozen);
 
-    ASSERT(at <= string->length); // FIXME: allow `at` that's larger than length, and add space in between
+    ASSERT(at <= string->length); // TODO: allow `at` that's larger than length, and add space in between
 
     if (at == string->length) {
         return pushCString(string, chars, lenToAdd);
     }
-
 
     if (lenToAdd == 0) return;
 
@@ -219,6 +218,7 @@ void insertCString(ObjString *string, char *chars, int lenToAdd, int at) {
         string->chars[at+i] = chars[i];
     }
     string->length += lenToAdd;
+    string->chars[string->length] = '\0';
     string->hash = 0;
 }
 
@@ -541,6 +541,9 @@ void *internalGetData(ObjInternal *obj) {
 
 void setObjectFinalizer(ObjInstance *obj, Obj *callable) {
     ASSERT(isCallable(OBJ_VAL(callable)));
+    if (obj->finalizerFunc == NULL) {
+        activeFinalizers++;
+    }
     obj->finalizerFunc = callable;
 }
 

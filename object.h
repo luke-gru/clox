@@ -27,6 +27,7 @@ typedef struct ObjAny ObjAny;
 // basic object structure that all objects (values of VAL_T_OBJ type)
 typedef struct Obj {
   ObjType type; // redundant, but we need for now
+  ObjAny *nextFree;
   size_t objectId;
   // GC fields
   unsigned short GCGen;
@@ -187,10 +188,6 @@ typedef struct ObjBoundMethod {
 
 // is big enough to represent any object
 typedef struct ObjAny {
-    struct {
-        ObjType type;
-        struct ObjAny *nextFree;
-    } free;
     union {
         Obj basic;
         ObjString string;

@@ -66,7 +66,7 @@ void writeValueArrayEnd(ValueArray *array, Value value);
 void writeValueArrayBeg(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);
 bool removeValueArray(ValueArray *array, int idx);
-void printValue(FILE *file, Value value, bool canCallMethods);
+int printValue(FILE *file, Value value, bool canCallMethods, int maxLen);
 
 // value type predicate function
 typedef bool (*value_type_p)(Value val);

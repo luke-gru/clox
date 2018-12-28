@@ -598,8 +598,14 @@ Value lxErrInit(int argCount, Value *args) {
 Value lxGCStats(int argCount, Value *args) {
     CHECK_ARITY("GC.stats", 1, 1, argCount);
     Value map = newMap();
-    Value bytesKey = newStringInstance(copyString("bytes", 5));
-    mapSet(map, bytesKey, NUMBER_VAL(vm.bytesAllocated));
+    Value totalKey = newStringInstance(copyString("totalAllocated", 14));
+    mapSet(map, totalKey, NUMBER_VAL(GCStats.totalAllocated));
+    Value heapSizeKey = newStringInstance(copyString("heapSize", 8));
+    mapSet(map, heapSizeKey, NUMBER_VAL(GCStats.heapSize));
+    Value heapUsedKey = newStringInstance(copyString("heapUsed", 8));
+    mapSet(map, heapUsedKey, NUMBER_VAL(GCStats.heapUsed));
+    Value heapWasteKey = newStringInstance(copyString("heapUsedWaste", 13));
+    mapSet(map, heapWasteKey, NUMBER_VAL(GCStats.heapUsedWaste));
     return map;
 }
 

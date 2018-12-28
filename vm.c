@@ -356,8 +356,6 @@ void resetStack(void) {
     EC->frameCount = 0;
 }
 
-#define FIRST_GC_THRESHHOLD (1024*1024)
-
 static void initMainThread(void) {
     if (pthread_mutex_init(&vm.GVLock, NULL) != 0) {
         die("Global VM lock unable to initialize");
@@ -392,8 +390,6 @@ void initVM() {
     resetStack();
     vm.objects = NULL;
 
-    vm.bytesAllocated = 0;
-    vm.nextGCThreshhold = FIRST_GC_THRESHHOLD;
     vm.grayCount = 0;
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
@@ -1233,7 +1229,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         }
         return true;
     } else {
-        UNREACHABLE("bad callable value given to callCallable");
+        UNREACHABLE("bad callable value given to callCallable: %s", typeOfVal(callable));
     }
 
     if (EC->frameCount >= FRAMES_MAX) {
@@ -1633,7 +1629,9 @@ void printVMStack(FILE *f) {
                 callFrameIdx++;
             }
             fprintf(f, "[ ");
-            printValue(f, *slot, false);
+            if (printValue(f, *slot, false, 20) == 20) {
+                fprintf(f, "(...)");
+            }
             fprintf(f, " ]");
             if (IS_OBJ(*slot)) {
                 Obj *objPtr = AS_OBJ(*slot);
@@ -1654,7 +1652,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
 
     if (CLOX_OPTION_T(debugVM)) {
         VM_DEBUG("Capturing upvalue: ");
-        printValue(stderr, *local, false);
+        printValue(stderr, *local, false, -1);
         fprintf(stderr, "\n");
     }
 
@@ -1935,7 +1933,7 @@ static InterpretResult vm_run() {
       case OP_PRINT: {
         Value val = pop();
         if (!vm.printBuf || vm.printToStdout) {
-            printValue(stdout, val, true);
+            printValue(stdout, val, true, -1);
             printf("\n");
             fflush(stdout);
         }

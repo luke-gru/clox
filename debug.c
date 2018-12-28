@@ -257,7 +257,7 @@ static int printConstantInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
     fprintf(f, "%-16s %4" PRId8 " '", op, constantIdx);
     Value constant = getConstant(chunk, constantIdx);
-    printValue(f, constant,  false);
+    printValue(f, constant,  false, -1);
     fprintf(f, "'\n");
     return i+2;
 }
@@ -283,7 +283,7 @@ static int printStringInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     uint8_t isStatic = chunk->code[i + 2];
     fprintf(f, "%-16s %04d '", op, constantIdx);
     Value constant = getConstant(chunk, constantIdx);
-    printValue(f, constant,  false);
+    printValue(f, constant,  false, -1);
     fprintf(f, "' (static=%u)\n", isStatic);
     return i+3;
 }
@@ -354,7 +354,7 @@ static int printClosureInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_f
     addFunc(funcs, AS_FUNCTION(constant));
 
     fprintf(f, "%-16s %4" PRId8 " '", op, funcConstIdx);
-    printValue(f, constant, false);
+    printValue(f, constant, false, -1);
     fprintf(f, "' (upvals: %d)\n", numUpvalues);
     return i+2+(numUpvalues*2);
 }

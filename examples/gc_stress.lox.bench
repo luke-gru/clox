@@ -5,8 +5,12 @@ var a = [];
 var s = "";
 var m = Map();
 o = Object();
-for (var i = 0; i < 100000; i = i + 1) {
-  /*m.merge(%{});*/
-  /*s << String(i);*/
+for (var i = 0; i < 1000000; i = i + 1) {
+  m.merge(%{});
+  s << String(i);
   [o];
 }
+GC.collect();
+GC.collect();
+GC.collect();
+GC.collect();
