@@ -75,9 +75,17 @@ static void printObjTypeSizes() {
     }
 }
 
+static void printGCDemographics() {
+    for (int i = OBJ_T_NONE+1; i < OBJ_T_LAST; i++) {
+        fprintf(stderr, "# %s: %ld\n", objTypeName(i), GCStats.demographics[i]);
+    }
+}
+
 static void printGCStats() {
     fprintf(stderr, "GC Stats\n");
-    printObjTypeSizes();
+    if (GET_OPTION(traceGCLvl > 4)) {
+        printObjTypeSizes();
+    }
     fprintf(stderr, "ObjAny size: %ld b\n", sizeof(ObjAny));
     fprintf(stderr, "Total allocated: %ld KB\n", GCStats.totalAllocated/1024);
     fprintf(stderr, "Heap size: %ld KB\n", GCStats.heapSize/1024);
@@ -85,7 +93,11 @@ static void printGCStats() {
     fprintf(stderr, "Heap used waste: %ld KB\n", GCStats.heapUsedWaste/1024);
     fprintf(stderr, "# heaps used: %d\n", heapsUsed);
     fprintf(stderr, "# objects: %ld\n", GCStats.heapUsed/sizeof(ObjAny));
+    if (GET_OPTION(traceGCLvl > 5)) {
+        printGCDemographics();
+    }
 }
+
 
 void printGCProfile() {
     fprintf(stderr, "Total runs: %lu\n", GCProf.totalRuns);
@@ -199,7 +211,9 @@ void addHeap() {
     } // freeList points to last free entry in list, linked backwards
 }
 
-
+// TODO: we shouldn't free all heaps right away, we should leave one
+// empty heap and mark it as empty, then we don't need to iterate over
+// it during GC, and we return it on next call to addHeap().
 void freeHeap(ObjAny *heap) {
     int i = 0;
     ObjAny *curHeap = NULL;
@@ -212,7 +226,7 @@ void freeHeap(ObjAny *heap) {
     }
     ASSERT(heapIdx != -1);
     memmove(heapList+heapIdx, heapList+heapIdx+1, heapListSize-heapIdx-1);
-    xfree(heap); // free the heap
+    xfree(heap);
     heapsUsed--;
     GCStats.totalAllocated -= (sizeof(ObjAny)*HEAP_SLOTS);
     GCStats.heapSize -= (sizeof(ObjAny)*HEAP_SLOTS);
@@ -228,6 +242,7 @@ retry:
         freeList = obj->nextFree;
         GCStats.heapUsed += sizeof(ObjAny);
         GCStats.heapUsedWaste += (sizeof(ObjAny)-sz);
+        GCStats.demographics[type]++;
         return obj;
     }
     if (!GCOn || dontGC) {
@@ -492,6 +507,7 @@ void freeObject(Obj *obj) {
     GCStats.generations[obj->GCGen]--;
     GCStats.heapUsed -= sizeof(ObjAny);
     GCStats.heapUsedWaste -= (sizeof(ObjAny)-sizeofObj(obj));
+    GCStats.demographics[obj->type]--;
 
     switch (obj->type) {
         case OBJ_T_BOUND_METHOD: {
@@ -705,7 +721,9 @@ void collectGarbage(void) {
     GC_TRACE_DEBUG(2, "Marking VM stack roots");
     if (GET_OPTION(traceGCLvl) >= 2) {
         printGCStats();
-        printGenerationInfo();
+        if (GET_OPTION(traceGCLvl >= 4)) {
+            printGenerationInfo();
+        }
         printVMStack(stderr);
     }
     // Mark stack roots up the stack for every execution context

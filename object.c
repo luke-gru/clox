@@ -1076,6 +1076,8 @@ const char *objTypeName(ObjType type) {
             return "T_STRING";
         case OBJ_T_FUNCTION:
             return "T_FUNCTION";
+        case OBJ_T_INSTANCE:
+            return "T_INSTANCE";
         case OBJ_T_CLASS:
             return "T_CLASS";
         case OBJ_T_MODULE:

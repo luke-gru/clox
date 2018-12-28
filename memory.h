@@ -50,6 +50,7 @@ struct sGCStats {
     size_t heapSize;
     size_t heapUsed;
     size_t heapUsedWaste;
+    unsigned long demographics[OBJ_T_LAST];
     unsigned long generations[GC_GEN_MAX+1];
 };
 
