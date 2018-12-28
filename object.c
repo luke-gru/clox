@@ -17,7 +17,7 @@ extern unsigned inCCall;
 
 static Obj *allocateObject(size_t size, ObjType type) {
     ASSERT(vm.inited);
-    Obj *object = (Obj*)reallocate(NULL, 0, size);
+    Obj *object = getNewObject();
     ASSERT(type > OBJ_T_NONE);
     object->type = type;
     object->isDark = true; // don't collect right away, wait at least 1 round of GC
@@ -27,14 +27,6 @@ static Obj *allocateObject(size_t size, ObjType type) {
         vec_push(&vm.stackObjects, object);
     }
 
-    // prepend new object to linked list
-    object->next = vm.objects;
-    if (vm.objects) {
-        vm.objects->prev = object;
-    }
-    object->prev = NULL;
-    vm.objects = object;
-    object->isLinked = true;
     object->objectId = (size_t)object;
     object->noGC = false;
     object->GCGen = 0;

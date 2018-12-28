@@ -130,6 +130,65 @@ static inline void trace_gc_func_end(int lvl, const char *funcName) {
     fprintf(stderr, "[GC]: </%s>\n", funcName);
 }
 
+#define HEAPS_INCREMENT 10
+#define FREE_MIN 500
+#define HEAP_SLOTS 10000
+static ObjAny **heapList;
+static int heapListSize = 0;
+static ObjAny *freeList;
+static int heapsUsed = 0;
+
+void addHeap() {
+    ObjAny *p, *pend;
+
+    if (heapsUsed == heapListSize) {
+        /* Realloc heaps */
+        heapListSize += HEAPS_INCREMENT;
+        size_t newHeapListSz = heapListSize*sizeof(void*);
+        heapList = (heapsUsed > 0) ?
+            (ObjAny**)realloc(heapList, newHeapListSz) :
+            (ObjAny**)malloc(newHeapListSz);
+        if (heapList == 0) {
+            fprintf(stderr, "can't alloc new heap list\n");
+            _exit(1);
+        }
+    }
+
+    p = heapList[heapsUsed++] = (ObjAny*)malloc(sizeof(ObjAny)*HEAP_SLOTS);
+    if (p == 0) {
+        fprintf(stderr, "addHeap: can't alloc new heap\n");
+        _exit(1);
+    }
+    pend = p + HEAP_SLOTS;
+
+    while (p < pend) {
+        ObjAny *obj = (ObjAny*)p;
+        obj->free.type = OBJ_T_NONE;
+        obj->as.basic.type = OBJ_T_NONE;
+        obj->free.nextFree = freeList;
+        freeList = obj;
+        p++;
+    } // freeList points to last free entry in list, linked backwards
+}
+
+Obj *getNewObject() {
+    Obj *obj = NULL;
+
+retry:
+    if (freeList) {
+        obj = (Obj*)(freeList + sizeof(ObjAnyHeader));
+        freeList = freeList->free.nextFree;
+        return obj;
+    }
+    if (!GCOn) {
+        addHeap();
+    } else {
+        collectGarbage(); // adds heap if needed at end of collection
+    }
+    goto retry;
+}
+
+
 // Main memory management function used by both ALLOCATE/FREE (see memory.h)
 // NOTE: memory is NOT initialized (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
@@ -359,9 +418,8 @@ void blackenObject(Obj *obj) {
     TRACE_GC_FUNC_END(4, "blackenObject");
 }
 
-void freeObject(Obj *obj, bool unlink) {
-    if (obj == NULL) return;
-    if (!obj->isLinked) return; // NOTE: not sure why needed, segfault sometimes if check not here (running bin/test_examples)
+void freeObject(Obj objS) {
+    Obj *obj = &objS;
     if (obj->type == OBJ_T_NONE) {
         GC_TRACE_DEBUG(5, "freeObject called on OBJ_T_NONE: %p", obj);
         return; // already freed
@@ -385,29 +443,6 @@ void freeObject(Obj *obj, bool unlink) {
     }
 
     GC_TRACE_FREE(4, obj);
-
-    if (unlink) {
-        ASSERT(obj->isLinked);
-        GC_TRACE_DEBUG(5, "Unlinking object p=%p", obj);
-        Obj *next = obj->next;
-        Obj *prev = obj->prev;
-        if (next) {
-            next->prev = prev;
-            obj->next = NULL;
-        }
-        if (prev) {
-            prev->next = next;
-            obj->prev = NULL;
-        } else {
-            GC_TRACE_DEBUG(5, "  unlinked first object");
-            vm.objects = next;
-        }
-        obj->isLinked = false;
-        if (next == NULL && prev == NULL) { // must be the only object
-            GC_TRACE_DEBUG(5, "  unlinked last object");
-            vm.objects = NULL;
-        }
-    }
 
     GCProf.generations[obj->GCGen]--;
 
@@ -437,7 +472,6 @@ void freeObject(Obj *obj, bool unlink) {
             freeTable(&klass->setters);
             vec_deinit(&klass->v_includedMods);
             GC_TRACE_DEBUG(5, "Freeing class: p=%p", obj);
-            FREE(ObjClass, obj);
             break;
         }
         case OBJ_T_MODULE: {
@@ -457,7 +491,6 @@ void freeObject(Obj *obj, bool unlink) {
             freeTable(&mod->getters);
             freeTable(&mod->setters);
             GC_TRACE_DEBUG(5, "Freeing module: p=%p", obj);
-            FREE(ObjModule, obj);
             break;
         }
         case OBJ_T_FUNCTION: {
@@ -469,19 +502,16 @@ void freeObject(Obj *obj, bool unlink) {
             // double free errors.
             /*freeChunk(&func->chunk);*/
             GC_TRACE_DEBUG(5, "Freeing ObjFunction: p=%p", obj);
-            FREE(ObjFunction, obj);
             break;
         }
         case OBJ_T_CLOSURE: {
             ObjClosure *closure = (ObjClosure*)obj;
             GC_TRACE_DEBUG(5, "Freeing ObjClosure: p=%p", closure);
             FREE_ARRAY(Value, closure->upvalues, closure->upvalueCount);
-            FREE(ObjClosure, obj);
             break;
         }
         case OBJ_T_NATIVE_FUNCTION: {
             GC_TRACE_DEBUG(5, "Freeing ObjNative: p=%p", obj);
-            FREE(ObjNative, obj);
             break;
         }
         case OBJ_T_INSTANCE: {
@@ -499,7 +529,6 @@ void freeObject(Obj *obj, bool unlink) {
             GC_TRACE_DEBUG(5, "Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
             freeTable(&instance->hiddenFields);
             GC_TRACE_DEBUG(5, "Freeing ObjInstance: p=%p", obj);
-            FREE(ObjInstance, obj);
             break;
         }
         case OBJ_T_INTERNAL: {
@@ -515,12 +544,10 @@ void freeObject(Obj *obj, bool unlink) {
                 ASSERT(0);
             }
             GC_TRACE_DEBUG(5, "Freeing internal object: p=%p", internal);
-            FREE(ObjInternal, internal);
             break;
         }
         case OBJ_T_UPVALUE: {
             GC_TRACE_DEBUG(5, "Freeing upvalue: p=%p", obj);
-            FREE(ObjUpvalue, obj);
             break;
         }
         case OBJ_T_STRING: {
@@ -536,7 +563,6 @@ void freeObject(Obj *obj, bool unlink) {
             string->chars = NULL;
             string->hash = 0;
             GC_TRACE_DEBUG(5, "Freeing ObjString: p=%p", obj);
-            FREE(ObjString, string);
             break;
         }
         default: {
@@ -746,80 +772,45 @@ void collectGarbage(void) {
 
     GC_TRACE_DEBUG(2, "Begin FREE process");
     // Collect the white (unmarked) objects.
-    Obj *object = vm.objects;
-    vec_void_t vvisited;
-    vec_init(&vvisited);
-    vec_void_t vSecondPhase;
-    vec_init(&vSecondPhase);
     int iter = 0;
     unsigned long numObjectsFreed = 0;
     unsigned long numObjectsKept = 0;
-    unsigned long numObjectsHiddenNotMarked = 0;
-    bool cycleFound = false; (void)cycleFound;
-    int phase = 1;
+    unsigned long numObjectsHiddenNotMarked = 0; // got saved by NoGC flag
 
-#define VEC_NEXTOBJ(vecp) ((vecp)->length == 0 ? NULL : vec_pop(vecp))
+    ObjAny *p, *pend;
 
-freeLoop:
-    while (object != NULL) {
-        ASSERT(object->type > OBJ_T_NONE);
-        ASSERT(object->isLinked);
-        int idx = 0;
-        vec_find(&vvisited, object, idx);
-        if (idx != -1) {
-            const char *otypeStr = typeOfObj(object); (void)otypeStr;
-            GC_TRACE_DEBUG(3, "Found cycle during free process (phase=%d, iter=%d, p=%p, otype=%s), stopping", phase, iter, object, otypeStr);
-            cycleFound = true;
-            object = object->next;
-            iter++;
-            continue;
-        }
-        GC_TRACE_DEBUG(5, "Free phase=%d, iter=%d, p=%p", phase, iter, object);
-        vec_push(&vvisited, object);
-        if (!object->isDark && !object->noGC) {
-            // This object wasn't marked, so remove it from the list and free it.
-            Obj *unreached = object;
-            object = unreached->next;
-            if (phase == 1 && skipFreeInPhase1(unreached)) {
-                vec_push(&vSecondPhase, unreached);
-                iter++;
-                continue;
-            } else if (phase == 2) {
-                freeObject(unreached, true);
+    freeList = NULL;
+    for (int i = 0; i < heapsUsed; i++) {
+        ObjAny *newFreeList = NULL;
+        newFreeList = freeList;
+        p = heapList[i];
+        pend = p + HEAP_SLOTS;
+
+        while (p < pend) {
+            if (!p->as.basic.isDark && !p->as.basic.noGC) {
                 numObjectsFreed++;
-                object = VEC_NEXTOBJ(&vSecondPhase);
-                iter++;
-                continue;
-            }
-            freeObject(unreached, true);
-            numObjectsFreed++;
-        } else {
-            ASSERT(phase == 1);
-            if (object->noGC && !object->isDark) {
+                p->free.type = OBJ_T_NONE;
+                p->free.nextFree = newFreeList;
+                freeObject(p->as.basic);
+                newFreeList = p;
+                numObjectsFreed++;
+            } else if (p->as.basic.noGC && !p->as.basic.isDark) {
                 numObjectsHiddenNotMarked++;
+            } else {
+                p->as.basic.isDark = false;
+                numObjectsKept++;
             }
-            // This object was reached, so unmark it (for the next GC) and move on to
-            // the next.
-            object->isDark = false;
-            object = object->next;
-            numObjectsKept++;
+            p++;
         }
-        iter++;
-    }
-    if (phase == 1) {
-        vec_clear(&vvisited);
-        phase = 2;
-        iter = 0;
-        object = VEC_NEXTOBJ(&vSecondPhase);
-        goto freeLoop;
+        freeList = newFreeList; }
+
+    if (numObjectsFreed < FREE_MIN) {
+        addHeap();
     }
 
-    vec_deinit(&vvisited);
-    vec_deinit(&vSecondPhase);
     GC_TRACE_DEBUG(2, "done FREE process");
-    GC_TRACE_DEBUG(3, "%lu objects freed, %lu objects kept, %lu unmarked hidden objects, cycle found: %s",
-            numObjectsFreed, numObjectsKept, numObjectsHiddenNotMarked,
-            cycleFound ? "yes" : "no");
+    GC_TRACE_DEBUG(3, "%lu objects freed, %lu objects kept, %lu unmarked hidden objects",
+            numObjectsFreed, numObjectsKept, numObjectsHiddenNotMarked);
 
     // Adjust the heap size based on live memory.
     vm.nextGCThreshhold = vm.bytesAllocated * GC_HEAP_GROW_FACTOR;
@@ -844,26 +835,36 @@ void freeObjects(void) {
     }
     struct timeval tRunStart;
     startGCRunProfileTimer(&tRunStart);
-    inGC = true;
-    Obj *object = vm.objects;
-    while (object != NULL) {
-        Obj *next = object->next;
-        if (object->noGC) {
-            unhideFromGC(object);
+
+    ObjAny *p, *pend;
+
+    freeList = NULL;
+    for (int i = 0; i < heapsUsed; i++) {
+        ObjAny *newFreeList = NULL;
+        int n = 0;
+        newFreeList = freeList;
+        p = heapList[i];
+        pend = p + HEAP_SLOTS;
+
+        while (p < pend) {
+            if (p->free.type == OBJ_T_NONE) {
+                p++;
+                continue;
+            }
+            if (p->as.basic.noGC) {
+                unhideFromGC((Obj*)p->as);
+            }
+            freeObject((Obj*)p->as);
+            p++;
         }
-        if (!skipFreeInPhase1(object)) {
-            freeObject(object, true);
-        }
-        object = next;
+        xfree(heapList[i]); // free the heap
     }
 
-    object = vm.objects;
-    // now finalizers and objects created in finalizers can be freed
-    while (object != NULL) {
-        Obj *next = object->next;
-        freeObject(object, true);
-        object = next;
-    }
+    if (heapList) xfree(heapList);
+    heapList = NULL;
+    heapsUsed = 0;
+    heapListSize = 0;
+    freeList = NULL;
 
     if (vm.grayStack) {
         xfree(vm.grayStack);

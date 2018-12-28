@@ -511,7 +511,7 @@ static void freeInternalIter(Obj *internalObj) {
     ObjInstance *instance = ((Iterator*)internal->data)->instance;
     ASSERT(instance);
     unhideFromGC((Obj*)instance);
-    freeObject((Obj*)instance, true); // release the actual memory
+    freeObject((Obj*)instance); // release the actual memory
     FREE(Iterator, internal->data); // free the Iterator struct
 }
 

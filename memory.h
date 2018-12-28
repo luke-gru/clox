@@ -47,11 +47,11 @@ extern GCProfile GCProf;
 
 void *reallocate(void *previous, size_t oldSize, size_t newSize);
 
-void grayObject(Obj *obj); // non-recursively mark object as live
+void grayObject(Obj obj); // non-recursively mark object as live
 void grayValue(Value val); // non-recursively mark object in value as live
 void collectGarbage(void); // do 1 mark+sweep
-void freeObject(Obj *obj, bool doUnlink);
-void blackenObject(Obj *obj); // recursively mark object's references
+void freeObject(Obj obj);
+void blackenObject(Obj obj); // recursively mark object's references
 void freeObjects(void); // free all vm.objects. Used at end of VM lifecycle
 
 void GCPromote(Obj *obj, unsigned short gen);
@@ -59,9 +59,12 @@ void GCPromote(Obj *obj, unsigned short gen);
 bool turnGCOff(void);
 bool turnGCOn(void);
 void setGCOnOff(bool turnOn);
-void hideFromGC(Obj *obj);
-void unhideFromGC(Obj *obj);
+void hideFromGC(Obj obj);
+void unhideFromGC(Obj obj);
 
 void printGCProfile(void);
+
+void addHeap();
+Obj getNewObject();
 
 #endif

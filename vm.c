@@ -2553,7 +2553,7 @@ static void setupPerScriptROGlobals(char *filename) {
     Value fileString = newStringInstance(file);
     hideFromGC(AS_OBJ(fileString));
     // NOTE: this can trigger GC, so we hide the value first
-    ASSERT(tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), fileString));
+    tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), fileString);
     unhideFromGC(AS_OBJ(fileString));
 
     if (filename[0] == pathSeparator) {
@@ -2563,7 +2563,7 @@ static void setupPerScriptROGlobals(char *filename) {
         Value dirVal = newStringInstance(dir);
         hideFromGC(AS_OBJ(dirVal));
         // NOTE: this can trigger GC, so we hide the value first
-        ASSERT(tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), dirVal));
+        tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), dirVal);
         unhideFromGC(AS_OBJ(dirVal));
     } else {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), NIL_VAL);

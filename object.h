@@ -8,7 +8,7 @@
 #include "table.h"
 
 typedef enum ObjType {
-  OBJ_T_NONE = 0, // should never appear
+  OBJ_T_NONE = 0, // when object is unitialized or freed
   OBJ_T_STRING,   // internal string value only, Strings in lox are instances
   OBJ_T_FUNCTION,
   OBJ_T_INSTANCE, // includes Strings, Arrays, Maps
@@ -22,15 +22,14 @@ typedef enum ObjType {
   OBJ_T_LAST, // should never happen
 } ObjType;
 
+typedef struct ObjAny ObjAny;
+
 // basic object structure that all objects (values of VAL_T_OBJ type)
 typedef struct Obj {
-  ObjType type;
-  Obj *next;
-  Obj *prev;
+  ObjType type; // redundant, but we need for now
   size_t objectId;
   // GC fields
   unsigned short GCGen;
-  bool isLinked; // is this object linked into vm.objects?
   bool isDark; // is this object marked?
   bool noGC; // don't collect this object
   // Other fields
@@ -185,6 +184,27 @@ typedef struct ObjBoundMethod {
   Value receiver;
   Obj *callable; // ObjClosure* or ObjNative*
 } ObjBoundMethod;
+
+// is big enough to represent any object
+typedef struct ObjAny {
+    struct {
+        ObjType type;
+        struct ObjAny *nextFree;
+    } free;
+    union {
+        Obj basic;
+        ObjString string;
+        ObjClass klass;
+        ObjModule module;
+        ObjFunction function;
+        ObjClosure closure;
+        ObjNative native;
+        ObjInstance instance;
+        ObjBoundMethod bound;
+        ObjUpvalue upvalue;
+        ObjInternal internal;
+    } as;
+} ObjAny;
 
 // thread internals
 typedef enum ThreadStatus {
