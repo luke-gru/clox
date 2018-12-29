@@ -1,0 +1,7 @@
+/**
+ * Used to produce segfault in compiler optimization pass
+ */
+var f = fun(obj) { };
+
+__END__
+-- noexpect: --

@@ -507,7 +507,7 @@ static void optimizeIseq(Iseq *iseq) {
     int idx = 0;
     while (cur) {
         COMP_TRACE("optimize idx %d", idx);
-        prev = cur->prev;
+        prev = cur->prev; // can be NULL
         prevp = NULL;
         // constant folding, ex: turn 2+2 into 4
         if (isBinOp(cur)) {
@@ -543,7 +543,7 @@ static void optimizeIseq(Iseq *iseq) {
 
         // replace/remove jump instruction if test is a constant (ex: `if (true)`) =>
         // OP_TRUE, OP_POP
-        if (isJump(cur) && isConst(prev)) {
+        if (isJump(cur) && (prev && isConst(prev))) {
             COMP_TRACE("Found constant conditional, removing/replacing JUMP");
             bool deleted = false;
             if (isJumpIfFalse(cur) && constBool(prev)) {
@@ -565,7 +565,7 @@ static void optimizeIseq(Iseq *iseq) {
 
         // 1+1; OP_CONSTANT '2', OP_POP => nothing (unused constant expression)
         if (!compilerOpts.noRemoveUnusedExpressions) {
-            if (isPop(cur) && noSideEffectsConst(prev)) {
+            if (isPop(cur) && (prev && noSideEffectsConst(prev))) {
                 COMP_TRACE("removing side effect expr 1");
                 rmInsnAndPatchLabels(iseq, prev);
                 COMP_TRACE("removing side effect expr 2");
@@ -606,6 +606,7 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
 
 static ObjFunction *endCompiler() {
     COMP_TRACE("endCompiler");
+    ASSERT(current);
     if (current->type == FUN_TYPE_TOP_LEVEL) {
         emitLeave();
     }
@@ -665,6 +666,7 @@ static void emitChildren(Node *n) {
     nodeWidth = 0;
     ASSERT(n->children);
     vec_foreach(n->children, stmt, i) {
+        ASSERT(stmt);
         emitNode(stmt);
     }
     nodeDepth--;

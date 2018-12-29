@@ -1,0 +1,12 @@
+/**
+ * With folded constants or any other added/remove instructions
+ * during optimization, we need to patch the jumps that touch these
+ * instructions
+ */
+if (1+1+1) {
+  print 1+1;
+  print "hi";
+} else {
+  print 3+3;
+  print "not";
+}
