@@ -22,7 +22,7 @@ static void markInternalAry(Obj *internalObj) {
         }
         // FIXME: this check is needed here due to bug in GC
         if (AS_OBJ(val)->type < OBJ_T_LAST) {
-            blackenObject(AS_OBJ(val));
+            grayObject(AS_OBJ(val));
         }
     }
 }
@@ -45,14 +45,13 @@ static Value lxArrayInit(int argCount, Value *args) {
     Value self = *args;
     DBG_ASSERT(IS_AN_ARRAY(self));
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(NULL, 0, markInternalAry, freeInternalAry);
-    hideFromGC((Obj*)internalObj);
+    ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalAry, freeInternalAry);
     ValueArray *ary = ALLOCATE(ValueArray, 1);
     initValueArray(ary);
     internalObj->data = ary;
     internalObj->dataSz = sizeof(ValueArray);
     tableSet(selfObj->hiddenFields, OBJ_VAL(aryStr), OBJ_VAL(internalObj));
-    unhideFromGC((Obj*)internalObj);
+    selfObj->internal = internalObj;
     for (int i = 1; i < argCount; i++) {
         writeValueArrayEnd(ary, args[i]);
     }
@@ -65,13 +64,14 @@ static Value lxArrayDup(int argCount, Value *args) {
     Value self = *args;
     Value dup = callSuper(0, NULL, NULL);
     ObjInstance *dupObj = AS_INSTANCE(dup);
-    ObjInternal *internalObj = newInternalObject(NULL, 0, markInternalAry, freeInternalAry);
+    ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalAry, freeInternalAry);
     ValueArray *selfAry = ARRAY_GETHIDDEN(self);
     ValueArray *dupAry = ALLOCATE(ValueArray, 1);
     initValueArray(dupAry);
     internalObj->data = dupAry;
     internalObj->dataSz = sizeof(ValueArray);
     tableSet(dupObj->hiddenFields, OBJ_VAL(aryStr), OBJ_VAL(internalObj));
+    dupObj->internal = internalObj;
 
     // XXX: might be slow to dup large arrays, should bulk copy memory using memcpy or similar
     Value el; int idx = 0;

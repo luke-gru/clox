@@ -210,7 +210,7 @@ Value lxThreadInit(int argCount, Value *args) {
     callSuper(0, NULL, NULL);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(NULL, sizeof(LxThread), NULL, NULL);
+    ObjInternal *internalObj = newInternalObject(true, NULL, sizeof(LxThread), NULL, NULL);
     LxThread *th = ALLOCATE(LxThread, 1); // GCed by default GC free of internalObject
     internalObj->data = th;
     tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)),
@@ -525,7 +525,7 @@ Value lxIteratorInit(int argCount, Value *args) {
     iter->index = -1;
     iter->lastRealIndex = -1;
     iter->instance = AS_INSTANCE(iterable);
-    ObjInternal *internalIter = newInternalObject(
+    ObjInternal *internalIter = newInternalObject(true,
         iter, sizeof(Iterator), markInternalIter, freeInternalIter
     );
     tableSet(selfObj->hiddenFields,

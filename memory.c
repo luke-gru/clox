@@ -94,7 +94,7 @@ static void printGCStats() {
     fprintf(stderr, "Heap used: %ld KB\n", GCStats.heapUsed/1024);
     fprintf(stderr, "Heap used waste: %ld KB\n", GCStats.heapUsedWaste/1024);
     fprintf(stderr, "# objects: %ld\n", GCStats.heapUsed/sizeof(ObjAny));
-    if (GET_OPTION(traceGCLvl > 3)) {
+    if (GET_OPTION(traceGCLvl > 2)) {
         printGCDemographics();
     }
 }
@@ -446,6 +446,9 @@ void blackenObject(Obj *obj) {
             }
             grayTable(instance->fields);
             grayTable(instance->hiddenFields);
+            if (instance->internal && instance->internal->markFunc) {
+                instance->internal->markFunc((Obj*)instance->internal);
+            }
             break;
         }
         case OBJ_T_INTERNAL: {
@@ -567,6 +570,10 @@ void freeObject(Obj *obj) {
         }
         case OBJ_T_INSTANCE: {
             ObjInstance *instance = (ObjInstance*)obj;
+            if (instance->internal && instance->internal->freeFunc) {
+                instance->internal->freeFunc((Obj*)instance->internal);
+                FREE(ObjInternal, instance->internal);
+            }
             GC_TRACE_DEBUG(5, "Freeing instance fields table: p=%p", &instance->fields);
             freeTable(instance->fields);
             GC_TRACE_DEBUG(5, "Freeing instance hidden fields table: p=%p", &instance->hiddenFields);

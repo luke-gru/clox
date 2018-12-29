@@ -21,7 +21,7 @@ static void markInternalMap(Obj *internalObj) {
     ObjInternal *internal = (ObjInternal*)internalObj;
     Table *map = (Table*)internal->data;
     ASSERT(map);
-    blackenTable(map);
+    grayTable(map);
 }
 
 static void freeInternalMap(Obj *internalObj) {
@@ -38,13 +38,14 @@ static Value lxMapInit(int argCount, Value *args) {
     callSuper(0, NULL, NULL);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalMap = newInternalObject(
+    ObjInternal *internalMap = newInternalObject(false,
         NULL, sizeof(Table), markInternalMap, freeInternalMap
     );
     Table *map = ALLOCATE(Table, 1);
     initTable(map);
     internalMap->data = map;
     tableSet(selfObj->hiddenFields, OBJ_VAL(mapStr), OBJ_VAL(internalMap));
+    selfObj->internal = internalMap;
 
     if (argCount == 1) {
         return self;
@@ -80,13 +81,14 @@ static Value lxMapDup(int argCount, Value *args) {
     Value orig = *args;
     Table *mapOrig = MAP_GETHIDDEN(orig);
 
-    ObjInternal *internalMap = newInternalObject(
+    ObjInternal *internalMap = newInternalObject(false,
         NULL, sizeof(Table), markInternalMap, freeInternalMap
     );
     Table *mapDup = ALLOCATE(Table, 1);
     initTable(mapDup);
     internalMap->data = mapDup;
     tableSet(dupObj->hiddenFields, OBJ_VAL(mapStr), OBJ_VAL(internalMap));
+    dupObj->internal = internalMap;
 
     Entry e; int idx = 0;
     TABLE_FOREACH(mapOrig, e, idx) {

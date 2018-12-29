@@ -56,6 +56,7 @@ typedef struct ObjInternal {
   size_t dataSz;
   GCMarkFunc markFunc;
   GCMarkFunc freeFunc;
+  bool isRealObject; // is allocated in object heap
 } ObjInternal;
 
 typedef struct sNode Node; // fwd decl
@@ -180,6 +181,7 @@ typedef struct ObjInstance {
   Obj *finalizerFunc; // ObjClosure* or ObjNative*
   Table *fields;
   Table *hiddenFields;
+  ObjInternal *internal;
 } ObjInstance;
 
 typedef struct ObjBoundMethod {
@@ -396,7 +398,7 @@ ObjModule *newModule(ObjString *name);
 ObjInstance *newInstance(ObjClass *klass);
 ObjNative *newNative(ObjString *name, NativeFn function);
 ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
-ObjInternal *newInternalObject(void *data, size_t dataSz, GCMarkFunc markFn, GCFreeFunc freeFn);
+ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCMarkFunc markFn, GCFreeFunc freeFn);
 ObjClosure *newClosure(ObjFunction *function);
 ObjUpvalue *newUpvalue(Value *slot);
 

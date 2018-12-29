@@ -407,6 +407,7 @@ ObjInstance *newInstance(ObjClass *klass) {
     obj->hiddenFields = tablesMem + sizeof(Table);
     initTable(obj->fields);
     initTable(obj->hiddenFields);
+    obj->internal = NULL;
     return obj;
 }
 
@@ -433,14 +434,21 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
     return bmethod;
 }
 
-ObjInternal *newInternalObject(void *data, size_t dataSz, GCMarkFunc markFunc, GCFreeFunc freeFunc) {
-    ObjInternal *obj = ALLOCATE_OBJ(
-        ObjInternal, OBJ_T_INTERNAL
-    );
+ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCMarkFunc markFunc, GCFreeFunc freeFunc) {
+    ObjInternal *obj;
+    if (isRealObject) {
+        obj = ALLOCATE_OBJ(
+            ObjInternal, OBJ_T_INTERNAL
+        );
+    } else {
+        obj = ALLOCATE(ObjInternal, 1);
+        obj->object.type = OBJ_T_INTERNAL;
+    }
     obj->data = data;
     obj->dataSz = dataSz;
     obj->markFunc = markFunc;
     obj->freeFunc = freeFunc;
+    obj->isRealObject = isRealObject;
     return obj;
 }
 

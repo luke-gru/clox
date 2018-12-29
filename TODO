@@ -69,8 +69,6 @@ Optimizations
 * different GC strategies, maybe support copying GC and/or generational GC
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results
-* Shrink ObjClass and ObjModule value size, add global class and module symbol
-table with new data structure symtab, that maps interned ObjStrings to
-entries of pointer size and type tag (so we can store numbers too).
-Hooks in newClass, newModule for registration, and freeClass, freeModule, for
-deregistration.
+* Reduce object allocation by introducing T_DATA that can act like
+a class, but is a wrapped struct, like Ruby. Arrays right now take 2
+objects, ObjInstance and ObjInternal, and can take 1 by removing ObjInternal.

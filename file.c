@@ -194,7 +194,7 @@ static void freeInternalFile(Obj *obj) {
 
 static LxFile *initFile(Value fileVal, ObjString *fname, int fd, int flags) {
     ObjInstance *fileObj = AS_INSTANCE(fileVal);
-    ObjInternal *internalObj = newInternalObject(NULL, sizeof(LxFile), markInternalFile, freeInternalFile);
+    ObjInternal *internalObj = newInternalObject(true, NULL, sizeof(LxFile), markInternalFile, freeInternalFile);
     hideFromGC((Obj*)internalObj);
     LxFile *file = ALLOCATE(LxFile, 1); // GCed by default GC free of internalObject
     file->name = dupString(fname);
