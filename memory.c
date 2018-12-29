@@ -590,6 +590,7 @@ void freeObject(Obj *obj) {
         }
         case OBJ_T_INTERNAL: {
             ObjInternal *internal = (ObjInternal*)obj;
+            ASSERT(internal->isRealObject);
             if (internal->freeFunc) {
                 GC_TRACE_DEBUG(5, "Freeing internal object's references: p=%p, datap=%p", internal, internal->data);
                 internal->freeFunc(obj);

@@ -71,26 +71,27 @@ bool removeValueArray(ValueArray *array, int idx) {
     return true;
 }
 
+#define PRINTNUM(other, max) ((other == 0 ? max : (max == -1 ? -1 : (max > other ? max-other : 0))))
 static int printBool(FILE *file, bool val, int maxLen) {
-    return fprintf(file, "%.*s", maxLen, val ? "true" : "false");
+    return fprintf(file, "%.*s", PRINTNUM(0, maxLen), val ? "true" : "false");
 }
 
 static int printNumber(FILE *file, double number, int maxLen) {
+    // TODO: use maxLen
     return fprintf(file, "%g", number);
 }
 
 int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
-#define PRINTNUM(a) ((a))
     if (IS_BOOL(value)) {
         return printBool(file, AS_BOOL(value), maxLen);
     } else if (IS_NIL(value)) {
-        return fprintf(file, "%.*s", PRINTNUM(maxLen), "nil");
+        return fprintf(file, "%.*s", PRINTNUM(0, maxLen), "nil");
     } else if (IS_NUMBER(value)) {
         return printNumber(file, AS_NUMBER(value), maxLen);
     } else if (IS_OBJ(value)) {
         if (IS_STRING(value)) {
             char *cstring = AS_CSTRING(value);
-            return fprintf(file, "%.*s", PRINTNUM(maxLen), cstring ? cstring : "(NULL)");
+            return fprintf(file, "%.*s", PRINTNUM(0, maxLen), cstring ? cstring : "(NULL)");
         } else if (IS_FUNCTION(value) || IS_CLOSURE(value)) {
             ObjFunction *func = NULL;
             if (IS_FUNCTION(value)) {
@@ -99,9 +100,9 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
                 func = AS_CLOSURE(value)->function;
             }
             if (func->name == NULL) {
-                return fprintf(file, "%.*s", PRINTNUM(maxLen), "<fun (Anon)>");
+                return fprintf(file, "%.*s", PRINTNUM(0, maxLen), "<fun (Anon)>");
             } else {
-                return fprintf(file, "<fun %.*s>", PRINTNUM(maxLen-6), func->name->chars);
+                return fprintf(file, "<fun %.*s>", PRINTNUM(6, maxLen), func->name->chars);
             }
         } else if (IS_INSTANCE(value)) {
             ObjInstance *inst = AS_INSTANCE(value);
@@ -121,7 +122,7 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
                 if (IS_A_STRING(value)) { // when canCallMethods == false
                     ObjString *str = VAL_TO_STRING(value);
                     if (str) {
-                        return fprintf(file, "\"%.*s\"", PRINTNUM(maxLen-2), str->chars);
+                        return fprintf(file, "\"%.*s\"", PRINTNUM(2, maxLen), str->chars);
                     } else {
                         // Shouldn't happen, but happens sometimes when debugging the GC
                         return fprintf(file, "??unknown string??");
@@ -129,21 +130,21 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
                 } else {
                     ObjClass *klass = inst->klass;
                     char *klassName = CLASSINFO(klass)->name->chars;
-                    return fprintf(file, "<instance %.*s>", PRINTNUM(maxLen-11), klassName);
+                    return fprintf(file, "<instance %.*s>", PRINTNUM(11, maxLen), klassName);
                 }
             }
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
             char *klassName = CLASSINFO(klass)->name ? CLASSINFO(klass)->name->chars : "(anon)";
-            return fprintf(file, "<class %.*s>", PRINTNUM(maxLen-8), klassName);
+            return fprintf(file, "<class %.*s>", PRINTNUM(8, maxLen), klassName);
         } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
             ObjModule *mod = AS_MODULE(value);
             char *modName = CLASSINFO(mod)->name ? CLASSINFO(mod)->name->chars : "(anon)";
-            return fprintf(file, "<module %.*s>", PRINTNUM(maxLen-9), modName);
+            return fprintf(file, "<module %.*s>", PRINTNUM(9, maxLen), modName);
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
             ObjString *name = native->name;
-            return fprintf(file, "<fn %.*s (native)>", PRINTNUM(maxLen-14), name->chars);
+            return fprintf(file, "<fn %.*s (native)>", PRINTNUM(14, maxLen), name->chars);
         } else if (OBJ_TYPE(value) == OBJ_T_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
             ObjString *name;
@@ -157,9 +158,9 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
                 UNREACHABLE("BUG");
             }
             ASSERT(name->chars);
-            return fprintf(file, "<method %.*s>", PRINTNUM(maxLen-9), name->chars);
+            return fprintf(file, "<method %.*s>", PRINTNUM(9, maxLen), name->chars);
         } else if (OBJ_TYPE(value) == OBJ_T_INTERNAL) {
-            return fprintf(file, "%.*s", PRINTNUM(maxLen-10), "<internal>");
+            return fprintf(file, "%.*s", PRINTNUM(10, maxLen), "<internal>");
         } else {
             UNREACHABLE("Unknown object type: valtype=%s (objtype=%d)",
                 typeOfVal(value),

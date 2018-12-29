@@ -1613,14 +1613,17 @@ void printVMStack(FILE *f) {
     VMExecContext *ec = NULL; int i = 0;
     int numCallFrames = VMNumCallFrames();
     int numStackFrames = VMNumStackFrames();
-    fprintf(f, "[DEBUG %d]: Stack (%d stack frames, %d call frames):\n", vmRunLvl, numStackFrames, numCallFrames);
+    fprintf(f, "[DEBUG %d]: Stack (%d stack frames, %d call frames):\n", vmRunLvl,
+            numStackFrames, numCallFrames);
     // print VM stack values from bottom of stack to top
     fprintf(f, "[DEBUG %d]: ", vmRunLvl);
     int callFrameIdx = 0;
     vec_foreach(&vm.v_ecs, ec, i) {
         for (Value *slot = ec->stack; slot < ec->stackTop; slot++) {
-            if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE)) {
-                fprintf(stderr, "[DEBUG %d]: Broken object pointer: %p\n", vmRunLvl, AS_OBJ(*slot));
+            if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE ||
+                                 (AS_OBJ(*slot)->type >= OBJ_T_LAST))) {
+                fprintf(stderr, "[DEBUG %d]: Broken object pointer: %p\n", vmRunLvl,
+                        AS_OBJ(*slot));
                 ASSERT(0);
             }
             if (ec->frames[callFrameIdx].slots == slot) {

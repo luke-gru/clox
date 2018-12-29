@@ -443,6 +443,7 @@ ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCM
     } else {
         obj = ALLOCATE(ObjInternal, 1);
         obj->object.type = OBJ_T_INTERNAL;
+        obj->object.GCGen = 0;
     }
     obj->data = data;
     obj->dataSz = dataSz;

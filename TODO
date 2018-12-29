@@ -70,4 +70,6 @@ Optimizations
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results
 * Deduplicate T_STRING and T_INSTANCE so that creating a string only
-uses 1 object, and malloced memory.
+uses 1 object (T_INSTANCE), and 1 malloced memory struct (T_STRING). Can
+do this with internalObj of stack value, with pointer to T_STRING in non-object
+memory.
