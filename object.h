@@ -61,16 +61,16 @@ typedef struct ObjInternal {
 typedef struct sNode Node; // fwd decl
 typedef struct ObjFunction {
   Obj object;
-  int arity; // number of required args
-  int numDefaultArgs; // number of optional default args
-  int numKwargs;
-  int upvalueCount;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM
   Chunk *chunk;
   ObjString *name;
   Obj *klass; // ObjClass* or ObjModule* (if method)
   Node *funcNode;
+  unsigned short arity; // number of required args
+  unsigned short numDefaultArgs; // number of optional default args
+  unsigned short numKwargs;
+  unsigned short upvalueCount;
   bool isSingletonMethod;
   bool hasRestArg;
 } ObjFunction;
