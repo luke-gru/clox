@@ -50,9 +50,9 @@ ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
     natFn->klass = (Obj*)klass; // class or module
     natFn->isStatic = false;
     if (klass && natFn->klass->type == OBJ_T_CLASS) {
-        natFn->isStatic = ((ObjClass*)klass)->singletonOf != NULL;
+        natFn->isStatic = CLASSINFO(klass)->singletonOf != NULL;
     }
-    tableSet(((ObjModule*)klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
+    tableSet(CLASSINFO(klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
     return natFn;
 }
 
@@ -60,7 +60,7 @@ ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
     ObjString *mname = internedString(name, strlen(name));
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
-    tableSet(((ObjModule*)klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
+    tableSet(CLASSINFO(klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
     return natFn;
 }
 
@@ -68,7 +68,7 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
     ObjString *mname = internedString(name, strlen(name));
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
-    tableSet(((ObjModule*)klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
+    tableSet(CLASSINFO(klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
     return natFn;
 }
 
@@ -413,9 +413,9 @@ Value lxModuleInit(int argCount, Value *args) {
     CHECK_ARG_IS_A(name, lxStringClass, 1);
     ObjString *nameStr = STRING_GETHIDDEN(name);
     ObjModule *mod = AS_MODULE(self);
-    ASSERT(mod->name == NULL);
+    ASSERT(CLASSINFO(mod)->name == NULL);
     ObjString *nameCpy = dupString(nameStr);
-    mod->name = nameCpy;
+    CLASSINFO(mod)->name = nameCpy;
     return self;
 }
 
@@ -443,8 +443,8 @@ Value lxClassInit(int argCount, Value *args) {
         CHECK_ARG_IS_INSTANCE_OF(args[2], lxClassClass, 2);
         superClass = AS_CLASS(args[2]);
     }
-    klass->name = name;
-    klass->superclass = superClass;
+    CLASSINFO(klass)->name = name;
+    CLASSINFO(klass)->superclass = superClass;
     return self;
 }
 
@@ -457,9 +457,9 @@ Value lxClassInclude(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(modVal, IS_MODULE_FUNC, "module", 1);
     ObjModule *mod = AS_MODULE(modVal);
     int alreadyIncluded = -1;
-    vec_find(klass->v_includedMods, mod, alreadyIncluded);
+    vec_find(&CLASSINFO(klass)->v_includedMods, mod, alreadyIncluded);
     if (alreadyIncluded == -1) {
-        vec_push(klass->v_includedMods, mod);
+        vec_push(&CLASSINFO(klass)->v_includedMods, mod);
     }
     return modVal;
 }
@@ -470,7 +470,7 @@ Value lxClassGetName(int argCount, Value *args) {
     CHECK_ARITY("Class#name", 1, 1, argCount);
     Value self = args[0];
     ObjClass *klass = AS_CLASS(self);
-    ObjString *origName = klass->name;
+    ObjString *origName = CLASSINFO(klass)->name;
     if (origName == NULL) {
         return newStringInstance(copyString("(anon)", 6));
     } else {
@@ -482,8 +482,8 @@ Value lxClassGetName(int argCount, Value *args) {
 Value lxClassGetSuperclass(int argCount, Value *args) {
     Value self = *args;
     ObjClass *klass = AS_CLASS(self);
-    if (klass->superclass) {
-        return OBJ_VAL(klass->superclass);
+    if (CLASSINFO(klass)->superclass) {
+        return OBJ_VAL(CLASSINFO(klass)->superclass);
     } else {
         return NIL_VAL;
     }
@@ -654,11 +654,11 @@ void checkBuiltinArgType(Value arg, value_type_p typechk_p, const char *typeExpe
 }
 
 void checkArgIsInstanceOf(Value arg, ObjClass *klass, int argnum) {
-    const char *typeExpect = klass->name->chars;
+    const char *typeExpect = CLASSINFO(klass)->name->chars;
     if (!is_value_instance_of_p(arg, klass)) {
         const char *typeActual;
         if (IS_INSTANCE(arg)) {
-            ObjString *className = AS_INSTANCE(arg)->klass->name;
+            ObjString *className = CLASSINFO(AS_INSTANCE(arg)->klass)->name;
             typeActual = className ? className->chars : "(anon)";
         } else {
             typeActual = typeOfVal(arg);
@@ -668,11 +668,11 @@ void checkArgIsInstanceOf(Value arg, ObjClass *klass, int argnum) {
 }
 
 void checkArgIsA(Value arg, ObjClass *klass, int argnum) {
-    const char *typeExpect = klass->name->chars;
+    const char *typeExpect = CLASSINFO(klass)->name->chars;
     if (!is_value_a_p(arg, klass)) {
         const char *typeActual;
         if (IS_INSTANCE(arg)) {
-            ObjString *className = AS_INSTANCE(arg)->klass->name;
+            ObjString *className = CLASSINFO(AS_INSTANCE(arg)->klass)->name;
             typeActual = className ? className->chars : "(anon)";
         } else {
             typeActual = typeOfVal(arg);

@@ -69,4 +69,8 @@ Optimizations
 * different GC strategies, maybe support copying GC and/or generational GC
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results
-* Make GC faster by keeping empty heaps around longer
+* Shrink ObjClass and ObjModule value size, add global class and module symbol
+table with new data structure symtab, that maps interned ObjStrings to
+entries of pointer size and type tag (so we can store numbers too).
+Hooks in newClass, newModule for registration, and freeClass, freeModule, for
+deregistration.

@@ -621,8 +621,7 @@ static int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
         }
     }
 
-    // TODO: error out
-    return -2;
+    UNREACHABLE_RETURN(-2);
 }
 
 static bool isValueOpEqual(Value lhs, Value rhs) {
@@ -667,7 +666,7 @@ void debugFrame() {
     fprintf(stderr, "  native? %c\n", frame->isCCall ? 't' : 'f');
     fprintf(stderr, "  method? %c\n", frame->instance ? 't' : 'f');
     if (frame->klass) {
-        fprintf(stderr, "  class: %s\n", frame->klass->name ? frame->klass->name->chars : "(anon)");
+        fprintf(stderr, "  class: %s\n", CLASSINFO(frame->klass)->name ? CLASSINFO(frame->klass)->name->chars : "(anon)");
     }
 }
 
@@ -715,7 +714,7 @@ void errorPrintScriptBacktrace(const char *format, ...) {
 }
 
 void showUncaughtError(Value err) {
-    ObjString *classNameObj = AS_INSTANCE(err)->klass->name;
+    ObjString *classNameObj = CLASSINFO(AS_INSTANCE(err)->klass)->name;
     char *className = NULL;
     if (classNameObj) {
         className = classNameObj->chars;
@@ -804,13 +803,13 @@ static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName,
     Value key = OBJ_VAL(propName);
     while (klass) {
         if (!lookInGivenClass && klass == givenClass) {
-            klass = klass->superclass; // FIXME: work in modules
+            klass = CLASSINFO(klass)->superclass; // FIXME: work in modules
             continue;
         }
-        if (tableGet(klass->methods, key, ret)) {
+        if (tableGet(CLASSINFO(klass)->methods, key, ret)) {
             return true;
         }
-        klass = klass->superclass;
+        klass = CLASSINFO(klass)->superclass;
     }
     return false;
 }
@@ -862,16 +861,16 @@ static void defineMethod(ObjString *name) {
     func->klass = AS_OBJ(classOrMod);
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
-        const char *klassName = klass->name ? klass->name->chars : "(anon)";
+        const char *klassName = CLASSINFO(klass)->name ? CLASSINFO(klass)->name->chars : "(anon)";
         (void)klassName;
         VM_DEBUG("defining method '%s' in class '%s'", name->chars, klassName);
-        tableSet(klass->methods, OBJ_VAL(name), method);
+        tableSet(CLASSINFO(klass)->methods, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
-        const char *modName = mod->name ? mod->name->chars : "(anon)";
+        const char *modName = CLASSINFO(mod)->name ? CLASSINFO(mod)->name->chars : "(anon)";
         (void)modName;
         VM_DEBUG("defining method '%s' in module '%s'", name->chars, modName);
-        tableSet(mod->methods, OBJ_VAL(name), method);
+        tableSet(CLASSINFO(mod)->methods, OBJ_VAL(name), method);
     }
     pop(); // function
 }
@@ -885,8 +884,8 @@ static void defineStaticMethod(ObjString *name) {
     func->klass = AS_OBJ(classOrMod);
     func->isSingletonMethod = true;
     ObjClass *metaClass = singletonClass(AS_OBJ(classOrMod));
-    VM_DEBUG("defining static method '%s#%s'", metaClass->name->chars, name->chars);
-    tableSet(metaClass->methods, OBJ_VAL(name), method);
+    VM_DEBUG("defining static method '%s#%s'", CLASSINFO(metaClass)->name->chars, name->chars);
+    tableSet(CLASSINFO(metaClass)->methods, OBJ_VAL(name), method);
     pop(); // function
 }
 
@@ -898,11 +897,11 @@ static void defineGetter(ObjString *name) {
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG("defining getter '%s'", name->chars);
-        tableSet(klass->getters, OBJ_VAL(name), method);
+        tableSet(CLASSINFO(klass)->getters, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         VM_DEBUG("defining getter '%s'", name->chars);
-        tableSet(mod->getters, OBJ_VAL(name), method);
+        tableSet(CLASSINFO(mod)->getters, OBJ_VAL(name), method);
     }
     pop(); // function
 }
@@ -914,11 +913,11 @@ static void defineSetter(ObjString *name) {
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG("defining setter '%s'", name->chars);
-        tableSet(klass->setters, OBJ_VAL(name), method);
+        tableSet(CLASSINFO(klass)->setters, OBJ_VAL(name), method);
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         VM_DEBUG("defining setter '%s'", name->chars);
-        tableSet(mod->setters, OBJ_VAL(name), method);
+        tableSet(CLASSINFO(mod)->setters, OBJ_VAL(name), method);
     }
     pop(); // function
 }
@@ -950,7 +949,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
             callable = instanceFindGetter(instance, methodName);
         }
         if (!callable) {
-            ObjString *className = instance->klass->name;
+            ObjString *className = CLASSINFO(instance->klass)->name;
             const char *classStr = className->chars ? className->chars : "(anon)";
             throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, methodName->chars);
         }
@@ -963,7 +962,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
         /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
         /*}*/
         if (!callable) {
-            ObjString *className = klass->name;
+            ObjString *className = CLASSINFO(klass)->name;
             const char *classStr = className ? className->chars : "(anon)";
             throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, methodName->chars);
         }
@@ -973,7 +972,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
         ObjModule *mod = (ObjModule*)obj;
         Obj *callable = moduleFindStaticMethod(mod, methodName);
         if (!callable) {
-            ObjString *modName = mod->name;
+            ObjString *modName = CLASSINFO(mod)->name;
             const char *modStr = modName ? modName->chars : "(anon)";
             throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, methodName->chars);
         }
@@ -1129,7 +1128,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         }
     } else if (IS_CLASS(callable)) { // initializer
         ObjClass *klass = AS_CLASS(callable);
-        const char *klassName = klass->name ? klass->name->chars : "(anon)";
+        const char *klassName = CLASSINFO(klass)->name ? CLASSINFO(klass)->name->chars : "(anon)";
         (void)klassName;
         VM_DEBUG("calling callable class %s", klassName);
         instance = newInstance(klass); // setup the new instance object
@@ -1398,10 +1397,10 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
 static Obj *findMethod(ObjClass *klass, ObjString *methodName) {
     Value method;
     while (klass) {
-        if (tableGet(klass->methods, OBJ_VAL(methodName), &method)) {
+        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(methodName), &method)) {
             return AS_OBJ(method);
         }
-        klass = klass->superclass;
+        klass = CLASSINFO(klass)->superclass;
     }
     return NULL;
 }
@@ -1430,7 +1429,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
         if ((ObjClass*)klass == lxObjClass) {
             return NIL_VAL;
         }
-        ObjClass *superClass = ((ObjClass*)klass)->superclass; // TODO: look in modules too
+        ObjClass *superClass = CLASSINFO(klass)->superclass; // TODO: look in modules too
         if (!superClass) {
             throwErrorFmt(lxErrClass, "No superclass found for callSuper");
         }
@@ -2214,7 +2213,7 @@ static InterpretResult vm_run() {
                   callable = instanceFindGetter(inst, mname);
               }
               if (!callable) {
-                  ObjString *className = inst->klass->name;
+                  ObjString *className = CLASSINFO(inst->klass)->name;
                   const char *classStr = className->chars ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, mname->chars);
               }
@@ -2228,7 +2227,7 @@ static InterpretResult vm_run() {
                   /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
               /*}*/
               if (!callable) {
-                  ObjString *className = klass->name;
+                  ObjString *className = CLASSINFO(klass)->name;
                   const char *classStr = className ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, mname->chars);
               }
@@ -2243,7 +2242,7 @@ static InterpretResult vm_run() {
                   /*callable = instanceFindGetter((ObjInstance*)mod, mname);*/
               /*}*/
               if (!callable) {
-                  ObjString *modName = mod->name;
+                  ObjString *modName = CLASSINFO(mod)->name;
                   const char *modStr = modName ? modName->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, mname->chars);
               }

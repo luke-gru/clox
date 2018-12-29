@@ -4,6 +4,8 @@
 #include "common.h"
 #include "value.h"
 
+/* Value table, maps values to values */
+
 typedef struct Entry {
   Value key;
   Value value;

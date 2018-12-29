@@ -316,6 +316,31 @@ ObjUpvalue *newUpvalue(Value *slot) {
     return upvalue;
 }
 
+static ClassInfo* newClassInfo(ObjString *name) {
+    ClassInfo *cinfo = ALLOCATE(ClassInfo, 1);
+    void *tablesMem = (void*)ALLOCATE(Table, 3);
+    cinfo->methods = tablesMem;
+    cinfo->getters = tablesMem + sizeof(Table)*1;
+    cinfo->setters = tablesMem + sizeof(Table)*2;
+    initTable(cinfo->methods);
+    initTable(cinfo->getters);
+    initTable(cinfo->setters);
+    cinfo->superclass = NULL;
+    vec_init(&cinfo->v_includedMods);
+    cinfo->singletonOf = NULL;
+    cinfo->name = name;
+    return cinfo;
+}
+
+// frees internal ClassInfo structures, not ClassInfo itself
+void freeClassInfo(ClassInfo *classInfo) {
+    freeTable(classInfo->methods);
+    freeTable(classInfo->getters);
+    freeTable(classInfo->setters);
+    FREE_ARRAY(Table, classInfo->methods, 3);
+    vec_deinit(&classInfo->v_includedMods);
+}
+
 ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     ObjClass *klass = ALLOCATE_OBJ(
         ObjClass, OBJ_T_CLASS
@@ -323,22 +348,13 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     klass->klass = lxClassClass; // this is NULL when creating object hierarchy in initVM
     klass->singletonKlass = NULL;
     klass->finalizerFunc = NULL;
-    klass->singletonOf = NULL;
-    void *tablesMem = (void*)ALLOCATE(Table, 5);
+    klass->classInfo = newClassInfo(name);
+    void *tablesMem = (void*)ALLOCATE(Table, 2);
     klass->fields = (Table*)tablesMem;
     klass->hiddenFields = tablesMem + sizeof(Table);
-    klass->methods = tablesMem + sizeof(Table)*2;
-    klass->getters = tablesMem + sizeof(Table)*3;
-    klass->setters = tablesMem + sizeof(Table)*4;
     initTable(klass->fields);
     initTable(klass->hiddenFields);
-    initTable(klass->methods);
-    initTable(klass->getters);
-    initTable(klass->setters);
-    klass->v_includedMods = ALLOCATE(vec_void_t, 1);
-    vec_init(klass->v_includedMods);
-    klass->name = name; // can be NULL
-    klass->superclass = superclass;
+    klass->classInfo->superclass = superclass;
     // during initial class hierarchy setup this is NULL
     if (nativeClassInit && isClassHierarchyCreated) {
         callVMMethod((ObjInstance*)klass, OBJ_VAL(nativeClassInit), 0, NULL);
@@ -355,18 +371,12 @@ ObjModule *newModule(ObjString *name) {
     mod->klass = lxModuleClass;
     mod->singletonKlass = NULL;
     mod->finalizerFunc = NULL;
-    void *tablesMem = ALLOCATE(Table, 5);
+    void *tablesMem = ALLOCATE(Table, 2);
     mod->fields = (Table*)tablesMem;
     mod->hiddenFields = tablesMem + sizeof(Table);
-    mod->methods = tablesMem + sizeof(Table)*2;
-    mod->getters = tablesMem + sizeof(Table)*3;
-    mod->setters = tablesMem + sizeof(Table)*4;
     initTable(mod->fields);
     initTable(mod->hiddenFields);
-    initTable(mod->methods);
-    initTable(mod->getters);
-    initTable(mod->setters);
-    mod->name = name; // can be NULL
+    mod->classInfo = newClassInfo(name);
     // during initial class hierarchy setup this is NULL
     if (nativeModuleInit && isClassHierarchyCreated) {
         callVMMethod((ObjInstance*)mod, OBJ_VAL(nativeModuleInit), 0, NULL);
@@ -443,15 +453,15 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     Value nameVal = OBJ_VAL(name);
     while (klass) {
         ObjModule *mod = NULL; int i = 0;
-        vec_foreach_rev(klass->v_includedMods, mod, i) {
-            if (tableGet(mod->methods, nameVal, &method)) {
+        vec_foreach_rev(&CLASSINFO(klass)->v_includedMods, mod, i) {
+            if (tableGet(CLASSINFO(mod)->methods, nameVal, &method)) {
                 return AS_OBJ(method);
             }
         }
-        if (tableGet(klass->methods, nameVal, &method)) {
+        if (tableGet(CLASSINFO(klass)->methods, nameVal, &method)) {
             return AS_OBJ(method);
         }
-        klass = klass->superclass;
+        klass = CLASSINFO(klass)->superclass;
     }
     return NULL;
 }
@@ -465,15 +475,15 @@ Obj *instanceFindGetter(ObjInstance *obj, ObjString *name) {
     Value nameVal = OBJ_VAL(name);
     while (klass) {
         ObjModule *mod = NULL; int i = 0;
-        vec_foreach_rev(klass->v_includedMods, mod, i) {
-            if (tableGet(mod->getters, nameVal, &getter)) {
+        vec_foreach_rev(&CLASSINFO(klass)->v_includedMods, mod, i) {
+            if (tableGet(CLASSINFO(mod)->getters, nameVal, &getter)) {
                 return AS_OBJ(getter);
             }
         }
-        if (tableGet(klass->getters, nameVal, &getter)) {
+        if (tableGet(CLASSINFO(klass)->getters, nameVal, &getter)) {
             return AS_OBJ(getter);
         }
-        klass = klass->superclass;
+        klass = CLASSINFO(klass)->superclass;
     }
     return NULL;
 }
@@ -487,15 +497,15 @@ Obj *instanceFindSetter(ObjInstance *obj, ObjString *name) {
     Value nameVal = OBJ_VAL(name);
     while (klass) {
         ObjModule *mod = NULL; int i = 0;
-        vec_foreach_rev(klass->v_includedMods, mod, i) {
-            if (tableGet(mod->setters, nameVal, &setter)) {
+        vec_foreach_rev(&CLASSINFO(klass)->v_includedMods, mod, i) {
+            if (tableGet(CLASSINFO(mod)->setters, nameVal, &setter)) {
                 return AS_OBJ(setter);
             }
         }
-        if (tableGet(klass->setters, nameVal, &setter)) {
+        if (tableGet(CLASSINFO(klass)->setters, nameVal, &setter)) {
             return AS_OBJ(setter);
         }
-        klass = klass->superclass;
+        klass = CLASSINFO(klass)->superclass;
     }
     return NULL;
 }
@@ -516,18 +526,18 @@ Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
     Value method;
     // look up in singleton class hierarchy
     while (klass) {
-        if (tableGet(klass->methods, OBJ_VAL(name), &method)) {
+        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
-        klass = klass->superclass;
+        klass = CLASSINFO(klass)->superclass;
     }
     // not found, look up in class `Class` instance methods, to Object
     klass = lxClassClass;
     while (klass) {
-        if (tableGet(klass->methods, OBJ_VAL(name), &method)) {
+        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
-        klass = klass->superclass;
+        klass = CLASSINFO(klass)->superclass;
     }
     return NULL;
 }
@@ -537,18 +547,18 @@ Obj *moduleFindStaticMethod(ObjModule *mod, ObjString *name) {
     Value method;
     // look up in singleton class hierarchy
     while (klass) {
-        if (tableGet(klass->methods, OBJ_VAL(name), &method)) {
+        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
-        klass = klass->superclass;
+        klass = CLASSINFO(klass)->superclass;
     }
     // not found, look up in class `Module` instance methods, to Object
     klass = lxModuleClass;
     while (klass) {
-        if (tableGet(klass->methods, OBJ_VAL(name), &method)) {
+        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
-        klass = klass->superclass;
+        klass = CLASSINFO(klass)->superclass;
     }
     return NULL;
 }
@@ -903,7 +913,7 @@ void setProp(Value self, ObjString *propName, Value val) {
 bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
     ObjClass *instKlass = inst->klass;
     while (instKlass != NULL && instKlass != klass) {
-        instKlass = instKlass->superclass;
+        instKlass = CLASSINFO(instKlass)->superclass;
     }
     return instKlass != NULL;
 }
@@ -922,7 +932,7 @@ bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
     ASSERT(subklass);
     ASSERT(superklass);
     while (subklass != NULL && subklass != superklass) {
-        subklass = subklass->superclass;
+        subklass = CLASSINFO(subklass)->superclass;
     }
     return subklass != NULL;
 }
@@ -932,8 +942,8 @@ static const char *anonClassName = "(anon)";
 const char *instanceClassName(ObjInstance *obj) {
     ASSERT(obj);
     ObjClass *klass = obj->klass;
-    if (!klass || !klass->name) return anonClassName;
-    return klass->name->chars;
+    if (!klass || !CLASSINFO(klass)->name) return anonClassName;
+    return CLASSINFO(klass)->name->chars;
 }
 
 ObjClass *singletonClass(Obj *obj) {
@@ -956,7 +966,7 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     ObjString *name = valueToString(OBJ_VAL(inst), hiddenString);
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, inst->klass);
-    meta->singletonOf = (Obj*)inst;
+    CLASSINFO(meta)->singletonOf = (Obj*)inst;
     inst->singletonKlass = meta;
     unhideFromGC((Obj*)name);
     return meta;
@@ -967,15 +977,15 @@ ObjClass *classSingletonClass(ObjClass *klass) {
         return klass->singletonKlass;
     }
     ObjString *name = NULL;
-    if (klass->name) {
-        name = dupString(klass->name);
+    if (CLASSINFO(klass)->name) {
+        name = dupString(CLASSINFO(klass)->name);
     } else {
         name = copyString("(anon)", 6);
-        klass->name = name;
+        CLASSINFO(klass)->name = name;
     }
     pushCString(name, " (meta)", 7);
-    ObjClass *meta = newClass(name, klass->superclass);
-    meta->singletonOf = (Obj*)klass;
+    ObjClass *meta = newClass(name, CLASSINFO(klass)->superclass);
+    CLASSINFO(meta)->singletonOf = (Obj*)klass;
     klass->singletonKlass = meta;
     /*klass->superclass = meta;*/
     return meta;
@@ -986,17 +996,17 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
         return mod->singletonKlass;
     }
     ObjString *name = NULL;
-    if (mod->name) {
-        name = dupString(mod->name);
+    if (CLASSINFO(mod)->name) {
+        name = dupString(CLASSINFO(mod)->name);
         hideFromGC((Obj*)name);
     } else {
         name = hiddenString("(anon)", 6);
-        mod->name = name;
+        CLASSINFO(mod)->name = name;
     }
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, lxClassClass);
     mod->singletonKlass = meta;
-    meta->singletonOf = (Obj*)mod;
+    CLASSINFO(meta)->singletonOf = (Obj*)mod;
     unhideFromGC((Obj*)name);
     return meta;
 }

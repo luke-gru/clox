@@ -110,6 +110,19 @@ typedef struct ObjNative {
 
 typedef struct ObjClass ObjClass; // fwd decl
 typedef struct ObjModule ObjModule; // fwd decl
+
+#define CLASSINFO(klass) (((ObjClass*) (klass))->classInfo)
+typedef struct ClassInfo {
+  Table *methods;
+  Table *getters;
+  Table *setters;
+  ObjString *name;
+  // for classes only
+  ObjClass *superclass;
+  vec_void_t v_includedMods; // pointers to ObjModule
+  Obj *singletonOf;  // if singleton class
+} ClassInfo;
+
 typedef struct ObjClass {
 
   // NOTE: same fields, in same order, as ObjInstance. Can be cast to an
@@ -121,14 +134,7 @@ typedef struct ObjClass {
   Table *fields;
   Table *hiddenFields;
 
-  Table *methods;
-  Table *getters;
-  Table *setters;
-  ObjString *name;
-
-  ObjClass *superclass;
-  vec_void_t *v_includedMods; // pointers to ObjModule
-  Obj *singletonOf;  // if singleton class
+  ClassInfo *classInfo;
 } ObjClass;
 
 typedef struct ObjModule {
@@ -142,10 +148,7 @@ typedef struct ObjModule {
   Table *fields;
   Table *hiddenFields;
 
-  Table *methods;
-  Table *getters;
-  Table *setters;
-  ObjString *name;
+  ClassInfo *classInfo;
 } ObjModule;
 
 extern ObjClass *lxObjClass;
@@ -396,6 +399,9 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
 ObjInternal *newInternalObject(void *data, size_t dataSz, GCMarkFunc markFn, GCFreeFunc freeFn);
 ObjClosure *newClosure(ObjFunction *function);
 ObjUpvalue *newUpvalue(Value *slot);
+
+// Object destruction functions
+void freeClassInfo(ClassInfo *cinfo);
 
 // methods/classes
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);

@@ -145,8 +145,8 @@ static void gc_trace_free(int lvl, Obj *obj) {
         printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`
         if (obj->type == OBJ_T_INSTANCE) {
             const char *className = "(anon)";
-            if (((ObjInstance*) obj)->klass->name) {
-                className = ((ObjInstance*) obj)->klass->name->chars;
+            if (CLASSINFO(((ObjInstance*) obj)->klass)->name) {
+                className = CLASSINFO(((ObjInstance*) obj)->klass)->name->chars;
             }
             fprintf(stderr, ", class => %s", className);
         }
@@ -362,26 +362,26 @@ void blackenObject(Obj *obj) {
         case OBJ_T_CLASS: {
             GC_TRACE_DEBUG(5, "Blackening class %p", obj);
             ObjClass *klass = (ObjClass*)obj;
-            if (klass->name) {
-                grayObject((Obj*)klass->name);
-            }
             if (klass->klass) {
                 grayObject((Obj*)klass->klass);
             }
             if (klass->singletonKlass) {
                 grayObject((Obj*)klass->singletonKlass);
             }
-            if (klass->superclass) {
-                grayObject((Obj*)klass->superclass);
-            }
             if (klass->finalizerFunc) {
                 grayObject(klass->finalizerFunc);
             }
+            if (klass->classInfo->name) {
+                grayObject((Obj*)klass->classInfo->name);
+            }
+            if (klass->classInfo->superclass) {
+                grayObject((Obj*)klass->classInfo->superclass);
+            }
             grayTable(klass->fields);
             grayTable(klass->hiddenFields);
-            grayTable(klass->methods);
-            grayTable(klass->getters);
-            grayTable(klass->setters);
+            grayTable(klass->classInfo->methods);
+            grayTable(klass->classInfo->getters);
+            grayTable(klass->classInfo->setters);
             break;
         }
         case OBJ_T_MODULE: {
@@ -395,20 +395,20 @@ void blackenObject(Obj *obj) {
                 GC_TRACE_DEBUG(8, "Graying module singleton class");
                 grayObject((Obj*)mod->singletonKlass);
             }
-            if (mod->name) {
-                GC_TRACE_DEBUG(8, "Graying module name");
-                grayObject((Obj*)mod->name);
-            }
             if (mod->finalizerFunc) {
                 GC_TRACE_DEBUG(8, "Graying module finalizer");
                 grayObject(mod->finalizerFunc);
             }
+            if (mod->classInfo->name) {
+                GC_TRACE_DEBUG(8, "Graying module name");
+                grayObject((Obj*)mod->classInfo->name);
+            }
 
             grayTable(mod->fields);
             grayTable(mod->hiddenFields);
-            grayTable(mod->methods);
-            grayTable(mod->getters);
-            grayTable(mod->setters);
+            grayTable(mod->classInfo->methods);
+            grayTable(mod->classInfo->getters);
+            grayTable(mod->classInfo->setters);
             break;
         }
         case OBJ_T_FUNCTION: {
@@ -520,15 +520,11 @@ void freeObject(Obj *obj) {
         case OBJ_T_CLASS: {
             ObjClass *klass = (ObjClass*)obj;
             GC_TRACE_DEBUG(5, "Freeing class methods/getters/setters tables");
-            klass->name = NULL;
             freeTable(klass->fields);
             freeTable(klass->hiddenFields);
-            freeTable(klass->methods);
-            freeTable(klass->getters);
-            freeTable(klass->setters);
-            FREE_ARRAY(Table, klass->fields, 5);
-            vec_deinit(klass->v_includedMods);
-            FREE_SIZE(VEC_SZ, klass->v_includedMods);
+            FREE_ARRAY(Table, klass->fields, 2);
+            freeClassInfo(klass->classInfo);
+            FREE(ClassInfo, klass->classInfo);
             GC_TRACE_DEBUG(5, "Freeing class: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;
@@ -536,13 +532,11 @@ void freeObject(Obj *obj) {
         case OBJ_T_MODULE: {
             ObjModule *mod = (ObjModule*)obj;
             GC_TRACE_DEBUG(5, "Freeing module methods/getters/setters tables");
-            mod->name = NULL;
             freeTable(mod->fields);
             freeTable(mod->hiddenFields);
-            freeTable(mod->methods);
-            freeTable(mod->getters);
-            freeTable(mod->setters);
-            FREE_ARRAY(Table, mod->fields, 5);
+            FREE_ARRAY(Table, mod->fields, 2);
+            freeClassInfo(mod->classInfo);
+            FREE(ClassInfo, mod->classInfo);
             GC_TRACE_DEBUG(5, "Freeing module: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;

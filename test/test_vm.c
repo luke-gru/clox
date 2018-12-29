@@ -258,7 +258,7 @@ static int test_simple_class(void) {
     T_ASSERT(IS_INSTANCE(*val));
     T_ASSERT_VALPRINTEQ("<instance Train>", *val);
     ObjInstance *inst = AS_INSTANCE(*val);
-    Value objClassVal = OBJ_VAL(inst->klass->superclass);
+    Value objClassVal = OBJ_VAL(CLASSINFO(inst->klass)->superclass);
     T_ASSERT_VALPRINTEQ("<class Object>", objClassVal);
 cleanup:
     freeVM();
