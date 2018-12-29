@@ -169,7 +169,7 @@ static Value lxProcessPwdStatic(int argCount, Value *args) {
         errno = last;
         throwErrorFmt(lxErrClass, "Cannot retrieve current directory: %s", strerror(err));
     }
-    return newStringInstance(copyString(buf, strlen(buf)));
+    return newStringInstance(copyString(buf, strlen(buf), false));
 }
 
 void Init_ProcessModule(void) {

@@ -50,7 +50,7 @@ static void errorAt(Token *token, const char *message) {
   if (current->panicMode) return;
   current->panicMode = true;
 
-  ObjString *str = hiddenString("", 0);
+  ObjString *str = hiddenString("", 0, true);
   pushCStringFmt(str, "[Parse Error], (line %d) Error", token->line);
 
   if (token->type == TOKEN_EOF) {

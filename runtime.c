@@ -25,27 +25,27 @@ const char pathSeparator =
 #endif
 
 void addGlobalFunction(const char *name, NativeFn func) {
-    ObjString *funcName = internedString(name, strlen(name));
+    ObjString *funcName = internedString(name, strlen(name), true);
     ObjNative *natFn = newNative(funcName, func);
     tableSet(&vm.globals, OBJ_VAL(funcName), OBJ_VAL(natFn));
 }
 
 ObjClass *addGlobalClass(const char *name, ObjClass *super) {
-    ObjString *className = internedString(name, strlen(name));
+    ObjString *className = internedString(name, strlen(name), true);
     ObjClass *objClass = newClass(className, super);
     tableSet(&vm.globals, OBJ_VAL(className), OBJ_VAL(objClass));
     return objClass;
 }
 
 ObjModule *addGlobalModule(const char *name) {
-    ObjString *modName = internedString(name, strlen(name));
+    ObjString *modName = internedString(name, strlen(name), true);
     ObjModule *mod = newModule(modName);
     tableSet(&vm.globals, OBJ_VAL(modName), OBJ_VAL(mod));
     return mod;
 }
 
 ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
-    ObjString *mname = internedString(name, strlen(name));
+    ObjString *mname = internedString(name, strlen(name), true);
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
     natFn->isStatic = false;
@@ -57,7 +57,7 @@ ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
 }
 
 ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
-    ObjString *mname = internedString(name, strlen(name));
+    ObjString *mname = internedString(name, strlen(name), true);
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
     tableSet(CLASSINFO(klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
@@ -65,7 +65,7 @@ ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
 }
 
 ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
-    ObjString *mname = internedString(name, strlen(name));
+    ObjString *mname = internedString(name, strlen(name), true);
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
     tableSet(CLASSINFO(klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
@@ -86,7 +86,7 @@ Value lxClock(int argCount, Value *args) {
 Value lxTypeof(int argCount, Value *args) {
     CHECK_ARITY("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
-    return newStringInstance(copyString(strType, strlen(strType)));
+    return newStringInstance(copyString(strType, strlen(strType), false));
 }
 
 Value lxDebugger(int argCount, Value *args) {
@@ -214,7 +214,7 @@ Value lxThreadInit(int argCount, Value *args) {
     LxThread *th = ALLOCATE(LxThread, 1); // GCed by default GC free of internalObject
     internalObj->data = th;
     selfObj->internal = internalObj;
-    tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)),
+    tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("th", 2, true)),
             OBJ_VAL(internalObj));
     return self;
 }
@@ -286,7 +286,7 @@ readableCheck:
         // TODO: throw syntax error
         return BOOL_VAL(false);
     }
-    ObjString *fpath = copyString(pathbuf, strlen(pathbuf));
+    ObjString *fpath = copyString(pathbuf, strlen(pathbuf), false);
     if (checkLoaded) {
         vec_push(&vm.loadedScripts, newStringInstance(fpath));
     }
@@ -415,7 +415,7 @@ Value lxModuleInit(int argCount, Value *args) {
     ObjString *nameStr = STRING_GETHIDDEN(name);
     ObjModule *mod = AS_MODULE(self);
     ASSERT(CLASSINFO(mod)->name == NULL);
-    ObjString *nameCpy = dupString(nameStr);
+    ObjString *nameCpy = dupString(nameStr, true);
     CLASSINFO(mod)->name = nameCpy;
     return self;
 }
@@ -434,7 +434,7 @@ Value lxClassInit(int argCount, Value *args) {
     ObjString *name = NULL;
     ObjClass *superClass = NULL;
     if (IS_A_STRING(arg1)) {
-        name = dupString(VAL_TO_STRING(arg1));
+        name = dupString(VAL_TO_STRING(arg1), true);
     } else if (IS_CLASS(arg1)) {
         superClass = AS_CLASS(arg1);
     } else {
@@ -473,9 +473,9 @@ Value lxClassGetName(int argCount, Value *args) {
     ObjClass *klass = AS_CLASS(self);
     ObjString *origName = CLASSINFO(klass)->name;
     if (origName == NULL) {
-        return newStringInstance(copyString("(anon)", 6));
+        return newStringInstance(copyString("(anon)", 6, false));
     } else {
-        return newStringInstance(dupString(origName));
+        return newStringInstance(dupString(origName, false));
     }
 }
 
@@ -530,7 +530,7 @@ Value lxIteratorInit(int argCount, Value *args) {
         iter, sizeof(Iterator), markInternalIter, freeInternalIter
     );
     tableSet(selfObj->hiddenFields,
-            OBJ_VAL(internedString("iter", 4)),
+            OBJ_VAL(internedString("iter", 4, true)),
             OBJ_VAL(internalIter));
     selfObj->internal = internalIter;
     return self;
@@ -542,7 +542,7 @@ Value lxIteratorNext(int argCount, Value *args) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     Value internalIter;
     ASSERT(tableGet(selfObj->hiddenFields,
-            OBJ_VAL(internedString("iter", 4)),
+            OBJ_VAL(internedString("iter", 4, true)),
             &internalIter));
     ObjInternal *internalObj = AS_INTERNAL(internalIter);
     Iterator *iter = internalGetData(internalObj);
@@ -593,22 +593,32 @@ Value lxErrInit(int argCount, Value *args) {
     } else {
         msg = NIL_VAL;
     }
-    setProp(self, internedString("message", 7), msg);
+    setProp(self, internedString("message", 7, true), msg);
     return self;
 }
 
 Value lxGCStats(int argCount, Value *args) {
     CHECK_ARITY("GC.stats", 1, 1, argCount);
     Value map = newMap();
-    Value totalKey = newStringInstance(copyString("totalAllocated", 14));
+    Value totalKey = newStringInstance(copyString("totalAllocated", 14, false));
     mapSet(map, totalKey, NUMBER_VAL(GCStats.totalAllocated));
-    Value heapSizeKey = newStringInstance(copyString("heapSize", 8));
+    Value heapSizeKey = newStringInstance(copyString("heapSize", 8, false));
     mapSet(map, heapSizeKey, NUMBER_VAL(GCStats.heapSize));
-    Value heapUsedKey = newStringInstance(copyString("heapUsed", 8));
+    Value heapUsedKey = newStringInstance(copyString("heapUsed", 8, false));
     mapSet(map, heapUsedKey, NUMBER_VAL(GCStats.heapUsed));
-    Value heapWasteKey = newStringInstance(copyString("heapUsedWaste", 13));
+    Value heapWasteKey = newStringInstance(copyString("heapUsedWaste", 13, false));
     mapSet(map, heapWasteKey, NUMBER_VAL(GCStats.heapUsedWaste));
+    for (int i = OBJ_T_NONE+1; i < OBJ_T_LAST; i++) {
+        const char *typeName = objTypeName(i);
+        Value classKey = newStringInstance(internedString(typeName, strlen(typeName), true));
+        mapSet(map, classKey, NUMBER_VAL(GCStats.demographics[i]));
+    }
     return map;
+}
+
+Value lxGCPrintStats(int argCount, Value *args) {
+    printGCStats(true);
+    return NIL_VAL;
 }
 
 Value lxGCCollect(int argCount, Value *args) {

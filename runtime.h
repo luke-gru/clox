@@ -97,6 +97,7 @@ Value lxGCCollect(int argCount, Value *args);
 Value lxGCSetFinalizer(int argCount, Value *args);
 Value lxGCOff(int argCount, Value *args);
 Value lxGCOn(int argCount, Value *args);
+Value lxGCPrintStats(int argCount, Value *args);
 
 // class Error
 Value lxErrInit(int argCount, Value *args);

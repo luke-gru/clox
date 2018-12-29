@@ -2,9 +2,15 @@ var a = [];
 var s = "";
 var m = Map();
 o = Object();
-for (var i = 0; i < 100000; i = i + 1) {
-  m.merge(%{});
+for (var i = 0; i < 1000000; i = i + 1) {
+  if (i == 10) {
+    GC.printStats();
+  }
   s << String(i);
+  if (i == 10) {
+    GC.printStats();
+  }
+  m.merge(%{});
   [o];
 }
 GC.collect();

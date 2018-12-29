@@ -18,20 +18,31 @@ Value lxStringInit(int argCount, Value *args) {
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (argCount == 2) {
+        bool dupped = false;
         Value internalStrVal = args[1];
         if (IS_T_STRING(internalStrVal)) { // string instance given, copy the buffer
             ObjString *orig = STRING_GETHIDDEN(internalStrVal);
-            ObjString *new = dupString(orig);
+            ObjString *new;
+            new = dupString(orig, false);
             internalStrVal = OBJ_VAL(new);
+            dupped = true;
         }
         if (!IS_STRING(internalStrVal)) { // other type given, convert to string
-            ObjString *str = valueToString(internalStrVal, copyString);
+            ObjString *str = valueToString(internalStrVal, copyString, false);
             internalStrVal = OBJ_VAL(str);
+            dupped = true;
+        }
+        if (!dupped && IS_STRING(internalStrVal)) {
+            ObjString *orig = (ObjString*)AS_OBJ(internalStrVal);
+            if (orig->isInterned) {
+                ObjString *new = dupStringShared(orig, false);
+                internalStrVal = OBJ_VAL(new);
+            }
         }
         ASSERT(IS_STRING(internalStrVal));
         tableSet(selfObj->hiddenFields, OBJ_VAL(bufStr), internalStrVal);
     } else { // empty string
-        Value internalStrVal = OBJ_VAL(copyString("", 0));
+        Value internalStrVal = OBJ_VAL(copyString("", 0, false));
         tableSet(selfObj->hiddenFields, OBJ_VAL(bufStr), internalStrVal);
     }
     return self;
@@ -76,7 +87,7 @@ static Value lxStringDup(int argCount, Value *args) {
     Value ret = lxObjectDup(argCount, args);
     ObjInstance *retInst = AS_INSTANCE(ret);
     ObjString *buf = STRING_GETHIDDEN(ret);
-    tableSet(retInst->hiddenFields, OBJ_VAL(bufStr), OBJ_VAL(dupString(buf)));
+    tableSet(retInst->hiddenFields, OBJ_VAL(bufStr), OBJ_VAL(dupString(buf, false)));
     return ret;
 }
 
@@ -161,5 +172,5 @@ void Init_StringClass() {
     addNativeGetter(stringClass, "size", lxStringGetSize);
     lxStringClass = stringClass;
 
-    bufStr = internedString("buf", 3);
+    bufStr = internedString("buf", 3, true);
 }

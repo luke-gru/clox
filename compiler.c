@@ -76,7 +76,7 @@ static void error(const char *format, ...) {
     int line = curTok ? curTok->line : 0;
     va_list args;
     va_start(args, format);
-    ObjString *str = hiddenString("", 0);
+    ObjString *str = hiddenString("", 0, true);
     pushCStringFmt(str, "[Compile Error]: ");
     if (line > 0) {
         pushCStringFmt(str, "(line: %d) ", line);
@@ -647,7 +647,7 @@ static uint8_t makeConstant(Value value, ConstType ctype) {
 // Add constant to constant pool from the token's lexeme, return index to it
 static uint8_t identifierConstant(Token* name) {
     DBG_ASSERT(vm.inited);
-    return makeConstant(OBJ_VAL(hiddenString(name->start, name->length)),
+    return makeConstant(OBJ_VAL(hiddenString(name->start, name->length, true)),
         CONST_T_STRLIT);
 }
 
@@ -849,7 +849,7 @@ static void initCompiler(
     switch (ftype) {
     case FUN_TYPE_NAMED:
         current->function->name = hiddenString(
-            tokStr(fTok), strlen(tokStr(fTok))
+            tokStr(fTok), strlen(tokStr(fTok)), true
         );
         break;
     case FUN_TYPE_INIT:
@@ -873,7 +873,7 @@ static void initCompiler(
         }
         strncat(methodNameBuf, sep, 1);
         strcat(methodNameBuf, funcName);
-        ObjString *methodName = hiddenString(methodNameBuf, strlen(methodNameBuf));
+        ObjString *methodName = hiddenString(methodNameBuf, strlen(methodNameBuf), true);
         current->function->name = methodName;
         xfree(methodNameBuf);
         break;
@@ -1207,13 +1207,13 @@ static void emitNode(Node *n) {
         // non-static string
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
-            ObjString *str = hiddenString(name->start+1, name->length-2);
+            ObjString *str = internedString(name->start+1, name->length-2, true);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 0);
         // static string
         } else if (n->tok.type == TOKEN_STRING_STATIC) {
             Token *name = &n->tok;
-            ObjString *str = hiddenString(name->start+2, name->length-3);
+            ObjString *str = internedString(name->start+2, name->length-3, true);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 1);
         } else if (n->tok.type == TOKEN_TRUE) {
@@ -1611,7 +1611,7 @@ static void emitNode(Node *n) {
                 if (i == 0) continue; // already emitted
                 int itarget = iseq->byteCount;
                 Token classTok = vec_first(catchStmt->children)->tok;
-                ObjString *className = hiddenString(tokStr(&classTok), strlen(tokStr(&classTok)));
+                ObjString *className = hiddenString(tokStr(&classTok), strlen(tokStr(&classTok)), true);
                 double catchTblIdx = (double)iseqAddCatchRow(
                     iseq, ifrom, ito,
                     itarget, OBJ_VAL(className)

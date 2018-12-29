@@ -102,7 +102,7 @@ static Value lxMapToString(int argCount, Value *args) {
     CHECK_ARITY("Map#toString", 1, 1, argCount);
     Value self = args[0];
     Obj *selfObj = AS_OBJ(self);
-    Value ret = newStringInstance(copyString("{", 1));
+    Value ret = newStringInstance(copyString("{", 1, false));
     ObjString *bufRet = STRING_GETHIDDEN(ret);
     Table *map = MAP_GETHIDDEN(self);
     Entry e; int idx = 0;
@@ -111,14 +111,14 @@ static Value lxMapToString(int argCount, Value *args) {
         if (IS_OBJ(e.key) && AS_OBJ(e.key) == selfObj) {
             pushCString(bufRet, "{...}", 5);
         } else {
-            ObjString *keyS = valueToString(e.key, copyString);
+            ObjString *keyS = valueToString(e.key, copyString, true);
             pushCString(bufRet, keyS->chars, strlen(keyS->chars));
         }
         pushCString(bufRet, " => ", 4);
         if (IS_OBJ(e.value) && AS_OBJ(e.value) == selfObj) {
             pushCString(bufRet, "{...}", 5);
         } else {
-            ObjString *valS = valueToString(e.value, copyString);
+            ObjString *valS = valueToString(e.value, copyString, true);
             pushCString(bufRet, valS->chars, strlen(valS->chars));
         }
 
@@ -255,7 +255,7 @@ static Value lxMapMerge(int argCount, Value *args) {
     Value other = args[1];
     Table *otherMap = MAP_GETHIDDEN(other);
     CHECK_ARG_IS_A(other, lxMapClass, 1);
-    Value ret = callMethod(AS_OBJ(self), internedString("dup", 3), 0, NULL);
+    Value ret = callMethod(AS_OBJ(self), internedString("dup", 3, true), 0, NULL);
     Table *retMap = MAP_GETHIDDEN(ret);
     Entry e; int idx = 0;
     TABLE_FOREACH(otherMap, e, idx) {
@@ -337,7 +337,7 @@ static Value lxEnvGet(int argCount, Value *args) {
     if (val == NULL) {
         return NIL_VAL;
     } else {
-        return newStringInstance(copyString(val, strlen(val)));
+        return newStringInstance(copyString(val, strlen(val), false));
     }
 }
 
@@ -370,8 +370,8 @@ static Value createEnvMap(void) {
                     "Contains no '='?", *envp);
         }
         size_t varLen = strlen(*envp);
-        ObjString *nameStr = copyString(*envp, (int)(eq-*envp));
-        ObjString *valStr = copyString(eq+1, (*envp+varLen)-eq-1);
+        ObjString *nameStr = copyString(*envp, (int)(eq-*envp), false);
+        ObjString *valStr = copyString(eq+1, (*envp+varLen)-eq-1, false);
         Value name = newStringInstance(nameStr);
         Value val = newStringInstance(valStr);
         tableSet(map, name, val);
@@ -408,7 +408,7 @@ static Value lxEnvDelete(int argCount, Value *args) {
 }
 
 void Init_MapClass() {
-    mapStr = internedString("map", 3);
+    mapStr = internedString("map", 3, true);
 
     ObjClass *mapClass = addGlobalClass("Map", lxObjClass);
     lxMapClass = mapClass;
@@ -435,7 +435,7 @@ void Init_MapClass() {
     // getters
     addNativeGetter(mapClass, "size", lxMapGetSize);
 
-    lxEnvClass = newClass(internedString("ENV", 3), lxObjClass);
+    lxEnvClass = newClass(internedString("ENV", 3, true), lxObjClass);
     lxEnv = newInstance(lxEnvClass);
 
     addNativeMethod(lxEnvClass, "opIndexGet", lxEnvGet);
@@ -444,5 +444,5 @@ void Init_MapClass() {
     addNativeMethod(lxEnvClass, "delete", lxEnvDelete);
     addNativeMethod(lxEnvClass, "iter", lxEnvIter);
 
-    tableSet(&vm.globals, OBJ_VAL(internedString("ENV", 3)), OBJ_VAL(lxEnv));
+    tableSet(&vm.globals, OBJ_VAL(internedString("ENV", 3, true)), OBJ_VAL(lxEnv));
 }

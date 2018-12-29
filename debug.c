@@ -266,7 +266,7 @@ static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
 
     Value constant = getConstant(chunk, constantIdx);
-    ObjString *constantStr = valueToString(constant, copyString);
+    ObjString *constantStr = valueToString(constant, copyString, true);
     char *constantCStr = constantStr->chars;
 
     char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+9, 1);
@@ -367,7 +367,7 @@ static int closureInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec
 
     addFunc(funcs, AS_FUNCTION(constant));
 
-    ObjString *constantStr = valueToString(constant, copyString);
+    ObjString *constantStr = valueToString(constant, copyString, true);
     char *constantCStr = constantStr->chars;
     char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+23, 1);
     ASSERT_MEM(cbuf);
@@ -708,7 +708,7 @@ ObjString *disassembleChunk(Chunk *chunk) {
     vec_funcp_t funcs;
     vec_init(&funcs);
 
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
 
     // catch table
     if (chunk->catchTbl) {

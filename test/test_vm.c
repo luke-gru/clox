@@ -50,7 +50,7 @@ static int test_vm_protect1(void) {
     frame->slots = EC->stack;
     frame->isCCall = false;
     frame->callLine = 1;
-    frame->file = hiddenString("file", 4);
+    frame->file = hiddenString("file", 4, true);
     // catch all errors of instance lxErrClass
     void *res = vm_protect(raiseErrProtect, &arg, lxErrClass, &status);
     T_ASSERT_EQ(TAG_RAISE, status);
@@ -75,7 +75,7 @@ static int test_vm_protect2(void) {
     frame->slots = EC->stack;
     frame->isCCall = false;
     frame->callLine = 1;
-    frame->file = hiddenString("file", 4);
+    frame->file = hiddenString("file", 4, true);
     // catch all errors
     void *res = vm_protect(raiseErrProtect, &arg, NULL, &status);
     T_ASSERT_EQ(TAG_RAISE, status);
@@ -100,7 +100,7 @@ static int test_vm_protect3(void) {
     frame->slots = EC->stack;
     frame->isCCall = false;
     frame->callLine = 1;
-    frame->file = hiddenString("file", 4);
+    frame->file = hiddenString("file", 4, true);
     void *res = vm_protect(raiseNoErrProtect, &arg, NULL, &status);
     T_ASSERT_EQ(TAG_NONE, status);
     T_ASSERT_EQ(lxAryClass, res);
@@ -532,7 +532,7 @@ static int test_native_typeof() {
                 "print typeof(MyPet);\n";
                 /*"print typeof([])\n""*/
     initVM();
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     interp(src, true);
     char *output = buf->chars;
@@ -555,7 +555,7 @@ cleanup:
 static int test_array_literal() {
     char *src = "var a = [1,2,3]; print a.toString(); a;";
     initVM();
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     interp(src, true);
     Value *val = getLastValue();
@@ -590,7 +590,7 @@ static int test_array_get_set() {
                 "a[0] = 400;\n"
                 "print a[0]; print a.toString();";
     initVM();
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
@@ -607,7 +607,7 @@ static int test_print_nested_array(void) {
     char *src = "var a = [[4],1,2,3];\n"
                 "print a; print a.toString();";
     initVM();
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     interp(src, true);
     ASSERT(buf->chars);
@@ -625,7 +625,7 @@ static int test_print_map(void) {
     char *src = "var m = Map();\n"
                 "print m;";
     initVM();
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "{}\n";
@@ -635,7 +635,7 @@ static int test_print_map(void) {
     freeVM();
 
     initVM();
-    buf = copyString("", 0);
+    buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     src =  "var m2 = Map(); m2[1] = 2; m2[2] = 4; print m2;";
     interp(src, true);
@@ -655,7 +655,7 @@ static int test_closures_global_scope(void) {
                 "incr(); incr();\n"
                 "print i + 1;";
     initVM();
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "0\n1\n2\n3\n";
@@ -673,7 +673,7 @@ static int test_closures_env_saved(void) {
                 "print add10(20);\n"
                 "print add10(40);\n";
     initVM();
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "30\n50\n";
@@ -693,7 +693,7 @@ static int test_catch_thrown_errors_from_c_code(void) {
                 "  print \"caught\";\n"
                 "}";
     initVM();
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "caught\n";
@@ -713,7 +713,7 @@ static int test_map_keys_work_as_expected(void) {
                 "print m[10];\n"
                 "print m['10'];\n";
     initVM();
-    ObjString *buf = copyString("", 0);
+    ObjString *buf = copyString("", 0, true);
     setPrintBuf(buf, false);
     interp(src, true);
     const char *expected = "9\n6\n";

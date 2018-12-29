@@ -147,7 +147,7 @@ static Value lxArrayToString(int argCount, Value *args) {
     CHECK_ARITY("Array#toString", 1, 1, argCount);
     Value self = *args;
     Obj *selfObj = AS_OBJ(self);
-    Value ret = newStringInstance(copyString("[", 1));
+    Value ret = newStringInstance(copyString("[", 1, false));
     ObjString *bufRet = STRING_GETHIDDEN(ret);
     ValueArray *ary = ARRAY_GETHIDDEN(self);
     for (int i = 0; i < ary->count; i++) {
@@ -159,7 +159,7 @@ static Value lxArrayToString(int argCount, Value *args) {
         if (IS_OBJ(elVal)) {
             DBG_ASSERT(AS_OBJ(elVal)->type > OBJ_T_NONE);
         }
-        ObjString *buf = valueToString(elVal, copyString);
+        ObjString *buf = valueToString(elVal, copyString, true);
         pushCString(bufRet, buf->chars, strlen(buf->chars));
         if (i < (ary->count-1)) {
             pushCString(bufRet, ",", 1);
@@ -262,7 +262,7 @@ static Value lxArrayWrapStatic(int argCount, Value *args) {
 }
 
 void Init_ArrayClass() {
-    aryStr = internedString("ary", 3);
+    aryStr = internedString("ary", 3, true);
 
     // class Array
     ObjClass *arrayClass = addGlobalClass("Array", lxObjClass);

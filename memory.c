@@ -81,9 +81,9 @@ static void printGCDemographics() {
     }
 }
 
-static void printGCStats() {
+void printGCStats(bool printAll) {
     fprintf(stderr, "GC Stats\n");
-    if (GET_OPTION(traceGCLvl > 2)) {
+    if (printAll || GET_OPTION(traceGCLvl > 2)) {
         printObjTypeSizes();
     }
     fprintf(stderr, "ObjAny size: %ld b\n", sizeof(ObjAny));
@@ -94,7 +94,7 @@ static void printGCStats() {
     fprintf(stderr, "Heap used: %ld KB\n", GCStats.heapUsed/1024);
     fprintf(stderr, "Heap used waste: %ld KB\n", GCStats.heapUsedWaste/1024);
     fprintf(stderr, "# objects: %ld\n", GCStats.heapUsed/sizeof(ObjAny));
-    if (GET_OPTION(traceGCLvl > 2)) {
+    if (printAll || GET_OPTION(traceGCLvl > 2)) {
         printGCDemographics();
     }
 }
@@ -484,6 +484,21 @@ static size_t sizeofObj(Obj *obj) {
     return sizeofObjType(obj->type);
 }
 
+static void freeString(ObjString *string) {
+    ASSERT(string->chars);
+    GC_TRACE_DEBUG(5, "Freeing string chars: p=%p, interned=%s,static=%s",
+            string->chars,
+            string->isInterned ? "t" : "f",
+            string->isStatic ? "t" : "f"
+            );
+    GC_TRACE_DEBUG(5, "Freeing string chars: s='%s' (len=%d, capa=%d)", string->chars, string->length, string->capacity);
+    FREE_ARRAY(char, string->chars, string->capacity + 1);
+    string->chars = NULL;
+    string->hash = 0;
+    GC_TRACE_DEBUG(5, "Freeing ObjString: p=%p", string);
+    ((Obj*) string)->type = OBJ_T_NONE;
+}
+
 void freeObject(Obj *obj) {
     if (obj->type == OBJ_T_NONE) {
         GC_TRACE_DEBUG(5, "freeObject called on OBJ_T_NONE: %p", obj);
@@ -579,6 +594,21 @@ void freeObject(Obj *obj) {
             if (instance->internal) {
                 FREE(ObjInternal, instance->internal);
             }
+            Value instanceVal = OBJ_VAL(obj);
+            if (IS_T_STRING(instanceVal)) {
+                ObjString *string = STRING_GETHIDDEN(instanceVal);
+                ASSERT(string);
+                if (!string->isRealObject) {
+                    if (string->isShared) {
+                        GC_TRACE_DEBUG(5, "Freeing malloced shared string p=%p", string);
+                        ((Obj*) string)->type = OBJ_T_NONE;
+                        FREE(ObjString, string);
+                    } else {
+                        GC_TRACE_DEBUG(5, "Freeing malloced string p=%p", string);
+                        freeString(string);
+                    }
+                }
+            }
             GC_TRACE_DEBUG(5, "Freeing instance fields table: p=%p", &instance->fields);
             freeTable(instance->fields);
             GC_TRACE_DEBUG(5, "Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
@@ -612,18 +642,8 @@ void freeObject(Obj *obj) {
         }
         case OBJ_T_STRING: {
             ObjString *string = (ObjString*)obj;
-            ASSERT(string->chars);
-            GC_TRACE_DEBUG(5, "Freeing string chars: p=%p, interned=%s,static=%s",
-                    string->chars,
-                    string->isInterned ? "t" : "f",
-                    string->isStatic ? "t" : "f"
-            );
-            GC_TRACE_DEBUG(5, "Freeing string chars: s='%s' (len=%d, capa=%d)", string->chars, string->length, string->capacity);
-            FREE_ARRAY(char, string->chars, string->capacity + 1);
-            string->chars = NULL;
-            string->hash = 0;
-            GC_TRACE_DEBUG(5, "Freeing ObjString: p=%p", obj);
-            obj->type = OBJ_T_NONE;
+            ASSERT(string->isRealObject);
+            freeString(string);
             break;
         }
         default: {
@@ -727,7 +747,7 @@ void collectGarbage(void) {
 
     GC_TRACE_DEBUG(2, "Marking VM stack roots");
     if (GET_OPTION(traceGCLvl) >= 2) {
-        printGCStats();
+        printGCStats(false);
         if (GET_OPTION(traceGCLvl >= 4)) {
             printGenerationInfo();
         }
@@ -968,7 +988,7 @@ freeLoop:
 void freeObjects(void) {
     GC_TRACE_DEBUG(2, "freeObjects -> begin FREEing all objects");
     if (GET_OPTION(traceGCLvl) >= 2) {
-        printGCStats();
+        printGCStats(false);
         printGenerationInfo();
     }
     struct timeval tRunStart;
@@ -980,6 +1000,8 @@ void freeObjects(void) {
     if (activeFinalizers == 0) {
         phase = 2;
     }
+    inGC = true;
+    dontGC = false;
 
 freeLoop:
     for (int i = 0; i < heapsUsed; i++) {
@@ -1045,4 +1067,6 @@ freeLoop:
     ASSERT(GCStats.heapUsed == 0);
     ASSERT(GCStats.heapUsedWaste == 0);
     inGC = false;
+    dontGC = false;
+    activeFinalizers = 0;
 }

@@ -22,7 +22,7 @@ static bool evalLines(char *lines[], int numLines) {
     _freeChunk();
     vm.exited = false;
     vm.hadError = false;
-    ObjString *buf = hiddenString("", 0);
+    ObjString *buf = hiddenString("", 0, true);
     for (int i = 0; i < numLines; i++) {
         char *line = lines[i];
         ASSERT(line);

@@ -39,18 +39,28 @@ static Obj *allocateObject(size_t size, ObjType type) {
  * Allocate a new lox string object with given characters and length
  * NOTE: length here is strlen(chars).
  */
-static ObjString *allocateString(char *chars, int length) {
+static ObjString *allocateString(char *chars, int length, bool isRealObject) {
     if (!vm.inited) {
         fprintf(stderr, "allocateString before VM inited: %s\n", chars);
         ASSERT(vm.inited);
     }
-    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
+    ObjString *string;
+    if (isRealObject) {
+        string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
+    } else {
+        string = ALLOCATE(ObjString, 1);
+        string->object.type = OBJ_T_STRING;
+        string->object.isFrozen = false;
+        string->object.objectId = (size_t)string;
+    }
     string->length = length;
     string->capacity = length;
     string->chars = chars;
     string->hash = 0; // lazily computed
     string->isInterned = false;
     string->isStatic = false;
+    string->isRealObject = isRealObject;
+    string->isShared = false;
     return string;
 }
 
@@ -92,39 +102,38 @@ uint32_t hashString(char *key, int length) {
 }
 
 // use `*chars` as the underlying storage for the new string object
-// NOTE: length here is strlen(chars)
 // XXX: Do not pass a static string here, it'll break when GC tries to free it.
-ObjString *takeString(char *chars, int length) {
-    DBG_ASSERT(strlen(chars) == length);
-    return allocateString(chars, length);
+ObjString *takeString(char *chars, int length, bool isRealObject) {
+    return allocateString(chars, length, isRealObject);
 }
 
 // use copy of `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
-ObjString *copyString(char *chars, int length) {
+ObjString *copyString(char *chars, int length, bool isRealObject) {
     DBG_ASSERT(strlen(chars) >= length);
 
     char *heapChars = ALLOCATE(char, length + 1);
     memcpy(heapChars, chars, length);
     heapChars[length] = '\0';
 
-    return allocateString(heapChars, length);
+    return allocateString(heapChars, length, isRealObject);
 }
 
-ObjString *hiddenString(char *chars, int len) {
+ObjString *hiddenString(char *chars, int len, bool isRealObject) {
+    (void)isRealObject;
     DBG_ASSERT(strlen(chars) >= len);
-    ObjString *string = copyString(chars, len);
+    ObjString *string = copyString(chars, len, true);
     hideFromGC((Obj*)string);
     return string;
 }
 
-
-ObjString *internedString(char *chars, int length) {
+ObjString *internedString(char *chars, int length, bool isRealObject) {
     DBG_ASSERT(strlen(chars) >= length);
+    (void)isRealObject;
     uint32_t hash = hashString(chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (!interned) {
-        interned = copyString(chars, length);
+        interned = copyString(chars, length, true);
         ASSERT(tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL));
         interned->isInterned = true;
         objFreeze((Obj*)interned);
@@ -133,18 +142,41 @@ ObjString *internedString(char *chars, int length) {
     return interned;
 }
 
-ObjString *dupString(ObjString *string) {
+ObjString *dupString(ObjString *string, bool isRealObject) {
     ASSERT(string);
-    ObjString *dup = copyString(string->chars, string->length);
+    ObjString *dup = copyString(string->chars, string->length, isRealObject);
     dup->hash = string->hash;
     return dup;
 }
 
+ObjString *dupStringShared(ObjString *string, bool isRealObject) {
+    ASSERT(string);
+    ObjString *dup = takeString(string->chars, string->length, isRealObject);
+    dup->hash = string->hash;
+    dup->isShared = true;
+    return dup;
+}
+
+static void dedupSharedString(Value self, ObjString *str) {
+    ASSERT(str);
+    if (!str->isShared) return;
+    char *chars = NULL;
+    if (str->capacity > 0) {
+        ASSERT(str->chars);
+        char *chars = ALLOCATE(char, str->capacity);
+        memcpy(chars, str->chars, str->length);
+        chars[str->length] = '\0';
+    }
+    str->chars = chars;
+    str->isShared = false;
+}
+
 void pushString(Value self, Value pushed) {
+    ObjString *lhsBuf = STRING_GETHIDDEN(self);
+    dedupSharedString(self, lhsBuf);
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
-    ObjString *lhsBuf = STRING_GETHIDDEN(self);
     ObjString *rhsBuf = STRING_GETHIDDEN(pushed);
     pushObjString(lhsBuf, rhsBuf);
 }
@@ -629,7 +661,7 @@ ValueArray *arrayGetHidden(Value aryVal) {
     ASSERT(IS_AN_ARRAY(aryVal));
     ObjInstance *inst = AS_INSTANCE(aryVal);
     Value internalObjVal;
-    ASSERT(tableGet(inst->hiddenFields, OBJ_VAL(internedString("ary", 3)), &internalObjVal));
+    ASSERT(tableGet(inst->hiddenFields, OBJ_VAL(internedString("ary", 3, true)), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     return ary;
@@ -645,7 +677,7 @@ Value newArray(void) {
 // duplicates a string instance
 Value dupStringInstance(Value instance) {
     ObjString *buf = STRING_GETHIDDEN(instance);
-    return newStringInstance(dupString(buf));
+    return newStringInstance(dupString(buf, false));
 }
 
 // creates a new string instance, using `buf` as underlying storage
@@ -659,18 +691,20 @@ Value newStringInstance(ObjString *buf) {
 }
 
 void clearString(Value string) {
+    ObjString *buf = STRING_GETHIDDEN(string);
+    dedupSharedString(string, buf);
     if (isFrozen(AS_OBJ(string))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
-    ObjString *buf = STRING_GETHIDDEN(string);
     clearObjString(buf);
 }
 
 void stringInsertAt(Value self, Value insert, int at) {
+    ObjString *selfBuf = STRING_GETHIDDEN(self);
+    dedupSharedString(self, selfBuf);
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
-    ObjString *selfBuf = STRING_GETHIDDEN(self);
     ObjString *insertBuf = STRING_GETHIDDEN(insert);
     insertObjString(selfBuf, insertBuf, at);
 }
@@ -682,7 +716,7 @@ Value stringSubstr(Value self, int startIdx, int len) {
     ObjString *buf = STRING_GETHIDDEN(self);
     ObjString *substr = NULL;
     if (startIdx >= buf->length) {
-        substr = copyString("", 0);
+        substr = copyString("", 0, false);
     } else {
         int maxlen = buf->length-startIdx; // "abc"
         // TODO: support negative len, like `-2` also,
@@ -690,7 +724,7 @@ Value stringSubstr(Value self, int startIdx, int len) {
         if (len > maxlen || len < 0) {
             len = maxlen;
         }
-        substr = copyString(buf->chars+startIdx, len);
+        substr = copyString(buf->chars+startIdx, len, false);
     }
 
     return newStringInstance(substr);
@@ -699,16 +733,17 @@ Value stringSubstr(Value self, int startIdx, int len) {
 Value stringIndexGet(Value self, int index) {
     ObjString *buf = STRING_GETHIDDEN(self);
     if (index >= buf->length) {
-        return newStringInstance(copyString("", 0));
+        return newStringInstance(copyString("", 0, false));
     } else if (index < 0) { // TODO: make it works from end of str?
         throwArgErrorFmt("%s", "index cannot be negative");
     } else {
-        return newStringInstance(copyString(buf->chars+index, 1));
+        return newStringInstance(copyString(buf->chars+index, 1, false));
     }
 }
 
 Value stringIndexSet(Value self, int index, char c) {
     ObjString *buf = STRING_GETHIDDEN(self);
+    dedupSharedString(self, buf);
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
@@ -873,7 +908,7 @@ Table *mapGetHidden(Value mapVal) {
     ASSERT(IS_A_MAP(mapVal));
     ObjInstance *inst = AS_INSTANCE(mapVal);
     Value internalObjVal;
-    ASSERT(tableGet(inst->hiddenFields, OBJ_VAL(internedString("map", 3)), &internalObjVal));
+    ASSERT(tableGet(inst->hiddenFields, OBJ_VAL(internedString("map", 3, true)), &internalObjVal));
     Table *map = (Table*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(map);
     return map;
@@ -883,7 +918,7 @@ ObjString *stringGetHidden(Value instance) {
     ASSERT(IS_A_STRING(instance));
     ObjInstance *inst = AS_INSTANCE(instance);
     Value stringVal;
-    if (tableGet(inst->hiddenFields, OBJ_VAL(internedString("buf", 3)), &stringVal)) {
+    if (tableGet(inst->hiddenFields, OBJ_VAL(internedString("buf", 3, true)), &stringVal)) {
         return (ObjString*)AS_OBJ(stringVal);
     } else {
         return NULL;
@@ -972,7 +1007,7 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     if (inst->singletonKlass) {
         return inst->singletonKlass;
     }
-    ObjString *name = valueToString(OBJ_VAL(inst), hiddenString);
+    ObjString *name = valueToString(OBJ_VAL(inst), hiddenString, true);
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, inst->klass);
     CLASSINFO(meta)->singletonOf = (Obj*)inst;
@@ -987,9 +1022,9 @@ ObjClass *classSingletonClass(ObjClass *klass) {
     }
     ObjString *name = NULL;
     if (CLASSINFO(klass)->name) {
-        name = dupString(CLASSINFO(klass)->name);
+        name = dupString(CLASSINFO(klass)->name, true);
     } else {
-        name = copyString("(anon)", 6);
+        name = copyString("(anon)", 6, true);
         CLASSINFO(klass)->name = name;
     }
     pushCString(name, " (meta)", 7);
@@ -1006,10 +1041,10 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
     }
     ObjString *name = NULL;
     if (CLASSINFO(mod)->name) {
-        name = dupString(CLASSINFO(mod)->name);
+        name = dupString(CLASSINFO(mod)->name, true);
         hideFromGC((Obj*)name);
     } else {
-        name = hiddenString("(anon)", 6);
+        name = hiddenString("(anon)", 6, true);
         CLASSINFO(mod)->name = name;
     }
     pushCString(name, " (meta)", 7);
@@ -1027,7 +1062,7 @@ Value newThread(void) {
 }
 
 LxThread *threadGetInternal(Value thread) {
-    Value internal = getHiddenProp(thread, internedString("th", 2));
+    Value internal = getHiddenProp(thread, internedString("th", 2, true));
     ObjInternal *i = AS_INTERNAL(internal);
     ASSERT(i->data);
     return (LxThread*)i->data;

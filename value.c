@@ -106,7 +106,7 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             }
         } else if (IS_INSTANCE(value)) {
             ObjInstance *inst = AS_INSTANCE(value);
-            Obj *callable = instanceFindMethod(inst, internedString("toString", 8));
+            Obj *callable = instanceFindMethod(inst, internedString("toString", 8, true));
             if (callable && vm.inited && canCallMethods) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL);
                 if (!IS_A_STRING(stringVal)) {
@@ -175,17 +175,17 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
 }
 
 // returns a new ObjString
-ObjString *valueToString(Value value, newStringFunc stringConstructor) {
+ObjString *valueToString(Value value, newStringFunc stringConstructor, bool isRealObject) {
     ASSERT(stringConstructor != takeString); // should copy the constructed c string
     ObjString *ret = NULL;
     if (IS_BOOL(value)) {
         if (AS_BOOL(value)) {
-            ret = stringConstructor("true", 4);
+            ret = stringConstructor("true", 4, isRealObject);
         } else {
-            ret = stringConstructor("false", 5);
+            ret = stringConstructor("false", 5, isRealObject);
         }
     } else if (IS_NIL(value)) {
-        ret = stringConstructor("nil", 3);
+        ret = stringConstructor("nil", 3, isRealObject);
     } else if (IS_NUMBER(value)) {
         char buftemp[50] = { '\0' };
         double d = AS_NUMBER(value);
@@ -193,13 +193,13 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
         char *buf = calloc(strlen(buftemp)+1, 1);
         ASSERT_MEM(buf);
         strcpy(buf, buftemp);
-        ret = stringConstructor(buf, strlen(buf));
+        ret = stringConstructor(buf, strlen(buf), isRealObject);
         xfree(buf);
     } else if (IS_OBJ(value)) {
         if (OBJ_TYPE(value) == OBJ_T_STRING) {
             char *cstring = AS_CSTRING(value);
             ASSERT(cstring);
-            ret = stringConstructor(cstring, strlen(cstring));
+            ret = stringConstructor(cstring, strlen(cstring), isRealObject);
         } else if (IS_FUNCTION(value) || IS_CLOSURE(value)) {
             ObjFunction *func = NULL;
             if (IS_FUNCTION(value)) {
@@ -209,17 +209,17 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             }
             if (func->name == NULL) {
                 const char *anon = "<fun (Anon)>";
-                ret = stringConstructor(anon, strlen(anon));
+                ret = stringConstructor(anon, strlen(anon), isRealObject);
             } else {
                 char *buf = calloc(strlen(func->name->chars)+1+6, 1);
                 ASSERT_MEM(buf);
                 sprintf(buf, "<fun %s>", func->name->chars);
-                ret = stringConstructor(buf, strlen(buf));
+                ret = stringConstructor(buf, strlen(buf), isRealObject);
                 xfree(buf);
             }
         } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE) {
             ObjInstance *inst = AS_INSTANCE(value);
-            Obj *toString = instanceFindMethod(inst, internedString("toString", 8));
+            Obj *toString = instanceFindMethod(inst, internedString("toString", 8, true));
             if (toString && vm.inited) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL);
                 if (!IS_A_STRING(stringVal)) {
@@ -227,7 +227,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
                     UNREACHABLE_RETURN(NULL);
                 }
                 char *cbuf = VAL_TO_STRING(stringVal)->chars;
-                ret = stringConstructor(cbuf, strlen(cbuf));
+                ret = stringConstructor(cbuf, strlen(cbuf), isRealObject);
                 pop(); // stringVal
             } else {
                 ObjClass *klass = inst->klass;
@@ -235,7 +235,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
                 char *cbuf = calloc(strlen(klassName)+1+11, 1);
                 ASSERT_MEM(cbuf);
                 sprintf(cbuf, "<instance %s>", klassName);
-                ret = stringConstructor(cbuf, strlen(cbuf));
+                ret = stringConstructor(cbuf, strlen(cbuf), isRealObject);
                 xfree(cbuf);
             }
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
@@ -244,7 +244,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             char *cbuf = calloc(strlen(klassName)+1+8, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<class %s>", klassName);
-            ret = stringConstructor(cbuf, strlen(cbuf));
+            ret = stringConstructor(cbuf, strlen(cbuf), isRealObject);
             xfree(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
             ObjModule *mod = AS_MODULE(value);
@@ -252,7 +252,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             char *cbuf = calloc(strlen(modName)+1+9, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<module %s>", modName);
-            ret = stringConstructor(cbuf, strlen(cbuf));
+            ret = stringConstructor(cbuf, strlen(cbuf), isRealObject);
             xfree(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
@@ -261,7 +261,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             char *cbuf = calloc(strlen(nameStr)+1+14, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<fn %s (native)>", nameStr);
-            ret = stringConstructor(cbuf, strlen(cbuf));
+            ret = stringConstructor(cbuf, strlen(cbuf), isRealObject);
             xfree(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_BOUND_METHOD) {
             ObjBoundMethod *bmethod = AS_BOUND_METHOD(value);
@@ -278,7 +278,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             char *cbuf = calloc(strlen(nameStr)+1+9, 1);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<method %s>", nameStr);
-            ret = stringConstructor(cbuf, strlen(cbuf));
+            ret = stringConstructor(cbuf, strlen(cbuf), isRealObject);
             xfree(cbuf);
         } else {
             UNREACHABLE("Invalid object type (%d)", AS_OBJ(value)->type);
@@ -314,7 +314,7 @@ uint32_t valHash(Value val) {
             }
         } else {
             if (IS_INSTANCE(val)) {
-                Value hashKey = callMethod(AS_OBJ(val), internedString("hashKey", 7), 0, NULL);
+                Value hashKey = callMethod(AS_OBJ(val), internedString("hashKey", 7, true), 0, NULL);
                 if (!IS_NUMBER(hashKey)) {
                     throwErrorFmt(lxTypeErrClass, "%s", "return of hashKey() method must be a number!");
                 }
@@ -354,12 +354,13 @@ bool valEqual(Value a, Value b) {
                         VAL_TO_STRING(b)->chars) == 0;
             }
             if (IS_INSTANCE_LIKE(a)) { // including lox strings
-                return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b));
+                return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8, true), 1, &b));
             }
+            fprintf(stderr, "type got: a=%d,b=%d\n", a.type, b.type);
             UNREACHABLE_RETURN(false);
         }
         case VAL_T_UNDEF: return false;
-        default: UNREACHABLE("");
+        default: UNREACHABLE("type got: a=%d,b=%d", a.type, b.type);
     }
 }
 

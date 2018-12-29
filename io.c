@@ -79,7 +79,7 @@ Value lxIOReadStatic(int argCount, Value *args) {
     int res = 0;
     char *buf = ioReadbuf;
     size_t bytesRead = 0;
-    Value ret = newStringInstance(copyString("", 0));
+    Value ret = newStringInstance(copyString("", 0, false));
     ObjString *retStr = STRING_GETHIDDEN(ret);
     releaseGVL();
     while ((res = read(fd, buf, READBUF_SZ)) == READBUF_SZ) {

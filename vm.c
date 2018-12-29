@@ -229,6 +229,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(GCClassStatic, "on", lxGCOn);
     addNativeMethod(GCClassStatic, "off", lxGCOff);
     addNativeMethod(GCClassStatic, "setFinalizer", lxGCSetFinalizer);
+    addNativeMethod(GCClassStatic, "printStats", lxGCPrintStats);
     lxGCModule = GCModule;
 
     // order of initialization not important here
@@ -241,7 +242,7 @@ static void defineNativeClasses(void) {
 // NOTE: this initialization function can create Lox runtime objects
 static void defineGlobalVariables(void) {
     lxLoadPath = newArray();
-    ObjString *loadPathStr = internedString("loadPath", 8);
+    ObjString *loadPathStr = internedString("loadPath", 8, true);
     ASSERT(tableSet(&vm.globals, OBJ_VAL(loadPathStr), lxLoadPath));
     // populate load path from -L option given to commandline
     char *lpath = GET_OPTION(initialLoadPath);
@@ -249,17 +250,17 @@ static void defineGlobalVariables(void) {
         char *beg = lpath;
         char *end = NULL;
         while ((end = strchr(beg, ':'))) {
-            ObjString *str = copyString(beg, end - beg);
+            ObjString *str = copyString(beg, end - beg, false);
             arrayPush(lxLoadPath, newStringInstance(str));
             beg = end+1;
         }
     }
 
-    ObjString *argvStr = internedString("ARGV", 4);
+    ObjString *argvStr = internedString("ARGV", 4, true);
     lxArgv = newArray();
     ASSERT(tableSet(&vm.globals, OBJ_VAL(argvStr), lxArgv));
     for (int i = 0; i < origArgc; i++) {
-        ObjString *argStr = copyString(origArgv[i], strlen(origArgv[i]));
+        ObjString *argStr = copyString(origArgv[i], strlen(origArgv[i]), false);
         Value arg = newStringInstance(argStr);
         hideFromGC(AS_OBJ(arg));
         arrayPush(lxArgv, arg);
@@ -292,7 +293,7 @@ Value createIterator(Value iterable) {
         callVMMethod(iterObj, OBJ_VAL(nativeIteratorInit), 1, &iterable);
         return pop();
     } else if (IS_INSTANCE(iterable)) {
-        ObjString *iterId = internedString("iter", 4);
+        ObjString *iterId = internedString("iter", 4, true);
         ObjInstance *instance = AS_INSTANCE(iterable);
         Obj *method = instanceFindMethodOrRaise(instance, iterId);
         callVMMethod(instance, OBJ_VAL(method), 0, NULL);
@@ -403,9 +404,9 @@ void initVM() {
     initTable(&vm.strings); // interned strings
     vm.inited = true; // NOTE: VM has to be inited before creation of strings
     vm.exited = false;
-    vm.initString = internedString("init", 4);
-    vm.fileString = internedString("__FILE__", 8);
-    vm.dirString = internedString("__DIR__", 7);
+    vm.initString = internedString("init", 4, true);
+    vm.fileString = internedString("__FILE__", 8, true);
+    vm.dirString = internedString("__DIR__", 7, true);
 
     vec_init(&vm.hiddenObjs);
     vec_init(&vm.stackObjects);
@@ -630,7 +631,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
     }
     if (IS_OBJ(lhs)) {
         if (IS_INSTANCE_LIKE(lhs)) {
-            ObjString *opEquals = internedString("opEquals", 8);
+            ObjString *opEquals = internedString("opEquals", 8, true);
             ObjInstance *self = AS_INSTANCE(lhs);
             Obj *methodOpEq = instanceFindMethod(self, opEquals);
             if (methodOpEq) {
@@ -721,12 +722,12 @@ void showUncaughtError(Value err) {
     } else {
         className = "(anon)";
     }
-    Value msg = getProp(err, internedString("message", 7));
+    Value msg = getProp(err, internedString("message", 7, true));
     char *msgStr = NULL;
     if (!IS_NIL(msg)) {
         msgStr = VAL_TO_STRING(msg)->chars;
     }
-    Value bt = getProp(err, internedString("backtrace", 9));
+    Value bt = getProp(err, internedString("backtrace", 9, true));
     ASSERT(!IS_NIL(bt));
     int btSz = ARRAY_SIZE(bt);
     fprintf(stderr, "Uncaught error, class: %s\n", className);
@@ -749,7 +750,7 @@ void setBacktrace(Value err) {
     VM_DEBUG("Setting backtrace");
     ASSERT(IS_AN_ERROR(err));
     Value ret = newArray();
-    setProp(err, internedString("backtrace", 9), ret);
+    setProp(err, internedString("backtrace", 9, true), ret);
     int numECs = vm.v_ecs.length;
     VMExecContext *ctx;
     for (int i = numECs-1; i >= 0; i--) {
@@ -760,7 +761,7 @@ void setBacktrace(Value err) {
             int line = frame->callLine;
             ObjString *file = frame->file;
             ASSERT(file);
-            ObjString *outBuf = hiddenString("", 0);
+            ObjString *outBuf = hiddenString("", 0, true);
             Value out = newStringInstance(outBuf);
             if (frame->isCCall) {
                 ObjNative *nativeFunc = frame->nativeFunc;
@@ -1254,7 +1255,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         vec_foreach_rev(params, param, pi) {
             if (param->type.kind == PARAM_NODE_KWARG) {
                 char *kwname = tokStr(&param->tok);
-                ObjString *kwStr = copyString(kwname, strlen(kwname));
+                ObjString *kwStr = copyString(kwname, strlen(kwname), true);
                 for (int i = 0; i < callInfo->numKwargs; i++) {
                     // keyword argument given, is on stack, we pop it off
                     if (strcmp(kwname, tokStr(callInfo->kwargNames+i)) == 0) {
@@ -1308,7 +1309,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         vec_foreach(params, param, pi) {
             if (param->type.kind == PARAM_NODE_KWARG) {
                 char *kwname = tokStr(&param->tok);
-                ObjString *kwStr = copyString(kwname, strlen(kwname));
+                ObjString *kwStr = copyString(kwname, strlen(kwname), true);
                 Value val;
                 if (MAP_GET(kwargsMap, OBJ_VAL(kwStr), &val)) {
                     push(val);
@@ -1534,7 +1535,7 @@ NORETURN void throwError(Value self) {
     ASSERT(vm.inited);
     ASSERT(IS_INSTANCE(self));
     vm.lastErrorThrown = self;
-    if (IS_NIL(getProp(self, internedString("backtrace", 9)))) {
+    if (IS_NIL(getProp(self, internedString("backtrace", 9, true)))) {
         setBacktrace(self);
     }
     // error from VM
@@ -1595,7 +1596,7 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     char *cbuf = ALLOCATE(char, len+1); // uses takeString below
     strncpy(cbuf, sbuf, len);
     cbuf[len] = '\0';
-    ObjString *buf = takeString(cbuf, len);
+    ObjString *buf = takeString(cbuf, len, true);
     hideFromGC((Obj*)buf);
     Value msg = newStringInstance(buf);
     Value err = newError(klass, msg);
@@ -1715,17 +1716,17 @@ static Value unpackValue(Value val, uint8_t idx) {
 static ObjString *methodNameForBinop(OpCode code) {
     switch (code) {
     case OP_ADD:
-        return internedString("opAdd", 5);
+        return internedString("opAdd", 5, true);
     case OP_SUBTRACT:
-        return internedString("opDiff", 6);
+        return internedString("opDiff", 6, true);
     case OP_MULTIPLY:
-        return internedString("opMul", 5);
+        return internedString("opMul", 5, true);
     case OP_DIVIDE:
-        return internedString("opDiv", 5);
+        return internedString("opDiv", 5, true);
     case OP_SHOVEL_L:
-        return internedString("opShovelLeft", 12);
+        return internedString("opShovelLeft", 12, true);
     case OP_SHOVEL_R:
-        return internedString("opShovelRight", 13);
+        return internedString("opShovelRight", 13, true);
     default:
         return NULL;
     }
@@ -1961,7 +1962,7 @@ static InterpretResult vm_run() {
             fflush(stdout);
         }
         if (vm.printBuf) {
-            ObjString *out = valueToString(val, hiddenString);
+            ObjString *out = valueToString(val, hiddenString, true);
             ASSERT(out);
             pushCString(vm.printBuf, out->chars, strlen(out->chars));
             pushCString(vm.printBuf, "\n", 1);
@@ -2470,7 +2471,7 @@ static InterpretResult vm_run() {
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexGet", 10));
+          Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexGet", 10, true));
           callCallable(OBJ_VAL(method), 1, true, NULL);
           break;
       }
@@ -2480,7 +2481,7 @@ static InterpretResult vm_run() {
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexSet ('[]=') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexSet", 10));
+          Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexSet", 10, true));
           callCallable(OBJ_VAL(method), 2, true, NULL);
           break;
       }
@@ -2517,10 +2518,11 @@ static InterpretResult vm_run() {
           push(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
           if (isStatic) {
-            buf->isStatic = true;
-            push(OBJ_VAL(buf));
+              buf->isStatic = true;
+              push(OBJ_VAL(buf));
           } else {
-            push(OBJ_VAL(dupString(buf)));
+              ASSERT(buf->isInterned);
+              push(OBJ_VAL(buf));
           }
           bool ret = callCallable(peek(1), 1, false, NULL);
           ASSERT(ret); // the string instance is pushed to top of stack
@@ -2574,7 +2576,7 @@ static InterpretResult vm_run() {
 }
 
 static void setupPerScriptROGlobals(char *filename) {
-    ObjString *file = copyString(filename, strlen(filename));
+    ObjString *file = copyString(filename, strlen(filename), false);
     Value fileString = newStringInstance(file);
     hideFromGC(AS_OBJ(fileString));
     // NOTE: this can trigger GC, so we hide the value first
@@ -2584,7 +2586,7 @@ static void setupPerScriptROGlobals(char *filename) {
     if (filename[0] == pathSeparator) {
         char *lastSep = rindex(filename, pathSeparator);
         int len = lastSep - filename;
-        ObjString *dir = copyString(filename, len);
+        ObjString *dir = copyString(filename, len, false);
         Value dirVal = newStringInstance(dir);
         hideFromGC(AS_OBJ(dirVal));
         // NOTE: this can trigger GC, so we hide the value first
@@ -2600,7 +2602,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     if (!EC) {
         return INTERPRET_UNINITIALIZED; // call initVM() first!
     }
-    EC->filename = copyString(filename, strlen(filename));
+    EC->filename = copyString(filename, strlen(filename), true);
     EC->frameCount = 0;
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
@@ -2632,7 +2634,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     resetStack();
     VMExecContext *ectx = EC;
     EC->loadContext = true;
-    EC->filename = copyString(filename, strlen(filename));
+    EC->filename = copyString(filename, strlen(filename), true);
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
@@ -2683,7 +2685,7 @@ static Value doVMEval(const char *src, const char *filename, int lineno, bool th
             return UNDEF_VAL;
         }
     }
-    EC->filename = copyString(filename, strlen(filename));
+    EC->filename = copyString(filename, strlen(filename), true);
     VM_DEBUG("%s", "Pushing initial eval callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;

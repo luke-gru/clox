@@ -45,6 +45,8 @@ typedef struct ObjString {
   int capacity;
   bool isStatic;
   bool isInterned;
+  bool isRealObject; // am I allocated on the object heap
+  bool isShared; // *chars is shared
 } ObjString;
 
 typedef void (*GCMarkFunc)(Obj *obj);
@@ -309,13 +311,14 @@ typedef struct LxFile {
 #define FILE_GETHIDDEN(fileVal) (fileGetHidden(fileVal))
 
 // strings (internal)
-typedef ObjString *(*newStringFunc)(char *chars, int length);
+typedef ObjString *(*newStringFunc)(char *chars, int length, bool isRealObject);
 // String creation functions
-ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
-ObjString *copyString(char *chars, int length); // copies provided memory. Object lives on lox heap.
-ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
-ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
-ObjString *dupString(ObjString *string);
+ObjString *takeString(char *chars, int length, bool isRealObject); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
+ObjString *copyString(char *chars, int length, bool isRealObject); // copies provided memory. Object lives on lox heap.
+ObjString *hiddenString(char *chars, int length, bool isRealObject); // hidden from GC, used in tests mainly.
+ObjString *internedString(char *chars, int length, bool isRealObject); // Provided string must be interned by VM or will give error.
+ObjString *dupString(ObjString *string, bool isRealObject);
+ObjString *dupStringShared(ObjString *string, bool isRealObject);
 void pushObjString(ObjString *a, ObjString *b);
 void clearObjString(ObjString *str);
 void insertObjString(ObjString *a, ObjString *b, int at);

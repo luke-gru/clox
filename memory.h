@@ -74,6 +74,7 @@ void hideFromGC(Obj *obj);
 void unhideFromGC(Obj *obj);
 
 void printGCProfile(void);
+void printGCStats(bool all);
 
 void addHeap(void);
 Obj *getNewObject(ObjType type, size_t sz);
