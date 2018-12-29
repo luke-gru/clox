@@ -69,6 +69,5 @@ Optimizations
 * different GC strategies, maybe support copying GC and/or generational GC
 * optimize array and string method lookup with an inline cache in the
 bytecode, and benchmark the lookup results
-* Reduce object allocation by introducing T_DATA that can act like
-a class, but is a wrapped struct, like Ruby. Arrays right now take 2
-objects, ObjInstance and ObjInternal, and can take 1 by removing ObjInternal.
+* Deduplicate T_STRING and T_INSTANCE so that creating a string only
+uses 1 object, and malloced memory.

@@ -1553,7 +1553,8 @@ static void emitNode(Node *n) {
                     idx++;
                 }
             }
-            ObjInternal *callInfoObj = newInternalObject(false, callInfoData, sizeof(CallInfo), NULL, NULL);
+            ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL);
+            hideFromGC((Obj*)callInfoObj);
             uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
             emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
         } else {
@@ -1579,7 +1580,8 @@ static void emitNode(Node *n) {
                     idx++;
                 }
             }
-            ObjInternal *callInfoObj = newInternalObject(false, callInfoData, sizeof(CallInfo), NULL, NULL);
+            ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL);
+            hideFromGC((Obj*)callInfoObj);
             uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
             emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);
         }

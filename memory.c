@@ -115,7 +115,8 @@ void printGCProfile() {
 void GCPromote(Obj *obj, unsigned short gen) {
     if (gen > GC_GEN_MAX) gen = GC_GEN_MAX;
     unsigned short oldGen = obj->GCGen;
-    GCStats.generations[oldGen]--;
+    if (GCStats.generations[oldGen])
+        GCStats.generations[oldGen]--;
     GCStats.generations[gen]++;
     obj->GCGen = gen;
 }
@@ -298,7 +299,8 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
 static inline void INC_GEN(Obj *obj) {
     if (obj->GCGen == GC_GEN_MAX) return;
     obj->GCGen++;
-    GCStats.generations[obj->GCGen-1]--;
+    if (GCStats.generations[obj->GCGen-1])
+        GCStats.generations[obj->GCGen-1]--;
     GCStats.generations[obj->GCGen]++;
 }
 
@@ -507,7 +509,8 @@ void freeObject(Obj *obj) {
 
     GC_TRACE_FREE(4, obj);
 
-    GCStats.generations[obj->GCGen]--;
+    if (GCStats.generations[obj->GCGen])
+        GCStats.generations[obj->GCGen]--;
     GCStats.heapUsed -= sizeof(ObjAny);
     GCStats.heapUsedWaste -= (sizeof(ObjAny)-sizeofObj(obj));
     GCStats.demographics[obj->type]--;
