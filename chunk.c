@@ -18,9 +18,8 @@ void initChunk(Chunk *chunk) {
 void initIseq(Iseq *seq) {
     seq->count = 0;
     seq->byteCount = 0;
-    seq->constants = ALLOCATE(ValueArray, 1);
-    initValueArray(seq->constants);
-    seq->catchTbl = NULL;
+    seq->constants = NULL; // share constants with chunk
+    seq->catchTbl = NULL; // share catchTbl with chunk
     seq->tail = NULL;
     seq->insns = NULL;
 }

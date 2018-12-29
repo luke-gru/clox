@@ -284,6 +284,7 @@ ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {
     function->hasRestArg = false;
     if (chunk == NULL) {
         chunk = ALLOCATE(Chunk, 1);
+        initChunk(chunk);
     }
     function->chunk = chunk;
     return function;

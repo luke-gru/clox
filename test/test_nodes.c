@@ -2,6 +2,9 @@
 #include "nodes.h"
 #include "parser.h"
 #include "vm.h"
+#include "memory.h"
+
+static Parser parser;
 
 // replace some blank characters with visible characters so it's easier
 // to diff 2 strings. Replace spaces, tabs and newlines

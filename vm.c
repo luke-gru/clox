@@ -2690,7 +2690,7 @@ static Value doVMEval(const char *src, const char *filename, int lineno, bool th
     ObjFunction *func = newFunction(chunk, NULL);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
-    /*unhideFromGC((Obj*)func);*/
+    unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
 

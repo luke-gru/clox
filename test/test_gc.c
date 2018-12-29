@@ -5,13 +5,7 @@
 #include "debug.h"
 
 static bool isLinkedObject(Obj *obj) {
-    ASSERT(vm.inited);
-    Obj *linked = vm.objects;
-    bool isLinked = false;
-    while (linked && !(isLinked = (linked == obj))) {
-        linked = linked->next;
-    }
-    return isLinked;
+    return obj->type != OBJ_T_NONE;
 }
 
 static void fullGC(void) {

@@ -87,17 +87,17 @@ static void printGCStats() {
         printObjTypeSizes();
     }
     fprintf(stderr, "ObjAny size: %ld b\n", sizeof(ObjAny));
+    fprintf(stderr, "heap page size: %ld KB\n", (HEAP_SLOTS*sizeof(ObjAny))/1024);
+    fprintf(stderr, "# heaps used: %d\n", heapsUsed);
     fprintf(stderr, "Total allocated: %ld KB\n", GCStats.totalAllocated/1024);
     fprintf(stderr, "Heap size: %ld KB\n", GCStats.heapSize/1024);
     fprintf(stderr, "Heap used: %ld KB\n", GCStats.heapUsed/1024);
     fprintf(stderr, "Heap used waste: %ld KB\n", GCStats.heapUsedWaste/1024);
-    fprintf(stderr, "# heaps used: %d\n", heapsUsed);
     fprintf(stderr, "# objects: %ld\n", GCStats.heapUsed/sizeof(ObjAny));
     if (GET_OPTION(traceGCLvl > 3)) {
         printGCDemographics();
     }
 }
-
 
 void printGCProfile() {
     fprintf(stderr, "Total runs: %lu\n", GCProf.totalRuns);

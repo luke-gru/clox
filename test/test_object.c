@@ -11,7 +11,7 @@ static int test_string_object(void) {
     T_ASSERT_STREQ("hi\n", cStr);
     T_ASSERT_EQ(3, string->length);
 cleanup:
-    freeObject((Obj*)string, true);
+    freeObject((Obj*)string);
     return 0;
 }
 
@@ -23,7 +23,7 @@ static int test_string_pushCStringFmt(void) {
     T_ASSERT_STREQ("hello, world", cStr);
     T_ASSERT_EQ(12, string->length);
 cleanup:
-    freeObject((Obj*)string, true);
+    freeObject((Obj*)string);
     return 0;
 }
 

@@ -70,7 +70,6 @@ int main(int argc, char *argv[]) {
     initSighandlers();
 
     CompileErr err = COMPILE_ERR_NONE;
-    int compile_res = 0;
     if (fname == NULL || interactive) {
         repl();
         exit(0);

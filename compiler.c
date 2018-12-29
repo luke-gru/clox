@@ -585,7 +585,7 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
     ASSERT(iseq);
     ASSERT(chunk);
     if (!compilerOpts.noOptimize) {
-        /*optimizeIseq(iseq);*/
+        optimizeIseq(iseq);
     }
     COMP_TRACE("copyIseqToChunk (%d insns, bytecount: %d)", iseq->count, iseq->byteCount);
     chunk->catchTbl = iseq->catchTbl;
@@ -838,6 +838,7 @@ static void initCompiler(
     compiler->scopeDepth = scopeDepth;
     compiler->function = newFunction(chunk, NULL);
     initIseq(&compiler->iseq);
+    compiler->iseq.constants = compiler->function->chunk->constants;
     hideFromGC((Obj*)compiler->function); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = ftype;
     compiler->hadError = false;
@@ -1714,7 +1715,7 @@ Chunk *compile_file(char *fname, CompileErr *err) {
     int fd = open(fname, O_RDONLY);
     if (fd == -1) {
         *err = COMPILE_ERR_ERRNO;
-        return fd;
+        return NULL;
     }
     struct stat st;
     int res = fstat(fd, &st);
