@@ -108,7 +108,7 @@ static void freeCompiler(Compiler *c, bool freeErrMessages) {
 }
 
 static Chunk *currentChunk() {
-  return &current->function->chunk;
+  return current->function->chunk;
 }
 
 static Iseq *currentIseq() {
@@ -335,7 +335,7 @@ static bool isNumConstOp(Insn *in) {
 }
 
 static Value iseqGetConstant(Iseq *seq, uint8_t idx) {
-    return seq->constants.values[idx];
+    return seq->constants->values[idx];
 }
 
 static Value foldConstant(Iseq *seq, Insn *cur, Insn *bin, Insn *ain) {
@@ -381,8 +381,8 @@ static Value foldConstant(Iseq *seq, Insn *cur, Insn *bin, Insn *ain) {
 }
 
 static void changeConstant(Iseq *seq, uint8_t constIdx, Value newVal) {
-    ASSERT(constIdx < seq->constants.count);
-    seq->constants.values[constIdx] = newVal;
+    ASSERT(constIdx < seq->constants->count);
+    seq->constants->values[constIdx] = newVal;
 }
 
 static bool isJump(Insn *in) {
@@ -585,11 +585,12 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
     ASSERT(iseq);
     ASSERT(chunk);
     if (!compilerOpts.noOptimize) {
-        optimizeIseq(iseq);
+        /*optimizeIseq(iseq);*/
     }
     COMP_TRACE("copyIseqToChunk (%d insns, bytecount: %d)", iseq->count, iseq->byteCount);
     chunk->catchTbl = iseq->catchTbl;
     chunk->constants = iseq->constants;
+    ASSERT(chunk->constants);
     Insn *in = iseq->insns;
     int idx = 0;
     while (in) {
@@ -1051,6 +1052,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
     emitChildren(n); // the blockNode
     popScope(COMPILE_SCOPE_FUNCTION);
     func = endCompiler();
+    ASSERT(func->chunk);
 
     // save the chunk as a constant in the parent (now current) chunk
     uint8_t funcIdx = makeConstant(OBJ_VAL(func), CONST_T_CODE);
@@ -1070,7 +1072,6 @@ static void emitFunction(Node *n, FunctionType ftype) {
         if ((currentClassOrModule == NULL && !inINBlock) || ftype == FUN_TYPE_NAMED) { // regular function
             namedVariable(n->tok, VAR_SET);
         } else { // method
-            func->isMethod = true;
             switch (ftype) {
                 case FUN_TYPE_METHOD:
                 case FUN_TYPE_INIT:
@@ -1666,7 +1667,7 @@ static void emitNode(Node *n) {
     }
 }
 
-int compile_src(char *src, Chunk *chunk, CompileErr *err) {
+Chunk *compile_src(char *src, CompileErr *err) {
     initScanner(&scanner, src);
     Parser p;
     initParser(&p);
@@ -1678,38 +1679,38 @@ int compile_src(char *src, Chunk *chunk, CompileErr *err) {
         if (p.hadError) {
             outputParserErrors(&p, stderr);
             freeParser(&p);
-            return -1;
+            return NULL;
         }
         return 0;
     } else if (p.hadError) {
         outputParserErrors(&p, stderr);
         freeParser(&p); // TODO: throw SyntaxError
         *err = COMPILE_ERR_SYNTAX;
-        return -1;
+        return NULL;
     }
     ASSERT(program);
     freeParser(&p);
     Compiler mainCompiler;
     top = &mainCompiler;
-    initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, chunk);
+    initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, NULL);
     emitNode(program);
     ObjFunction *prog = endCompiler();
-    *chunk = prog->chunk; // copy
-    if (CLOX_OPTION_T(debugBytecode)) {
-        printDisassembledChunk(stderr, chunk, "Bytecode:");
+    if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
+        printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
     }
     if (mainCompiler.hadError) {
         outputCompilerErrors(&mainCompiler, stderr);
         freeCompiler(&mainCompiler, true);
         *err = COMPILE_ERR_SEMANTICS;
-        return -1; // TODO: throw SyntaxError
+        return NULL;
     } else {
         *err = COMPILE_ERR_NONE;
-        return 0;
+        ASSERT(prog->chunk);
+        return prog->chunk;
     }
 }
 
-int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
+Chunk *compile_file(char *fname, CompileErr *err) {
     int fd = open(fname, O_RDONLY);
     if (fd == -1) {
         *err = COMPILE_ERR_ERRNO;
@@ -1719,7 +1720,7 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
     int res = fstat(fd, &st);
     if (res != 0) {
         *err = COMPILE_ERR_ERRNO;
-        return res;
+        return NULL;
     }
     char *buf = calloc(st.st_size+1, 1);
     ASSERT_MEM(buf);
@@ -1727,12 +1728,10 @@ int compile_file(char *fname, Chunk *chunk, CompileErr *err) {
     if (res == -1) {
         *err = COMPILE_ERR_ERRNO;
         xfree(buf);
-        return res;
+        return NULL;
     }
-    res = compile_src(buf, chunk, err);
-    // NOTE: buf not freed, because tokens from scanner still point to file
-    // buffer, and is also used in VM loop.
-    return res;
+    Chunk *chunk = compile_src(buf, err);
+    return chunk;
 }
 
 void grayCompilerRoots(void) {

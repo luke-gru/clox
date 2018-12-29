@@ -277,11 +277,11 @@ readableCheck:
     if (checkLoaded && VMLoadedScript(pathbuf)) {
         return BOOL_VAL(false);
     }
-    Chunk chunk;
-    initChunk(&chunk);
     CompileErr err = COMPILE_ERR_NONE;
-    int compile_res = compile_file(pathbuf, &chunk, &err);
-    if (compile_res != 0) {
+    Chunk *chunk = compile_file(pathbuf, &err);
+    if (!chunk || err != COMPILE_ERR_NONE) {
+        freeChunk(chunk);
+        FREE(Chunk, chunk);
         // TODO: throw syntax error
         return BOOL_VAL(false);
     }
@@ -289,7 +289,7 @@ readableCheck:
     if (checkLoaded) {
         vec_push(&vm.loadedScripts, newStringInstance(fpath));
     }
-    InterpretResult ires = loadScript(&chunk, pathbuf);
+    InterpretResult ires = loadScript(chunk, pathbuf);
     return BOOL_VAL(ires == INTERPRET_OK);
 }
 

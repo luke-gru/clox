@@ -5,6 +5,7 @@
 #include "debug.h"
 #include "options.h"
 #include "runtime.h"
+#include "memory.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
@@ -75,19 +76,15 @@ int main(int argc, char *argv[]) {
         exit(0);
     }
 
-    Chunk chunk;
-    initChunk(&chunk);
     initVM();
-    compile_res = compile_file(fname, &chunk, &err);
+    Chunk *chunk = compile_file(fname, &err);
 
-    if (compile_res != 0) {
+    if (err != COMPILE_ERR_NONE || !chunk) {
         if (err == COMPILE_ERR_SYNTAX) {
             freeVM();
-            freeChunk(&chunk);
             die("%s", "Syntax error");
         } else {
             freeVM();
-            freeChunk(&chunk);
             if (err == COMPILE_ERR_ERRNO) {
                 die("Compile error: %s", strerror(errno));
             } else {
@@ -99,18 +96,17 @@ int main(int argc, char *argv[]) {
 
     if (CLOX_OPTION_T(compileOnly)) {
         freeVM();
-        freeChunk(&chunk);
+        freeChunk(chunk);
+        FREE(Chunk, chunk);
         printf("No compilation errors\n");
         exit(0);
     }
 
-    InterpretResult ires = interpret(&chunk, fname);
+    InterpretResult ires = interpret(chunk, fname);
     if (ires != INTERPRET_OK) {
-        freeChunk(&chunk);
         // error message was already displayed
         stopVM(1);
     }
 
-    freeChunk(&chunk);
     stopVM(0);
 }

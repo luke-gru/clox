@@ -112,8 +112,8 @@ typedef struct CompilerOpts {
 
 extern CompilerOpts compilerOpts;
 
-int compile_src(char *src, Chunk *chunk, CompileErr *err);
-int compile_file(char *fname, Chunk *chunk, CompileErr *err);
+Chunk *compile_src(char *src, CompileErr *err);
+Chunk *compile_file(char *fname, CompileErr *err);
 
 void grayCompilerRoots(void);
 

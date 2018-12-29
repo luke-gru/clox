@@ -68,7 +68,7 @@ static void printGenerationInfo() {
 }
 
 static void printObjTypeSizes() {
-    int type = OBJ_T_NONE;
+    int type = OBJ_T_NONE+1;
     while (type < OBJ_T_LAST) {
         fprintf(stderr, "%s size: %ld\n", objTypeName(type), sizeofObjType(type));
         type++;
@@ -83,7 +83,7 @@ static void printGCDemographics() {
 
 static void printGCStats() {
     fprintf(stderr, "GC Stats\n");
-    if (GET_OPTION(traceGCLvl > 4)) {
+    if (GET_OPTION(traceGCLvl > 2)) {
         printObjTypeSizes();
     }
     fprintf(stderr, "ObjAny size: %ld b\n", sizeof(ObjAny));
@@ -93,7 +93,7 @@ static void printGCStats() {
     fprintf(stderr, "Heap used waste: %ld KB\n", GCStats.heapUsedWaste/1024);
     fprintf(stderr, "# heaps used: %d\n", heapsUsed);
     fprintf(stderr, "# objects: %ld\n", GCStats.heapUsed/sizeof(ObjAny));
-    if (GET_OPTION(traceGCLvl > 5)) {
+    if (GET_OPTION(traceGCLvl > 3)) {
         printGCDemographics();
     }
 }

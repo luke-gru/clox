@@ -11,13 +11,15 @@ void initChunk(Chunk *chunk) {
     chunk->ndepths = NULL;
     chunk->nwidths = NULL;
     chunk->catchTbl = NULL;
-    initValueArray(&chunk->constants);
+    chunk->constants = ALLOCATE(ValueArray, 1);
+    initValueArray(chunk->constants);
 }
 
 void initIseq(Iseq *seq) {
     seq->count = 0;
     seq->byteCount = 0;
-    initValueArray(&seq->constants);
+    seq->constants = ALLOCATE(ValueArray, 1);
+    initValueArray(seq->constants);
     seq->catchTbl = NULL;
     seq->tail = NULL;
     seq->insns = NULL;
@@ -43,7 +45,7 @@ void freeIseq(Iseq *seq) {
     // catchtbl is shared with chunk, don't free it
     seq->catchTbl = NULL;
     // constant valuearray is shared with chunk, don't free it
-    memset(&seq->constants, 0, sizeof(seq->constants));
+    seq->constants = NULL;
 }
 
 void iseqAddInsn(Iseq *seq, Insn *toAdd) {
@@ -149,7 +151,7 @@ void freeChunk(Chunk *chunk) {
     }
     chunk->lines = NULL;
     /*fprintf(stderr, "freeChunk constants\n");*/
-    freeValueArray(&chunk->constants);
+    freeValueArray(chunk->constants);
     if (chunk->catchTbl) {
         /*fprintf(stderr, "freeChunk catchTbl\n");*/
         freeCatchTable(chunk->catchTbl);
@@ -163,7 +165,7 @@ void freeChunk(Chunk *chunk) {
  * Retrieve a constant from the provided chunk's constant pool
  */
 Value getConstant(Chunk *chunk, int idx) {
-    return chunk->constants.values[idx];
+    return chunk->constants->values[idx];
 }
 
 int iseqAddCatchRow(
@@ -197,6 +199,6 @@ int iseqAddCatchRow(
 }
 
 int iseqAddConstant(Iseq *seq, Value value) {
-    writeValueArrayEnd(&seq->constants, value);
-    return seq->constants.count - 1;
+    writeValueArrayEnd(seq->constants, value);
+    return seq->constants->count - 1;
 }

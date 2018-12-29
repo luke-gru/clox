@@ -67,11 +67,10 @@ typedef struct ObjFunction {
   int upvalueCount;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM
-  Chunk chunk;
+  Chunk *chunk;
   ObjString *name;
   Obj *klass; // ObjClass* or ObjModule* (if method)
   Node *funcNode;
-  bool isMethod; // TODO: remove, redundant (see `klass`)
   bool isSingletonMethod;
   bool hasRestArg;
 } ObjFunction;

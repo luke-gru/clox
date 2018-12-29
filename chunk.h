@@ -32,7 +32,7 @@ typedef struct Chunk {
     int *lines; // lineno associated with bytecode instruction
     int *ndepths; // node depth level associated with bytecode instruction (used by debugger)
     int *nwidths; // node width level ...
-    ValueArray constants;
+    ValueArray *constants;
     CatchTable *catchTbl;
 } Chunk;
 
@@ -65,7 +65,7 @@ typedef struct Insn {
 typedef struct Iseq {
     int count; // # of Insns
     int byteCount;
-    ValueArray constants;
+    ValueArray *constants;
     CatchTable *catchTbl;
     Insn *tail; // tail of insns list
     Insn *insns; // head of doubly linked list of insns

@@ -275,17 +275,17 @@ ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {
 
     function->arity = 0;
     function->numDefaultArgs = 0;
-    function->hasRestArg = false;
     function->numKwargs = 0;
     function->upvalueCount = 0;
     function->name = NULL;
-    function->isMethod = false;
+    function->klass = NULL;
     function->funcNode = funcNode;
+    function->isSingletonMethod = false;
+    function->hasRestArg = false;
     if (chunk == NULL) {
-        initChunk(&function->chunk);
-    } else {
-        function->chunk = *chunk; // copy
+        chunk = ALLOCATE(Chunk, 1);
     }
+    function->chunk = chunk;
     return function;
 }
 

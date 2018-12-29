@@ -679,7 +679,7 @@ static inline CallFrame *getFrameOrNull(void) {
 }
 
 static inline Chunk *currentChunk(void) {
-    return &getFrame()->closure->function->chunk;
+    return getFrame()->closure->function->chunk;
 }
 
 void errorPrintScriptBacktrace(const char *format, ...) {
@@ -699,8 +699,8 @@ void errorPrintScriptBacktrace(const char *format, ...) {
         } else {
             ObjFunction *function = frame->closure->function;
             // -1 because the IP is sitting on the next instruction to be executed.
-            size_t instruction = frame->ip - function->chunk.code - 1;
-            fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
+            size_t instruction = frame->ip - function->chunk->code - 1;
+            fprintf(stderr, "[line %d] in ", function->chunk->lines[instruction]);
             if (function->name == NULL) {
                 fprintf(stderr, "script\n"); // top-level
             } else {
@@ -860,7 +860,6 @@ static void defineMethod(ObjString *name) {
     ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
     ObjFunction *func = AS_CLOSURE(method)->function;
     func->klass = AS_OBJ(classOrMod);
-    func->isMethod = true;
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         const char *klassName = klass->name ? klass->name->chars : "(anon)";
@@ -885,7 +884,6 @@ static void defineStaticMethod(ObjString *name) {
     ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
     func->klass = AS_OBJ(classOrMod);
     func->isSingletonMethod = true;
-    func->isMethod = true;
     ObjClass *metaClass = singletonClass(AS_OBJ(classOrMod));
     VM_DEBUG("defining static method '%s#%s'", metaClass->name->chars, name->chars);
     tableSet(metaClass->methods, OBJ_VAL(name), method);
@@ -1324,7 +1322,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         push(kwargsMap);
     }
 
-    int parentStart = getFrame()->ip - getFrame()->closure->function->chunk.code - 2;
+    int parentStart = getFrame()->ip - getFrame()->closure->function->chunk->code - 2;
     ASSERT(parentStart >= 0);
 
     size_t funcOffset = 0;
@@ -1366,7 +1364,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         VM_DEBUG("Func offset due to optargs: %d", (int)funcOffset);
     }
     frame->closure = closure;
-    frame->ip = closure->function->chunk.code + funcOffset;
+    frame->ip = closure->function->chunk->code + funcOffset;
     frame->start = parentStart;
     frame->isCCall = false;
     frame->nativeFunc = NULL;
@@ -1766,7 +1764,7 @@ static InterpretResult vm_run() {
         }
     }
 #define READ_BYTE() (*getFrame()->ip++)
-#define READ_CONSTANT() (ch->constants.values[READ_BYTE()])
+#define READ_CONSTANT() (ch->constants->values[READ_BYTE()])
 #define BINARY_OP(op, opcode, type) \
     do { \
       Value b = pop(); \
@@ -2663,22 +2661,19 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
 static Value doVMEval(const char *src, const char *filename, int lineno, bool throwOnErr) {
     CallFrame *oldFrame = getFrame();
     CompileErr err = COMPILE_ERR_NONE;
-    Chunk chunk;
-    initChunk(&chunk);
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
     compilerOpts.noRemoveUnusedExpressions = true;
     push_EC();
     VMExecContext *ectx = EC;
     ectx->evalContext = true;
     resetStack();
-    int compile_res = compile_src(src, &chunk, &err);
+    Chunk *chunk = compile_src(src, &err);
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
-    if (compile_res != 0) {
+    if (err != COMPILE_ERR_NONE || !chunk) {
         VM_DEBUG("compile error in eval");
         pop_EC();
         ASSERT(getFrame() == oldFrame);
-        freeChunk(&chunk);
         if (throwOnErr) {
             throwErrorFmt(lxSyntaxErrClass, "%s", "Syntax error");
         } else {
@@ -2690,12 +2685,12 @@ static Value doVMEval(const char *src, const char *filename, int lineno, bool th
     VM_DEBUG("%s", "Pushing initial eval callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
-    frame->ip = chunk.code;
+    frame->ip = chunk->code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(&chunk, NULL);
+    ObjFunction *func = newFunction(chunk, NULL);
     hideFromGC((Obj*)func);
     frame->closure = newClosure(func);
-    unhideFromGC((Obj*)func);
+    /*unhideFromGC((Obj*)func);*/
     frame->isCCall = false;
     frame->nativeFunc = NULL;
 

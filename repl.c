@@ -8,15 +8,18 @@
 #include "memory.h"
 #include "linenoise.h"
 
-Chunk rChunk;
+static Chunk *chunk = NULL;
 
-static void resetChunk(void) {
-    initChunk(&rChunk); // NOTE: should call freeChunk to release the value array
+static void _freeChunk() {
+    if (chunk) {
+        freeChunk(chunk);
+        chunk = NULL;
+    }
 }
 
 static bool evalLines(char *lines[], int numLines) {
     resetStack();
-    resetChunk();
+    _freeChunk();
     vm.exited = false;
     vm.hadError = false;
     ObjString *buf = hiddenString("", 0);
@@ -28,17 +31,18 @@ static bool evalLines(char *lines[], int numLines) {
     char *code = buf->chars;
     CompileErr cerr = COMPILE_ERR_NONE;
     /*fprintf(stderr, "compiling code: '%s'", code);*/
-    int res = compile_src(code, &rChunk, &cerr);
+    chunk = compile_src(code, &cerr);
     unhideFromGC((Obj*)buf);
-    if (res != 0) {
+    if (cerr != COMPILE_ERR_NONE) {
         fprintf(stderr, "%s", "Compilation error\n");
         return false;
     }
     /*fprintf(stderr, "interpreting code\n");*/
-    InterpretResult ires = interpret(&rChunk, "(repl)");
+    InterpretResult ires = interpret(chunk, "(repl)");
     resetStack();
     if (ires != INTERPRET_OK) {
         fprintf(stderr, "%s", "Error evaluating code\n");
+        _freeChunk(chunk);
         return false;
     }
     return true;
@@ -86,7 +90,6 @@ static void _resetScanner(void) {
 NORETURN void repl(void) {
     const char *prompt = ">  ";
     _resetScanner();
-    initChunk(&rChunk);
     initVM();
     linenoiseHistorySetMaxLen(500);
     // we want to evaluate unused expressions, like the statement `1+1`,
@@ -114,7 +117,7 @@ NORETURN void repl(void) {
         // resets the VM, re-inits the code chunk
         if (numLines == 0 && strcmp(line, "reset") == 0) {
             fprintf(stderr, "Resetting VM... ");
-            freeChunk(&rChunk); // re-initializes it too
+            _freeChunk(chunk);
             freeVM();
             initVM();
             _resetScanner();

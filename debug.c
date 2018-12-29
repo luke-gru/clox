@@ -246,7 +246,7 @@ void printDisassembledChunk(FILE *f, Chunk *chunk, const char *name) {
     vec_foreach(&funcs, func, i) {
         char *name = func->name ? func->name->chars : "(anon)";
         fprintf(f, "-- Function %s --\n", name);
-        printDisassembledChunk(f, &func->chunk, name);
+        printDisassembledChunk(f, func->chunk, name);
         fprintf(f, "----\n");
     }
     vec_deinit(&funcs);
@@ -737,7 +737,7 @@ ObjString *disassembleChunk(Chunk *chunk) {
         fprintf(stderr, "Function name: '%s'\n", name);
         sprintf(cbuf, "-- Function %s --\n", name);
         pushCString(buf, cbuf, strlen(cbuf));
-        ObjString *funcStr = disassembleChunk(&func->chunk);
+        ObjString *funcStr = disassembleChunk(func->chunk);
         pushCString(buf, funcStr->chars, strlen(funcStr->chars));
         pushCString(buf, "----\n", strlen("----\n"));
         xfree(cbuf);
