@@ -210,9 +210,10 @@ Value lxThreadInit(int argCount, Value *args) {
     callSuper(0, NULL, NULL);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(true, NULL, sizeof(LxThread), NULL, NULL);
+    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxThread), NULL, NULL);
     LxThread *th = ALLOCATE(LxThread, 1); // GCed by default GC free of internalObject
     internalObj->data = th;
+    selfObj->internal = internalObj;
     tableSet(selfObj->hiddenFields, OBJ_VAL(internedString("th", 2)),
             OBJ_VAL(internalObj));
     return self;
@@ -501,7 +502,7 @@ static void markInternalIter(Obj *internalObj) {
     ASSERT(internal);
     ObjInstance *instance = ((Iterator*)internal->data)->instance;
     ASSERT(instance);
-    blackenObject((Obj*)instance);
+    grayObject((Obj*)instance);
 }
 
 static void freeInternalIter(Obj *internalObj) {
@@ -525,12 +526,13 @@ Value lxIteratorInit(int argCount, Value *args) {
     iter->index = -1;
     iter->lastRealIndex = -1;
     iter->instance = AS_INSTANCE(iterable);
-    ObjInternal *internalIter = newInternalObject(true,
+    ObjInternal *internalIter = newInternalObject(false,
         iter, sizeof(Iterator), markInternalIter, freeInternalIter
     );
     tableSet(selfObj->hiddenFields,
             OBJ_VAL(internedString("iter", 4)),
             OBJ_VAL(internalIter));
+    selfObj->internal = internalIter;
     return self;
 }
 

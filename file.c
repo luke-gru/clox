@@ -194,16 +194,15 @@ static void freeInternalFile(Obj *obj) {
 
 static LxFile *initFile(Value fileVal, ObjString *fname, int fd, int flags) {
     ObjInstance *fileObj = AS_INSTANCE(fileVal);
-    ObjInternal *internalObj = newInternalObject(true, NULL, sizeof(LxFile), markInternalFile, freeInternalFile);
-    hideFromGC((Obj*)internalObj);
+    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxFile), markInternalFile, freeInternalFile);
     LxFile *file = ALLOCATE(LxFile, 1); // GCed by default GC free of internalObject
     file->name = dupString(fname);
     file->fd = fd;
     file->oflags = flags;
     file->isOpen = true;
     internalObj->data = file;
+    fileObj->internal = internalObj;
     tableSet(fileObj->hiddenFields, OBJ_VAL(internedString("f", 1)), OBJ_VAL(internalObj));
-    unhideFromGC((Obj*)internalObj);
     return file;
 }
 

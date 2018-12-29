@@ -572,6 +572,8 @@ void freeObject(Obj *obj) {
             ObjInstance *instance = (ObjInstance*)obj;
             if (instance->internal && instance->internal->freeFunc) {
                 instance->internal->freeFunc((Obj*)instance->internal);
+            }
+            if (instance->internal) {
                 FREE(ObjInternal, instance->internal);
             }
             GC_TRACE_DEBUG(5, "Freeing instance fields table: p=%p", &instance->fields);
