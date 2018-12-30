@@ -88,7 +88,6 @@ Value lxIteratorNext(int argCount, Value *args);
 ObjNative *nativeIteratorInit;
 
 // class Thread
-Value lxThreadInit(int argCount, Value *args);
 ObjNative *nativeThreadInit;
 
 // module GC
@@ -126,6 +125,8 @@ void Init_FileClass(void);
 void Init_ProcessModule(void);
 // random()/srandom() functions
 void Init_rand(void);
+// class Thread
+void Init_ThreadClass(void);
 
 // API for adding classes/modules/methods
 void addGlobalFunction(const char *name, NativeFn func);

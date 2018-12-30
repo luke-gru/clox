@@ -1,4 +1,3 @@
-#include <pthread.h>
 #include <stdio.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -13,6 +12,8 @@
 #include "nodes.h"
 
 VM vm;
+
+pthread_t GVLOwner;
 
 #ifndef NDEBUG
 #define VM_DEBUG(...) vm_debug(__VA_ARGS__)
@@ -113,12 +114,9 @@ static void defineNativeFunctions(void) {
 
 // Builtin classes initialized below
 ObjClass *lxObjClass;
-ObjClass *lxStringClass;
 ObjClass *lxClassClass;
 ObjClass *lxModuleClass;
-ObjClass *lxAryClass;
 ObjClass *lxIteratorClass;
-ObjClass *lxThreadClass;
 ObjModule *lxGCModule;
 ObjClass *lxErrClass;
 ObjClass *lxArgErrClass;
@@ -131,7 +129,6 @@ Value lxLoadPath; // load path for loadScript/requireScript (-L flag)
 Value lxArgv;
 
 ObjNative *nativeObjectInit = NULL;
-ObjNative *nativeThreadInit = NULL;
 ObjNative *nativeIteratorInit = NULL;
 ObjNative *nativeErrorInit = NULL;
 ObjNative *nativeClassInit = NULL;
@@ -216,11 +213,6 @@ static void defineNativeClasses(void) {
     ObjClass *loadErrClass = addGlobalClass("LoadError", errClass);
     lxLoadErrClass = loadErrClass;
 
-    // class Thread
-    ObjClass *threadClass = addGlobalClass("Thread", objClass);
-    lxThreadClass = threadClass;
-    nativeThreadInit = addNativeMethod(threadClass, "init", lxThreadInit);
-
     // module GC
     ObjModule *GCModule = addGlobalModule("GC");
     ObjClass *GCClassStatic = moduleSingletonClass(GCModule);
@@ -235,6 +227,7 @@ static void defineNativeClasses(void) {
     Init_ProcessModule();
     Init_IOClass();
     Init_FileClass();
+    Init_ThreadClass();
     isClassHierarchyCreated = true;
 }
 
@@ -2833,7 +2826,9 @@ NORETURN void stopVM(int status) {
 
 void acquireGVL(void) {
     pthread_t tid = pthread_self(); (void)tid;
+    ASSERT(GVLOwner != tid);
     THREAD_DEBUG(3, "thread %lu locking GVL...", (unsigned long)tid);
+    GVLOwner = tid;
     pthread_mutex_lock(&vm.GVLock);
     // TODO: set vm.curThread here
     THREAD_DEBUG(3, "thread %lu locked GVL", (unsigned long)tid);
@@ -2843,5 +2838,6 @@ void releaseGVL(void) {
     pthread_t tid = pthread_self(); (void)tid;
     THREAD_DEBUG(3, "thread %lu unlocking GVL", (unsigned long)tid);
     // TODO: set vm.curThread to NULL here
+    GVLOwner = 0;
     pthread_mutex_unlock(&vm.GVLock);
 }

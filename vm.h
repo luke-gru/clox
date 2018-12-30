@@ -201,6 +201,7 @@ Value createIterator(Value iterable);
 void acquireGVL(void);
 void releaseGVL(void);
 void thread_debug(int lvl, const char *format, ...);
+pthread_t GVLOwner;
 
 // debug
 void printVMStack(FILE *f);

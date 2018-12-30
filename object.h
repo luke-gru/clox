@@ -161,6 +161,7 @@ extern ObjClass *lxMapClass;
 extern ObjClass *lxIteratorClass;
 extern ObjClass *lxFileClass;
 extern ObjClass *lxThreadClass;
+extern ObjClass *lxMutexClass;
 extern ObjModule *lxGCModule;
 extern ObjModule *lxProcessMod;
 extern ObjClass *lxIOClass;
