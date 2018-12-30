@@ -6,11 +6,11 @@ fork(fun() {
   sleep(1);
   rd.close();
   wr.write("HI");
-  wr.close();
 });
 var timeout = 2;
 var res = IO.select([rd], [], [], timeout);
-print rd.read(2);
+wr.close();
+print rd.read();
 rd.close();
 if (res != nil) { // nil = timed out
   print typeof(res[0]);

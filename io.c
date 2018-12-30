@@ -71,10 +71,9 @@ void IOClose(Value ioVal) {
     }
 }
 
-static void NORETURN throwIOSyserr(int err, const char *desc) {
-    int last = errno;
-    errno = 0;
-    throwErrorFmt(lxErrClass, "IO Error during %s: %s", desc, strerror(last));
+static void NORETURN throwIOSyserr(int err, int last, const char *desc) {
+    errno = last;
+    throwErrorFmt(lxErrClass, "IO Error during %s: %s", desc, strerror(err));
 }
 
 ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
@@ -83,20 +82,40 @@ ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
     size_t justRead = 0;
     char fileReadBuf[READBUF_SZ];
     size_t maxRead = untilEOF ? READBUF_SZ : (numBytes > READBUF_SZ ? READBUF_SZ : numBytes);
+    int last = errno;
     releaseGVL();
     while ((justRead = read(fd, fileReadBuf, maxRead)) > 0) {
         acquireGVL();
         pushCString(retBuf, fileReadBuf, justRead);
+        releaseGVL();
         nread += justRead;
         numBytes -= justRead;
         maxRead = untilEOF ? READBUF_SZ : (numBytes > READBUF_SZ ? READBUF_SZ : numBytes);
-        releaseGVL();
     }
     acquireGVL();
     if (justRead == -1) {
-        throwIOSyserr(errno, "read");
+        throwIOSyserr(errno, last, "read");
     }
 
+    return retBuf;
+}
+
+ObjString *IOReadlineFd(int fd, size_t maxLen) {
+    ObjString *retBuf = NULL;
+    if (maxLen == 0) maxLen = READBUF_SZ;
+    char fileReadBuf[READBUF_SZ];
+    FILE *file = fdopen(fd, "r");
+    ASSERT(file); // TODO: handle uncommon error, it's already open...
+    char *line = NULL;
+    int last = errno;
+    releaseGVL();
+    line = fgets(fileReadBuf, maxLen+1, file);
+    acquireGVL();
+    if (line == NULL) {
+        errno = last;
+        return copyString("", 0);
+    }
+    retBuf = copyString(line, strlen(line));
     return retBuf;
 }
 
@@ -109,6 +128,12 @@ ObjString *IORead(Value io, size_t numBytes, bool untilEOF) {
         throwErrorFmt(lxErrClass, "Cannot read from stdout/stdin");
     }
     return IOReadFd(f->fd, numBytes, untilEOF);
+}
+
+ObjString *IOReadline(Value io, size_t maxBytes) {
+    // TODO: checks
+    LxFile *f = FILE_GETHIDDEN(io);
+    return IOReadlineFd(f->fd, maxBytes);
 }
 
 size_t IOWrite(Value io, const void *buf, size_t count) {
@@ -125,10 +150,8 @@ size_t IOWrite(Value io, const void *buf, size_t count) {
     int last = errno;
     releaseGVL();
     while ((res = write(fd, ioWritebuf, chunkSz)) > 0 && (written += res) && written < count) {
-        acquireGVL();
         chunkSz -= written;
         memcpy(ioWritebuf, buf+written, chunkSz > WRITEBUF_SZ ? WRITEBUF_SZ : chunkSz);
-        releaseGVL();
     }
     acquireGVL();
     if (res == -1) {
@@ -171,6 +194,21 @@ Value lxIORead(int argCount, Value *args) {
     }
     ObjString *buf = IORead(self, numBytes, untilEOF);
     ASSERT(buf);
+    return newStringInstance(buf);
+}
+
+Value lxIOGetline(int argCount, Value *args) {
+    CHECK_ARITY("IO#getline", 1, 2, argCount);
+    Value self = args[0];
+    size_t maxBytes = 0;
+    if (argCount == 2) {
+        CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
+        double maxd = AS_NUMBER(args[1]);
+        if (maxd > 0) {
+            maxBytes = (size_t)maxd;
+        }
+    }
+    ObjString *buf = IOReadline(self, maxBytes);
     return newStringInstance(buf);
 }
 
@@ -240,7 +278,9 @@ Value lxIOSelectStatic(int argCount, Value *args) {
         }
     }
     int last = errno;
+    releaseGVL();
     int res = select(highestFd+1, &fds[0], &fds[1], &fds[2], &timeout);
+    acquireGVL();
     if (res == -1) {
         int err = errno;
         errno = last;
@@ -330,6 +370,16 @@ Value lxIOWrite(int argCount, Value *args) {
     return NUMBER_VAL(IOWrite(self, buf, strlen(buf)));
 }
 
+Value lxIOPuts(int argCount, Value *args) {
+    CHECK_ARITY("IO#puts", 2, 2, argCount);
+    CHECK_ARG_IS_A(args[1], lxStringClass, 1);
+    Value self = *args;
+    const char *buf = VAL_TO_STRING(args[1])->chars;
+    IOWrite(self, buf, strlen(buf));
+    IOWrite(self, "\n", 1);
+    return NIL_VAL;
+}
+
 Value lxIOClose(int argCount, Value *args) {
     CHECK_ARITY("IO#close", 1, 1, argCount);
     IOClose(*args);
@@ -363,7 +413,9 @@ void Init_IOClass(void) {
     addNativeMethod(ioStatic, "select", lxIOSelectStatic);
 
     addNativeMethod(ioClass, "read", lxIORead);
+    addNativeMethod(ioClass, "getline", lxIOGetline);
     addNativeMethod(ioClass, "write", lxIOWrite);
+    addNativeMethod(ioClass, "puts", lxIOPuts);
     addNativeMethod(ioClass, "close", lxIOClose);
     addNativeMethod(ioClass, "fcntl", lxIOFcntl);
 
