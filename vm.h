@@ -60,6 +60,7 @@ typedef struct ErrTagInfo {
 // when evaling a string, a new context is also created, etc.
 // Holds the read-only globals like __FILE__ and __DIR__,
 // as well as the script name for the currently executing file.
+// This is per-thread
 typedef struct VMExecContext {
     Value stack[STACK_MAX]; // stack VM, this is the stack (bottom) of operands
     Value *stackTop;
@@ -76,7 +77,7 @@ typedef struct VMExecContext {
 } VMExecContext;
 
 typedef struct VM {
-    VMExecContext *ec; // current execution context of vm
+    VMExecContext *ec; // current execution context of vm thread
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
 
     Obj *objects; // linked list of heap objects
