@@ -1136,6 +1136,8 @@ static void emitNode(Node *n) {
             emitOp0(OP_GREATER_EQUAL);
         } else if (n->tok.type == TOKEN_EQUAL_EQUAL) {
             emitOp0(OP_EQUAL);
+        } else if (n->tok.type == TOKEN_BANG_EQUAL) {
+            emitOp0(OP_NOT_EQUAL);
         } else if (n->tok.type == TOKEN_PIPE) {
             emitOp0(OP_BITOR);
         } else if (n->tok.type == TOKEN_AMP) {
@@ -1200,7 +1202,12 @@ static void emitNode(Node *n) {
             // binary number
             } else if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'b' || numStr[1] == 'B')) {
                 d = (double)strtol(numStr+2, NULL, 2);
-            } else {
+            } else { // decimal number
+                if (numStr[0] == '0' && numLen > 1) {
+                    int line = curTok ? curTok->line : 0;
+                    fprintf(stderr, "[Warning]: Decimal (base 10) number starting with '0' "
+                            "found on line %d. If you wanted an octal number, the prefix is '0c' (ex: 0c644).\n", line);
+                }
                 d = strtod(numStr, NULL);
             }
             emitConstant(NUMBER_VAL(d), CONST_T_NUMLIT);

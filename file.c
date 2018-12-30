@@ -10,9 +10,8 @@
 #include "table.h"
 
 ObjClass *lxFileClass;
-
-// TODO: make File a subclass of IO, and use per-IO object buffers
-static char fileReadBuf[4096];
+#define READBUF_SZ 4092
+#define WRITEBUF_SZ 4092
 
 // Does this file exist and is it accessible? If not, returns errno from stat()
 static int fileExists(char *fname) {
@@ -24,33 +23,6 @@ static int fileExists(char *fname) {
         int ret = errno;
         errno = last;
         return ret;
-    }
-}
-
-LxFile *fileGetHidden(Value file) {
-    ObjInstance *inst = AS_INSTANCE(file);
-    Value internalVal;
-    if (tableGet(inst->hiddenFields, OBJ_VAL(internedString("f", 1)), &internalVal)) {
-        DBG_ASSERT(IS_INTERNAL(internalVal));
-        LxFile *f = (LxFile*)internalGetData(AS_INTERNAL(internalVal));
-        return f;
-    } else {
-        return NULL;
-    }
-}
-
-void fileClose(Value file) {
-    LxFile *f = FILE_GETHIDDEN(file);
-    ASSERT(f);
-    if (f->isOpen) {
-        int res = 0;
-        int last = errno;
-        if ((res = close(f->fd)) != 0) {
-            int err = errno;
-            errno = last;
-            throwErrorFmt(lxErrClass, "Error closing file: %s", strerror(err));
-        }
-        f->isOpen = false;
     }
 }
 
@@ -115,19 +87,9 @@ static Value lxFileReadStatic(int argCount, Value *args) {
     ObjString *fnameStr = VAL_TO_STRING(fname);
     checkFileExists(fnameStr->chars);
     FILE *f = checkFopen(fnameStr->chars, "r");
-    ObjString *retBuf = copyString("", 0);
-    Value ret = newStringInstance(retBuf);
-    size_t nread = 0;
-    releaseGVL();
-    while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
-        acquireGVL();
-        pushCString(retBuf, fileReadBuf, nread);
-        releaseGVL();
-    }
-    acquireGVL();
-    checkFerror(f, "reading", fnameStr->chars);
+    ObjString *buf = IOReadFd(fileno(f), 0, true);
     checkFclose(f);
-    return ret;
+    return newStringInstance(buf);
 }
 
 static Value lxFileReadLinesStatic(int argCount, Value *args) {
@@ -142,6 +104,7 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
     releaseGVL();
     Value line;
     bool leftoverLine = false;
+    char fileReadBuf[READBUF_SZ];
     while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
         acquireGVL();
         size_t nleft = nread;
@@ -177,44 +140,16 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
     return ary;
 }
 
-static void markInternalFile(Obj *obj) {
-    ASSERT(obj->type == OBJ_T_INTERNAL);
-    ObjInternal *internal = (ObjInternal*)obj;
-    LxFile *f = (LxFile*)internal->data;
-    ASSERT(f && f->name);
-    grayObject((Obj*)f->name);
-}
-
-static void freeInternalFile(Obj *obj) {
-    ASSERT(obj->type == OBJ_T_INTERNAL);
-    ObjInternal *internal = (ObjInternal*)obj;
-    LxFile *f = (LxFile*)internal->data;
-    FREE(LxFile, f);
-}
-
-static LxFile *initFile(Value fileVal, ObjString *fname, int fd, int flags) {
-    ObjInstance *fileObj = AS_INSTANCE(fileVal);
-    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxFile), markInternalFile, freeInternalFile);
-    LxFile *file = ALLOCATE(LxFile, 1); // GCed by default GC free of internalObject
-    file->name = dupString(fname);
-    file->fd = fd;
-    file->oflags = flags;
-    file->isOpen = true;
-    internalObj->data = file;
-    fileObj->internal = internalObj;
-    tableSet(fileObj->hiddenFields, OBJ_VAL(internedString("f", 1)), OBJ_VAL(internalObj));
-    return file;
-}
-
 static Value lxFileInit(int argCount, Value *args) {
     CHECK_ARITY("File#init", 2, 2, argCount);
+    callSuper(0, NULL, NULL);
     Value self = args[0];
     Value fname = args[1];
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
     ObjString *fnameStr = VAL_TO_STRING(fname);
     FILE *f = checkFopen(fnameStr->chars, "r+");
     int fd = fileno(f);
-    initFile(self, fnameStr, fd, O_RDWR);
+    initIOAfterOpen(self, fnameStr, fd, 0, O_RDWR);
     return self;
 }
 
@@ -228,7 +163,7 @@ static Value lxFileCreateStatic(int argCount, Value *args) {
     ObjString *fnameStr = VAL_TO_STRING(fname);
     int fd = checkOpen(fnameStr->chars, flags, mode);
     Value file = OBJ_VAL(newInstance(lxFileClass));
-    initFile(file, fnameStr, fd, flags);
+    initIOAfterOpen(file, fnameStr, fd, mode, flags);
     return file;
 }
 
@@ -252,7 +187,7 @@ static Value lxFileOpenStatic(int argCount, Value *args) {
     }
     int fd = checkOpen(fnameStr->chars, flags, mode);
     Value file = OBJ_VAL(newInstance(lxFileClass));
-    initFile(file, fnameStr, fd, flags);
+    initIOAfterOpen(file, fnameStr, fd, mode, flags);
     return file;
 }
 
@@ -280,7 +215,7 @@ static Value lxFileWrite(int argCount, Value *args) {
     Value toWrite = args[1];
     CHECK_ARG_IS_A(toWrite, lxStringClass, 1);
     const char *buf = VAL_TO_STRING(toWrite)->chars;
-    size_t written = IOWrite(f->fd, buf, strlen(buf));
+    size_t written = IOWrite(self, buf, strlen(buf));
     return NUMBER_VAL(written);
 }
 
@@ -288,7 +223,7 @@ static Value lxFileWrite(int argCount, Value *args) {
 static Value lxFileClose(int argCount, Value *args) {
     CHECK_ARITY("File#close", 1, 1, argCount);
     Value self = args[0];
-    fileClose(self);
+    IOClose(self);
     return NIL_VAL;
 }
 
@@ -360,11 +295,11 @@ static Value lxFileRewind(int argCount, Value *args) {
         NUMBER_VAL(0),
         NUMBER_VAL(SEEK_SET)
     };
-    return callMethod(AS_OBJ(*args), internedString("seek", 4), 2, seekArgs);
+    return callMethod(AS_OBJ(*args), INTERN("seek"), 2, seekArgs);
 }
 
 void Init_FileClass(void) {
-    ObjClass *fileClass = addGlobalClass("File", lxObjClass);
+    ObjClass *fileClass = addGlobalClass("File", lxIOClass);
     ObjClass *fileStatic = classSingletonClass(fileClass);
 
     addNativeMethod(fileStatic, "create", lxFileCreateStatic);
@@ -372,6 +307,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "exists", lxFileExistsStatic);
     addNativeMethod(fileStatic, "read", lxFileReadStatic);
     addNativeMethod(fileStatic, "readLines", lxFileReadLinesStatic);
+
     addNativeMethod(fileClass, "init", lxFileInit);
     addNativeMethod(fileClass, "write", lxFileWrite);
     addNativeMethod(fileClass, "close", lxFileClose);
@@ -383,29 +319,29 @@ void Init_FileClass(void) {
 
     Value fileClassVal = OBJ_VAL(fileClass);
     // TODO: make constants instead of properties
-    setProp(fileClassVal, internedString("RDONLY", 6), NUMBER_VAL(O_RDONLY));
-    setProp(fileClassVal, internedString("WRONLY", 6), NUMBER_VAL(O_WRONLY));
-    setProp(fileClassVal, internedString("RDWR", 4), NUMBER_VAL(O_RDWR));
-    setProp(fileClassVal, internedString("APPEND", 6), NUMBER_VAL(O_APPEND));
-    setProp(fileClassVal, internedString("CREAT", 5), NUMBER_VAL(O_CREAT));
-    setProp(fileClassVal, internedString("CLOEXEC", 7), NUMBER_VAL(O_CLOEXEC));
-    setProp(fileClassVal, internedString("NOFOLLOW", 8), NUMBER_VAL(O_NOFOLLOW));
-    setProp(fileClassVal, internedString("TMPFILE", 7), NUMBER_VAL(O_TMPFILE));
-    setProp(fileClassVal, internedString("SYNC", 4), NUMBER_VAL(O_SYNC));
-    setProp(fileClassVal, internedString("TRUNC", 5), NUMBER_VAL(O_TRUNC));
-    setProp(fileClassVal, internedString("EXCL", 4), NUMBER_VAL(O_EXCL));
+    setProp(fileClassVal, INTERN("O_RDONLY"), NUMBER_VAL(O_RDONLY));
+    setProp(fileClassVal, INTERN("O_WRONLY"), NUMBER_VAL(O_WRONLY));
+    setProp(fileClassVal, INTERN("O_RDWR"), NUMBER_VAL(O_RDWR));
+    setProp(fileClassVal, INTERN("O_APPEND"), NUMBER_VAL(O_APPEND));
+    setProp(fileClassVal, INTERN("O_CREAT"), NUMBER_VAL(O_CREAT));
+    setProp(fileClassVal, INTERN("O_CLOEXEC"), NUMBER_VAL(O_CLOEXEC));
+    setProp(fileClassVal, INTERN("O_NOFOLLOW"), NUMBER_VAL(O_NOFOLLOW));
+    setProp(fileClassVal, INTERN("O_TMPFILE"), NUMBER_VAL(O_TMPFILE));
+    setProp(fileClassVal, INTERN("O_SYNC"), NUMBER_VAL(O_SYNC));
+    setProp(fileClassVal, INTERN("O_TRUNC"), NUMBER_VAL(O_TRUNC));
+    setProp(fileClassVal, INTERN("O_EXCL"), NUMBER_VAL(O_EXCL));
 
-    setProp(fileClassVal, internedString("SEEK_SET", 8), NUMBER_VAL(SEEK_SET));
-    setProp(fileClassVal, internedString("SEEK_CUR", 8), NUMBER_VAL(SEEK_CUR));
-    setProp(fileClassVal, internedString("SEEK_END", 8), NUMBER_VAL(SEEK_END));
+    setProp(fileClassVal, INTERN("SEEK_SET"), NUMBER_VAL(SEEK_SET));
+    setProp(fileClassVal, INTERN("SEEK_CUR"), NUMBER_VAL(SEEK_CUR));
+    setProp(fileClassVal, INTERN("SEEK_END"), NUMBER_VAL(SEEK_END));
 #ifndef SEEK_DATA
 #define SEEK_DATA 0
 #endif
-    setProp(fileClassVal, internedString("SEEK_DATA", 9), NUMBER_VAL(SEEK_DATA));
+    setProp(fileClassVal, INTERN("SEEK_DATA"), NUMBER_VAL(SEEK_DATA));
 #ifndef SEEK_HOLE
 #define SEEK_HOLE 0
 #endif
-    setProp(fileClassVal, internedString("SEEK_HOLE", 9), NUMBER_VAL(SEEK_HOLE));
+    setProp(fileClassVal, INTERN("SEEK_HOLE"), NUMBER_VAL(SEEK_HOLE));
 
 
     lxFileClass = fileClass;

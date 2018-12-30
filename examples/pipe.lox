@@ -12,6 +12,7 @@ var pid = fork(fun() {
 });
 IO.close(rd);
 IO.write(wr, "Message from parent: go to sleep!");
+IO.close(wr); // allow read to unblock
 print "I'm waiting...";
 waitpid(pid);
 

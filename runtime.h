@@ -108,8 +108,18 @@ void Init_StringClass(void);
 void Init_ArrayClass(void);
 // class Map
 void Init_MapClass(void);
-// module IO
-void Init_IOModule(void);
+// class IO
+void Init_IOClass(void);
+LxFile *fileGetHidden(Value io);
+LxFile *fileGetInternal(Value io);
+LxFile *initIOAfterOpen(Value io, ObjString *fname, int fd, int mode, int oflags);
+size_t IOWrite(Value io, const void *buf, size_t count);
+void IOClose(Value io);
+ObjString *IORead(Value io, size_t bytesMax, bool untilEOF);
+ObjString *IOReadFd(int fd, size_t bytesMax, bool untilEOF);
+//ObjString *IOGetline(Value io, size_t bytesMax);
+//ObjString *IOGetchar(Value io);
+
 // class File
 void Init_FileClass(void);
 // module Process

@@ -69,6 +69,8 @@ const char *opName(OpCode code) {
         return "OP_LESS_EQUAL";
     case OP_EQUAL:
         return "OP_EQUAL";
+    case OP_NOT_EQUAL:
+        return "OP_NOT_EQUAL";
     case OP_RETURN:
         return "OP_RETURN";
     case OP_NIL:
@@ -580,6 +582,7 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_GREATER_EQUAL:
         case OP_LESS_EQUAL:
         case OP_EQUAL:
+        case OP_NOT_EQUAL:
         case OP_PRINT:
         case OP_TRUE:
         case OP_FALSE:
@@ -674,6 +677,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_GREATER_EQUAL:
         case OP_LESS_EQUAL:
         case OP_EQUAL:
+        case OP_NOT_EQUAL:
         case OP_PRINT:
         case OP_TRUE:
         case OP_FALSE:

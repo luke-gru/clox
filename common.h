@@ -70,6 +70,7 @@ typedef enum {
     OP_POP,
 
     OP_EQUAL,
+    OP_NOT_EQUAL,
     OP_GREATER,
     OP_LESS,
     OP_GREATER_EQUAL,

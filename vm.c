@@ -176,7 +176,7 @@ static void defineNativeClasses(void) {
     // class Class
     nativeClassInit = addNativeMethod(classClass, "init", lxClassInit);
     addNativeMethod(classClass, "include", lxClassInclude);
-    addNativeGetter(classClass, "_superClass", lxClassGetSuperclass);
+    addNativeGetter(classClass, "superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
 
     nativeModuleInit = addNativeMethod(modClass, "init", lxModuleInit);
@@ -233,8 +233,8 @@ static void defineNativeClasses(void) {
 
     // order of initialization not important here
     Init_ProcessModule();
+    Init_IOClass();
     Init_FileClass();
-    Init_IOModule();
     isClassHierarchyCreated = true;
 }
 
@@ -1913,6 +1913,16 @@ static InterpretResult vm_run() {
               push(trueValue());
           } else {
               push(falseValue());
+          }
+          break;
+      }
+      case OP_NOT_EQUAL: {
+          Value rhs = pop();
+          Value lhs = pop();
+          if (isValueOpEqual(lhs, rhs)) {
+              push(falseValue());
+          } else {
+              push(trueValue());
           }
           break;
       }

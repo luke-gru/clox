@@ -163,7 +163,7 @@ extern ObjClass *lxFileClass;
 extern ObjClass *lxThreadClass;
 extern ObjModule *lxGCModule;
 extern ObjModule *lxProcessMod;
-extern ObjModule *lxIOMod;
+extern ObjClass *lxIOClass;
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
 extern ObjClass *lxTypeErrClass;
@@ -219,9 +219,10 @@ typedef struct LxThread {
     ThreadStatus status;
 } LxThread;
 
-// file internals
+// io/file internals
 typedef struct LxFile {
     int fd;
+    int mode;
     int oflags; // open flags
     bool isOpen;
     ObjString *name; // copied (owned value)
@@ -314,6 +315,7 @@ typedef ObjString *(*newStringFunc)(char *chars, int length);
 ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
 ObjString *copyString(char *chars, int length); // copies provided memory. Object lives on lox heap.
 ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
+#define INTERN(chars) (internedString(chars, strlen(chars)))
 ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
 ObjString *dupString(ObjString *string);
 void pushObjString(ObjString *a, ObjString *b);
@@ -383,13 +385,6 @@ ThreadStatus threadGetStatus(Value thread);
 pthread_t threadGetId(Value thread);
 Value newThread(void);
 LxThread *threadGetInternal(Value thread);
-
-// IO
-size_t IOWrite(int fd, const void *buf, size_t count);
-
-// files
-LxFile *fileGetInternal(Value file);
-void fileClose(Value file);
 
 // Object creation functions
 ObjFunction *newFunction(Chunk *chunk, Node *funcNode);
