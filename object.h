@@ -208,18 +208,6 @@ typedef struct ObjAny {
     } as;
 } ObjAny;
 
-// thread internals
-typedef enum ThreadStatus {
-    THREAD_STOPPED = 0,
-    THREAD_RUNNING,
-    THREAD_ZOMBIE
-} ThreadStatus;
-
-typedef struct LxThread {
-    pthread_t tid;
-    ThreadStatus status;
-} LxThread;
-
 // io/file internals
 typedef struct LxFile {
     int fd;
@@ -309,6 +297,7 @@ typedef struct LxFile {
 
 #define STRING_GETHIDDEN(stringVal) (stringGetHidden(stringVal))
 #define FILE_GETHIDDEN(fileVal) (fileGetHidden(fileVal))
+#define THREAD_GETHIDDEN(thVal) (threadGetHidden(thVal))
 
 // strings (internal)
 typedef ObjString *(*newStringFunc)(char *chars, int length);
@@ -380,12 +369,9 @@ bool        mapEquals(Value map, Value other);
 Table      *mapGetHidden(Value map);
 
 // threads
-void threadSetStatus(Value thread, ThreadStatus status);
-void threadSetId(Value thread, pthread_t tid);
-ThreadStatus threadGetStatus(Value thread);
-pthread_t threadGetId(Value thread);
 Value newThread(void);
-LxThread *threadGetInternal(Value thread);
+typedef struct LxThread LxThread; // fwd decl
+LxThread *threadGetHidden(Value thread);
 
 // Object creation functions
 ObjFunction *newFunction(Chunk *chunk, Node *funcNode);
@@ -428,7 +414,7 @@ const char *typeOfObj(Obj *obj);
 bool isInstanceLikeObj(Obj *obj);
 size_t sizeofObjType(ObjType type);
 const char *objTypeName(ObjType type);
-
+char *className(ObjClass *klass);
 
 typedef bool (*obj_type_p)(Obj*);
 bool is_obj_function_p(Obj*);

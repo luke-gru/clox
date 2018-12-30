@@ -1,3 +1,6 @@
+/**
+ * FIXME: sometimes segfaults. Not problem with mutex, but with threading
+ */
 var i = 0;
 var threads = [];
 var list = [];
@@ -6,7 +9,7 @@ for (var j = 0; j < 100; j+=1) {
   var t = newThread(fun() {
     for (var k = 0; k < 100; k+=1) {
       m.lock();
-      list << nil;
+      i += 1;
       m.unlock();
     }
   });
@@ -17,4 +20,4 @@ for (var j = 0; j < 100; j+=1) {
   joinThread(threads[j]);
 }
 
-print list.size();
+print i;

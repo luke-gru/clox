@@ -12,27 +12,65 @@ ObjNative *nativeThreadInit = NULL;
 ObjString *thKey;
 ObjString *mutexKey;
 
+void threadSetStatus(Value thread, ThreadStatus status) {
+    LxThread *th = THREAD_GETHIDDEN(thread);
+    th->status = status;
+}
+void threadSetId(Value thread, pthread_t tid) {
+    LxThread *th = THREAD_GETHIDDEN(thread);
+    th->tid = tid;
+}
+
+ThreadStatus threadGetStatus(Value thread) {
+    LxThread *th = THREAD_GETHIDDEN(thread);
+    return th->status;
+}
+pthread_t threadGetId(Value thread) {
+    LxThread *th = THREAD_GETHIDDEN(thread);
+    return th->tid;
+}
+
 static void enteredNewThread() {
+    acquireGVLTid(pthread_self());
     Value thread = newThread();
+    LxThread *th = THREAD_GETHIDDEN(thread);
+
+    // set thread state from current (last) thread
+    th->ec = vm.curThread->ec;
+    VMExecContext *ctx = NULL; int ctxIdx = 0;
+    // FIXME: figure out if it's safe to copy all this data (CallFrame too)
+    vec_foreach(&vm.curThread->v_ecs, ctx, ctxIdx) {
+        VMExecContext *newCtx = ALLOCATE(VMExecContext, 1);
+        memcpy(newCtx, ctx, sizeof(VMExecContext));
+        vec_push(&th->v_ecs, newCtx);
+    }
+    th->thisObj = vm.curThread->thisObj;
+    th->lastValue = NULL;
+    th->errInfo = NULL; // TODO: copy
+    th->inCCall = vm.curThread->inCCall;
+    th->cCallJumpBufSet = vm.curThread->cCallJumpBufSet;
+    th->cCallThrew = false;
+    th->returnedFromNativeErr = false;
+    memcpy(&th->cCallJumpBuf, &vm.curThread->cCallJumpBuf, sizeof(jmp_buf));
+    th->vmRunLvl = vm.curThread->vmRunLvl;
+    th->lastSplatNumArgs = vm.curThread->lastSplatNumArgs;
+
     threadSetStatus(thread, THREAD_RUNNING);
     threadSetId(thread, pthread_self());
-    vm.curThread = AS_INSTANCE(thread);
+    vm.curThread = th;
     vec_push(&vm.threads, vm.curThread);
     // TODO: set other threads to STOPPED?
 }
 
 static void exitingThread() {
-    threadSetStatus(OBJ_VAL(vm.curThread), THREAD_STOPPED);
     vec_remove(&vm.threads, vm.curThread);
-    vm.curThread = NULL;
 }
 
 static void *runCallableInNewThread(void *arg) {
     ObjClosure *closure = arg;
     ASSERT(closure);
-    acquireGVL();
+    enteredNewThread(); // acquires GVL
     THREAD_DEBUG(2, "in new thread");
-    enteredNewThread();
     push(OBJ_VAL(closure));
     THREAD_DEBUG(2, "calling callable");
     callCallable(OBJ_VAL(closure), 0, false, NULL);
@@ -49,9 +87,9 @@ Value lxNewThread(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(closure, IS_CLOSURE_FUNC, "function", 1);
     ObjClosure *func = AS_CLOSURE(closure);
     pthread_t tnew;
+    releaseGVL();
     if (pthread_create(&tnew, NULL, runCallableInNewThread, func) == 0) {
         THREAD_DEBUG(2, "created thread id %lu", (unsigned long)tnew);
-        releaseGVL(); // allow thread to run if it's ready
         acquireGVL();
         return NUMBER_VAL((unsigned long)tnew);
     } else {
@@ -79,16 +117,38 @@ Value lxJoinThread(int argCount, Value *args) {
     return NIL_VAL;
 }
 
-static Value lxThreadInit(int argCount, Value *args) {
+static void LxThreadSetup(LxThread *th) {
+    th->tid = pthread_self();
+    th->status = THREAD_STOPPED;
+    th->ec = NULL;
+    vec_init(&th->v_ecs);
+    th->thisObj = NULL;
+    th->lastValue = NULL;
+    th->hadError = false;
+    th->errInfo = NULL;
+    th->lastErrorThrown = NIL_VAL;
+    th->inCCall = 0;
+    th->cCallThrew = false;
+    th->returnedFromNativeErr = false;
+    memset(&th->cCallJumpBuf, 0, sizeof(jmp_buf));
+    th->cCallJumpBufSet = false;
+    th->vmRunLvl = 0;
+    th->lastSplatNumArgs = -1;
+}
+
+Value lxThreadInit(int argCount, Value *args) {
     CHECK_ARITY("Thread#init", 1, 1, argCount);
     callSuper(0, NULL, NULL);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxThread), NULL, NULL);
     LxThread *th = ALLOCATE(LxThread, 1);
+    LxThreadSetup(th);
     internalObj->data = th;
     selfObj->internal = internalObj;
-    tableSet(selfObj->hiddenFields, OBJ_VAL(thKey), OBJ_VAL(internalObj));
+    // NOTE: use INTERN("th") here because thKey may not be initialized (can
+    // be called during initVM
+    tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("th")), OBJ_VAL(internalObj));
     return self;
 }
 

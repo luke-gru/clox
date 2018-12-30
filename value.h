@@ -83,5 +83,6 @@ const char *typeOfVal(Value val);
 uint32_t valHash(Value val);
 bool valEqual(Value a, Value b);
 bool isCallable(Value val);
+void fillCallableName(Value callable, const char buf[], size_t buflen);
 
 #endif

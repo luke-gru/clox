@@ -55,10 +55,10 @@ static int test_vm_protect1(void) {
     void *res = vm_protect(raiseErrProtect, &arg, lxErrClass, &status);
     T_ASSERT_EQ(TAG_RAISE, status);
     T_ASSERT_EQ(NULL, res);
-    T_ASSERT_EQ(false, vm.hadError);
-    T_ASSERT(vm.errInfo != NULL);
+    T_ASSERT_EQ(false, THREAD()->hadError);
+    T_ASSERT(THREAD()->errInfo != NULL);
     popFrame();
-    T_ASSERT_EQ(NULL, vm.errInfo); // frame popped, errInfo for frame should be gone
+    T_ASSERT_EQ(NULL, THREAD()->errInfo); // frame popped, errInfo for frame should be gone
 cleanup:
     freeVM();
     return 0;
@@ -80,10 +80,10 @@ static int test_vm_protect2(void) {
     void *res = vm_protect(raiseErrProtect, &arg, NULL, &status);
     T_ASSERT_EQ(TAG_RAISE, status);
     T_ASSERT_EQ(NULL, res);
-    T_ASSERT_EQ(false, vm.hadError);
-    T_ASSERT(vm.errInfo != NULL);
+    T_ASSERT_EQ(false, THREAD()->hadError);
+    T_ASSERT(THREAD()->errInfo != NULL);
     popFrame();
-    T_ASSERT_EQ(NULL, vm.errInfo); // frame popped, errInfo for frame should be gone
+    T_ASSERT_EQ(NULL, THREAD()->errInfo); // frame popped, errInfo for frame should be gone
 cleanup:
     freeVM();
     return 0;
@@ -104,8 +104,8 @@ static int test_vm_protect3(void) {
     void *res = vm_protect(raiseNoErrProtect, &arg, NULL, &status);
     T_ASSERT_EQ(TAG_NONE, status);
     T_ASSERT_EQ(lxAryClass, res);
-    T_ASSERT_EQ(false, vm.hadError);
-    T_ASSERT_EQ(NULL, vm.errInfo); // due to no error thrown, the errinfo should be gone
+    T_ASSERT_EQ(false, THREAD()->hadError);
+    T_ASSERT_EQ(NULL, THREAD()->errInfo); // due to no error thrown, the errinfo should be gone
     popFrame();
 cleanup:
     freeVM();

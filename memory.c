@@ -733,12 +733,26 @@ void collectGarbage(void) {
         }
         printVMStack(stderr);
     }
-    // Mark stack roots up the stack for every execution context
-    VMExecContext *ctx = NULL; int k = 0;
-    vec_foreach(&vm.v_ecs, ctx, k) {
-        grayTable(&ctx->roGlobals);
-        for (Value *slot = ctx->stack; slot < ctx->stackTop; slot++) {
-            grayValue(*slot);
+    // Mark stack roots up the stack for every execution context in every thread
+    Obj *thObj; int thIdx = 0;
+    vec_foreach(&vm.threads, thObj, thIdx) {
+        ASSERT(thObj);
+        grayObject(thObj);
+        LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
+        ASSERT(th);
+        if (th->thisObj) {
+            grayObject(th->thisObj);
+        }
+        if (th->lastValue) {
+            grayValue(*th->lastValue);
+        }
+        grayValue(th->lastErrorThrown);
+        VMExecContext *ctx = NULL; int k = 0;
+        vec_foreach(&th->v_ecs, ctx, k) {
+            grayTable(&ctx->roGlobals);
+            for (Value *slot = ctx->stack; slot < ctx->stackTop; slot++) {
+                grayValue(*slot);
+            }
         }
     }
 
@@ -755,17 +769,22 @@ void collectGarbage(void) {
 
     GC_TRACE_DEBUG(2, "Marking VM frame functions");
     // gray active function closure objects
-    ctx = NULL; k = 0;
+    VMExecContext *ctx = NULL; int ctxIdx = 0;
     int numFramesFound = 0;
-    vec_foreach(&vm.v_ecs, ctx, k) {
-        grayObject((Obj*)ctx->filename);
-        if (ctx->lastValue) {
-            grayValue(*ctx->lastValue);
-        }
-        for (int i = 0; i < ctx->frameCount; i++) {
-            grayObject((Obj*)ctx->frames[i].closure);
-            grayObject((Obj*)ctx->frames[i].instance);
-            numFramesFound++;
+    thObj = NULL; thIdx = 0;
+    vec_foreach(&vm.threads, thObj, thIdx) {
+        LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
+        vec_foreach(&th->v_ecs, ctx, ctxIdx) {
+            grayObject((Obj*)ctx->filename);
+            if (ctx->lastValue) {
+                grayValue(*ctx->lastValue);
+            }
+            for (int i = 0; i < ctx->frameCount; i++) {
+                // TODO: gray native function if exists
+                grayObject((Obj*)ctx->frames[i].closure);
+                grayObject((Obj*)ctx->frames[i].instance);
+                numFramesFound++;
+            }
         }
     }
     GC_TRACE_DEBUG(2, "%d frame functions found", numFramesFound);
@@ -783,12 +802,6 @@ void collectGarbage(void) {
     }
     GC_TRACE_DEBUG(3, "Open upvalues found: %d", numOpenUpsFound);
 
-    GC_TRACE_DEBUG(2, "Marking VM threads");
-    ObjInstance *thread = NULL; int ti = 0;
-    vec_foreach(&vm.threads, thread, ti) {
-        grayObject((Obj*)thread);
-    }
-
     GC_TRACE_DEBUG(2, "Marking globals (%d found)", vm.globals.count);
     grayTable(&vm.globals);
     GC_TRACE_DEBUG(2, "Marking interned strings (%d found)", vm.strings.count);
@@ -802,11 +815,6 @@ void collectGarbage(void) {
     if (vm.printBuf) {
         GC_TRACE_DEBUG(3, "Marking VM print buf");
         grayObject((Obj*)vm.printBuf);
-    }
-
-    if (vm.lastValue != NULL) {
-        GC_TRACE_DEBUG(3, "Marking VM last value");
-        grayValue(*vm.lastValue);
     }
 
     GC_TRACE_DEBUG(2, "Marking atExit handlers: %d", vm.exitHandlers.length);

@@ -324,6 +324,10 @@ uint32_t valHash(Value val) {
             }
         } else {
             if (IS_INSTANCE(val)) {
+                if (!vm.inited) {
+                    fprintf(stderr, "val type: %s\n", typeOfVal(val));
+                    ASSERT(0);
+                }
                 Value hashKey = callMethod(AS_OBJ(val), internedString("hashKey", 7), 0, NULL);
                 if (!IS_NUMBER(hashKey)) {
                     throwErrorFmt(lxTypeErrClass, "%s", "return of hashKey() method must be a number!");
@@ -376,6 +380,38 @@ bool valEqual(Value a, Value b) {
 bool isCallable(Value val) {
     return IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
         IS_BOUND_METHOD(val) || IS_CLOSURE(val);
+}
+
+void fillCallableName(Value callable, const char buf[], size_t buflen) {
+    memset(buf, 0, buflen);
+    ASSERT(isCallable(callable));
+    if (IS_CLASS(callable)) {
+        sprintf(buf, "%s#init", className(AS_CLASS(callable)));
+    } else if (IS_NATIVE_FUNCTION_FUNC(callable)) {
+        ObjNative *native = AS_NATIVE_FUNCTION(callable);
+        char *nameStr = native->name->chars;
+        if (native->klass) { // method
+            char *classNm = className((ObjClass*)native->klass);
+            bool isStatic = native->isStatic;
+            sprintf(buf, "%s%c%s", classNm, isStatic ? '.' : '#',
+                    nameStr);
+        } else {
+            sprintf(buf, "%s", nameStr);
+        }
+    } else if (IS_CLOSURE(callable)) {
+        ObjFunction *func = AS_CLOSURE(callable)->function;
+        if (func->klass) {
+            ObjClass *klass = (ObjClass*)func->klass;
+            char *classNm = className(klass);
+            bool isStatic = func->isSingletonMethod;
+            sprintf(buf, "%s%c%s", classNm, isStatic ? '.' : '#',
+                    func->name->chars);
+        } else {
+            sprintf(buf, "%s", func->name ? func->name->chars : "(anon");
+        }
+    } else {
+        sprintf(buf, "%s", "TODO"); // TODO
+    }
 }
 
 bool is_bool_p(Value val) {

@@ -88,6 +88,7 @@ Value lxIteratorNext(int argCount, Value *args);
 ObjNative *nativeIteratorInit;
 
 // class Thread
+Value lxThreadInit(int argCount, Value *args);
 ObjNative *nativeThreadInit;
 
 // module GC
