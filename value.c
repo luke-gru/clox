@@ -12,6 +12,16 @@ void initValueArray(ValueArray *array) {
     array->count = 0;
 }
 
+void initValueArrayWithCapa(ValueArray *array, int capa) {
+    initValueArray(array);
+    if (capa <= 0) return;
+    array->capacity = capa;
+    array->values = GROW_ARRAY(
+        array->values, Value,
+        0, array->capacity
+    );
+}
+
 void writeValueArrayEnd(ValueArray *array, Value value) {
     if (array->capacity < array->count + 1) {
         int oldCapacity = array->capacity;

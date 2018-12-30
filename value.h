@@ -62,6 +62,7 @@ typedef struct ValueArray {
 #define OBJ_TYPE(value)   (AS_OBJ(value)->type)
 
 void initValueArray(ValueArray *array);
+void initValueArrayWithCapa(ValueArray *array, int capa);
 void writeValueArrayEnd(ValueArray *array, Value value);
 void writeValueArrayBeg(ValueArray *array, Value value);
 void freeValueArray(ValueArray *array);

@@ -47,7 +47,12 @@ static Value lxArrayInit(int argCount, Value *args) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalAry, freeInternalAry);
     ValueArray *ary = ALLOCATE(ValueArray, 1);
-    initValueArray(ary);
+    int capa = argCount-1;
+    if (capa > 1) {
+        initValueArrayWithCapa(ary, capa);
+    } else {
+        initValueArray(ary);
+    }
     internalObj->data = ary;
     internalObj->dataSz = sizeof(ValueArray);
     tableSet(selfObj->hiddenFields, OBJ_VAL(aryStr), OBJ_VAL(internalObj));
