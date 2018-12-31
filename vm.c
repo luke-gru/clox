@@ -2865,6 +2865,11 @@ void releaseGVL(void) {
     pthread_cond_signal(&vm.GVCond); // signal waiters
 }
 
+void threadSetCurrent(LxThread *th) {
+    vm.curThread = th;
+    GVLOwner = th->tid;
+}
+
 LxThread *FIND_THREAD(pthread_t tid) {
     ObjInstance *threadInstance; int thIdx = 0;
     LxThread *th = NULL;

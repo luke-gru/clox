@@ -234,6 +234,7 @@ void acquireGVLMaybe(void);
 void releaseGVL(void);
 void thread_debug(int lvl, const char *format, ...);
 volatile long long GVLOwner;
+void threadSetCurrent(LxThread *th);
 
 // debug
 void printVMStack(FILE *f, LxThread *th);

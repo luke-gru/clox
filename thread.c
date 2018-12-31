@@ -13,6 +13,24 @@ ObjNative *nativeThreadInit = NULL;
 ObjString *thKey;
 ObjString *mutexKey;
 
+#define GVL_UNLOCK_BEGIN() do { \
+  LxThread *thStored = THREAD(); \
+  pthread_mutex_unlock(&vm.GVLock); \
+  vm.curThread = NULL; GVLOwner = -1; \
+  vm.GVLockStatus = 0
+
+#define GVL_UNLOCK_END() \
+  pthread_mutex_lock(&vm.GVLock); \
+  threadSetCurrent(thStored); \
+} while(0)
+
+#define BLOCKING_REGION_CORE(exec) do { \
+    GVL_UNLOCK_BEGIN(); {\
+	    exec; \
+    } \
+    GVL_UNLOCK_END(); \
+} while(0)
+
 void threadSetStatus(Value thread, ThreadStatus status) {
     LxThread *th = THREAD_GETHIDDEN(thread);
     th->status = status;
@@ -209,25 +227,64 @@ Value lxThreadInit(int argCount, Value *args) {
 }
 
 typedef struct LxMutex {
-    pthread_t owner;
+    LxThread *owner;
     pthread_mutex_t lock;
+    pthread_cond_t cond;
+    int waiting;
 } LxMutex;
 
 void setupMutex(LxMutex *mutex) {
-    mutex->owner = 0;
+    mutex->owner = NULL;
+    mutex->waiting = 0;
     pthread_mutex_init(&mutex->lock, NULL);
+    pthread_cond_init(&mutex->cond, NULL);
+}
+
+static void lockFunc(LxMutex *mutex, LxThread *th) {
+    pthread_mutex_lock(&mutex->lock); // can block
+    mutex->waiting++;
+    pthread_cond_wait(&mutex->cond, &mutex->lock);
+    mutex->waiting--;
+    THREAD_DEBUG(1, "Thread %lu LOCKED mutex", th->tid);
+    mutex->owner = th;
+    pthread_mutex_unlock(&mutex->lock); // can block
 }
 
 void lockMutex(LxMutex *mutex) {
-    // NOTE: don't release GVL here, we need to block
     pthread_mutex_lock(&mutex->lock); // can block
-    pthread_t tid = pthread_self();
-    mutex->owner = tid;
+    LxThread *th = THREAD();
+    if (mutex->owner == NULL) {
+        THREAD_DEBUG(1, "Thread %lu LOCKED mutex (no contention)", th->tid);
+        ASSERT(mutex->waiting == 0);
+        mutex->owner = th;
+        pthread_mutex_unlock(&mutex->lock); // can block
+        return;
+    }
+    pthread_mutex_unlock(&mutex->lock); // can block
+    THREAD_DEBUG(1, "Thread %lu locking mutex (contention)", th->tid);
+    while (mutex->owner != th) {
+        BLOCKING_REGION_CORE({
+            lockFunc(mutex, th);
+        });
+        if (mutex->owner == th) break;
+        THREAD_DEBUG(1, "Thread %lu trying again...", th->tid);
+    }
 }
 
 void unlockMutex(LxMutex *mutex) {
+    pthread_mutex_lock(&mutex->lock);
+    LxThread *th = THREAD();
+    ASSERT(mutex->owner == th);
+    mutex->owner = NULL;
+    THREAD_DEBUG(1, "Thread %lu unlocking mutex...", th->tid);
+    if (mutex->waiting > 0) {
+        THREAD_DEBUG(1, "Thread %lu signaling waiter(s)...", th->tid);
+        pthread_cond_signal(&mutex->cond);
+    } else {
+        pthread_cond_signal(&mutex->cond);
+    }
+    THREAD_DEBUG(1, "Thread %lu UNLOCKED mutex", th->tid);
     pthread_mutex_unlock(&mutex->lock);
-    mutex->owner = 0;
 }
 
 static LxMutex *mutexGetHidden(Value mutex) {
@@ -260,6 +317,7 @@ static Value lxMutexLock(int argCount, Value *args) {
 }
 
 static Value lxMutexUnlock(int argCount, Value *args) {
+    fprintf(stderr, "Called unlock!\n");
     CHECK_ARITY("Mutex#unlock", 1, 1, argCount);
     Value self = *args;
     LxMutex *m = mutexGetHidden(self);
