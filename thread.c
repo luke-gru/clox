@@ -72,18 +72,22 @@ static void newThreadSetup(LxThread *parentThread) {
     tableSet(thInstance->hiddenFields, OBJ_VAL(thKey), OBJ_VAL(internalObj));
 
     // set thread state from current (last) thread
-    th->ec = parentThread->ec;
     VMExecContext *ctx = NULL; int ctxIdx = 0;
     // FIXME: figure out if it's safe to copy all this data (CallFrame too)
     vec_foreach(&parentThread->v_ecs, ctx, ctxIdx) {
         VMExecContext *newCtx = ALLOCATE(VMExecContext, 1);
         memcpy(newCtx, ctx, sizeof(VMExecContext));
         newCtx->stackTop = newCtx->stack + (ctx->stackTop-ctx->stack);
-        ASSERT(newCtx->stackTop - newCtx->stack == ctx->stackTop - ctx->stack);
-        newCtx->frameCount = newCtx->frameCount;
+        newCtx->stackTop--; // for the two current stack objects that newThread() creates
+        newCtx->stackTop--;
+        newCtx->frameCount = 1;
         newCtx->lastValue = NULL;
         vec_push(&th->v_ecs, newCtx);
     }
+    th->ec = vec_last(&th->v_ecs);
+    /*fprintf(stderr, "NEW VM STACK\n");*/
+    /*printVMStack(stderr, th);*/
+    /*fprintf(stderr, "/NEW VM STACK\n");*/
     th->thisObj = parentThread->thisObj;
     th->lastValue = NULL;
     th->errInfo = NULL; // TODO: copy
@@ -125,14 +129,13 @@ static void *runCallableInNewThread(void *arg) {
     ASSERT(tid == pthread_self());
     ASSERT(vm.curThread->tid == pthread_self());
     push(OBJ_VAL(closure));
-    THREAD_DEBUG(2, "calling callable %lu", pthread_self());
     if (vm.exited) {
         THREAD_DEBUG(2, "vm exited, quitting new thread %lu", pthread_self());
         releaseGVL();
         pthread_exit(NULL);
     }
+    THREAD_DEBUG(2, "calling callable %lu", pthread_self());
     callCallable(OBJ_VAL(closure), 0, false, NULL);
-    pop();
     exitingThread();
     THREAD_DEBUG(2, "exiting thread %lu", pthread_self());
     releaseGVL();
@@ -281,5 +284,6 @@ void Init_ThreadClass() {
     addNativeMethod(mutexClass, "unlock", lxMutexUnlock);
 
     thKey = INTERN("th");
+    hideFromGC((Obj*)thKey);
     mutexKey = INTERN("mutex");
 }

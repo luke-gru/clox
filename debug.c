@@ -24,6 +24,7 @@ NORETURN void die(const char *fmt, ...) {
 NORETURN void diePrintCBacktrace(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
+    fprintf(stderr, "Error in thread: %lld\n", THREAD() ? (long long)THREAD()->tid : -1);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");

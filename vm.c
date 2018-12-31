@@ -1606,24 +1606,28 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     UNREACHABLE("thrown");
 }
 
-void printVMStack(FILE *f) {
-    if (EC->stackTop == EC->stack && THREAD()->v_ecs.length == 1) {
-        fprintf(f, "[DEBUG %d]: Stack: empty\n", THREAD()->vmRunLvl);
+void printVMStack(FILE *f, LxThread *th) {
+    unsigned long tid = 0;
+    if (th != vm.mainThread) {
+        tid = th->tid;
+    }
+    if (th->ec->stackTop == th->ec->stack && th->v_ecs.length == 1) {
+        fprintf(f, "[DEBUG %d (th=%lu)]: Stack: empty\n", th->vmRunLvl, tid);
         return;
     }
     VMExecContext *ec = NULL; int i = 0;
     int numCallFrames = VMNumCallFrames();
     int numStackFrames = VMNumStackFrames();
-    fprintf(f, "[DEBUG %d]: Stack (%d stack frames, %d call frames):\n", THREAD()->vmRunLvl,
-            numStackFrames, numCallFrames);
+    fprintf(f, "[DEBUG %d (th=%lu)]: Stack (%d stack frames, %d call frames):\n", th->vmRunLvl,
+            tid, numStackFrames, numCallFrames);
     // print VM stack values from bottom of stack to top
-    fprintf(f, "[DEBUG %d]: ", THREAD()->vmRunLvl);
+    fprintf(f, "[DEBUG %d]: ", th->vmRunLvl);
     int callFrameIdx = 0;
-    vec_foreach(&THREAD()->v_ecs, ec, i) {
+    vec_foreach(&th->v_ecs, ec, i) {
         for (Value *slot = ec->stack; slot < ec->stackTop; slot++) {
             if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE ||
                                  (AS_OBJ(*slot)->type >= OBJ_T_LAST))) {
-                fprintf(stderr, "[DEBUG %d]: Broken object pointer: %p\n", THREAD()->vmRunLvl,
+                fprintf(stderr, "[DEBUG %d]: Broken object pointer: %p\n", th->vmRunLvl,
                         AS_OBJ(*slot));
                 ASSERT(0);
             }
@@ -1825,7 +1829,7 @@ static InterpretResult vm_run() {
 
 #ifndef NDEBUG
     if (CLOX_OPTION_T(traceVMExecution)) {
-        printVMStack(stderr);
+        printVMStack(stderr, THREAD());
         printDisassembledInstruction(stderr, ch, (int)(getFrame()->ip - ch->code), NULL);
     }
 #endif
@@ -2847,12 +2851,16 @@ void acquireGVL(void) {
         pthread_cond_wait(&vm.GVCond, &vm.GVLock); // block on wait queue
     }
     vm.GVLockStatus = 1;
+    vm.curThread = FIND_THREAD(pthread_self());
+    GVLOwner = pthread_self();
     pthread_mutex_unlock(&vm.GVLock);
 }
 
 void releaseGVL(void) {
     pthread_mutex_lock(&vm.GVLock);
     vm.GVLockStatus = 0;
+    GVLOwner = -1;
+    vm.curThread = NULL;
     pthread_mutex_unlock(&vm.GVLock);
     pthread_cond_signal(&vm.GVCond); // signal waiters
 }
@@ -2892,7 +2900,9 @@ ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid) {
 
 LxThread *THREAD() {
     if (!vm.curThread) {
-        vm.curThread = FIND_THREAD(GVLOwner);
+        vm.curThread = FIND_THREAD(pthread_self());
+        ASSERT(vm.curThread->tid == GVLOwner);
+        ASSERT(vm.curThread);
     }
     return vm.curThread;
 }

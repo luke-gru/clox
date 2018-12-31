@@ -108,7 +108,7 @@ NORETURN void repl(void) {
             break;
         }
         if (numLines == 0 && strcmp(line, "pstack") == 0) {
-            printVMStack(stderr);
+            printVMStack(stderr, THREAD());
             xfree(line);
             line = NULL;
             continue;

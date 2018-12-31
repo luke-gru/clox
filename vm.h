@@ -236,7 +236,7 @@ void thread_debug(int lvl, const char *format, ...);
 volatile long long GVLOwner;
 
 // debug
-void printVMStack(FILE *f);
+void printVMStack(FILE *f, LxThread *th);
 void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given strings to this buffer, if given
 void unsetPrintBuf(void);
 int VMNumStackFrames(void);
