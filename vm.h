@@ -99,7 +99,10 @@ typedef struct LxThread {
     bool cCallJumpBufSet;
     int vmRunLvl;
     int lastSplatNumArgs;
-    int mutexCounter;
+    // stack of object pointers created during C function calls. When
+    // control returns to the VM, these are popped. Stack objects aren't
+    // collected during GC.
+    vec_void_t stackObjects;
 } LxThread;
 
 // threads
@@ -123,10 +126,6 @@ typedef struct VM {
     int grayCapacity;
     Obj **grayStack;
     vec_void_t hiddenObjs;
-    // stack of object pointers created during C function calls. When
-    // control returns to the VM, these are popped. Stack objects aren't
-    // collected during GC.
-    vec_void_t stackObjects;
 
     vec_val_t loadedScripts;
 
@@ -141,6 +140,8 @@ typedef struct VM {
 
     // threading
     pthread_mutex_t GVLock; // global VM lock
+    pthread_cond_t GVCond;
+    int GVLockStatus;
     volatile LxThread *curThread;
     LxThread *mainThread;
     vec_void_t threads; // list of current thread ObjInstance pointers

@@ -348,7 +348,11 @@ static ObjInstance *initMainThread(void) {
     if (pthread_mutex_init(&vm.GVLock, NULL) != 0) {
         die("Global VM lock unable to initialize");
     }
+    if (pthread_cond_init(&vm.GVCond, NULL) != 0) {
+        die("Global VM lock cond unable to initialize");
+    }
 
+    vm.GVLockStatus = 0;
     vm.curThread = NULL;
     vm.mainThread = NULL;
 
@@ -383,7 +387,6 @@ void initVM() {
     initTable(&vm.strings); // interned strings
 
     vec_init(&vm.hiddenObjs);
-    vec_init(&vm.stackObjects);
     ObjInstance *mainT = initMainThread();
     push_EC();
     resetStack();
@@ -443,7 +446,6 @@ void freeVM(void) {
 
     freeTable(&vm.globals);
     freeTable(&vm.strings);
-    vec_deinit(&vm.stackObjects);
     vm.initString = NULL;
     vm.fileString = NULL;
     vm.dirString = NULL;
@@ -993,7 +995,7 @@ void popFrame(void) {
             ASSERT(th->inCCall > 0);
             th->inCCall--;
             if (th->inCCall == 0) {
-                vec_clear(&vm.stackObjects); // FIXME: make per-thread
+                vec_clear(&THREAD()->stackObjects);
             }
         }
     }
@@ -1147,7 +1149,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 if (th->returnedFromNativeErr) {
                     th->returnedFromNativeErr = false;
                     VM_DEBUG("native initializer returned from error");
-                    vec_clear(&vm.stackObjects);
+                    vec_clear(&THREAD()->stackObjects);
                     while (getFrame() >= newFrame) {
                         popFrame();
                     }
@@ -1372,13 +1374,14 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
  */
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     DBG_ASSERT(vm.inited);
-    int lenBefore = vm.stackObjects.length;
+    LxThread *th = THREAD();
+    int lenBefore = th->stackObjects.length;
     bool ret = doCallCallable(callable, argCount, isMethod, info);
-    int lenAfter = vm.stackObjects.length;
+    int lenAfter = th->stackObjects.length;
 
     // allow collection of new stack-created objects if they're not rooted now
     for (int i = lenBefore; i < lenAfter; i++) {
-        (void)vec_pop(&vm.stackObjects);
+        (void)vec_pop(&th->stackObjects);
     }
 
     return ret;
@@ -2839,46 +2842,19 @@ NORETURN void stopVM(int status) {
 }
 
 void acquireGVL(void) {
-    if (pthread_self() == GVLOwner) {
-        LxThread *th = FIND_THREAD(GVLOwner);
-        vm.curThread = th;
-        th->tid = GVLOwner;
-        return;
-    }
     pthread_mutex_lock(&vm.GVLock);
-    pthread_t tid = pthread_self();
-    GVLOwner = tid;
-    LxThread *th = FIND_THREAD(tid);
-    vm.curThread = th;
-}
-
-void acquireGVLMaybe(void) {
-    if (GVLOwner == pthread_self()) {
-        return;
+    while (vm.GVLockStatus > 0) {
+        pthread_cond_wait(&vm.GVCond, &vm.GVLock); // block on wait queue
     }
-    THREAD_DEBUG(3, "thread %lu acquiring GVL from maybe", pthread_self());
-    acquireGVL();
-}
-
-void acquireGVLTid(pthread_t tid) {
-    THREAD_DEBUG(3, "thread %lu locking GVL (tid), owner = %lu", tid, GVLOwner);
-    ASSERT(GVLOwner != tid);
-    pthread_mutex_lock(&vm.GVLock);
-    THREAD_DEBUG(3, "thread %lu locked GVL (tid)", tid);
-    GVLOwner = tid;
+    vm.GVLockStatus = 1;
+    pthread_mutex_unlock(&vm.GVLock);
 }
 
 void releaseGVL(void) {
-    while (settingUpThread) { }
-    if (THREAD()->mutexCounter > 0) {
-        return;
-    }
-    ASSERT(THREAD()->tid == GVLOwner);
-    pthread_t tid = pthread_self(); (void)tid;
-    THREAD_DEBUG(3, "thread %lu unlocking GVL", tid);
+    pthread_mutex_lock(&vm.GVLock);
+    vm.GVLockStatus = 0;
     pthread_mutex_unlock(&vm.GVLock);
-    GVLOwner = -1;
-    vm.curThread = NULL;
+    pthread_cond_signal(&vm.GVCond); // signal waiters
 }
 
 LxThread *FIND_THREAD(pthread_t tid) {

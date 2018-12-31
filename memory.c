@@ -493,16 +493,20 @@ void freeObject(Obj *obj) {
     ASSERT(!obj->noGC);
     TRACE_GC_FUNC_START(4, "freeObject");
     if (vm.inited) {
-        int stackObjFoundIdx = -1;
-        vec_find(&vm.stackObjects, obj, stackObjFoundIdx);
-        if (stackObjFoundIdx != -1) {
-            if (inGC) {
-                GC_TRACE_DEBUG(4, "Skipped freeing stack object: p=%p (in GC)", obj);
-                return; // Don't free stack objects in a GC
+        ObjInstance *threadInst; int tidx = 0;
+        vec_foreach(&vm.threads, threadInst, tidx) {
+            LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(threadInst));
+            int stackObjFoundIdx = -1;
+            vec_find(&th->stackObjects, obj, stackObjFoundIdx);
+            if (stackObjFoundIdx != -1) {
+                if (inGC) {
+                    GC_TRACE_DEBUG(4, "Skipped freeing stack object: p=%p (in GC)", obj);
+                    return; // Don't free stack objects in a GC
+                }
+                GC_TRACE_DEBUG(5, "Freeing stack object: p=%p (must be manual call "
+                        "to freeObject(), not in GC)", obj);
+                vec_splice(&th->stackObjects, stackObjFoundIdx, 1);
             }
-            GC_TRACE_DEBUG(5, "Freeing stack object: p=%p (must be manual call "
-                "to freeObject(), not in GC)", obj);
-            vec_splice(&vm.stackObjects, stackObjFoundIdx, 1);
         }
 
     }
@@ -756,11 +760,18 @@ void collectGarbage(void) {
         }
     }
 
-    GC_TRACE_DEBUG(2, "Marking VM C-call stack objects (%d found)", vm.stackObjects.length);
-    Obj *stackObjPtr = NULL; int idx = 0;
-    vec_foreach(&vm.stackObjects, stackObjPtr, idx) {
-        grayObject(stackObjPtr);
+    GC_TRACE_DEBUG(2, "Marking per-thread VM C-call stack objects");
+    int numStackObjects = 0;
+    ObjInstance *threadInst = NULL; int tIdx = 0;
+    vec_foreach(&vm.threads, threadInst, tIdx) {
+        LxThread *curThread = THREAD_GETHIDDEN(OBJ_VAL(threadInst));
+        Obj *stackObjPtr = NULL; int stIdx = 0;
+        vec_foreach(&curThread->stackObjects, stackObjPtr, stIdx) {
+            numStackObjects++;
+            grayObject(stackObjPtr);
+        }
     }
+    GC_TRACE_DEBUG(2, "# C-call stack objects found: %d", numStackObjects);
 
     Value *scriptName; int i = 0;
     vec_foreach_ptr(&vm.loadedScripts, scriptName, i) {

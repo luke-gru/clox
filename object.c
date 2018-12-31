@@ -22,7 +22,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->isFrozen = false;
 
     if (vm.inited && vm.curThread && THREAD()->inCCall > 0) {
-        vec_push(&vm.stackObjects, object);
+        vec_push(&THREAD()->stackObjects, object);
     }
 
     object->objectId = (size_t)object;

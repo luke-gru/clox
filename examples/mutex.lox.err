@@ -6,7 +6,7 @@ var m = Mutex();
 var f = nil;
 for (var j = 0; j < 100; j+=1) {
   var t = newThread(fun() {
-    for (var k = 0; k < 1; k+=1) {
+    for (var k = 0; k < 10; k+=1) {
       m.lock();
       tmp = i;
       f = File.open("chunk.c"); // make threads switch

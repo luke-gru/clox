@@ -13,8 +13,6 @@ ObjNative *nativeThreadInit = NULL;
 ObjString *thKey;
 ObjString *mutexKey;
 
-extern volatile long long GVLOwner;
-
 void threadSetStatus(Value thread, ThreadStatus status) {
     LxThread *th = THREAD_GETHIDDEN(thread);
     th->status = status;
@@ -51,7 +49,11 @@ static void LxThreadSetup(LxThread *th) {
     th->cCallJumpBufSet = false;
     th->vmRunLvl = 0;
     th->lastSplatNumArgs = -1;
-    th->mutexCounter = 0;
+    vec_init(&th->stackObjects);
+}
+
+static void LxThreadCleanup(LxThread *th) {
+    vec_deinit(&th->stackObjects);
 }
 
 // NOTE: vm.curThread is NOT the current thread here, and doesn't hold
@@ -106,26 +108,16 @@ static void exitingThread() {
     vec_find(&vm.threads, FIND_THREAD_INSTANCE(vm.curThread->tid), idx);
     ASSERT(idx > -1);
     vec_splice(&vm.threads, idx, 1);
+    LxThreadCleanup(vm.curThread);
 }
 
-volatile bool settingUpThread = false;
-
 static void *runCallableInNewThread(void *arg) {
-    acquireGVLTid(pthread_self());
-    settingUpThread = true;
+    acquireGVL();
     pthread_t tid = pthread_self();
-    ASSERT(GVLOwner == tid);
     ObjClosure *closure = arg;
     ASSERT(closure);
     THREAD_DEBUG(2, "in new thread %lu", pthread_self());
-    THREAD_DEBUG(2, "owner: %lu", GVLOwner);
     LxThread *th = FIND_NEW_THREAD();
-    if (!th) {
-        ObjInstance *thread; int tidx = 0;
-        vec_foreach(&vm.threads, thread, tidx) {
-            fprintf(stderr, "TID found: %lu\n", THREAD_GETHIDDEN(OBJ_VAL(thread))->tid);
-        }
-    }
     ASSERT(th);
     th->tid = tid;
     th->status = THREAD_RUNNING;
@@ -135,14 +127,14 @@ static void *runCallableInNewThread(void *arg) {
     push(OBJ_VAL(closure));
     THREAD_DEBUG(2, "calling callable %lu", pthread_self());
     if (vm.exited) {
+        THREAD_DEBUG(2, "vm exited, quitting new thread %lu", pthread_self());
+        releaseGVL();
         pthread_exit(NULL);
     }
-    settingUpThread = false;
     callCallable(OBJ_VAL(closure), 0, false, NULL);
     pop();
     exitingThread();
     THREAD_DEBUG(2, "exiting thread %lu", pthread_self());
-    th->mutexCounter = 0;
     releaseGVL();
     pthread_exit(NULL);
 }
@@ -156,10 +148,13 @@ Value lxNewThread(int argCount, Value *args) {
     ObjClosure *func = AS_CLOSURE(closure);
     pthread_t tnew;
     newThreadSetup(vm.curThread);
+    releaseGVL();
     if (pthread_create(&tnew, NULL, runCallableInNewThread, func) == 0) {
+        acquireGVL();
         THREAD_DEBUG(2, "created thread id %lu", (unsigned long)tnew);
         return NUMBER_VAL((unsigned long)tnew);
     } else {
+        acquireGVL();
         THREAD_DEBUG(2, "Error making new thread, throwing\n");
         // TODO: throw lxThreadErrClass
         throwErrorFmt(lxErrClass, "Error creating new thread");
@@ -188,10 +183,11 @@ Value lxJoinThread(int argCount, Value *args) {
 }
 
 
-/*Value lxThreadScheduleStatic(int argCount, Value *args) {*/
-    /*releaseGVL();*/
-    /*acquireGVL();*/
-/*}*/
+Value lxThreadScheduleStatic(int argCount, Value *args) {
+    releaseGVL();
+    acquireGVL();
+    return NIL_VAL;
+}
 
 Value lxThreadInit(int argCount, Value *args) {
     CHECK_ARITY("Thread#init", 1, 1, argCount);
@@ -222,7 +218,6 @@ void setupMutex(LxMutex *mutex) {
 void lockMutex(LxMutex *mutex) {
     // NOTE: don't release GVL here, we need to block
     pthread_mutex_lock(&mutex->lock); // can block
-    THREAD()->mutexCounter++;
     pthread_t tid = pthread_self();
     mutex->owner = tid;
 }
@@ -230,7 +225,6 @@ void lockMutex(LxMutex *mutex) {
 void unlockMutex(LxMutex *mutex) {
     pthread_mutex_unlock(&mutex->lock);
     mutex->owner = 0;
-    THREAD()->mutexCounter--;
 }
 
 static LxMutex *mutexGetHidden(Value mutex) {
@@ -275,8 +269,8 @@ void Init_ThreadClass() {
     ObjClass *threadClass = addGlobalClass("Thread", lxObjClass);
     lxThreadClass = threadClass;
 
-    /*ObjClass *threadStatic = singletonClass((Obj*)threadClass);*/
-    /*addNativeMethod(threadStatic, "schedule", lxThreadScheduleStatic);*/
+    ObjClass *threadStatic = classSingletonClass(threadClass);
+    addNativeMethod(threadStatic, "schedule", lxThreadScheduleStatic);
 
     nativeThreadInit = addNativeMethod(threadClass, "init", lxThreadInit);
 
