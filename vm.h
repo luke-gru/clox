@@ -103,6 +103,7 @@ typedef struct LxThread {
     // control returns to the VM, these are popped. Stack objects aren't
     // collected during GC.
     vec_void_t stackObjects;
+    int mutexCounter;
 } LxThread;
 
 // threads

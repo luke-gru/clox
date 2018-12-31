@@ -1,0 +1,29 @@
+var i = 0;
+var tmp = 0;
+var threads = [];
+var f = nil;
+var m = Mutex();
+for (var j = 0; j < 100; j+=1) {
+  var t = newThread(fun() {
+    for (var k = 0; k < 10; k+=1) {
+      m.lock();
+      tmp = i;
+      f = File("chunk.c");
+      Thread.schedule();
+      f.close();
+      i = tmp + 1;
+      m.unlock();
+    }
+  });
+  threads << t;
+}
+
+for (var j = 0; j < 100; j+=1) {
+  joinThread(threads[j]);
+}
+
+print i;
+
+__END__
+-- expect: --
+1000

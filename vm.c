@@ -2847,6 +2847,12 @@ NORETURN void stopVM(int status) {
 
 void acquireGVL(void) {
     pthread_mutex_lock(&vm.GVLock);
+    LxThread *th = vm.curThread;
+    if (th && th->mutexCounter > 0 && GVLOwner == th->tid && th->tid == pthread_self()) {
+        THREAD_DEBUG(1, "Thread %lu skipping acquire of GVL due to held mutex\n", pthread_self());
+        pthread_mutex_unlock(&vm.GVLock);
+        return;
+    }
     while (vm.GVLockStatus > 0) {
         pthread_cond_wait(&vm.GVCond, &vm.GVLock); // block on wait queue
     }
@@ -2858,6 +2864,12 @@ void acquireGVL(void) {
 
 void releaseGVL(void) {
     pthread_mutex_lock(&vm.GVLock);
+    LxThread *th = vm.curThread;
+    if (th && th->mutexCounter > 0 && th->tid == GVLOwner && th->tid == pthread_self()) {
+        THREAD_DEBUG(1, "Thread %lu skipping release of GVL due to held mutex\n", pthread_self());
+        pthread_mutex_unlock(&vm.GVLock);
+        return;
+    }
     vm.GVLockStatus = 0;
     GVLOwner = -1;
     vm.curThread = NULL;

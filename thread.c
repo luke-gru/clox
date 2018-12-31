@@ -66,6 +66,7 @@ static void LxThreadSetup(LxThread *th) {
     memset(&th->cCallJumpBuf, 0, sizeof(jmp_buf));
     th->cCallJumpBufSet = false;
     th->vmRunLvl = 0;
+    th->mutexCounter = 0;
     th->lastSplatNumArgs = -1;
     vec_init(&th->stackObjects);
 }
@@ -245,6 +246,7 @@ static void lockFunc(LxMutex *mutex, LxThread *th) {
     mutex->waiting++;
     pthread_cond_wait(&mutex->cond, &mutex->lock);
     mutex->waiting--;
+    th->mutexCounter++;
     THREAD_DEBUG(1, "Thread %lu LOCKED mutex", th->tid);
     mutex->owner = th;
     pthread_mutex_unlock(&mutex->lock); // can block
@@ -257,6 +259,7 @@ void lockMutex(LxMutex *mutex) {
         THREAD_DEBUG(1, "Thread %lu LOCKED mutex (no contention)", th->tid);
         ASSERT(mutex->waiting == 0);
         mutex->owner = th;
+        th->mutexCounter++;
         pthread_mutex_unlock(&mutex->lock); // can block
         return;
     }
@@ -280,9 +283,8 @@ void unlockMutex(LxMutex *mutex) {
     if (mutex->waiting > 0) {
         THREAD_DEBUG(1, "Thread %lu signaling waiter(s)...", th->tid);
         pthread_cond_signal(&mutex->cond);
-    } else {
-        pthread_cond_signal(&mutex->cond);
     }
+    th->mutexCounter--;
     THREAD_DEBUG(1, "Thread %lu UNLOCKED mutex", th->tid);
     pthread_mutex_unlock(&mutex->lock);
 }
