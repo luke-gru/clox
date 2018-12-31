@@ -100,6 +100,7 @@ static void deleteBreakpt(Debugger *dbg, char *file, int line) {
 }
 
 void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nwidth) {
+    LxThread *th = THREAD();
     if (dbg->awaitingPause) {
         fprintf(stdout, "Entered lox debugger\n");
         dbg->awaitingPause = false;
@@ -167,7 +168,7 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
             return;
         } else if (strcmp(buf, "frames") == 0) {
             VMExecContext *ctx = NULL; int i = 0;
-            vec_foreach_rev(&vm.v_ecs, ctx, i) {
+            vec_foreach_rev(&th->v_ecs, ctx, i) {
                 for (int j = ctx->frameCount-1; j >= 0; j--) {
                     CallFrame *frame = &ctx->frames[j];
                     if (frame->closure->function->name) {

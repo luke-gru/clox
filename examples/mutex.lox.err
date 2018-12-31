@@ -1,0 +1,25 @@
+var i = 0;
+var tmp = 0;
+var threads = [];
+var list = [];
+var m = Mutex();
+var f = nil;
+for (var j = 0; j < 100; j+=1) {
+  var t = newThread(fun() {
+    for (var k = 0; k < 1; k+=1) {
+      m.lock();
+      tmp = i;
+      f = File.open("chunk.c"); // make threads switch
+      f.close();
+      i = tmp + 1;
+      m.unlock();
+    }
+  });
+  threads << t;
+}
+
+for (var j = 0; j < 100; j+=1) {
+  joinThread(threads[j]);
+}
+
+print i;

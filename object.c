@@ -13,17 +13,15 @@
     (type*)allocateObject(sizeof(type), objectType)
 
 extern VM vm;
-extern unsigned inCCall;
 
 static Obj *allocateObject(size_t size, ObjType type) {
-    ASSERT(vm.inited);
     Obj *object = getNewObject(type, size);
     ASSERT(type > OBJ_T_NONE);
     object->type = type;
     object->isDark = true; // don't collect right away, wait at least 1 round of GC
     object->isFrozen = false;
 
-    if (inCCall > 0) {
+    if (vm.inited && vm.curThread && THREAD()->inCCall > 0) {
         vec_push(&vm.stackObjects, object);
     }
 
@@ -40,10 +38,6 @@ static Obj *allocateObject(size_t size, ObjType type) {
  * NOTE: length here is strlen(chars).
  */
 static ObjString *allocateString(char *chars, int length) {
-    if (!vm.inited) {
-        fprintf(stderr, "allocateString before VM inited: %s\n", chars);
-        ASSERT(vm.inited);
-    }
     ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
     string->length = length;
     string->capacity = length;
@@ -387,14 +381,16 @@ ObjModule *newModule(ObjString *name) {
 
 // allocates a new instance object, doesn't call its constructor
 ObjInstance *newInstance(ObjClass *klass) {
-    ASSERT(klass);
+    if (vm.inited) ASSERT(klass);
     // NOTE: since this is called from vm.c's doCallCallable to initialize new
     // instances when given constructor functions, this must return new
     // modules/classes when given Module() or Class() constructors
-    if (klass == lxModuleClass) {
-        return (ObjInstance*)newModule(NULL);
-    } else if (klass == lxClassClass) {
-        return (ObjInstance*)newClass(NULL, lxObjClass);
+    if (vm.inited) {
+        if (klass == lxModuleClass) {
+            return (ObjInstance*)newModule(NULL);
+        } else if (klass == lxClassClass) {
+            return (ObjInstance*)newClass(NULL, lxObjClass);
+        }
     }
     ObjInstance *obj = ALLOCATE_OBJ(
         ObjInstance, OBJ_T_INSTANCE
@@ -1021,34 +1017,30 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
 }
 
 Value newThread(void) {
-    ObjInstance *instance = newInstance(lxThreadClass);
-    callVMMethod(instance, OBJ_VAL(nativeThreadInit), 0, NULL);
-    return pop();
+    if (!vm.inited) { // creating main thread in initVM
+        ASSERT(vm.mainThread == NULL);
+        ObjInstance *instance = newInstance(NULL);
+        // no stack frame, just use function
+        Value threadVal = OBJ_VAL(instance);
+        lxThreadInit(1, &threadVal);
+        return threadVal;
+    } else {
+        ObjInstance *instance = newInstance(lxThreadClass);
+        callVMMethod(instance, OBJ_VAL(nativeThreadInit), 0, NULL);
+        return pop();
+    }
 }
 
-LxThread *threadGetInternal(Value thread) {
+Value newThreadFromOldCurrentThread(void) {
+    ObjInstance *instance = newInstance(lxThreadClass);
+    return OBJ_VAL(instance);
+}
+
+LxThread *threadGetHidden(Value thread) {
     Value internal = getHiddenProp(thread, internedString("th", 2));
     ObjInternal *i = AS_INTERNAL(internal);
     ASSERT(i->data);
     return (LxThread*)i->data;
-}
-
-void threadSetStatus(Value thread, ThreadStatus status) {
-    LxThread *th = threadGetInternal(thread);
-    th->status = status;
-}
-void threadSetId(Value thread, pthread_t tid) {
-    LxThread *th = threadGetInternal(thread);
-    th->tid = tid;
-}
-
-ThreadStatus threadGetStatus(Value thread) {
-    LxThread *th = threadGetInternal(thread);
-    return th->status;
-}
-pthread_t threadGetId(Value thread) {
-    LxThread *th = threadGetInternal(thread);
-    return th->tid;
 }
 
 bool isInstanceLikeObj(Obj *obj) {
@@ -1115,6 +1107,14 @@ const char *objTypeName(ObjType type) {
             return "T_INTERNAL";
         default:
             UNREACHABLE_RETURN("invalid type");
+    }
+}
+
+char *className(ObjClass *klass) {
+    if (CLASSINFO(klass)->name) {
+        return CLASSINFO(klass)->name->chars;
+    } else {
+        return "(anon)";
     }
 }
 

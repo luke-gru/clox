@@ -43,7 +43,9 @@ static int checkOpen(const char *fname, int flags, mode_t mode) {
 
 static FILE *checkFopen(const char *path, const char *modeStr) {
     int last = errno;
+    releaseGVL();
     FILE *f = fopen(path, modeStr);
+    acquireGVL();
     if (!f) {
         int err = errno;
         errno = last;

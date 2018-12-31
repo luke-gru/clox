@@ -21,8 +21,6 @@
 
 typedef struct CallInfo CallInfo;
 
-extern unsigned inCCall;
-
 typedef struct CallFrame {
     // Non-native function fields
     ObjClosure *closure; // if call frame is from compiled code, this is set
@@ -76,14 +74,42 @@ typedef struct VMExecContext {
     bool loadContext; // is executing 'loadScript' or 'requireScript'
 } VMExecContext;
 
-typedef struct VM {
-    VMExecContext *ec; // current execution context of vm thread
-    vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
+// thread internals
+typedef enum ThreadStatus {
+    THREAD_STOPPED = 0,
+    THREAD_READY,
+    THREAD_RUNNING,
+    THREAD_ZOMBIE,
+} ThreadStatus;
 
-    Obj *objects; // linked list of heap objects
-    ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
-    Value *lastValue;
+typedef struct LxThread {
+    pthread_t tid;
+    volatile ThreadStatus status;
+    VMExecContext *ec; // current execution context of vm
+    vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
     Obj *thisObj;
+    Value *lastValue;
+    bool hadError;
+    ErrTagInfo *errInfo;
+    Value lastErrorThrown; // TODO: change to Obj pointer
+    int inCCall;
+    bool cCallThrew;
+    bool returnedFromNativeErr;
+    jmp_buf cCallJumpBuf;
+    bool cCallJumpBufSet;
+    int vmRunLvl;
+    int lastSplatNumArgs;
+    int mutexCounter;
+} LxThread;
+
+// threads
+void threadSetStatus(Value thread, ThreadStatus status);
+void threadSetId(Value thread, pthread_t tid);
+ThreadStatus threadGetStatus(Value thread);
+pthread_t threadGetId(Value thread);
+
+typedef struct VM {
+    ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
     Table globals; // global variables
     Table strings; // interned strings
     ObjString *initString;
@@ -109,23 +135,25 @@ typedef struct VM {
 
     bool inited;
 
-    bool exited;
-    bool hadError;
-    ErrTagInfo *errInfo;
-    Value lastErrorThrown;
+    volatile bool exited;
 
     vec_void_t exitHandlers;
 
     // threading
     pthread_mutex_t GVLock; // global VM lock
-    ObjInstance *curThread;
-    ObjInstance *mainThread;
+    volatile LxThread *curThread;
+    LxThread *mainThread;
     vec_void_t threads; // list of current thread ObjInstance pointers
 } VM; // singleton
 
 extern VM vm;
+extern volatile bool settingUpThread;
 
-#define EC (vm.ec)
+#define EC (THREAD()->ec)
+LxThread *THREAD();
+LxThread *FIND_THREAD(pthread_t tid);
+LxThread *FIND_NEW_THREAD();
+ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid);
 
 typedef enum {
   INTERPRET_OK = 1,
@@ -200,8 +228,11 @@ Value createIterator(Value iterable);
 
 // threads
 void acquireGVL(void);
+void acquireGVLTid(pthread_t tid);
+void acquireGVLMaybe(void);
 void releaseGVL(void);
 void thread_debug(int lvl, const char *format, ...);
+volatile long long GVLOwner;
 
 // debug
 void printVMStack(FILE *f);

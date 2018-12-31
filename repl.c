@@ -21,7 +21,6 @@ static bool evalLines(char *lines[], int numLines) {
     resetStack();
     _freeChunk();
     vm.exited = false;
-    vm.hadError = false;
     ObjString *buf = hiddenString("", 0);
     for (int i = 0; i < numLines; i++) {
         char *line = lines[i];
@@ -157,8 +156,8 @@ NORETURN void repl(void) {
                 // Add first callframe in case there are none, because
                 // printValue may call native methods (toString()), which
                 // rely on the framecount to be at least 1.
-                if (vm.ec->frameCount == 0) {
-                    vm.ec->frameCount++;
+                if (THREAD()->ec->frameCount == 0) {
+                    THREAD()->ec->frameCount++;
                 }
                 printValue(stderr, *val, true, -1);
             } else {

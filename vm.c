@@ -1,4 +1,3 @@
-#include <pthread.h>
 #include <stdio.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -14,6 +13,8 @@
 
 VM vm;
 
+volatile long long GVLOwner;
+
 #ifndef NDEBUG
 #define VM_DEBUG(...) vm_debug(__VA_ARGS__)
 #define VM_WARN(...) vm_warn(__VA_ARGS__)
@@ -21,8 +22,6 @@ VM vm;
 #define VM_DEBUG(...) (void)0
 #define VM_WARN(...) (void)0
 #endif
-
-static int vmRunLvl = 0;
 
 static void vm_debug(const char *format, ...) {
     if (!CLOX_OPTION_T(debugVM)) return;
@@ -113,12 +112,9 @@ static void defineNativeFunctions(void) {
 
 // Builtin classes initialized below
 ObjClass *lxObjClass;
-ObjClass *lxStringClass;
 ObjClass *lxClassClass;
 ObjClass *lxModuleClass;
-ObjClass *lxAryClass;
 ObjClass *lxIteratorClass;
-ObjClass *lxThreadClass;
 ObjModule *lxGCModule;
 ObjClass *lxErrClass;
 ObjClass *lxArgErrClass;
@@ -131,7 +127,6 @@ Value lxLoadPath; // load path for loadScript/requireScript (-L flag)
 Value lxArgv;
 
 ObjNative *nativeObjectInit = NULL;
-ObjNative *nativeThreadInit = NULL;
 ObjNative *nativeIteratorInit = NULL;
 ObjNative *nativeErrorInit = NULL;
 ObjNative *nativeClassInit = NULL;
@@ -216,11 +211,6 @@ static void defineNativeClasses(void) {
     ObjClass *loadErrClass = addGlobalClass("LoadError", errClass);
     lxLoadErrClass = loadErrClass;
 
-    // class Thread
-    ObjClass *threadClass = addGlobalClass("Thread", objClass);
-    lxThreadClass = threadClass;
-    nativeThreadInit = addNativeMethod(threadClass, "init", lxThreadInit);
-
     // module GC
     ObjModule *GCModule = addGlobalModule("GC");
     ObjClass *GCClassStatic = moduleSingletonClass(GCModule);
@@ -235,6 +225,7 @@ static void defineNativeClasses(void) {
     Init_ProcessModule();
     Init_IOClass();
     Init_FileClass();
+    Init_ThreadClass();
     isClassHierarchyCreated = true;
 }
 
@@ -308,37 +299,34 @@ Value createIterator(Value iterable) {
     UNREACHABLE(__func__);
 }
 
-// VM/C call "context switch" data
-static jmp_buf CCallJumpBuf;
-unsigned inCCall;
-static bool cCallThrew = false;
-static bool returnedFromNativeErr = false;
-
-static int lastSplatNumArgs = -1; // FIXME: this is really ugly
-
 // Uncaught errors jump here
 static jmp_buf rootVMLoopJumpBuf;
 static bool rootVMLoopJumpBufSet = false;
 
-static int curLine = 1;
+static int curLine = 1; // TODO: per thread
 
 // Add and use a new execution context
 static inline void push_EC(void) {
+    LxThread *th = THREAD();
     VMExecContext *ectx = ALLOCATE(VMExecContext, 1);
     memset(ectx, 0, sizeof(*ectx));
     initTable(&ectx->roGlobals);
-    vec_push(&vm.v_ecs, ectx);
-    vm.ec = ectx; // EC = ectx
+    vec_push(&th->v_ecs, ectx);
+    th->ec = ectx; // EC = ectx
 }
 
 // Pop the current execution context and use the one created before
 // the current one.
 static inline void pop_EC(void) {
-    ASSERT(vm.v_ecs.length > 0);
-    VMExecContext *ctx = (VMExecContext*)vec_pop(&vm.v_ecs);
+    LxThread *th = THREAD();
+    ASSERT(th->v_ecs.length > 0);
+    VMExecContext *ctx = (VMExecContext*)vec_pop(&th->v_ecs);
     freeTable(&ctx->roGlobals);
     FREE(VMExecContext, ctx);
-    vm.ec = (VMExecContext*)vec_last(&vm.v_ecs);
+    th->ec = (VMExecContext*)vec_last(&th->v_ecs);
+    if (th->v_ecs.length == 0) {
+        th->ec = NULL;
+    }
 }
 
 static inline bool isInEval(void) {
@@ -356,7 +344,7 @@ void resetStack(void) {
     EC->frameCount = 0;
 }
 
-static void initMainThread(void) {
+static ObjInstance *initMainThread(void) {
     if (pthread_mutex_init(&vm.GVLock, NULL) != 0) {
         die("Global VM lock unable to initialize");
     }
@@ -365,17 +353,19 @@ static void initMainThread(void) {
     vm.mainThread = NULL;
 
     Value mainThread = newThread();
+    LxThread *th = THREAD_GETHIDDEN(mainThread);
 
-    vm.curThread = AS_INSTANCE(mainThread);
-    vm.mainThread = AS_INSTANCE(mainThread);
+    vm.curThread = th;
+    vm.mainThread = th;
     vec_init(&vm.threads);
-    vec_push(&vm.threads, vm.curThread);
+    vec_push(&vm.threads, AS_INSTANCE(mainThread));
 
-    acquireGVL();
-    threadSetStatus(mainThread, THREAD_RUNNING);
     pthread_t tid = pthread_self();
     threadSetId(mainThread, tid);
+    acquireGVL();
+    threadSetStatus(mainThread, THREAD_RUNNING);
     THREAD_DEBUG(1, "Main thread initialized");
+    return AS_INSTANCE(mainThread);
 }
 
 void initVM() {
@@ -385,38 +375,23 @@ void initVM() {
     }
     VM_DEBUG("initVM() start");
     turnGCOff();
-    vec_init(&vm.v_ecs);
-    push_EC();
-    resetStack();
-    vm.objects = NULL;
-
     vm.grayCount = 0;
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
-    vm.openUpvalues = NULL;
-    vm.printBuf = NULL;
-    vec_init(&vm.loadedScripts);
 
-    vm.lastValue = NULL;
-    vm.thisObj = NULL;
     initTable(&vm.globals);
     initTable(&vm.strings); // interned strings
-    vm.inited = true; // NOTE: VM has to be inited before creation of strings
-    vm.exited = false;
-    vm.initString = internedString("init", 4);
-    vm.fileString = internedString("__FILE__", 8);
-    vm.dirString = internedString("__DIR__", 7);
 
     vec_init(&vm.hiddenObjs);
     vec_init(&vm.stackObjects);
-    vm.lastErrorThrown = NIL_VAL;
-    vm.hadError = false;
-    vm.errInfo = NULL;
-    inCCall = 0;
-    cCallThrew = false;
-    returnedFromNativeErr = false;
+    ObjInstance *mainT = initMainThread();
+    push_EC();
+    resetStack();
+
+    vec_init(&vm.loadedScripts);
+    vm.openUpvalues = NULL;
+    vm.printBuf = NULL;
     curLine = 1;
-    memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
 
     memset(&rootVMLoopJumpBuf, 0, sizeof(rootVMLoopJumpBuf));
     rootVMLoopJumpBufSet = false;
@@ -426,12 +401,18 @@ void initVM() {
     initDebugger(&vm.debugger);
     vm.instructionStepperOn = CLOX_OPTION_T(stepVMExecution);
 
+    vm.inited = true; // NOTE: VM has to be inited before creation of strings
+    vm.exited = false;
+    vm.initString = internedString("init", 4);
+    vm.fileString = internedString("__FILE__", 8);
+    vm.dirString = internedString("__DIR__", 7);
+
     pushFrame();
 
     defineNativeFunctions();
     defineNativeClasses();
+    mainT->klass = lxThreadClass; // now that it's created
     defineGlobalVariables();
-    initMainThread();
 
     popFrame();
 
@@ -439,12 +420,11 @@ void initVM() {
     // don't pop EC here, we'll pop it in freeVM()
 
     turnGCOn();
-    vmRunLvl = 0;
     VM_DEBUG("initVM() end");
 }
 
 void freeVM(void) {
-    /*fprintf(stderr, "VM run level: %d\n", vmRunLvl);*/
+    /*fprintf(stderr, "VM run level: %d\n", th->vmRunLvl);*/
     if (!vm.inited) {
         VM_WARN("freeVM: VM not yet initialized");
         return;
@@ -456,12 +436,7 @@ void freeVM(void) {
     freeDebugger(&vm.debugger);
     vm.instructionStepperOn = false;
 
-    inCCall = 0;
-    cCallThrew = false;
-    returnedFromNativeErr = false;
-    memset(&CCallJumpBuf, 0, sizeof(CCallJumpBuf));
     curLine = 1;
-    vm.errInfo = NULL;
 
     memset(&rootVMLoopJumpBuf, 0, sizeof(rootVMLoopJumpBuf));
     rootVMLoopJumpBufSet = false;
@@ -472,46 +447,47 @@ void freeVM(void) {
     vm.initString = NULL;
     vm.fileString = NULL;
     vm.dirString = NULL;
-    vm.hadError = false;
     vm.printBuf = NULL;
     vm.printToStdout = true;
-    vm.lastValue = NULL;
-    vm.thisObj = NULL;
     vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
     vec_deinit(&vm.loadedScripts);
     isClassHierarchyCreated = false;
-    vm.objects = NULL;
 
-    vec_clear(&vm.v_ecs);
-    vm.ec = NULL;
     vm.inited = false;
     vm.exited = false;
 
     vec_deinit(&vm.exitHandlers);
 
-    vmRunLvl = 0;
+    while (THREAD()->ec) { pop_EC(); }
+
     releaseGVL();
+
+    THREAD_DEBUG(1, "VM lock destroying...");
     pthread_mutex_destroy(&vm.GVLock);
+
     vm.curThread = NULL;
     vm.mainThread = NULL;
     vec_deinit(&vm.threads);
-
-    while (EC) { pop_EC(); }
 
     VM_DEBUG("freeVM() end");
 }
 
 
 int VMNumStackFrames(void) {
-    VMExecContext *firstEC = vec_first(&vm.v_ecs);
-    return EC->stackTop - firstEC->stack;
+    VMExecContext *ctx; int ctxIdx = 0;
+    int num = 0;
+    vec_foreach(&THREAD()->v_ecs, ctx, ctxIdx) {
+        ASSERT(ctx->stackTop >= ctx->stack);
+        num += (ctx->stackTop - ctx->stack);
+    }
+    return num;
 }
 
 int VMNumCallFrames(void) {
     int ret = 0;
     VMExecContext *ec; int i = 0;
-    vec_foreach(&vm.v_ecs, ec, i) {
+    vec_foreach(&THREAD()->v_ecs, ec, i) {
         ret += ec->frameCount;
     }
     return ret;
@@ -548,8 +524,8 @@ Value pop(void) {
     ASSERT(EC->stackTop > EC->stack);
     EC->stackTop--;
     EC->lastValue = EC->stackTop;
-    vm.lastValue = EC->lastValue;
-    return *vm.lastValue;
+    THREAD()->lastValue = EC->lastValue;
+    return *(THREAD()->lastValue);
 }
 
 Value peek(unsigned n) {
@@ -559,7 +535,7 @@ Value peek(unsigned n) {
 
 static inline void setThis(unsigned n) {
     ASSERT((EC->stackTop-n) > EC->stack);
-    vm.thisObj = AS_OBJ(*(EC->stackTop-1-n));
+    THREAD()->thisObj = AS_OBJ(*(EC->stackTop-1-n));
 }
 
 Value *getLastValue(void) {
@@ -709,7 +685,7 @@ void errorPrintScriptBacktrace(const char *format, ...) {
         }
     }
 
-    vm.hadError = true;
+    THREAD()->hadError = true;
     resetStack();
 }
 
@@ -740,20 +716,21 @@ void showUncaughtError(Value err) {
         fprintf(stderr, "%s", VAL_TO_STRING(ARRAY_GET(bt, i))->chars);
     }
 
-    vm.hadError = true;
+    THREAD()->hadError = true;
     resetStack();
 }
 
 // every new error value, when thrown, gets its backtrace set first
 void setBacktrace(Value err) {
     VM_DEBUG("Setting backtrace");
+    LxThread *th = THREAD();
     ASSERT(IS_AN_ERROR(err));
     Value ret = newArray();
     setProp(err, internedString("backtrace", 9), ret);
-    int numECs = vm.v_ecs.length;
+    int numECs = th->v_ecs.length;
     VMExecContext *ctx;
     for (int i = numECs-1; i >= 0; i--) {
-        ctx = vm.v_ecs.data[i];
+        ctx = th->v_ecs.data[i];
         DBG_ASSERT(ctx);
         for (int j = ctx->frameCount - 1; j >= 0; j--) {
             CallFrame *frame = &ctx->frames[j];
@@ -825,7 +802,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     } else if ((getter = instanceFindGetter(obj, propName))) {
         VM_DEBUG("getter found");
         callVMMethod(obj, OBJ_VAL(getter), 0, NULL);
-        if (vm.hadError) {
+        if (THREAD()->hadError) {
             return NIL_VAL;
         } else {
             return pop();
@@ -928,7 +905,7 @@ static void defineSetter(ObjString *name) {
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
     VM_DEBUG("Calling VM method");
     push(OBJ_VAL(instance));
-    Obj *oldThis = vm.thisObj;
+    Obj *oldThis = THREAD()->thisObj;
     setThis(0);
     for (int i = 0; i < argCount; i++) {
         ASSERT(args);
@@ -936,7 +913,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     }
     VM_DEBUG("call begin");
     callCallable(callable, argCount, true, NULL); // pushes return value to stack
-    vm.thisObj = oldThis;
+    THREAD()->thisObj = oldThis;
     VM_DEBUG("call end");
     return peek(0);
 }
@@ -994,36 +971,39 @@ Value callFunctionValue(Value callable, int argCount, Value *args) {
 }
 
 static void unwindErrInfo(CallFrame *frame) {
-    ErrTagInfo *info = vm.errInfo;
+    ErrTagInfo *info = THREAD()->errInfo;
     while (info && info->frame == frame) {
         ErrTagInfo *prev = info->prev;
         FREE(ErrTagInfo, info);
         info = prev;
     }
-    vm.errInfo = info;
+    THREAD()->errInfo = info;
 }
 
 
 void popFrame(void) {
     DBG_ASSERT(vm.inited);
+    LxThread *th = THREAD();
     ASSERT(EC->frameCount >= 1);
     VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
     CallFrame *frame = getFrame();
     unwindErrInfo(frame);
     if (frame->isCCall) {
-        ASSERT(inCCall > 0);
-        inCCall--;
-        if (inCCall == 0) {
-            vec_clear(&vm.stackObjects);
+        if (th->inCCall > 0) {
+            ASSERT(th->inCCall > 0);
+            th->inCCall--;
+            if (th->inCCall == 0) {
+                vec_clear(&vm.stackObjects); // FIXME: make per-thread
+            }
         }
     }
     memset(frame, 0, sizeof(*frame));
     EC->frameCount--;
     frame = getFrameOrNull();
     if (frame && frame->instance) {
-        vm.thisObj = (Obj*)frame->instance;
+        th->thisObj = (Obj*)frame->instance;
     } else {
-        vm.thisObj = NULL;
+        th->thisObj = NULL;
     }
     ASSERT_VALID_STACK();
 }
@@ -1066,21 +1046,26 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->isCCall = true;
     newFrame->nativeFunc = native;
     newFrame->file = EC->filename;
-    inCCall++;
+    THREAD()->inCCall++;
 }
 
 // sets up VM/C call jumpbuf if not set
 static void captureNativeError(void) {
-    if (inCCall == 0) {
+    LxThread *th = THREAD();
+    if (th->inCCall == 0) {
         VM_DEBUG("%s", "Setting VM/C error jump buffer");
-        int jumpRes = setjmp(CCallJumpBuf);
+        VM_DEBUG("setting VM/C error jump buf\n");
+        int jumpRes = setjmp(th->cCallJumpBuf);
         if (jumpRes == JUMP_SET) { // jump is set, prepared to enter C land
+            th->cCallJumpBufSet = true;
             return;
         } else { // C call longjmped here from throwError()
-            ASSERT(inCCall > 0);
-            ASSERT(cCallThrew);
-            cCallThrew = false;
-            returnedFromNativeErr = true;
+            th = THREAD();
+            ASSERT(th->inCCall > 0);
+            ASSERT(th->cCallThrew);
+            th->cCallThrew = false;
+            th->returnedFromNativeErr = true;
+            th->cCallJumpBufSet = false;
         }
     }
 }
@@ -1107,6 +1092,7 @@ static bool checkFunctionArity(ObjFunction *func, int argCount) {
 // new instance and puts it in the proper spot in the stack. The return value
 // is pushed to the stack.
 static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo *callInfo) {
+    LxThread *th = THREAD();
     ObjClosure *closure = NULL;
     Value instanceVal;
     ObjInstance *instance = NULL;
@@ -1134,8 +1120,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         instance = newInstance(klass); // setup the new instance object
         frameClass = klass;
         instanceVal = OBJ_VAL(instance);
-        Obj *oldThis = vm.thisObj;
-        vm.thisObj = (Obj*)instance;
+        Obj *oldThis = th->thisObj;
+        th->thisObj = (Obj*)instance;
         /*ASSERT(IS_CLASS(EC->stackTop[-argCount - 1])); this holds true if the # of args is correct for the function */
         EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
         // Call the initializer, if there is one.
@@ -1156,17 +1142,17 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
                 nativeInit->function(argCount+1, EC->stackTop-argCount-1);
-                vm.thisObj = oldThis;
+                th->thisObj = oldThis;
                 newFrame->slots = EC->stackTop-argCount-1;
-                if (returnedFromNativeErr) {
-                    returnedFromNativeErr = false;
+                if (th->returnedFromNativeErr) {
+                    th->returnedFromNativeErr = false;
                     VM_DEBUG("native initializer returned from error");
                     vec_clear(&vm.stackObjects);
                     while (getFrame() >= newFrame) {
                         popFrame();
                     }
-                    ASSERT(inCCall == 0);
-                    throwError(vm.lastErrorThrown); // re-throw inside VM
+                    ASSERT(th->inCCall == 0);
+                    throwError(th->lastErrorThrown); // re-throw inside VM
                     return false;
                 } else {
                     VM_DEBUG("native initializer returned");
@@ -1190,7 +1176,11 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         EC->stackTop[-argCount - 1] = instanceVal;
         return doCallCallable(OBJ_VAL(callable), argCount, true, callInfo);
     } else if (IS_NATIVE_FUNCTION(callable)) {
-        VM_DEBUG("Calling native %s with %d args", isMethod ? "method" : "function", argCount);
+#ifndef NDEBUG
+        static const char callableNameBuf[200];
+        fillCallableName(callable, callableNameBuf, 200);
+        VM_DEBUG("Calling native %s %s with %d args", isMethod ? "method" : "function", callableNameBuf, argCount);
+#endif
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
         int argCountActual = argCount; // includes the callable on the stack, or the receiver if it's a method
         if (isMethod) {
@@ -1211,14 +1201,14 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         newFrame->klass = frameClass;
         Value val = native->function(argCount, EC->stackTop-argCount);
         newFrame->slots = EC->stackTop-argCountActual;
-        if (returnedFromNativeErr) {
+        if (th->returnedFromNativeErr) {
             VM_DEBUG("Returned from native function with error");
-            returnedFromNativeErr = false;
+            th->returnedFromNativeErr = false;
             while (getFrame() >= newFrame) {
                 popFrame();
             }
-            ASSERT(inCCall == 0);
-            throwError(vm.lastErrorThrown); // re-throw inside VM
+            ASSERT(th->inCCall == 0);
+            throwError(th->lastErrorThrown); // re-throw inside VM
             return false;
         } else {
             VM_DEBUG("Returned from native function without error");
@@ -1437,7 +1427,10 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
         if (!superMethod) {
             throwErrorFmt(lxErrClass, "No super method found for callSuper");
         }
+        LxThread *th = THREAD();
+        int inCCall = th->inCCall;
         callVMMethod(frame->instance, OBJ_VAL(superMethod), argCount, args);
+        ASSERT(th->inCCall == inCCall);
         return pop();
     } else {
         UNREACHABLE("bug");
@@ -1450,16 +1443,17 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
  * the proper class to catch.
  */
 static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowFound) {
+    LxThread *th = THREAD();
     CatchTable *tbl = currentChunk()->catchTbl;
     CatchTable *row = tbl;
     int currentIpOff = (int)(getFrame()->ip - currentChunk()->code);
     bool poppedEC = false;
     VM_DEBUG("findthrowjumploc");
     while (row || EC->frameCount >= 1) {
-        VM_DEBUG("framecount: %d, num ECs: %d", EC->frameCount, vm.v_ecs.length);
+        VM_DEBUG("framecount: %d, num ECs: %d", EC->frameCount, th->v_ecs.length);
         if (row == NULL) { // pop a call frame
             VM_DEBUG("row null");
-            if (vm.v_ecs.length == 0 || (vm.v_ecs.length == 1 && EC->frameCount == 1)) {
+            if (th->v_ecs.length == 0 || (th->v_ecs.length == 1 && EC->frameCount == 1)) {
                 return false;
             }
             if (EC->frameCount == 1) { // there's at least 1 more context to go through
@@ -1518,7 +1512,7 @@ static CatchTable *getCatchTableRow(int idx) {
 }
 
 ErrTagInfo *findErrTag(ObjClass *klass) {
-    ErrTagInfo *cur = vm.errInfo;
+    ErrTagInfo *cur = THREAD()->errInfo;
     while (cur) {
         // tag for all errors
         if (cur->errClass == NULL || cur->errClass == klass) {
@@ -1533,7 +1527,8 @@ NORETURN void throwError(Value self) {
     VM_DEBUG("throwing error");
     ASSERT(vm.inited);
     ASSERT(IS_INSTANCE(self));
-    vm.lastErrorThrown = self;
+    LxThread *th = THREAD();
+    th->lastErrorThrown = self;
     if (IS_NIL(getProp(self, internedString("backtrace", 9)))) {
         setBacktrace(self);
     }
@@ -1547,12 +1542,14 @@ NORETURN void throwError(Value self) {
         VM_DEBUG("longjmping to tag");
         longjmp(errInfo->jmpBuf, JUMP_PERFORMED);
     }
-    if (inCCall > 0) {
+    if (th->inCCall > 0 && th->cCallJumpBufSet) {
+        ASSERT(getFrame()->isCCall);
         VM_DEBUG("throwing error from C call, longjmping");
-        ASSERT(!cCallThrew);
-        cCallThrew = true;
-        longjmp(CCallJumpBuf, JUMP_PERFORMED);
+        ASSERT(!th->cCallThrew);
+        th->cCallThrew = true;
+        longjmp(th->cCallJumpBuf, JUMP_PERFORMED);
     }
+    th->inCCall = 0;
     if (findThrowJumpLoc(klass, &ipNew, &catchRow)) {
         ASSERT(ipNew);
         ASSERT(catchRow);
@@ -1569,13 +1566,14 @@ NORETURN void throwError(Value self) {
 }
 
 void popErrInfo(void) {
-    vm.errInfo = vm.errInfo->prev;
+    THREAD()->errInfo = THREAD()->errInfo->prev;
 }
 
 void unsetErrInfo(void) {
-    vm.lastErrorThrown = NIL_VAL;
-    ASSERT(vm.errInfo);
-    vm.errInfo = vm.errInfo->prev;
+    LxThread *th = THREAD();
+    th->lastErrorThrown = NIL_VAL;
+    ASSERT(th->errInfo);
+    th->errInfo = th->errInfo->prev;
 }
 
 void rethrowErrInfo(ErrTagInfo *info) {
@@ -1599,30 +1597,30 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     hideFromGC((Obj*)buf);
     Value msg = newStringInstance(buf);
     Value err = newError(klass, msg);
-    vm.lastErrorThrown = err;
+    THREAD()->lastErrorThrown = err;
     unhideFromGC((Obj*)buf);
     throwError(err);
     UNREACHABLE("thrown");
 }
 
 void printVMStack(FILE *f) {
-    if (EC->stackTop == EC->stack && vm.v_ecs.length == 1) {
-        fprintf(f, "[DEBUG %d]: Stack: empty\n", vmRunLvl);
+    if (EC->stackTop == EC->stack && THREAD()->v_ecs.length == 1) {
+        fprintf(f, "[DEBUG %d]: Stack: empty\n", THREAD()->vmRunLvl);
         return;
     }
     VMExecContext *ec = NULL; int i = 0;
     int numCallFrames = VMNumCallFrames();
     int numStackFrames = VMNumStackFrames();
-    fprintf(f, "[DEBUG %d]: Stack (%d stack frames, %d call frames):\n", vmRunLvl,
+    fprintf(f, "[DEBUG %d]: Stack (%d stack frames, %d call frames):\n", THREAD()->vmRunLvl,
             numStackFrames, numCallFrames);
     // print VM stack values from bottom of stack to top
-    fprintf(f, "[DEBUG %d]: ", vmRunLvl);
+    fprintf(f, "[DEBUG %d]: ", THREAD()->vmRunLvl);
     int callFrameIdx = 0;
-    vec_foreach(&vm.v_ecs, ec, i) {
+    vec_foreach(&THREAD()->v_ecs, ec, i) {
         for (Value *slot = ec->stack; slot < ec->stackTop; slot++) {
             if (IS_OBJ(*slot) && (AS_OBJ(*slot)->type <= OBJ_T_NONE ||
                                  (AS_OBJ(*slot)->type >= OBJ_T_LAST))) {
-                fprintf(stderr, "[DEBUG %d]: Broken object pointer: %p\n", vmRunLvl,
+                fprintf(stderr, "[DEBUG %d]: Broken object pointer: %p\n", THREAD()->vmRunLvl,
                         AS_OBJ(*slot));
                 ASSERT(0);
             }
@@ -1735,33 +1733,34 @@ static ObjString *methodNameForBinop(OpCode code) {
  * Run the VM's instructions.
  */
 static InterpretResult vm_run() {
+    LxThread *th = THREAD();
     if (CLOX_OPTION_T(parseOnly) || CLOX_OPTION_T(compileOnly)) {
         return INTERPRET_OK;
     }
 
     if (!rootVMLoopJumpBufSet) {
-        ASSERT(vmRunLvl == 0);
+        ASSERT(th->vmRunLvl == 0);
         int jumpRes = setjmp(rootVMLoopJumpBuf);
         rootVMLoopJumpBufSet = true;
         if (jumpRes == JUMP_SET) {
             VM_DEBUG("VM set rootVMLoopJumpBuf");
         } else {
             VM_DEBUG("VM caught error in rootVMLoopJumpBuf");
-            showUncaughtError(vm.lastErrorThrown);
+            showUncaughtError(THREAD()->lastErrorThrown);
             return INTERPRET_RUNTIME_ERROR;
         }
     }
-    vmRunLvl++;
+    th->vmRunLvl++;
     Chunk *ch = currentChunk();
     if (ch->catchTbl != NULL) {
         CallFrame *f = getFrame();
         int jumpRes = setjmp(f->jmpBuf);
         if (jumpRes == JUMP_SET) {
             f->jmpBufSet = true;
-            VM_DEBUG("VM set catch table for call frame (vm_run lvl %d)", vmRunLvl-1);
+            VM_DEBUG("VM set catch table for call frame (vm_run lvl %d)", th->vmRunLvl-1);
         } else {
-            VM_DEBUG("VM caught error for call frame (vm_run lvl %d)", vmRunLvl-1);
-            vm.hadError = false;
+            VM_DEBUG("VM caught error for call frame (vm_run lvl %d)", th->vmRunLvl-1);
+            th->hadError = false;
             // stack is already unwound to proper frame
         }
     }
@@ -1796,12 +1795,12 @@ static InterpretResult vm_run() {
 
   /*fprintf(stderr, "VM run level: %d\n", vmRunLvl);*/
   for (;;) {
-      if (vm.hadError) {
-          vmRunLvl--;
+      if (th->hadError) {
+          (th->vmRunLvl)--;
           return INTERPRET_RUNTIME_ERROR;
       }
       if (vm.exited) {
-          vmRunLvl--;
+          (th->vmRunLvl)--;
           return INTERPRET_OK;
       }
       if (EC->stackTop < EC->stack) {
@@ -2169,9 +2168,9 @@ static InterpretResult vm_run() {
       }
       case OP_CALL: {
           uint8_t numArgs = READ_BYTE();
-          if (lastSplatNumArgs > 0) {
-              numArgs += (lastSplatNumArgs-1);
-              lastSplatNumArgs = -1;
+          if (th->lastSplatNumArgs > 0) {
+              numArgs += (th->lastSplatNumArgs-1);
+              th->lastSplatNumArgs = -1;
           }
           Value callableVal = peek(numArgs);
           if (!isCallable(callableVal)) {
@@ -2212,11 +2211,11 @@ static InterpretResult vm_run() {
           ObjString *mname = AS_STRING(methodName);
           uint8_t numArgs = READ_BYTE();
           Value callInfoVal = READ_CONSTANT();
-          Obj *oldThis = vm.thisObj;
+          Obj *oldThis = th->thisObj;
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
-          if (lastSplatNumArgs > 0) {
-              numArgs += (lastSplatNumArgs-1);
-              lastSplatNumArgs = -1;
+          if (th->lastSplatNumArgs > 0) {
+              numArgs += (th->lastSplatNumArgs-1);
+              th->lastSplatNumArgs = -1;
           }
           Value instanceVal = peek(numArgs);
           if (IS_INSTANCE(instanceVal)) {
@@ -2232,7 +2231,7 @@ static InterpretResult vm_run() {
               }
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
-              vm.thisObj = oldThis;
+              th->thisObj = oldThis;
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);
@@ -2247,7 +2246,7 @@ static InterpretResult vm_run() {
               EC->stackTop[-numArgs-1] = instanceVal;
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
-              vm.thisObj = oldThis;
+              th->thisObj = oldThis;
           } else if (IS_MODULE(instanceVal)) {
               ObjModule *mod = AS_MODULE(instanceVal);
               Obj *callable = moduleFindStaticMethod(mod, mname);
@@ -2262,7 +2261,7 @@ static InterpretResult vm_run() {
               EC->stackTop[-numArgs-1] = instanceVal;
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
-              vm.thisObj = oldThis;
+              th->thisObj = oldThis;
           } else {
               throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfVal(instanceVal));
           }
@@ -2270,8 +2269,8 @@ static InterpretResult vm_run() {
           break;
       }
       case OP_GET_THIS: {
-          ASSERT(vm.thisObj);
-          push(OBJ_VAL(vm.thisObj));
+          ASSERT(th->thisObj);
+          push(OBJ_VAL(th->thisObj));
           break;
       }
       case OP_SPLAT_ARRAY: {
@@ -2280,16 +2279,16 @@ static InterpretResult vm_run() {
               throwErrorFmt(lxTypeErrClass, "Splatted expression must evaluate to an Array (type=%s)",
                       typeOfVal(ary));
           }
-          lastSplatNumArgs = ARRAY_SIZE(ary);
-          for (int i = 0; i < lastSplatNumArgs; i++) {
+          th->lastSplatNumArgs = ARRAY_SIZE(ary);
+          for (int i = 0; i < th->lastSplatNumArgs; i++) {
               push(ARRAY_GET(ary, i));
           }
           break;
       }
       case OP_GET_SUPER: {
           Value methodName = READ_CONSTANT();
-          ASSERT(vm.thisObj);
-          Value instanceVal = OBJ_VAL(vm.thisObj);
+          ASSERT(th->thisObj);
+          Value instanceVal = OBJ_VAL(th->thisObj);
           ASSERT(IS_INSTANCE(instanceVal)); // FIXME: get working for classes (singleton methods)
           ObjClass *klass = (ObjClass*)getFrame()->closure->function->klass;
           ASSERT(klass); // TODO: get working for module functions that call super
@@ -2315,7 +2314,7 @@ static InterpretResult vm_run() {
           popFrame();
           EC->stackTop = newTop;
           push(result);
-          vmRunLvl--;
+          (th->vmRunLvl)--;
           return INTERPRET_OK;
       }
       case OP_ITER: {
@@ -2566,13 +2565,15 @@ static InterpretResult vm_run() {
       // exit interpreter, or evaluation context if in eval() or
       // loadScript/requireScript
       case OP_LEAVE: {
-          if (!isInEval() && !isInLoadedScript()) vm.exited = true;
-          vmRunLvl--;
+          if (!isInEval() && !isInLoadedScript()) {
+              vm.exited = true;
+          }
+          (th->vmRunLvl)--;
           return INTERPRET_OK;
       }
       default:
           errorPrintScriptBacktrace("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
-          vmRunLvl--;
+          (th->vmRunLvl)--;
           return INTERPRET_RUNTIME_ERROR;
     }
   }
@@ -2663,7 +2664,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     if (EC == ectx) pop_EC();
     ASSERT(oldFrame == getFrame());
     if (status == TAG_RAISE) {
-        rethrowErrInfo(vm.errInfo);
+        rethrowErrInfo(THREAD()->errInfo);
         UNREACHABLE_RETURN(INTERPRET_RUNTIME_ERROR);
     } else {
         return INTERPRET_OK;
@@ -2713,10 +2714,10 @@ static Value doVMEval(const char *src, const char *filename, int lineno, bool th
     vm_protect(vm_run_protect, NULL, NULL, &status);
     if (status == TAG_RAISE) {
         result = INTERPRET_RUNTIME_ERROR;
-        vm.hadError = true;
+        THREAD()->hadError = true;
     }
-    Value val = *vm.lastValue;
-    VM_DEBUG("eval finished: error: %d", vm.hadError ? 1 : 0);
+    Value val = *THREAD()->lastValue;
+    VM_DEBUG("eval finished: error: %d", THREAD()->hadError ? 1 : 0);
     // `EC != ectx` if an error occured in the eval, and propagated out
     // due to being caught in a surrounding context or never being caught.
     if (EC == ectx) pop_EC();
@@ -2725,7 +2726,7 @@ static Value doVMEval(const char *src, const char *filename, int lineno, bool th
         return val;
     } else {
         if (throwOnErr) {
-            rethrowErrInfo(vm.errInfo);
+            rethrowErrInfo(THREAD()->errInfo);
             UNREACHABLE_RETURN(UNDEF_VAL);
         } else {
             // TODO: output error messages
@@ -2757,23 +2758,25 @@ void unsetPrintBuf(void) {
 static void unwindJumpRecover(ErrTagInfo *info) {
     ASSERT(info);
     DBG_ASSERT(getFrame());
+    LxThread *th = THREAD();
     while (getFrame() != info->frame) {
         VM_DEBUG("popping callframe from unwind");
         popFrame();
     }
-    while (vm.errInfo != info) {
+    while (th->errInfo != info) {
         VM_DEBUG("freeing Errinfo");
-        ASSERT(vm.errInfo);
-        ErrTagInfo *prev = vm.errInfo->prev;
+        ASSERT(th->errInfo);
+        ErrTagInfo *prev = th->errInfo->prev;
         ASSERT(prev);
-        FREE(ErrTagInfo, vm.errInfo);
-        vm.errInfo = prev;
+        FREE(ErrTagInfo, th->errInfo);
+        th->errInfo = prev;
     }
 }
 
 void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status) {
+    LxThread *th = THREAD();
     addErrInfo(errClass);
-    ErrTagInfo *errInfo = vm.errInfo;
+    ErrTagInfo *errInfo = th->errInfo;
     int jmpres = 0;
     if ((jmpres = setjmp(errInfo->jmpBuf)) == JUMP_SET) {
         *status = TAG_NONE;
@@ -2781,15 +2784,15 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
         void *res = func(arg);
         ErrTagInfo *prev = errInfo->prev;
         FREE(ErrTagInfo, errInfo);
-        vm.errInfo = prev;
+        th->errInfo = prev;
         VM_DEBUG("vm_protect after func");
         return res;
     } else if (jmpres == JUMP_PERFORMED) {
         VM_DEBUG("vm_protect got to longjmp");
-        ASSERT(errInfo == vm.errInfo);
+        ASSERT(errInfo == th->errInfo);
         unwindJumpRecover(errInfo);
         errInfo->status = TAG_RAISE;
-        errInfo->caughtError = vm.lastErrorThrown;
+        errInfo->caughtError = th->lastErrorThrown;
         *status = TAG_RAISE;
     } else {
         fprintf(stderr, "vm_protect: error from setjmp");
@@ -2799,12 +2802,13 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
 }
 
 ErrTagInfo *addErrInfo(ObjClass *errClass) {
+    LxThread *th = THREAD();
     struct ErrTagInfo *info = ALLOCATE(ErrTagInfo, 1);
     info->status = TAG_NONE;
     info->errClass = errClass;
     info->frame = getFrame();
-    info->prev = vm.errInfo;
-    vm.errInfo = info;
+    info->prev = th->errInfo;
+    th->errInfo = info;
     info->caughtError = NIL_VAL;
     return info;
 }
@@ -2820,28 +2824,99 @@ void runAtExitHooks(void) {
     }
 }
 
-// FIXME: only exit the current thread. Stop the VM only if it's main thread.
 NORETURN void stopVM(int status) {
-    runAtExitHooks();
-    freeVM();
-    if (GET_OPTION(profileGC)) {
-        printGCProfile();
+    if (THREAD() == vm.mainThread) {
+        runAtExitHooks();
+        freeVM();
+        if (GET_OPTION(profileGC)) {
+            printGCProfile();
+        }
+        vm.exited = true;
+        _exit(status);
+    } else {
+        _exit(status);
     }
-    vm.exited = true;
-    _exit(status);
 }
 
 void acquireGVL(void) {
-    pthread_t tid = pthread_self(); (void)tid;
-    THREAD_DEBUG(3, "thread %lu locking GVL...", (unsigned long)tid);
+    if (pthread_self() == GVLOwner) {
+        LxThread *th = FIND_THREAD(GVLOwner);
+        vm.curThread = th;
+        th->tid = GVLOwner;
+        return;
+    }
     pthread_mutex_lock(&vm.GVLock);
-    // TODO: set vm.curThread here
-    THREAD_DEBUG(3, "thread %lu locked GVL", (unsigned long)tid);
+    pthread_t tid = pthread_self();
+    GVLOwner = tid;
+    LxThread *th = FIND_THREAD(tid);
+    vm.curThread = th;
+}
+
+void acquireGVLMaybe(void) {
+    if (GVLOwner == pthread_self()) {
+        return;
+    }
+    THREAD_DEBUG(3, "thread %lu acquiring GVL from maybe", pthread_self());
+    acquireGVL();
+}
+
+void acquireGVLTid(pthread_t tid) {
+    THREAD_DEBUG(3, "thread %lu locking GVL (tid), owner = %lu", tid, GVLOwner);
+    ASSERT(GVLOwner != tid);
+    pthread_mutex_lock(&vm.GVLock);
+    THREAD_DEBUG(3, "thread %lu locked GVL (tid)", tid);
+    GVLOwner = tid;
 }
 
 void releaseGVL(void) {
+    while (settingUpThread) { }
+    if (THREAD()->mutexCounter > 0) {
+        return;
+    }
+    ASSERT(THREAD()->tid == GVLOwner);
     pthread_t tid = pthread_self(); (void)tid;
-    THREAD_DEBUG(3, "thread %lu unlocking GVL", (unsigned long)tid);
-    // TODO: set vm.curThread to NULL here
+    THREAD_DEBUG(3, "thread %lu unlocking GVL", tid);
     pthread_mutex_unlock(&vm.GVLock);
+    GVLOwner = -1;
+    vm.curThread = NULL;
+}
+
+LxThread *FIND_THREAD(pthread_t tid) {
+    ObjInstance *threadInstance; int thIdx = 0;
+    LxThread *th = NULL;
+    vec_foreach(&vm.threads, threadInstance, thIdx) {
+        th = THREAD_GETHIDDEN(OBJ_VAL(threadInstance));
+        ASSERT(th);
+        if (th->tid == tid) return th;
+    }
+    return NULL;
+}
+
+LxThread *FIND_NEW_THREAD(pthread_t tid) {
+    ObjInstance *threadInstance; int thIdx = 0;
+    LxThread *th = NULL;
+    vec_foreach_rev(&vm.threads, threadInstance, thIdx) {
+        th = THREAD_GETHIDDEN(OBJ_VAL(threadInstance));
+        ASSERT(th);
+        if (th->status == THREAD_READY) return th;
+    }
+    return NULL;
+}
+
+ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid) {
+    ObjInstance *threadInstance; int thIdx = 0;
+    LxThread *th = NULL;
+    vec_foreach(&vm.threads, threadInstance, thIdx) {
+        th = THREAD_GETHIDDEN(OBJ_VAL(threadInstance));
+        ASSERT(th);
+        if (th->tid == tid) return threadInstance;
+    }
+    return NULL;
+}
+
+LxThread *THREAD() {
+    if (!vm.curThread) {
+        vm.curThread = FIND_THREAD(GVLOwner);
+    }
+    return vm.curThread;
 }
