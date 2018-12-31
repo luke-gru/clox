@@ -28,7 +28,9 @@ static int fileExists(char *fname) {
 
 static int checkOpen(const char *fname, int flags, mode_t mode) {
     int last = errno;
+    releaseGVL();
     int fd = open(fname, flags, mode);
+    acquireGVL();
     if (fd < 0) {
         int err = errno;
         errno = last;

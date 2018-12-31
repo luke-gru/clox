@@ -337,7 +337,7 @@ static int test_native_clock(void) {
     char *src = "print clock(); clock();";
     interp(src, true);
     Value *val = getLastValue();
-    printVMStack(stderr);
+    printVMStack(stderr, THREAD());
     T_ASSERT(val != NULL);
     T_ASSERT(IS_NUMBER(*val));
 cleanup:
