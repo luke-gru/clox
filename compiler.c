@@ -1040,6 +1040,7 @@ static CallInfo *emitCall(Node *n) {
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
+        callInfoData->isYield = false;
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
@@ -1067,6 +1068,7 @@ static CallInfo *emitCall(Node *n) {
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
+        callInfoData->isYield = false;
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
@@ -1169,7 +1171,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
         return func;
     }
 
-    if (ftype != FUN_TYPE_ANON) {
+    if (ftype != FUN_TYPE_ANON && ftype != FUN_TYPE_BLOCK) {
         if ((currentClassOrModule == NULL && !inINBlock) || ftype == FUN_TYPE_NAMED) { // regular function
             namedVariable(n->tok, VAR_SET);
         } else { // method

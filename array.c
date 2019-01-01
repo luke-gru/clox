@@ -289,8 +289,8 @@ static Value lxArrayMap(int argCount, Value *args) {
     int status = 0;
     int iterStart = 0;
     Value ret = newArray();
+    SETUP_BLOCK(status)
     while (true) {
-        SETUP_BLOCK(status)
             if (status == TAG_NONE) {
                 break;
             } else if (status == TAG_RAISE) {

@@ -145,8 +145,13 @@ Value lxYield(int argCount, Value *args) {
     for (int i = 0; i < argCount; i++) {
         push(args[i]);
     }
-    callCallable(callable, argCount, false, NULL);
-    return pop();
+    CallInfo cinfo = {
+        .argc = argCount,
+        .block = THREAD()->curBlock,
+        .isYield = true // tell callCallable to adjust frame stack in popFrame()
+    };
+    callCallable(callable, argCount, false, &cinfo);
+    UNREACHABLE("should throw in yield");
 }
 
 // Register atExit handler for process

@@ -227,6 +227,10 @@ static void defineNativeClasses(void) {
     lxBreakBlockErrClass = breakBlockErr;
     lxContinueBlockErrClass = continueBlockErr;
     lxReturnBlockErrClass = returnBlockErr;
+    hideFromGC((Obj*)blockIterErr);
+    hideFromGC((Obj*)breakBlockErr);
+    hideFromGC((Obj*)continueBlockErr);
+    hideFromGC((Obj*)returnBlockErr);
 
     // module GC
     ObjModule *GCModule = addGlobalModule("GC");
@@ -534,6 +538,10 @@ static bool isOpStackEmpty(void) {
 
 void push(Value value) {
     ASSERT_VALID_STACK();
+    if (EC->stackTop == EC->stack + STACK_MAX) {
+        fprintf(stderr, "Stack overflow!\n");
+        exit(1);
+    }
     if (IS_OBJ(value)) {
         ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
     }
@@ -1008,6 +1016,7 @@ void popFrame(void) {
     ASSERT(EC->frameCount >= 1);
     VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
     CallFrame *frame = getFrame();
+    int stackAdjust = frame->stackAdjustOnPop;
     unwindErrInfo(frame);
     if (frame->isCCall) {
         if (th->inCCall > 0) {
@@ -1025,6 +1034,9 @@ void popFrame(void) {
     EC->frameCount--;
     frame = getFrameOrNull(); // new frame
     if (frame) {
+        if (stackAdjust > 0) {
+            EC->stackTop -= stackAdjust;
+        }
         if (frame->instance) {
             th->thisObj = (Obj*)frame->instance;
         } else {
@@ -1054,6 +1066,7 @@ CallFrame *pushFrame(void) {
     frame->prev = prev;
     frame->block = NULL;
     frame->lastBlock = NULL;
+    frame->stackAdjustOnPop = 0;
     return frame;
 }
 
@@ -1081,6 +1094,7 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->nativeFunc = native;
     newFrame->file = EC->filename;
     newFrame->block = NULL;
+    newFrame->stackAdjustOnPop = 0;
     THREAD()->inCCall++;
 }
 
@@ -1398,6 +1412,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     frame->start = parentStart;
     frame->isCCall = false;
     frame->nativeFunc = NULL;
+    if (callInfo && callInfo->isYield) {
+        frame->stackAdjustOnPop = (callInfo->argc+1);
+    }
     // +1 to include either the called function (for non-methods) or the receiver (for methods)
     frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1) -
         (func->numKwargs > 0 ? numKwargsNotGiven+1 : 0);
@@ -1554,6 +1571,7 @@ static CatchTable *getCatchTableRow(int idx) {
 }
 
 ErrTagInfo *findErrTag(ObjClass *klass) {
+    ASSERT(klass);
     ErrTagInfo *cur = THREAD()->errInfo;
     while (cur) {
         // NULL = tag for all errors
@@ -2216,6 +2234,7 @@ static InterpretResult vm_run() {
           break; // unreached
       }
       case OP_BLOCK_CONTINUE: {
+          ASSERT(THREAD()->lastValue);
           Value ret = *THREAD()->lastValue;
           Value err = newError(lxContinueBlockErrClass, NIL_VAL);
           setProp(err, INTERN("ret"), ret);

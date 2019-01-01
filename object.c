@@ -939,9 +939,11 @@ Value newError(ObjClass *errClass, Value msg) {
 bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
     ASSERT(subklass);
     ASSERT(superklass);
-    if (subklass == superklass) return true;
+    if (subklass == superklass) { return true; }
     while (subklass != NULL && subklass != superklass) {
-        subklass = CLASSINFO(subklass)->superclass;
+        ClassInfo *cinfo = CLASSINFO(subklass);
+        ASSERT(cinfo);
+        subklass = cinfo->superclass;
     }
     return subklass != NULL;
 }

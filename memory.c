@@ -246,7 +246,7 @@ retry:
         GCStats.demographics[type]++;
         return obj;
     }
-    if (!GCOn || dontGC) {
+    if (!GCOn || dontGC || OPTION_T(disableGC)) {
         addHeap();
     } else {
         collectGarbage(); // adds heap if needed at end of collection
