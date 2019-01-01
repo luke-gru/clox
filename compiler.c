@@ -1098,6 +1098,44 @@ static void pushVarSlots() {
     addFakeLocal();
 }
 
+void emitBinaryOp(Token tok) {
+    if (tok.type == TOKEN_PLUS) {
+        emitOp0(OP_ADD);
+    } else if (tok.type == TOKEN_MINUS) {
+        emitOp0(OP_SUBTRACT);
+    } else if (tok.type == TOKEN_STAR) {
+        emitOp0(OP_MULTIPLY);
+    } else if (tok.type == TOKEN_SLASH) {
+        emitOp0(OP_DIVIDE);
+    } else if (tok.type == TOKEN_PERCENT) {
+        emitOp0(OP_MODULO);
+    } else if (tok.type == TOKEN_LESS) {
+        emitOp0(OP_LESS);
+    } else if (tok.type == TOKEN_LESS_EQUAL) {
+        emitOp0(OP_LESS_EQUAL);
+    } else if (tok.type == TOKEN_GREATER) {
+        emitOp0(OP_GREATER);
+    } else if (tok.type == TOKEN_GREATER_EQUAL) {
+        emitOp0(OP_GREATER_EQUAL);
+    } else if (tok.type == TOKEN_EQUAL_EQUAL) {
+        emitOp0(OP_EQUAL);
+    } else if (tok.type == TOKEN_BANG_EQUAL) {
+        emitOp0(OP_NOT_EQUAL);
+    } else if (tok.type == TOKEN_PIPE) {
+        emitOp0(OP_BITOR);
+    } else if (tok.type == TOKEN_AMP) {
+        emitOp0(OP_BITAND);
+    } else if (tok.type == TOKEN_CARET) {
+        emitOp0(OP_BITXOR);
+    } else if (tok.type == TOKEN_SHOVEL_L) {
+        emitOp0(OP_SHOVEL_L);
+    } else if (tok.type == TOKEN_SHOVEL_R) {
+        emitOp0(OP_SHOVEL_R);
+    } else {
+        UNREACHABLE("invalid binary expr node (token: %s)", tokStr(&tok));
+    }
+}
+
 static void emitNode(Node *n) {
     if (current->hadError) return;
     curTok = &n->tok;
@@ -1116,41 +1154,7 @@ static void emitNode(Node *n) {
     case BINARY_EXPR:
     case BINARY_ASSIGN_EXPR: {
         emitChildren(n);
-        if (n->tok.type == TOKEN_PLUS) {
-            emitOp0(OP_ADD);
-        } else if (n->tok.type == TOKEN_MINUS) {
-            emitOp0(OP_SUBTRACT);
-        } else if (n->tok.type == TOKEN_STAR) {
-            emitOp0(OP_MULTIPLY);
-        } else if (n->tok.type == TOKEN_SLASH) {
-            emitOp0(OP_DIVIDE);
-        } else if (n->tok.type == TOKEN_PERCENT) {
-            emitOp0(OP_MODULO);
-        } else if (n->tok.type == TOKEN_LESS) {
-            emitOp0(OP_LESS);
-        } else if (n->tok.type == TOKEN_LESS_EQUAL) {
-            emitOp0(OP_LESS_EQUAL);
-        } else if (n->tok.type == TOKEN_GREATER) {
-            emitOp0(OP_GREATER);
-        } else if (n->tok.type == TOKEN_GREATER_EQUAL) {
-            emitOp0(OP_GREATER_EQUAL);
-        } else if (n->tok.type == TOKEN_EQUAL_EQUAL) {
-            emitOp0(OP_EQUAL);
-        } else if (n->tok.type == TOKEN_BANG_EQUAL) {
-            emitOp0(OP_NOT_EQUAL);
-        } else if (n->tok.type == TOKEN_PIPE) {
-            emitOp0(OP_BITOR);
-        } else if (n->tok.type == TOKEN_AMP) {
-            emitOp0(OP_BITAND);
-        } else if (n->tok.type == TOKEN_CARET) {
-            emitOp0(OP_BITXOR);
-        } else if (n->tok.type == TOKEN_SHOVEL_L) {
-            emitOp0(OP_SHOVEL_L);
-        } else if (n->tok.type == TOKEN_SHOVEL_R) {
-            emitOp0(OP_SHOVEL_R);
-        } else {
-            UNREACHABLE("invalid binary expr node (token: %s)", tokStr(&n->tok));
-        }
+        emitBinaryOp(n->tok);
         if (nodeKind(n) == BINARY_ASSIGN_EXPR) {
             Node *varNode = vec_first(n->children);
             namedVariable(varNode->tok, VAR_SET);
@@ -1496,6 +1500,16 @@ static void emitNode(Node *n) {
     case PROP_SET_EXPR: {
         emitChildren(n);
         emitOp1(OP_PROP_SET, identifierConstant(&n->tok));
+        break;
+    }
+    // ex: obj.prop = 1
+    // (propGet (var o) prop)
+    case PROP_SET_BINOP_EXPR: {
+        emitNode(n->children->data[0]->children->data[0]);
+        emitNode(n->children->data[0]);
+        emitNode(n->children->data[1]);
+        emitBinaryOp(n->tok);
+        emitOp1(OP_PROP_SET, identifierConstant(&n->children->data[0]->tok));
         break;
     }
     case RETURN_STMT: {

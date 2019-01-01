@@ -903,7 +903,23 @@ static Node *assignment() {
         }
         TRACE_END("assignment");
         return ret;
-    } else if (checkAssignOp()) {
+    } else if (checkAssignOp()) { // ex: a += 1, a -= 1
+        if (nodeKind(lval) == PROP_ACCESS_EXPR) {
+            advance();
+            Token opTok = current->previous;
+            advance();
+            Node *rval = assignment(); // assignment goes right to left in precedence (a *= (b += c))
+            TRACE_START("propAccessExpr");
+            node_type_t propsetT = {
+                .type = NODE_EXPR,
+                .kind = PROP_SET_BINOP_EXPR,
+            };
+            Node *ret = createNode(propsetT, opTok, NULL);
+            nodeAddChild(ret, lval);
+            nodeAddChild(ret, rval);
+            TRACE_END("propAccessExpr");
+            return ret;
+        }
         if (nodeKind(lval) != VARIABLE_EXPR) {
             errorAtCurrent("invalid assignment lvalue");
         }

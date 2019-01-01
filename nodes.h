@@ -24,6 +24,7 @@ typedef enum eExprType {
     ANON_FN_EXPR,
     PROP_ACCESS_EXPR,
     PROP_SET_EXPR,
+    PROP_SET_BINOP_EXPR,
     THIS_EXPR,
     SUPER_EXPR,
     SPLAT_EXPR,

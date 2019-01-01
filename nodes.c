@@ -260,6 +260,21 @@ static char *outputPropSetExpr(Node *n, int indentLevel) {
     return buf;
 }
 
+static char *outputPropSetBinopExpr(Node *n, int indentLevel) {
+    char *buf =  (char*)"(propSet ";
+    char *lhsOut = outputASTString(vec_first(n->children), indentLevel);
+    buf = strAdd(buf, lhsOut);
+    buf = strAdd(buf, " ");
+    char *propName = tokStr(&n->tok);
+    buf = strAdd(buf, propName);
+    buf = strAdd(buf, "=");
+    buf = strAdd(buf, " ");
+    char *rhsOut = outputASTString(n->children->data[1], indentLevel);
+    buf = strAdd(buf, rhsOut);
+    buf = strAdd(buf, ")");
+    return buf;
+}
+
 static char *outputThisExpr(Node *n, int indentLevel) {
     return "(var this)";
 }
@@ -657,6 +672,8 @@ char *outputASTString(Node *node, int indentLevel) {
                     return outputPropAccessExpr(node, indentLevel);
                 case PROP_SET_EXPR:
                     return outputPropSetExpr(node, indentLevel);
+                case PROP_SET_BINOP_EXPR:
+                    return outputPropSetBinopExpr(node, indentLevel);
                 case THIS_EXPR:
                     return outputThisExpr(node, indentLevel);
                 case SUPER_EXPR:
