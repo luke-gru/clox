@@ -128,6 +128,7 @@ ObjClass *lxLoadErrClass;
 ObjClass *lxBlockIterErrClass;
 ObjClass *lxBreakBlockErrClass;
 ObjClass *lxContinueBlockErrClass;
+ObjClass *lxReturnBlockErrClass;
 
 Value lxLoadPath; // load path for loadScript/requireScript (-L flag)
 Value lxArgv;
@@ -221,9 +222,11 @@ static void defineNativeClasses(void) {
     ObjClass *blockIterErr = newClass(INTERN("BlockIterError"), errClass);
     ObjClass *breakBlockErr = newClass(INTERN("BlockBreakError"), blockIterErr);
     ObjClass *continueBlockErr = newClass(INTERN("BlockContinueError"), blockIterErr);
+    ObjClass *returnBlockErr = newClass(INTERN("BlockReturnError"), blockIterErr);
     lxBlockIterErrClass = blockIterErr;
     lxBreakBlockErrClass = breakBlockErr;
     lxContinueBlockErrClass = continueBlockErr;
+    lxReturnBlockErrClass = returnBlockErr;
 
     // module GC
     ObjModule *GCModule = addGlobalModule("GC");
@@ -1015,13 +1018,22 @@ void popFrame(void) {
             }
         }
     }
+    if (frame->block == th->outermostBlock) {
+        th->outermostBlock = NULL;
+    }
     memset(frame, 0, sizeof(*frame));
     EC->frameCount--;
-    frame = getFrameOrNull();
-    if (frame && frame->instance) {
-        th->thisObj = (Obj*)frame->instance;
+    frame = getFrameOrNull(); // new frame
+    if (frame) {
+        if (frame->instance) {
+            th->thisObj = (Obj*)frame->instance;
+        } else {
+            th->thisObj = NULL;
+        }
     } else {
-        th->thisObj = NULL;
+        th->curBlock = NULL;
+        th->lastBlock = NULL;
+        th->outermostBlock = NULL;
     }
     ASSERT_VALID_STACK();
 }
@@ -2199,12 +2211,23 @@ static InterpretResult vm_run() {
           break;
       }
       case OP_BLOCK_BREAK: {
-          throwErrorFmt(lxBreakBlockErrClass, "internal error"); // blocks catch this, not propagated
-          break;
+          Value err = newError(lxBreakBlockErrClass, NIL_VAL);
+          throwError(err); // blocks catch this, not propagated
+          break; // unreached
       }
       case OP_BLOCK_CONTINUE: {
-          throwErrorFmt(lxContinueBlockErrClass, "internal error"); // block catch this, not propagated
-          break;
+          Value ret = *THREAD()->lastValue;
+          Value err = newError(lxContinueBlockErrClass, NIL_VAL);
+          setProp(err, INTERN("ret"), ret);
+          throwError(err); // blocks catch this, not propagated
+          break; // unreached
+      }
+      case OP_BLOCK_RETURN: {
+          Value ret = pop();
+          Value err = newError(lxReturnBlockErrClass, NIL_VAL);
+          setProp(err, INTERN("ret"), ret);
+          throwError(err); // blocks catch this, not propagated
+          break; // unreached
       }
       case OP_CALL: {
           uint8_t numArgs = READ_BYTE();
@@ -2261,6 +2284,7 @@ static InterpretResult vm_run() {
           if (callInfo->block) {
               th->lastBlock = oldBlock;
               th->curBlock = callInfo->block;
+              if (!oldBlock) th->outermostBlock = th->curBlock;
           }
           Value instanceVal = peek(numArgs);
           if (IS_INSTANCE(instanceVal)) {

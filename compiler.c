@@ -184,8 +184,16 @@ static void emitReturn(Compiler *compiler) {
         emitOp0(OP_GET_THIS);
         emitOp0(OP_RETURN);
     } else {
-        emitOp0(OP_NIL);
-        emitOp0(OP_RETURN);
+        if (breakBlock) {
+            ASSERT(compiler->type == FUN_TYPE_BLOCK); // TODO: error()
+            // TODO: push nil if empty function
+            emitOp0(OP_BLOCK_CONTINUE); // continue with last evaluated statement
+        } else if (compiler->type == FUN_TYPE_BLOCK) {
+            emitOp0(OP_BLOCK_CONTINUE); // continue with last evaluated statement
+        } else {
+            emitOp0(OP_NIL);
+            emitOp0(OP_RETURN);
+        }
     }
 }
 
@@ -201,8 +209,10 @@ static void popScope(CompileScopeType stype) {
             COMP_TRACE("popScope closing upvalue");
             emitCloseUpvalue();
         } else {
-            COMP_TRACE("popScope emitting OP_POP");
-            emitOp0(OP_POP);
+            if (current->type != FUN_TYPE_BLOCK) {
+                COMP_TRACE("popScope emitting OP_POP");
+                emitOp0(OP_POP);
+            }
         }
         current->localCount--;
     }
@@ -885,6 +895,9 @@ static void initCompiler(
     case FUN_TYPE_BLOCK:
     case FUN_TYPE_TOP_LEVEL:
         current->function->name = NULL;
+        if (ftype == FUN_TYPE_BLOCK) {
+            current->function->isBlock = true;
+        }
         break;
     default:
         UNREACHABLE("invalid function type %d", ftype);
@@ -1622,7 +1635,12 @@ static void emitNode(Node *n) {
             } else {
                 emitChildren(n);
             }
-            emitOp0(OP_RETURN);
+            if (breakBlock) {
+                ASSERT(current->type == FUN_TYPE_BLOCK); // TODO: error
+                emitOp0(OP_BLOCK_RETURN);
+            } else {
+                emitOp0(OP_RETURN);
+            }
             COMP_TRACE("Emitting explicit return (children)");
         } else {
             COMP_TRACE("Emitting explicit return (void)");

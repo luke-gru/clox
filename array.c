@@ -268,6 +268,8 @@ static Value lxArrayEach(int argCount, Value *args) {
                 return NIL_VAL;
             } else if (errInst->klass == lxContinueBlockErrClass) {
                 SETUP_BLOCK(status)
+            } else if (errInst->klass == lxReturnBlockErrClass) {
+                return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
             } else { UNREACHABLE("bug"); }
         }
     }
@@ -286,6 +288,7 @@ static Value lxArrayMap(int argCount, Value *args) {
     Value el; int valIdx = 0;
     int status = 0;
     int iterStart = 0;
+    Value ret = newArray();
     while (true) {
         SETUP_BLOCK(status)
             if (status == TAG_NONE) {
@@ -297,11 +300,14 @@ static Value lxArrayMap(int argCount, Value *args) {
                 if (errInst->klass == lxBreakBlockErrClass) {
                     return NIL_VAL;
                 } else if (errInst->klass == lxContinueBlockErrClass) { // continue
+                    Value newEl = getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+                    arrayPush(ret, newEl);
                     SETUP_BLOCK(status)
+                } else if (errInst->klass == lxReturnBlockErrClass) {
+                    return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
                 } else { UNREACHABLE("bug"); }
             }
     }
-    Value ret = newArray();
     VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
         iterStart++;
         Value newEl = lxYield(1, &el);

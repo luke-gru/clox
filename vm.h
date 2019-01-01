@@ -93,6 +93,7 @@ typedef struct LxThread {
     Obj *thisObj;
     ObjFunction *curBlock;
     ObjFunction *lastBlock;
+    ObjFunction *outermostBlock;
     Value *lastValue;
     bool hadError;
     ErrTagInfo *errInfo;

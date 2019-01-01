@@ -57,7 +57,8 @@ static void LxThreadSetup(LxThread *th) {
     vec_init(&th->v_ecs);
     th->thisObj = NULL;
     th->curBlock = NULL;
-    th->lastBlock = NULL;
+    th->lastBlock = NULL; // this field for convenience, not necessary if we track it somewhere else
+    th->outermostBlock = NULL;
     th->lastValue = NULL;
     th->hadError = false;
     th->errInfo = NULL;

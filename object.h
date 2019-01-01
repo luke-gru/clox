@@ -74,6 +74,7 @@ typedef struct ObjFunction {
   unsigned short upvalueCount;
   bool isSingletonMethod;
   bool hasRestArg;
+  bool isBlock;
 } ObjFunction;
 
 typedef struct ObjUpvalue ObjUpvalue;
@@ -175,6 +176,7 @@ extern ObjClass *lxLoadErrClass;
 extern ObjClass *lxBlockIterErrClass;
 extern ObjClass *lxBreakBlockErrClass;
 extern ObjClass *lxContinueBlockErrClass;
+extern ObjClass *lxReturnBlockErrClass;
 
 extern Value lxLoadPath;
 extern Value lxArgv;

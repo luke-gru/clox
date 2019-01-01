@@ -62,6 +62,7 @@ typedef enum {
 
     OP_BLOCK_BREAK,
     OP_BLOCK_CONTINUE,
+    OP_BLOCK_RETURN,
 
     OP_TRUE,
     OP_FALSE,
