@@ -384,7 +384,10 @@ Token scanToken(void) {
             return makeToken(TOKEN_DOT);
         }
     }
-    case '-': return makeToken(TOKEN_MINUS);
+    case '-': {
+        if (match('>')) return makeToken(TOKEN_ARROW);
+        return makeToken(TOKEN_MINUS);
+    }
     case '+': return makeToken(TOKEN_PLUS);
     case '/': return makeToken(TOKEN_SLASH);
     case '%': return makeToken(TOKEN_PERCENT);
@@ -565,6 +568,8 @@ const char *tokTypeStr(TokenType ttype) {
       return "FOREACH";
     case TOKEN_CONTINUE:
       return "CONTINUE";
+    case TOKEN_ARROW:
+      return "ARROW";
     case TOKEN_END_SCRIPT:
       return "__END__";
     case TOKEN_ERROR:

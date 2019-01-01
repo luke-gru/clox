@@ -36,6 +36,8 @@ typedef enum {
   TOKEN_SHOVEL_L, // <<
   TOKEN_SHOVEL_R, // >>
 
+  TOKEN_ARROW, // ->
+
   TOKEN_IDENTIFIER,
   TOKEN_STRING_SQUOTE,
   TOKEN_STRING_DQUOTE,
@@ -79,6 +81,7 @@ typedef enum {
     FUNCTION_TYPE_GETTER,
     FUNCTION_TYPE_SETTER,
     FUNCTION_TYPE_CLASS_METHOD,
+    FUNCTION_TYPE_BLOCK
 } ParseFunctionType;
 
 typedef struct Token {
