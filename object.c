@@ -276,6 +276,7 @@ ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {
     function->funcNode = funcNode;
     function->isSingletonMethod = false;
     function->hasRestArg = false;
+    function->upvaluesInfo = NULL;
     if (chunk == NULL) {
         chunk = ALLOCATE(Chunk, 1);
         initChunk(chunk);

@@ -123,18 +123,49 @@ static ObjClosure *closureFromFn(ObjFunction *func) {
     return newClosure(func);
 }
 
-static void setupCatchYield() {
+static CallFrame *getOuterClosureFrame() {
+    CallFrame *frame = getFrame()->prev;
+    while (frame) {
+        if (!frame->closure) {
+            frame = frame->prev;
+            continue;
+        }
+        return frame;
+    }
+    return NULL;
 }
 
+static void fillClosureUpvalues(ObjClosure *block, ObjClosure *outer, CallFrame *frame) {
+    fprintf(stderr, "Fill closure upvalues\n");
+    ObjFunction *blockFn = block->function;
+    ASSERT(blockFn);
+    debugFrame(frame);
+    for (int i = 0; i < blockFn->upvalueCount; i++) {
+        fprintf(stderr, "Fill closure upvalues iter\n");
+        uint8_t index = blockFn->upvaluesInfo[i].index;
+        if (blockFn->upvaluesInfo[i].isLocal) {
+            // FIXME: frame->slots should be frame->innerSlots
+            fprintf(stderr, "captureUpvalue\n");
+            block->upvalues[i] = captureUpvalue(frame->slots+index);
+        } else {
+            fprintf(stderr, "take from outer\n");
+            block->upvalues[i] = outer->upvalues[index];
+        }
+    }
+}
+
+// TODO: setup closures
 static ObjClosure *getBlockClosure(void) {
     ObjFunction *block = THREAD()->curBlock;
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
-    /*if (THREAD()->blockDepth > THREAD()->blockErrSetDepth) {*/
-    /*setupCatchYield();*/
-    /*}*/
     ObjClosure *blockClosure = closureFromFn(block);
+    CallFrame *frame = getOuterClosureFrame();
+    ASSERT(frame);
+    ObjClosure *lastClosure = frame->closure;
+    ASSERT(lastClosure);
+    fillClosureUpvalues(blockClosure, lastClosure, frame);
     return blockClosure;
 }
 

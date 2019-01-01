@@ -1,0 +1,12 @@
+fun local() {
+  var i = 0;
+  return [1,2,3].map() -> (num) {
+    i + num;
+  };
+}
+
+print local();
+
+__END__
+-- expect: --
+[1,2,3];

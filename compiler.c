@@ -25,7 +25,7 @@
 
 static const char *compileScopeName(CompileScopeType stype) {
     switch (stype) {
-    case COMPILE_SCOPE_BLOCK: return "SCOPE_BLOCK";
+    case COMPILE_SCOPE_BLOCK: return "SCOPE_BLOCK"; // in a { } block, NOT language-level function 'block'
     case COMPILE_SCOPE_FUNCTION: return "SCOPE_FUNCTION";
     case COMPILE_SCOPE_CLASS: return "SCOPE_CLASS";
     case COMPILE_SCOPE_IN: return "SCOPE_IN";
@@ -518,6 +518,7 @@ static bool isPop(Insn *insns) {
 }
 
 static void optimizeIseq(Iseq *iseq) {
+    return;
     COMP_TRACE("OptimizeIseq");
     Insn *cur = iseq->insns; // first insn
     Insn *prev = NULL;
@@ -1093,10 +1094,10 @@ static CallInfo *emitCall(Node *n) {
 // emit function or method
 static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     Compiler fCompiler;
-    initCompiler(&fCompiler, current->scopeDepth,
-        ftype, &n->tok, NULL);
-    pushScope(COMPILE_SCOPE_FUNCTION); // this scope holds the local variable parameters
+    int scopeDepth = current->scopeDepth;
+    initCompiler(&fCompiler, scopeDepth, ftype, &n->tok, NULL);
 
+    pushScope(COMPILE_SCOPE_FUNCTION); // this scope holds the local variable parameters
     ObjFunction *func = fCompiler.function;
     func->funcNode = n;
 
@@ -1152,7 +1153,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
         blockDepth++;
         breakBlock = true;
     }
-    emitChildren(n); // the blockNode
+    emitChildren(n);
     if (ftype == FUN_TYPE_BLOCK) {
         blockDepth--;
         breakBlock = oldBreakBlock;
@@ -1162,42 +1163,51 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     ASSERT(func->chunk);
 
     // save the chunk as a constant in the parent (now current) chunk
-    uint8_t funcIdx = makeConstant(OBJ_VAL(func), CONST_T_CODE);
     if (ftype != FUN_TYPE_BLOCK) {
+        fprintf(stderr, "Saving constant in parent (not block)\n");
+        uint8_t funcIdx = makeConstant(OBJ_VAL(func), CONST_T_CODE);
         emitOp1(OP_CLOSURE, funcIdx);
+    } else {
+        fprintf(stderr, "skipped saving constant in parent\n");
     }
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
-    for (int i = 0; i < func->upvalueCount; i++) {
-        emitOp0(fCompiler.upvalues[i].isLocal ? 1 : 0);
-        emitOp0(fCompiler.upvalues[i].index);
+    if (func->upvalueCount > 0) {
+        func->upvaluesInfo = malloc(sizeof(Upvalue)*LX_MAX_UPVALUES);
+        ASSERT_MEM(func->upvaluesInfo);
+        if (ftype != FUN_TYPE_BLOCK) {
+            for (int i = 0; i < func->upvalueCount; i++) {
+                emitOp0(fCompiler.upvalues[i].isLocal ? 1 : 0);
+                emitOp0(fCompiler.upvalues[i].index);
+                func->upvaluesInfo[i] = fCompiler.upvalues[i]; // copy upvalue info
+            }
+        }
     }
 
-    if (ftype == FUN_TYPE_TOP_LEVEL) {
+    if (ftype == FUN_TYPE_TOP_LEVEL || ftype == FUN_TYPE_BLOCK ||
+            ftype == FUN_TYPE_ANON) {
         return func;
     }
 
-    if (ftype != FUN_TYPE_ANON && ftype != FUN_TYPE_BLOCK) {
-        if ((currentClassOrModule == NULL && !inINBlock) || ftype == FUN_TYPE_NAMED) { // regular function
-            namedVariable(n->tok, VAR_SET);
-        } else { // method
-            switch (ftype) {
-                case FUN_TYPE_METHOD:
-                case FUN_TYPE_INIT:
-                    emitOp1(OP_METHOD, identifierConstant(&n->tok));
-                    break;
-                case FUN_TYPE_CLASS_METHOD:
-                    emitOp1(OP_CLASS_METHOD, identifierConstant(&n->tok));
-                    break;
-                case FUN_TYPE_GETTER:
-                    emitOp1(OP_GETTER, identifierConstant(&n->tok));
-                    break;
-                case FUN_TYPE_SETTER:
-                    emitOp1(OP_SETTER, identifierConstant(&n->tok));
-                    break;
-                default:
-                    UNREACHABLE("bug: invalid function type: %d\n", ftype);
-            }
+    if ((currentClassOrModule == NULL && !inINBlock) || ftype == FUN_TYPE_NAMED) { // regular function
+        namedVariable(n->tok, VAR_SET);
+    } else { // method
+        switch (ftype) {
+            case FUN_TYPE_METHOD:
+            case FUN_TYPE_INIT:
+                emitOp1(OP_METHOD, identifierConstant(&n->tok));
+                break;
+            case FUN_TYPE_CLASS_METHOD:
+                emitOp1(OP_CLASS_METHOD, identifierConstant(&n->tok));
+                break;
+            case FUN_TYPE_GETTER:
+                emitOp1(OP_GETTER, identifierConstant(&n->tok));
+                break;
+            case FUN_TYPE_SETTER:
+                emitOp1(OP_SETTER, identifierConstant(&n->tok));
+                break;
+            default:
+                UNREACHABLE("bug: invalid function type: %d\n", ftype);
         }
     }
     return func;
@@ -1650,6 +1660,7 @@ static void emitNode(Node *n) {
                 ASSERT(current->type == FUN_TYPE_BLOCK); // TODO: error
                 emitOp0(OP_BLOCK_RETURN);
             } else {
+                popScope(COMPILE_SCOPE_BLOCK);
                 emitOp0(OP_RETURN);
             }
             COMP_TRACE("Emitting explicit return (children)");

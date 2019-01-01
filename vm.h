@@ -39,7 +39,7 @@ typedef struct CallFrame {
     jmp_buf jmpBuf; // only used if chunk associated with closure has a catch table
     bool jmpBufSet;
     struct CallFrame *prev;
-    ObjFunction *block;
+    ObjFunction *block; // if block, this is the block function
     ObjFunction *lastBlock;
     int stackAdjustOnPop; // used for blocks
 } CallFrame; // represents a local scope (block, function, etc)
@@ -255,6 +255,9 @@ void popFrame(void);
 CallFrame *pushFrame(void);
 CallFrame *getFrame(void);
 
+// upvalues
+ObjUpvalue *captureUpvalue(Value *local);
+
 // iterators
 Value createIterator(Value iterable);
 
@@ -274,7 +277,7 @@ void unsetPrintBuf(void);
 int VMNumStackFrames(void);
 int VMNumCallFrames(void);
 const char *callFrameName(CallFrame *frame);
-void debugFrame(void);
+void debugFrame(CallFrame *frame);
 
 // exiting
 void runAtExitHooks(void);

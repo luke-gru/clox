@@ -60,6 +60,7 @@ typedef struct ObjInternal {
 } ObjInternal;
 
 typedef struct sNode Node; // fwd decl
+typedef struct Upvalue Upvalue; // fwd decl
 typedef struct ObjFunction {
   Obj object;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
@@ -68,6 +69,7 @@ typedef struct ObjFunction {
   ObjString *name;
   Obj *klass; // ObjClass* or ObjModule* (if method)
   Node *funcNode;
+  Upvalue *upvaluesInfo;
   unsigned short arity; // number of required args
   unsigned short numDefaultArgs; // number of optional default args
   unsigned short numKwargs;
@@ -77,7 +79,7 @@ typedef struct ObjFunction {
   bool isBlock;
 } ObjFunction;
 
-typedef struct ObjUpvalue ObjUpvalue;
+typedef struct ObjUpvalue ObjUpvalue; // fwd decl
 typedef struct ObjUpvalue {
   Obj object;
 

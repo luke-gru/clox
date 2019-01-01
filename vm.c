@@ -662,8 +662,7 @@ CallFrame *getFrame(void) {
     return &EC->frames[EC->frameCount-1];
 }
 
-void debugFrame() {
-    CallFrame *frame = getFrame();
+void debugFrame(CallFrame *frame) {
     const char *fnName = frame->isCCall ? frame->nativeFunc->name->chars :
         frame->closure->function->name->chars;
     fprintf(stderr, "CallFrame:\n");
