@@ -880,6 +880,7 @@ static void initCompiler(
         break;
     }
     case FUN_TYPE_ANON:
+    case FUN_TYPE_BLOCK:
     case FUN_TYPE_TOP_LEVEL:
         current->function->name = NULL;
         break;
@@ -1130,7 +1131,9 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
 
     // save the chunk as a constant in the parent (now current) chunk
     uint8_t funcIdx = makeConstant(OBJ_VAL(func), CONST_T_CODE);
-    emitOp1(OP_CLOSURE, funcIdx);
+    if (ftype != FUN_TYPE_BLOCK) {
+        emitOp1(OP_CLOSURE, funcIdx);
+    }
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
     for (int i = 0; i < func->upvalueCount; i++) {
@@ -1618,7 +1621,7 @@ static void emitNode(Node *n) {
     }
     case CALL_BLOCK_EXPR: {
         CallInfo *cinfo = emitCall(n->children->data[0]);
-        ObjFunction *block = emitFunction(n->children->data[1], FUN_TYPE_ANON);
+        ObjFunction *block = emitFunction(n->children->data[1], FUN_TYPE_BLOCK);
         cinfo->block = block;
         break;
     }

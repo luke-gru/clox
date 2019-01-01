@@ -124,13 +124,11 @@ static ObjClosure *closureFromFn(ObjFunction *func) {
 }
 
 static ObjClosure *getBlockClosure(void) {
-    CallFrame *fr = getFrame();
-    ASSERT(fr->prev && fr->prev);
-    if (fr->info == NULL) fr = fr->prev;
-    if (!fr->info || !fr->info->block) {
-        throwErrorFmt(lxErrClass, "Cannot yield");
+    ObjFunction *block = THREAD()->curBlock;
+    if (!block) {
+        throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
-    ObjClosure *blockClosure = closureFromFn(fr->info->block);
+    ObjClosure *blockClosure = closureFromFn(block);
     return blockClosure;
 }
 

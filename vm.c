@@ -1025,7 +1025,7 @@ CallFrame *pushFrame(void) {
     ASSERT(vm.fileString);
     frame->file = EC->filename;
     frame->prev = prev;
-    frame->info = NULL;
+    frame->block = NULL;
     return frame;
 }
 
@@ -1052,7 +1052,7 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->isCCall = true;
     newFrame->nativeFunc = native;
     newFrame->file = EC->filename;
-    newFrame->info = NULL;
+    newFrame->block = NULL;
     THREAD()->inCCall++;
 }
 
@@ -1145,7 +1145,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 ASSERT(nativeInit->function);
                 pushNativeFrame(nativeInit);
                 CallFrame *newFrame = getFrame();
-                newFrame->info = callInfo;
+                newFrame->block = th->curBlock;
                 DBG_ASSERT(instance);
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
@@ -1207,7 +1207,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         CallFrame *newFrame = getFrame();
         newFrame->instance = instance;
         newFrame->klass = frameClass;
-        newFrame->info = callInfo;
+        newFrame->block = th->curBlock;
         Value val = native->function(argCount, EC->stackTop-argCount);
         newFrame->slots = EC->stackTop-argCountActual;
         if (th->returnedFromNativeErr) {
@@ -1355,7 +1355,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // add frame
     VM_DEBUG("%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
-    frame->info = callInfo;
+    frame->block = th->curBlock;
     frame->instance = instance;
     if (instance && !frameClass) frameClass = instance->klass;
     frame->klass = frameClass;
@@ -2227,10 +2227,14 @@ static InterpretResult vm_run() {
           uint8_t numArgs = READ_BYTE();
           Value callInfoVal = READ_CONSTANT();
           Obj *oldThis = th->thisObj;
+          ObjFunction *oldBlock = th->curBlock;
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           if (th->lastSplatNumArgs > 0) {
               numArgs += (th->lastSplatNumArgs-1);
               th->lastSplatNumArgs = -1;
+          }
+          if (callInfo->block) {
+              th->curBlock = callInfo->block;
           }
           Value instanceVal = peek(numArgs);
           if (IS_INSTANCE(instanceVal)) {
@@ -2247,6 +2251,7 @@ static InterpretResult vm_run() {
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
               th->thisObj = oldThis;
+              th->curBlock = oldBlock;
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);
@@ -2262,6 +2267,7 @@ static InterpretResult vm_run() {
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
               th->thisObj = oldThis;
+              th->curBlock = oldBlock;
           } else if (IS_MODULE(instanceVal)) {
               ObjModule *mod = AS_MODULE(instanceVal);
               Obj *callable = moduleFindStaticMethod(mod, mname);
@@ -2277,6 +2283,7 @@ static InterpretResult vm_run() {
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
               th->thisObj = oldThis;
+              th->curBlock = oldBlock;
           } else {
               throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfVal(instanceVal));
           }

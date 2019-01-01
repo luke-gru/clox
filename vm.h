@@ -39,7 +39,7 @@ typedef struct CallFrame {
     jmp_buf jmpBuf; // only used if chunk associated with closure has a catch table
     bool jmpBufSet;
     struct CallFrame *prev;
-    CallInfo *info;
+    ObjFunction *block;
 } CallFrame; // represents a local scope (block, function, etc)
 
 typedef enum ErrTag {
@@ -90,6 +90,7 @@ typedef struct LxThread {
     VMExecContext *ec; // current execution context of vm
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
     Obj *thisObj;
+    ObjFunction *curBlock;
     Value *lastValue;
     bool hadError;
     ErrTagInfo *errInfo;

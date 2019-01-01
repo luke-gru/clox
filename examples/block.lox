@@ -3,3 +3,7 @@ var c = a.map() -> (b) {
   return b + 1;
 };
 print c;
+
+__END__
+-- expect: --
+[2,3,4]
