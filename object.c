@@ -288,9 +288,12 @@ ObjClosure *newClosure(ObjFunction *func) {
     ASSERT(func);
     // Allocate the upvalue array first so it doesn't cause the closure to get
     // collected.
-    ObjUpvalue** upvalues = ALLOCATE(ObjUpvalue*, func->upvalueCount);
-    for (int i = 0; i < func->upvalueCount; i++) {
-        upvalues[i] = NULL;
+    ObjUpvalue **upvalues = NULL;
+    if (func->upvalueCount > 0) {
+        upvalues = ALLOCATE(ObjUpvalue*, func->upvalueCount);
+        for (int i = 0; i < func->upvalueCount; i++) {
+            upvalues[i] = NULL;
+        }
     }
 
     ObjClosure *closure = ALLOCATE_OBJ(
@@ -936,6 +939,7 @@ Value newError(ObjClass *errClass, Value msg) {
 bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
     ASSERT(subklass);
     ASSERT(superklass);
+    if (subklass == superklass) return true;
     while (subklass != NULL && subklass != superklass) {
         subklass = CLASSINFO(subklass)->superclass;
     }

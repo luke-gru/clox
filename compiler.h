@@ -29,7 +29,8 @@ typedef enum {
     FUN_TYPE_SETTER,
     FUN_TYPE_CLASS_METHOD,
     // implementation detail, top-level is compiled as if it was a function
-    FUN_TYPE_TOP_LEVEL
+    FUN_TYPE_TOP_LEVEL,
+    FUN_TYPE_BLOCK,
 } FunctionType;
 
 typedef struct Local {
@@ -101,6 +102,7 @@ typedef struct CallInfo {
     int numKwargs;
     bool usesSplat;
     Token kwargNames[LX_MAX_KWARGS];
+    ObjFunction *block;
 } CallInfo;
 
 typedef struct CompilerOpts {

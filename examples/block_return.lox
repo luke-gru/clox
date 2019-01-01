@@ -1,0 +1,17 @@
+var a = [1,2,3];
+print a.each() -> (num) {
+  print num;
+  if (num == 2) { return num; }
+  [num+1, num+3].each() -> (num2) {
+    print num2;
+    continue;
+  };
+};
+
+__END__
+-- expect: --
+1
+2
+4
+2
+2

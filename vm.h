@@ -38,6 +38,9 @@ typedef struct CallFrame {
     ObjString *file; // full path of file the function is called from
     jmp_buf jmpBuf; // only used if chunk associated with closure has a catch table
     bool jmpBufSet;
+    struct CallFrame *prev;
+    ObjFunction *block;
+    ObjFunction *lastBlock;
 } CallFrame; // represents a local scope (block, function, etc)
 
 typedef enum ErrTag {
@@ -88,6 +91,9 @@ typedef struct LxThread {
     VMExecContext *ec; // current execution context of vm
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
     Obj *thisObj;
+    ObjFunction *curBlock;
+    ObjFunction *lastBlock;
+    ObjFunction *outermostBlock;
     Value *lastValue;
     bool hadError;
     ErrTagInfo *errInfo;
@@ -194,6 +200,7 @@ NORETURN void throwError(Value err);
 ErrTagInfo *addErrInfo(ObjClass *errClass);
 typedef void* (vm_cb_func)(void*);
 void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status);
+void unwindJumpRecover(ErrTagInfo *info);
 void rethrowErrInfo(ErrTagInfo *info);
 void unsetErrInfo(void);
 void popErrInfo(void);
@@ -220,10 +227,32 @@ Value callFunctionValue(Value callable, int argCount, Value *args);
 // Must be called from native C callframe only. Value is returned, popped from
 // stack. `args` does not include `self`, and `cinfo` can be NULL.
 Value callSuper(int argCount, Value *args, CallInfo *cinfo);
+// NOTE: must be called before lxYield to setup error handlers.
+// Similar code to vm_protect.
+#define SETUP_BLOCK(status) {\
+    LxThread *th = THREAD();\
+    ASSERT(th->curBlock);\
+    addErrInfo(lxBlockIterErrClass);\
+    ErrTagInfo *errInfo = th->errInfo;\
+    ObjFunction *blk = th->curBlock;\
+    int jmpres = 0;\
+    if ((jmpres = setjmp(errInfo->jmpBuf)) == JUMP_SET) {\
+        status = TAG_NONE;\
+    } else if (jmpres == JUMP_PERFORMED) {\
+        unwindJumpRecover(errInfo);\
+        th->curBlock = blk;\
+        ASSERT(th->errInfo == errInfo);\
+        errInfo->status = TAG_RAISE;\
+        errInfo->caughtError = THREAD()->lastErrorThrown;\
+        status = TAG_RAISE;\
+    }\
+}
+
 
 // call frames
 void popFrame(void);
 CallFrame *pushFrame(void);
+CallFrame *getFrame(void);
 
 // iterators
 Value createIterator(Value iterable);

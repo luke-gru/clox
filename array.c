@@ -250,6 +250,72 @@ static Value lxArrayHashKey(int argCount, Value *args) {
     return NUMBER_VAL(hash);
 }
 
+static Value lxArrayEach(int argCount, Value *args) {
+    CHECK_ARITY("Array#each", 1, 1, argCount);
+    ValueArray *ary = ARRAY_GETHIDDEN(*args);
+    Value el; int valIdx = 0;
+    int status = 0;
+    int iterStart = 0;
+    SETUP_BLOCK(status)
+    while (true) {
+        if (status == TAG_NONE) {
+            break;
+        } else if (status == TAG_RAISE) {
+            popErrInfo();
+            ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
+            ASSERT(errInst);
+            if (errInst->klass == lxBreakBlockErrClass) {
+                return NIL_VAL;
+            } else if (errInst->klass == lxContinueBlockErrClass) {
+                SETUP_BLOCK(status)
+            } else if (errInst->klass == lxReturnBlockErrClass) {
+                return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+            } else { UNREACHABLE("bug"); }
+        }
+    }
+
+    Value ret = NIL_VAL;
+    VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
+        iterStart++;
+        ret = lxYield(1, &el);
+    }
+    return ret;
+}
+
+static Value lxArrayMap(int argCount, Value *args) {
+    CHECK_ARITY("Array#map", 1, 1, argCount);
+    ValueArray *ary = ARRAY_GETHIDDEN(*args);
+    Value el; int valIdx = 0;
+    int status = 0;
+    int iterStart = 0;
+    Value ret = newArray();
+    while (true) {
+        SETUP_BLOCK(status)
+            if (status == TAG_NONE) {
+                break;
+            } else if (status == TAG_RAISE) {
+                popErrInfo();
+                ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
+                ASSERT(errInst);
+                if (errInst->klass == lxBreakBlockErrClass) {
+                    return NIL_VAL;
+                } else if (errInst->klass == lxContinueBlockErrClass) { // continue
+                    Value newEl = getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+                    arrayPush(ret, newEl);
+                    SETUP_BLOCK(status)
+                } else if (errInst->klass == lxReturnBlockErrClass) {
+                    return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+                } else { UNREACHABLE("bug"); }
+            }
+    }
+    VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
+        iterStart++;
+        Value newEl = lxYield(1, &el);
+        arrayPush(ret, newEl);
+    }
+    return ret;
+}
+
 static Value lxArrayGetSize(int argCount, Value *args) {
     ValueArray *ary = ARRAY_GETHIDDEN(*args);
     return NUMBER_VAL(ary->count);
@@ -293,6 +359,8 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "iter", lxArrayIter);
     addNativeMethod(arrayClass, "clear", lxArrayClear);
     addNativeMethod(arrayClass, "hashKey", lxArrayHashKey);
+    addNativeMethod(arrayClass, "each", lxArrayEach);
+    addNativeMethod(arrayClass, "map", lxArrayMap);
 
     // getters
     addNativeGetter(arrayClass, "size", lxArrayGetSize);

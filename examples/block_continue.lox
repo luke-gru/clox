@@ -1,0 +1,20 @@
+var a = [1,2,3];
+a.each() -> (num) {
+  print num;
+  [num+1, num+3].each() -> (num2) {
+    print num2;
+    continue;
+  };
+};
+
+__END__
+-- expect: --
+1
+2
+4
+2
+3
+5
+3
+4
+6

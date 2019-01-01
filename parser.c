@@ -15,13 +15,26 @@
 #define TRACE_END(name) _trace_end(name)
 #endif
 
+static int traceLvl = 0;
+const char traceNesting[] = "  ";
+
+static void printTraceNesting() {
+    for (int i = 0; i < traceLvl; i++) {
+        fprintf(stderr, traceNesting);
+    }
+}
+
 static void _trace_start(const char *name) {
     if (CLOX_OPTION_T(traceParserCalls)) {
+        printTraceNesting();
         fprintf(stderr, "[-- <%s> --]\n", name);
+        traceLvl += 1;
     }
 }
 static void _trace_end(const char *name) {
     if (CLOX_OPTION_T(traceParserCalls)) {
+        traceLvl -= 1;
+        printTraceNesting();
         fprintf(stderr, "[-- </%s> --]\n", name);
     }
 }
@@ -801,11 +814,13 @@ static Node *funDeclaration(ParseFunctionType fnType) {
             .type = NODE_STMT,
             .kind = SETTER_STMT,
         };
-    } else {
+    } else if (fnType == FUNCTION_TYPE_ANON) {
         funcType = (node_type_t){
             .type = NODE_EXPR,
             .kind = ANON_FN_EXPR,
         };
+    } else {
+        ASSERT(0);
     }
     Node *funcNode = createNode(funcType, nameTok, NULL);
     nodeAddData(funcNode, (void*)paramNodes);
@@ -1117,6 +1132,10 @@ static Node *unary() {
     return ret;
 }
 
+static Node *blockDecl() {
+    return funDeclaration(FUNCTION_TYPE_ANON);
+}
+
 static Node *call() {
     TRACE_START("call");
     Node *expr = primary();
@@ -1163,6 +1182,20 @@ static Node *call() {
                     }
                 }
                 consume(TOKEN_RIGHT_PAREN, "Expected ')' to end call expression");
+            }
+            // block
+            if (match(TOKEN_ARROW)) {
+                TRACE_START("callBlock");
+                node_type_t blockCallT = {
+                    .type = NODE_EXPR,
+                    .kind = CALL_BLOCK_EXPR,
+                };
+                Node *fnCall = blockDecl(); // TODO
+                Node *blockFn = createNode(blockCallT, current->previous, NULL);
+                nodeAddChild(blockFn, expr);
+                nodeAddChild(blockFn, fnCall);
+                expr = blockFn;
+                TRACE_END("callBlock");
             }
             TRACE_END("callActual");
         } else if (match(TOKEN_DOT)) {

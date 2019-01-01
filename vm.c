@@ -103,6 +103,7 @@ static void defineNativeFunctions(void) {
     addGlobalFunction("debugger", lxDebugger);
     addGlobalFunction("eval", lxEval);
     addGlobalFunction("sleep", lxSleep);
+    addGlobalFunction("yield", lxYield);
     addGlobalFunction("exit", lxExit);
     addGlobalFunction("atExit", lxAtExit);
     addGlobalFunction("newThread", lxNewThread);
@@ -122,6 +123,12 @@ ObjClass *lxTypeErrClass;
 ObjClass *lxNameErrClass;
 ObjClass *lxSyntaxErrClass;
 ObjClass *lxLoadErrClass;
+
+// internal error classes for flow control of blocks
+ObjClass *lxBlockIterErrClass;
+ObjClass *lxBreakBlockErrClass;
+ObjClass *lxContinueBlockErrClass;
+ObjClass *lxReturnBlockErrClass;
 
 Value lxLoadPath; // load path for loadScript/requireScript (-L flag)
 Value lxArgv;
@@ -210,6 +217,16 @@ static void defineNativeClasses(void) {
     // class LoadError
     ObjClass *loadErrClass = addGlobalClass("LoadError", errClass);
     lxLoadErrClass = loadErrClass;
+
+    // internal errors for block flow control
+    ObjClass *blockIterErr = newClass(INTERN("BlockIterError"), errClass);
+    ObjClass *breakBlockErr = newClass(INTERN("BlockBreakError"), blockIterErr);
+    ObjClass *continueBlockErr = newClass(INTERN("BlockContinueError"), blockIterErr);
+    ObjClass *returnBlockErr = newClass(INTERN("BlockReturnError"), blockIterErr);
+    lxBlockIterErrClass = blockIterErr;
+    lxBreakBlockErrClass = breakBlockErr;
+    lxContinueBlockErrClass = continueBlockErr;
+    lxReturnBlockErrClass = returnBlockErr;
 
     // module GC
     ObjModule *GCModule = addGlobalModule("GC");
@@ -434,6 +451,8 @@ void freeVM(void) {
     }
     VM_DEBUG("freeVM() start");
 
+    vm.mainThread->curBlock = NULL;
+    vm.mainThread->lastBlock = NULL;
     freeObjects();
 
     freeDebugger(&vm.debugger);
@@ -630,7 +649,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
     }
 }
 
-static inline CallFrame *getFrame(void) {
+CallFrame *getFrame(void) {
     ASSERT(EC->frameCount >= 1);
     return &EC->frames[EC->frameCount-1];
 }
@@ -999,13 +1018,22 @@ void popFrame(void) {
             }
         }
     }
+    if (frame->block == th->outermostBlock) {
+        th->outermostBlock = NULL;
+    }
     memset(frame, 0, sizeof(*frame));
     EC->frameCount--;
-    frame = getFrameOrNull();
-    if (frame && frame->instance) {
-        th->thisObj = (Obj*)frame->instance;
+    frame = getFrameOrNull(); // new frame
+    if (frame) {
+        if (frame->instance) {
+            th->thisObj = (Obj*)frame->instance;
+        } else {
+            th->thisObj = NULL;
+        }
     } else {
-        th->thisObj = NULL;
+        th->curBlock = NULL;
+        th->lastBlock = NULL;
+        th->outermostBlock = NULL;
     }
     ASSERT_VALID_STACK();
 }
@@ -1016,12 +1044,16 @@ CallFrame *pushFrame(void) {
         throwErrorFmt(lxErrClass, "Stackoverflow, max number of call frames (%d)", FRAMES_MAX);
         UNREACHABLE_RETURN(NULL);
     }
+    CallFrame *prev = getFrameOrNull();
     CallFrame *frame = &EC->frames[EC->frameCount++];
     memset(frame, 0, sizeof(*frame));
     frame->callLine = curLine;
     /*Value curFile;*/
     ASSERT(vm.fileString);
     frame->file = EC->filename;
+    frame->prev = prev;
+    frame->block = NULL;
+    frame->lastBlock = NULL;
     return frame;
 }
 
@@ -1048,6 +1080,7 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->isCCall = true;
     newFrame->nativeFunc = native;
     newFrame->file = EC->filename;
+    newFrame->block = NULL;
     THREAD()->inCCall++;
 }
 
@@ -1140,6 +1173,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 ASSERT(nativeInit->function);
                 pushNativeFrame(nativeInit);
                 CallFrame *newFrame = getFrame();
+                newFrame->block = th->curBlock;
+                newFrame->lastBlock = th->lastBlock;
                 DBG_ASSERT(instance);
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
@@ -1201,6 +1236,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         CallFrame *newFrame = getFrame();
         newFrame->instance = instance;
         newFrame->klass = frameClass;
+        newFrame->block = th->curBlock;
+        newFrame->lastBlock = th->lastBlock;
         Value val = native->function(argCount, EC->stackTop-argCount);
         newFrame->slots = EC->stackTop-argCountActual;
         if (th->returnedFromNativeErr) {
@@ -1348,6 +1385,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // add frame
     VM_DEBUG("%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
+    frame->block = th->curBlock;
+    frame->lastBlock = th->lastBlock;
     frame->instance = instance;
     if (instance && !frameClass) frameClass = instance->klass;
     frame->klass = frameClass;
@@ -1517,8 +1556,8 @@ static CatchTable *getCatchTableRow(int idx) {
 ErrTagInfo *findErrTag(ObjClass *klass) {
     ErrTagInfo *cur = THREAD()->errInfo;
     while (cur) {
-        // tag for all errors
-        if (cur->errClass == NULL || cur->errClass == klass) {
+        // NULL = tag for all errors
+        if (cur->errClass == NULL || IS_SUBCLASS(klass, cur->errClass)) {
             return cur;
         }
         cur = cur->prev;
@@ -1542,17 +1581,15 @@ NORETURN void throwError(Value self) {
     uint8_t *ipNew = NULL;
     ErrTagInfo *errInfo = NULL;
     if ((errInfo = findErrTag(klass))) {
-        VM_DEBUG("longjmping to tag");
+        VM_DEBUG("longjmping to errinfo tag");
         longjmp(errInfo->jmpBuf, JUMP_PERFORMED);
     }
-    if (th->inCCall > 0 && th->cCallJumpBufSet) {
-        ASSERT(getFrame()->isCCall);
+    if (th->inCCall > 0 && th->cCallJumpBufSet && getFrame()->isCCall) {
         VM_DEBUG("throwing error from C call, longjmping");
         ASSERT(!th->cCallThrew);
         th->cCallThrew = true;
         longjmp(th->cCallJumpBuf, JUMP_PERFORMED);
     }
-    th->inCCall = 0;
     if (findThrowJumpLoc(klass, &ipNew, &catchRow)) {
         ASSERT(ipNew);
         ASSERT(catchRow);
@@ -1579,7 +1616,7 @@ void unsetErrInfo(void) {
     th->errInfo = th->errInfo->prev;
 }
 
-void rethrowErrInfo(ErrTagInfo *info) {
+NORETURN void rethrowErrInfo(ErrTagInfo *info) {
     ASSERT(info);
     Value err = info->caughtError;
     popErrInfo();
@@ -2173,6 +2210,25 @@ static InterpretResult vm_run() {
           getFrame()->ip -= (ipOffset+2);
           break;
       }
+      case OP_BLOCK_BREAK: {
+          Value err = newError(lxBreakBlockErrClass, NIL_VAL);
+          throwError(err); // blocks catch this, not propagated
+          break; // unreached
+      }
+      case OP_BLOCK_CONTINUE: {
+          Value ret = *THREAD()->lastValue;
+          Value err = newError(lxContinueBlockErrClass, NIL_VAL);
+          setProp(err, INTERN("ret"), ret);
+          throwError(err); // blocks catch this, not propagated
+          break; // unreached
+      }
+      case OP_BLOCK_RETURN: {
+          Value ret = pop();
+          Value err = newError(lxReturnBlockErrClass, NIL_VAL);
+          setProp(err, INTERN("ret"), ret);
+          throwError(err); // blocks catch this, not propagated
+          break; // unreached
+      }
       case OP_CALL: {
           uint8_t numArgs = READ_BYTE();
           if (th->lastSplatNumArgs > 0) {
@@ -2219,10 +2275,16 @@ static InterpretResult vm_run() {
           uint8_t numArgs = READ_BYTE();
           Value callInfoVal = READ_CONSTANT();
           Obj *oldThis = th->thisObj;
+          ObjFunction *oldBlock = th->curBlock;
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           if (th->lastSplatNumArgs > 0) {
               numArgs += (th->lastSplatNumArgs-1);
               th->lastSplatNumArgs = -1;
+          }
+          if (callInfo->block) {
+              th->lastBlock = oldBlock;
+              th->curBlock = callInfo->block;
+              if (!oldBlock) th->outermostBlock = th->curBlock;
           }
           Value instanceVal = peek(numArgs);
           if (IS_INSTANCE(instanceVal)) {
@@ -2239,6 +2301,7 @@ static InterpretResult vm_run() {
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
               th->thisObj = oldThis;
+              th->curBlock = oldBlock;
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);
@@ -2254,6 +2317,7 @@ static InterpretResult vm_run() {
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
               th->thisObj = oldThis;
+              th->curBlock = oldBlock;
           } else if (IS_MODULE(instanceVal)) {
               ObjModule *mod = AS_MODULE(instanceVal);
               Obj *callable = moduleFindStaticMethod(mod, mname);
@@ -2269,6 +2333,7 @@ static InterpretResult vm_run() {
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
               th->thisObj = oldThis;
+              th->curBlock = oldBlock;
           } else {
               throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfVal(instanceVal));
           }
@@ -2762,7 +2827,7 @@ void unsetPrintBuf(void) {
     vm.printToStdout = true;
 }
 
-static void unwindJumpRecover(ErrTagInfo *info) {
+void unwindJumpRecover(ErrTagInfo *info) {
     ASSERT(info);
     DBG_ASSERT(getFrame());
     LxThread *th = THREAD();

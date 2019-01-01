@@ -231,6 +231,15 @@ static char *outputCallExpr(Node *n, int indentLevel) {
 
 static char *outputFunctionStmt(Node *n, int indentLevel);
 
+static char *outputCallBlockExpr(Node *n, int indentLevel) {
+    char *buf = "";
+    char *callOut = outputCallExpr(n->children->data[0], indentLevel);
+    char *fnDeclOut = outputFunctionStmt(n->children->data[1], indentLevel);
+    buf = strAdd(callOut, " [BLK] ");
+    buf = strAdd(buf, fnDeclOut);
+    return buf;
+}
+
 static char *outputAnonFnExpr(Node *n, int indentLevel) {
     return outputFunctionStmt(n, indentLevel);
 }
@@ -666,6 +675,8 @@ char *outputASTString(Node *node, int indentLevel) {
                     return outputAssignExpr(node, indentLevel);
                 case CALL_EXPR:
                     return outputCallExpr(node, indentLevel);
+                case CALL_BLOCK_EXPR:
+                    return outputCallBlockExpr(node, indentLevel);
                 case ANON_FN_EXPR:
                     return outputAnonFnExpr(node, indentLevel);
                 case PROP_ACCESS_EXPR:

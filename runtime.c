@@ -119,6 +119,36 @@ Value lxSleep(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+static ObjClosure *closureFromFn(ObjFunction *func) {
+    return newClosure(func);
+}
+
+static void setupCatchYield() {
+}
+
+static ObjClosure *getBlockClosure(void) {
+    ObjFunction *block = THREAD()->curBlock;
+    if (!block) {
+        throwErrorFmt(lxErrClass, "Cannot yield, no block given");
+    }
+    /*if (THREAD()->blockDepth > THREAD()->blockErrSetDepth) {*/
+    /*setupCatchYield();*/
+    /*}*/
+    ObjClosure *blockClosure = closureFromFn(block);
+    return blockClosure;
+}
+
+Value lxYield(int argCount, Value *args) {
+    ObjClosure *blkClosure = getBlockClosure();
+    Value callable = OBJ_VAL(blkClosure);
+    push(callable);
+    for (int i = 0; i < argCount; i++) {
+        push(args[i]);
+    }
+    callCallable(callable, argCount, false, NULL);
+    return pop();
+}
+
 // Register atExit handler for process
 Value lxAtExit(int argCount, Value *args) {
     CHECK_ARITY("atExit", 1, 1, argCount);
@@ -510,7 +540,9 @@ Value lxErrInit(int argCount, Value *args) {
     Value msg;
     if (argCount == 2) {
         msg = args[1];
-        CHECK_ARG_IS_A(msg, lxStringClass, 1);
+        if (!IS_NIL(msg)) {
+            CHECK_ARG_IS_A(msg, lxStringClass, 1);
+        }
     } else {
         msg = NIL_VAL;
     }

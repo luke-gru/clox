@@ -1,0 +1,17 @@
+var a = [1,2,3];
+a.each() -> (num) {
+  print num;
+  [num+1, num+3].map() -> (num2) {
+    print num2;
+    break;
+  };
+};
+
+__END__
+-- expect: --
+1
+2
+2
+3
+3
+4

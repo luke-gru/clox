@@ -24,7 +24,11 @@ NORETURN void die(const char *fmt, ...) {
 NORETURN void diePrintCBacktrace(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    fprintf(stderr, "Error in thread: %lld\n", THREAD() ? (long long)THREAD()->tid : -1);
+    fprintf(stderr, "Error in thread: %lld", THREAD() ? (long long)THREAD()->tid : -1);
+    if (vm.mainThread == THREAD()) {
+        fprintf(stderr, " (main)");
+    }
+    fprintf(stderr, "\n");
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");
@@ -170,6 +174,12 @@ const char *opName(OpCode code) {
         return "OP_ITER";
     case OP_ITER_NEXT:
         return "OP_ITER_NEXT";
+    case OP_BLOCK_BREAK:
+        return "OP_BLOCK_BREAK";
+    case OP_BLOCK_CONTINUE:
+        return "OP_BLOCK_CONTINUE";
+    case OP_BLOCK_RETURN:
+        return "OP_BLOCK_RETURN";
     case OP_LEAVE:
         return "OP_LEAVE";
     default:
@@ -416,7 +426,7 @@ static int loopInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t numArgs = chunk->code[i + 1];
     (void)numArgs; // unused
     uint8_t constantSlot = chunk->code[i + 2];
@@ -426,6 +436,9 @@ static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     ObjInternal *obj = AS_INTERNAL(callInfoVal);
     CallInfo *callInfo = internalGetData(obj);
     ASSERT(callInfo);
+    if (callInfo->block) {
+        addFunc(funcs, callInfo->block);
+    }
     char *callName = tokStr(&callInfo->nameTok);
     if (strcmp(callName, "}") == 0) { // when `fun() { ... }(args)`
         callName = "(anon)";
@@ -438,10 +451,20 @@ static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i) {
 }
 
 // TODO: make it like printCallInstruction (show callInfo)
-static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     char *cbuf = calloc(strlen(op)+1+11, 1);
     ASSERT_MEM(cbuf);
     uint8_t numArgs = chunk->code[i + 1];
+    uint8_t callInfoSlot = chunk->code[i + 2];
+    Value callInfoVal = getConstant(chunk, callInfoSlot);
+    /*fprintf(f, "typeof=%s\n", typeOfVal(callInfoVal));*/
+    ASSERT(IS_INTERNAL(callInfoVal));
+    ObjInternal *obj = AS_INTERNAL(callInfoVal);
+    CallInfo *callInfo = internalGetData(obj);
+    ASSERT(callInfo);
+    if (callInfo->block) {
+        addFunc(funcs, callInfo->block);
+    }
     sprintf(cbuf, "%s\t(argc=%02d)\n", op, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
@@ -449,8 +472,18 @@ static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
 }
 
 // TODO: show callInfo
-static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t methodNameArg = chunk->code[i + 1];
+    uint8_t callInfoSlot = chunk->code[i + 3];
+    Value callInfoVal = getConstant(chunk, callInfoSlot);
+    /*fprintf(f, "typeof=%s\n", typeOfVal(callInfoVal));*/
+    ASSERT(IS_INTERNAL(callInfoVal));
+    ObjInternal *obj = AS_INTERNAL(callInfoVal);
+    CallInfo *callInfo = internalGetData(obj);
+    ASSERT(callInfo);
+    if (callInfo->block) {
+        addFunc(funcs, callInfo->block);
+    }
     Value methodName = getConstant(chunk, methodNameArg);
     char *methodNameStr = AS_CSTRING(methodName);
     uint8_t numArgs = chunk->code[i+2];
@@ -459,8 +492,18 @@ static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i) {
 }
 
 // TODO: show callInfo
-static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t methodNameArg = chunk->code[i + 1];
+    uint8_t callInfoSlot = chunk->code[i + 3];
+    Value callInfoVal = getConstant(chunk, callInfoSlot);
+    /*fprintf(f, "typeof=%s\n", typeOfVal(callInfoVal));*/
+    ASSERT(IS_INTERNAL(callInfoVal));
+    ObjInternal *obj = AS_INTERNAL(callInfoVal);
+    CallInfo *callInfo = internalGetData(obj);
+    ASSERT(callInfo);
+    if (callInfo->block) {
+        addFunc(funcs, callInfo->block);
+    }
     Value methodName = getConstant(chunk, methodNameArg);
     char *methodNameStr = AS_CSTRING(methodName);
     uint8_t numArgs = chunk->code[i+2];
@@ -561,9 +604,9 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_LOOP:
             return printLoopInstruction(f, opName(byte), chunk, i);
         case OP_CALL:
-            return printCallInstruction(f, opName(byte), chunk, i);
+            return printCallInstruction(f, opName(byte), chunk, i, funcs);
         case OP_INVOKE:
-            return printInvokeInstruction(f, opName(byte), chunk, i);
+            return printInvokeInstruction(f, opName(byte), chunk, i, funcs);
         case OP_CHECK_KEYWORD:
             return printCheckKeywordInstruction(f, opName(byte), chunk, i);
         case OP_NEGATE:
@@ -601,6 +644,9 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_SPLAT_ARRAY:
         case OP_ITER:
         case OP_ITER_NEXT:
+        case OP_BLOCK_BREAK:
+        case OP_BLOCK_CONTINUE:
+        case OP_BLOCK_RETURN:
             return printSimpleInstruction(f, opName(byte), i);
         default:
             fprintf(f, "Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
@@ -656,9 +702,9 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_LOOP:
             return loopInstruction(buf, opName(byte), chunk, i);
         case OP_CALL:
-            return callInstruction(buf, opName(byte), chunk, i);
+            return callInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_INVOKE:
-            return invokeInstruction(buf, opName(byte), chunk, i);
+            return invokeInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_CHECK_KEYWORD:
             return checkKeywordInstruction(buf, opName(byte), chunk, i);
         case OP_NEGATE:
@@ -696,6 +742,9 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_SPLAT_ARRAY:
         case OP_ITER:
         case OP_ITER_NEXT:
+        case OP_BLOCK_BREAK:
+        case OP_BLOCK_CONTINUE:
+        case OP_BLOCK_RETURN:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             ASSERT(0);
