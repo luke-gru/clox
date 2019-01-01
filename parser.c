@@ -700,7 +700,7 @@ static vec_nodep_t *createNodeVec(void) {
 static Node *funDeclaration(ParseFunctionType fnType) {
     TRACE_START("funDeclaration");
     Token nameTok = current->previous;
-    if (fnType != FUNCTION_TYPE_ANON && fnType != FUNCTION_TYPE_BLOCK) {
+    if (fnType != FUNCTION_TYPE_ANON) {
         consume(TOKEN_IDENTIFIER, "Expect function name (identifier) after 'fun' keyword");
         nameTok = current->previous;
     }
@@ -815,11 +815,6 @@ static Node *funDeclaration(ParseFunctionType fnType) {
             .kind = SETTER_STMT,
         };
     } else if (fnType == FUNCTION_TYPE_ANON) {
-        funcType = (node_type_t){
-            .type = NODE_EXPR,
-            .kind = ANON_FN_EXPR,
-        };
-    } else if (fnType == FUNCTION_TYPE_BLOCK) {
         funcType = (node_type_t){
             .type = NODE_EXPR,
             .kind = ANON_FN_EXPR,
@@ -1138,7 +1133,7 @@ static Node *unary() {
 }
 
 static Node *blockDecl() {
-    return funDeclaration(FUNCTION_TYPE_BLOCK);
+    return funDeclaration(FUNCTION_TYPE_ANON);
 }
 
 static Node *call() {

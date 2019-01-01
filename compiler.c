@@ -857,6 +857,7 @@ static void initCompiler(
     case FUN_TYPE_SETTER:
     case FUN_TYPE_METHOD:
     case FUN_TYPE_CLASS_METHOD: {
+        fprintf(stderr, "FUN TYPE %d\n", ftype);
         ASSERT(currentClassOrModule || inINBlock);
         char *className = "";
         if (currentClassOrModule) {
@@ -1617,7 +1618,7 @@ static void emitNode(Node *n) {
     }
     case CALL_BLOCK_EXPR: {
         CallInfo *cinfo = emitCall(n->children->data[0]);
-        ObjFunction *block = emitFunction(n->children->data[1], FUNCTION_TYPE_BLOCK);
+        ObjFunction *block = emitFunction(n->children->data[1], FUN_TYPE_ANON);
         cinfo->block = block;
         break;
     }
