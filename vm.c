@@ -2572,7 +2572,7 @@ static InterpretResult vm_run() {
       // exit interpreter, or evaluation context if in eval() or
       // loadScript/requireScript
       case OP_LEAVE: {
-          if (!isInEval() && !isInLoadedScript()) {
+          if (th == vm.mainThread && !isInEval() && !isInLoadedScript()) {
               vm.exited = true;
           }
           (th->vmRunLvl)--;

@@ -319,7 +319,6 @@ static Value lxMutexLock(int argCount, Value *args) {
 }
 
 static Value lxMutexUnlock(int argCount, Value *args) {
-    fprintf(stderr, "Called unlock!\n");
     CHECK_ARITY("Mutex#unlock", 1, 1, argCount);
     Value self = *args;
     LxMutex *m = mutexGetHidden(self);
