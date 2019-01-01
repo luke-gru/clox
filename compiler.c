@@ -187,8 +187,14 @@ static void emitReturn(Compiler *compiler) {
         if (breakBlock) {
             ASSERT(compiler->type == FUN_TYPE_BLOCK); // TODO: error()
             // TODO: push nil if empty function
+            if (compiler->function->chunk->count == 0) {
+                emitOp0(OP_NIL);
+            }
             emitOp0(OP_BLOCK_CONTINUE); // continue with last evaluated statement
         } else if (compiler->type == FUN_TYPE_BLOCK) {
+            if (compiler->function->chunk->count == 0) {
+                emitOp0(OP_NIL);
+            }
             emitOp0(OP_BLOCK_CONTINUE); // continue with last evaluated statement
         } else {
             emitOp0(OP_NIL);
@@ -1509,6 +1515,9 @@ static void emitNode(Node *n) {
             return;
         }
         if (breakBlock) {
+            if (current->function->chunk->count == 0) {
+                emitOp0(OP_NIL);
+            }
             emitOp0(OP_BLOCK_CONTINUE);
         } else {
             emitLoop(loopStart);
@@ -1646,7 +1655,12 @@ static void emitNode(Node *n) {
             COMP_TRACE("Emitting explicit return (children)");
         } else {
             COMP_TRACE("Emitting explicit return (void)");
-            emitReturn(current);
+            if (breakBlock) {
+                emitOp0(OP_NIL);
+                emitOp0(OP_BLOCK_RETURN);
+            } else {
+                emitReturn(current);
+            }
         }
         break;
     }

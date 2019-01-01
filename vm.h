@@ -232,7 +232,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo);
 // Similar code to vm_protect.
 #define SETUP_BLOCK(status) {\
     ASSERT(THREAD()->curBlock);\
-    addErrInfo(lxBlockIterErrClass);\
+    addErrInfo(lxErrClass);\
     ErrTagInfo *errInfo = THREAD()->errInfo;\
     ObjFunction *blk = THREAD()->curBlock;\
     int jmpres = 0;\
@@ -245,6 +245,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo);
         errInfo->status = TAG_RAISE;\
         errInfo->caughtError = THREAD()->lastErrorThrown;\
         status = TAG_RAISE;\
+        popErrInfo();\
     }\
 }
 

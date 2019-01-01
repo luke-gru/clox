@@ -1,0 +1,19 @@
+print [1,2,3].each() -> (num) { };
+print [1,2,3].each() -> (num) { break; };
+print [1,2,3].each() -> (num) { continue; };
+print [1,2,3].each() -> (num) { return; };
+print [1,2,3].map() -> (num) { };
+print [1,2,3].map() -> (num) { break; };
+print [1,2,3].map() -> (num) { continue; };
+print [1,2,3].map() -> (num) { return; };
+
+__END__
+-- expect: --
+nil
+nil
+nil
+nil
+[nil,nil,nil]
+nil
+[nil,nil,nil]
+nil

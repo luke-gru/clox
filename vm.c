@@ -1035,7 +1035,9 @@ void popFrame(void) {
     frame = getFrameOrNull(); // new frame
     if (frame) {
         if (stackAdjust > 0) {
-            EC->stackTop -= stackAdjust;
+            if (EC->stackTop-stackAdjust > EC->stack) {
+                EC->stackTop -= stackAdjust;
+            }
         }
         if (frame->instance) {
             th->thisObj = (Obj*)frame->instance;
@@ -2234,8 +2236,7 @@ static InterpretResult vm_run() {
           break; // unreached
       }
       case OP_BLOCK_CONTINUE: {
-          ASSERT(THREAD()->lastValue);
-          Value ret = *THREAD()->lastValue;
+          Value ret = pop();
           Value err = newError(lxContinueBlockErrClass, NIL_VAL);
           setProp(err, INTERN("ret"), ret);
           throwError(err); // blocks catch this, not propagated

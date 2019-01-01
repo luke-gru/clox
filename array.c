@@ -261,7 +261,6 @@ static Value lxArrayEach(int argCount, Value *args) {
         if (status == TAG_NONE) {
             break;
         } else if (status == TAG_RAISE) {
-            popErrInfo();
             ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
             ASSERT(errInst);
             if (errInst->klass == lxBreakBlockErrClass) {
@@ -270,7 +269,9 @@ static Value lxArrayEach(int argCount, Value *args) {
                 SETUP_BLOCK(status)
             } else if (errInst->klass == lxReturnBlockErrClass) {
                 return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
-            } else { UNREACHABLE("bug"); }
+            } else {
+                throwError(THREAD()->lastErrorThrown);
+            }
         }
     }
 
@@ -294,7 +295,6 @@ static Value lxArrayMap(int argCount, Value *args) {
             if (status == TAG_NONE) {
                 break;
             } else if (status == TAG_RAISE) {
-                popErrInfo();
                 ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
                 ASSERT(errInst);
                 if (errInst->klass == lxBreakBlockErrClass) {
@@ -305,7 +305,9 @@ static Value lxArrayMap(int argCount, Value *args) {
                     SETUP_BLOCK(status)
                 } else if (errInst->klass == lxReturnBlockErrClass) {
                     return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
-                } else { UNREACHABLE("bug"); }
+                } else {
+                    throwError(THREAD()->lastErrorThrown);
+                }
             }
     }
     VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
