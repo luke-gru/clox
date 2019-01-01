@@ -172,6 +172,10 @@ extern ObjClass *lxNameErrClass;
 extern ObjClass *lxSyntaxErrClass;
 extern ObjClass *lxLoadErrClass;
 
+extern ObjClass *lxBlockIterErrClass;
+extern ObjClass *lxBreakBlockErrClass;
+extern ObjClass *lxContinueBlockErrClass;
+
 extern Value lxLoadPath;
 extern Value lxArgv;
 

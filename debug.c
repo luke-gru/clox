@@ -174,6 +174,10 @@ const char *opName(OpCode code) {
         return "OP_ITER";
     case OP_ITER_NEXT:
         return "OP_ITER_NEXT";
+    case OP_BLOCK_BREAK:
+        return "OP_BLOCK_BREAK";
+    case OP_BLOCK_CONTINUE:
+        return "OP_BLOCK_CONTINUE";
     case OP_LEAVE:
         return "OP_LEAVE";
     default:
@@ -605,6 +609,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_SPLAT_ARRAY:
         case OP_ITER:
         case OP_ITER_NEXT:
+        case OP_BLOCK_BREAK:
+        case OP_BLOCK_CONTINUE:
             return printSimpleInstruction(f, opName(byte), i);
         default:
             fprintf(f, "Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
@@ -700,6 +706,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_SPLAT_ARRAY:
         case OP_ITER:
         case OP_ITER_NEXT:
+        case OP_BLOCK_BREAK:
+        case OP_BLOCK_CONTINUE:
             return simpleInstruction(buf, opName(byte), i);
         default: {
             ASSERT(0);

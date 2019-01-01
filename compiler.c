@@ -44,6 +44,8 @@ static Token *curTok = NULL;
 static int loopStart = -1;
 static int nodeDepth = 0;
 static int nodeWidth = -1;
+static int blockDepth = 0;
+static bool breakBlock = false;
 
 CompilerOpts compilerOpts; // [external]
 
@@ -1124,7 +1126,16 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             patchJump(ifJumpStart, -1, NULL);
         }
     }
+    bool oldBreakBlock = breakBlock;
+    if (ftype == FUN_TYPE_BLOCK) {
+        blockDepth++;
+        breakBlock = true;
+    }
     emitChildren(n); // the blockNode
+    if (ftype == FUN_TYPE_BLOCK) {
+        blockDepth--;
+        breakBlock = oldBreakBlock;
+    }
     popScope(COMPILE_SCOPE_FUNCTION);
     func = endCompiler();
     ASSERT(func->chunk);
@@ -1358,6 +1369,8 @@ static void emitNode(Node *n) {
     }
     case WHILE_STMT: {
         int oldLoopStart = loopStart;
+        bool oldBreakBlock = breakBlock;
+        breakBlock = false;
         Insn *loopLabel = currentIseq()->tail;
         loopStart = currentIseq()->byteCount + 2;
         emitNode(vec_first(n->children)); // cond
@@ -1374,6 +1387,7 @@ static void emitNode(Node *n) {
         patchJump(whileJumpStart, -1, NULL);
         patchBreaks(whileJumpStart, currentIseq()->tail);
         loopStart = oldLoopStart;
+        breakBlock = oldBreakBlock;
         break;
     }
     case FOR_STMT: {
@@ -1383,6 +1397,7 @@ static void emitNode(Node *n) {
             emitNode(init);
         }
         int oldLoopStart = loopStart;
+        bool oldBreakBlock = breakBlock;
         Node *test = n->children->data[1];
         int beforeTest = currentIseq()->byteCount+2;
         loopStart = beforeTest;
@@ -1404,8 +1419,10 @@ static void emitNode(Node *n) {
         patchBreaks(forJump, currentIseq()->tail);
         popScope(COMPILE_SCOPE_BLOCK);
         loopStart = oldLoopStart;
+        breakBlock = oldBreakBlock;
         break;
     }
+    // FIXME: support breaks/continue in foreach!
     case FOREACH_STMT: {
         pushScope(COMPILE_SCOPE_BLOCK);
         vec_byte_t v_slots;
@@ -1459,20 +1476,28 @@ static void emitNode(Node *n) {
         break;
     }
     case BREAK_STMT: {
-        if (loopStart == -1) {
-            error("'break' can only be used in loops ('while' or 'for' loops)");
+        if (loopStart == -1 && blockDepth == 0) {
+            error("'break' can only be used in loops ('while' or 'for' loops) and blocks");
             return;
         }
-        Insn *in = emitJump(OP_JUMP);
-        in->flags |= INSN_FL_BREAK;
+        if (breakBlock) {
+            emitOp0(OP_BLOCK_BREAK);
+        } else {
+            Insn *in = emitJump(OP_JUMP);
+            in->flags |= INSN_FL_BREAK;
+        }
         break; // I heard you like break statements, so I put a break in your break
     }
     case CONTINUE_STMT: {
-        if (loopStart == -1) {
-            error("'continue' can only be used in loops ('while' or 'for' loops)");
+        if (loopStart == -1 && blockDepth == 0) {
+            error("'continue' can only be used in loops ('while' or 'for' loops) and blocks");
             return;
         }
-        emitLoop(loopStart);
+        if (breakBlock) {
+            emitOp0(OP_BLOCK_CONTINUE);
+        } else {
+            emitLoop(loopStart);
+        }
         break;
     }
     case PRINT_STMT: {

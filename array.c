@@ -254,8 +254,27 @@ static Value lxArrayEach(int argCount, Value *args) {
     CHECK_ARITY("Array#each", 1, 1, argCount);
     ValueArray *ary = ARRAY_GETHIDDEN(*args);
     Value el; int valIdx = 0;
+    int status = 0;
+    int iterStart = 0;
+    SETUP_BLOCK(status)
+    while (true) {
+        if (status == TAG_NONE) {
+            break;
+        } else if (status == TAG_RAISE) {
+            popErrInfo();
+            ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
+            ASSERT(errInst);
+            if (errInst->klass == lxBreakBlockErrClass) {
+                return NIL_VAL;
+            } else if (errInst->klass == lxContinueBlockErrClass) {
+                SETUP_BLOCK(status)
+            } else { UNREACHABLE("bug"); }
+        }
+    }
+
     Value ret = NIL_VAL;
-    VALARRAY_FOREACH(ary, el, valIdx) {
+    VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
+        iterStart++;
         ret = lxYield(1, &el);
     }
     return ret;
@@ -265,10 +284,27 @@ static Value lxArrayMap(int argCount, Value *args) {
     CHECK_ARITY("Array#map", 1, 1, argCount);
     ValueArray *ary = ARRAY_GETHIDDEN(*args);
     Value el; int valIdx = 0;
+    int status = 0;
+    int iterStart = 0;
+    while (true) {
+        SETUP_BLOCK(status)
+            if (status == TAG_NONE) {
+                break;
+            } else if (status == TAG_RAISE) {
+                popErrInfo();
+                ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
+                ASSERT(errInst);
+                if (errInst->klass == lxBreakBlockErrClass) {
+                    return NIL_VAL;
+                } else if (errInst->klass == lxContinueBlockErrClass) { // continue
+                    SETUP_BLOCK(status)
+                } else { UNREACHABLE("bug"); }
+            }
+    }
     Value ret = newArray();
-    VALARRAY_FOREACH(ary, el, valIdx) {
+    VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
+        iterStart++;
         Value newEl = lxYield(1, &el);
-        /*printValue(stderr, newEl, false, -1);*/
         arrayPush(ret, newEl);
     }
     return ret;

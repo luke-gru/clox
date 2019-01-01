@@ -60,6 +60,9 @@ typedef enum {
     OP_ITER,
     OP_ITER_NEXT,
 
+    OP_BLOCK_BREAK,
+    OP_BLOCK_CONTINUE,
+
     OP_TRUE,
     OP_FALSE,
     OP_NIL,

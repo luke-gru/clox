@@ -37,6 +37,9 @@ typedef struct ValueArray {
 #define VALARRAY_FOREACH(ary, val, idx) \
     for (idx = 0; idx < ary->count && (val = ary->values[idx]).type != VAL_T_UNDEF; idx++)
 
+#define VALARRAY_FOREACH_START(ary, val, startIdx, idx) \
+    for (idx = startIdx; idx < ary->count && (val = ary->values[idx]).type != VAL_T_UNDEF; idx++)
+
 
 #define IS_BOOL(value)    ((value).type == VAL_T_BOOL)
 #define IS_NIL(value)     ((value).type == VAL_T_NIL)

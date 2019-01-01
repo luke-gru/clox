@@ -123,11 +123,17 @@ static ObjClosure *closureFromFn(ObjFunction *func) {
     return newClosure(func);
 }
 
+static void setupCatchYield() {
+}
+
 static ObjClosure *getBlockClosure(void) {
     ObjFunction *block = THREAD()->curBlock;
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
+    /*if (THREAD()->blockDepth > THREAD()->blockErrSetDepth) {*/
+    /*setupCatchYield();*/
+    /*}*/
     ObjClosure *blockClosure = closureFromFn(block);
     return blockClosure;
 }
