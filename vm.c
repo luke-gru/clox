@@ -103,6 +103,7 @@ static void defineNativeFunctions(void) {
     addGlobalFunction("debugger", lxDebugger);
     addGlobalFunction("eval", lxEval);
     addGlobalFunction("sleep", lxSleep);
+    addGlobalFunction("yield", lxYield);
     addGlobalFunction("exit", lxExit);
     addGlobalFunction("atExit", lxAtExit);
     addGlobalFunction("newThread", lxNewThread);
@@ -630,7 +631,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
     }
 }
 
-static inline CallFrame *getFrame(void) {
+CallFrame *getFrame(void) {
     ASSERT(EC->frameCount >= 1);
     return &EC->frames[EC->frameCount-1];
 }
@@ -1016,12 +1017,15 @@ CallFrame *pushFrame(void) {
         throwErrorFmt(lxErrClass, "Stackoverflow, max number of call frames (%d)", FRAMES_MAX);
         UNREACHABLE_RETURN(NULL);
     }
+    CallFrame *prev = getFrameOrNull();
     CallFrame *frame = &EC->frames[EC->frameCount++];
     memset(frame, 0, sizeof(*frame));
     frame->callLine = curLine;
     /*Value curFile;*/
     ASSERT(vm.fileString);
     frame->file = EC->filename;
+    frame->prev = prev;
+    frame->info = NULL;
     return frame;
 }
 
@@ -1048,6 +1052,7 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->isCCall = true;
     newFrame->nativeFunc = native;
     newFrame->file = EC->filename;
+    newFrame->info = NULL;
     THREAD()->inCCall++;
 }
 
@@ -1140,6 +1145,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 ASSERT(nativeInit->function);
                 pushNativeFrame(nativeInit);
                 CallFrame *newFrame = getFrame();
+                newFrame->info = callInfo;
                 DBG_ASSERT(instance);
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
@@ -1201,6 +1207,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         CallFrame *newFrame = getFrame();
         newFrame->instance = instance;
         newFrame->klass = frameClass;
+        newFrame->info = callInfo;
         Value val = native->function(argCount, EC->stackTop-argCount);
         newFrame->slots = EC->stackTop-argCountActual;
         if (th->returnedFromNativeErr) {
@@ -1348,6 +1355,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // add frame
     VM_DEBUG("%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
+    frame->info = callInfo;
     frame->instance = instance;
     if (instance && !frameClass) frameClass = instance->klass;
     frame->klass = frameClass;

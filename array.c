@@ -250,6 +250,19 @@ static Value lxArrayHashKey(int argCount, Value *args) {
     return NUMBER_VAL(hash);
 }
 
+static Value lxArrayMap(int argCount, Value *args) {
+    CHECK_ARITY("Array#map", 1, 1, argCount);
+    ValueArray *ary = ARRAY_GETHIDDEN(*args);
+    Value el; int valIdx = 0;
+    Value ret = newArray();
+    VALARRAY_FOREACH(ary, el, valIdx) {
+        Value newEl = lxYield(1, &el);
+        /*printValue(stderr, newEl, false, -1);*/
+        arrayPush(ret, newEl);
+    }
+    return ret;
+}
+
 static Value lxArrayGetSize(int argCount, Value *args) {
     ValueArray *ary = ARRAY_GETHIDDEN(*args);
     return NUMBER_VAL(ary->count);
@@ -293,6 +306,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "iter", lxArrayIter);
     addNativeMethod(arrayClass, "clear", lxArrayClear);
     addNativeMethod(arrayClass, "hashKey", lxArrayHashKey);
+    addNativeMethod(arrayClass, "map", lxArrayMap);
 
     // getters
     addNativeGetter(arrayClass, "size", lxArrayGetSize);

@@ -38,6 +38,8 @@ typedef struct CallFrame {
     ObjString *file; // full path of file the function is called from
     jmp_buf jmpBuf; // only used if chunk associated with closure has a catch table
     bool jmpBufSet;
+    struct CallFrame *prev;
+    CallInfo *info;
 } CallFrame; // represents a local scope (block, function, etc)
 
 typedef enum ErrTag {
@@ -224,6 +226,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo);
 // call frames
 void popFrame(void);
 CallFrame *pushFrame(void);
+CallFrame *getFrame(void);
 
 // iterators
 Value createIterator(Value iterable);

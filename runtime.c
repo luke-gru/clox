@@ -119,6 +119,32 @@ Value lxSleep(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+static ObjClosure *closureFromFn(ObjFunction *func) {
+    return newClosure(func);
+}
+
+static ObjClosure *getBlockClosure(void) {
+    CallFrame *fr = getFrame();
+    ASSERT(fr->prev && fr->prev);
+    if (fr->info == NULL) fr = fr->prev;
+    if (!fr->info || !fr->info->block) {
+        throwErrorFmt(lxErrClass, "Cannot yield");
+    }
+    ObjClosure *blockClosure = closureFromFn(fr->info->block);
+    return blockClosure;
+}
+
+Value lxYield(int argCount, Value *args) {
+    ObjClosure *blkClosure = getBlockClosure();
+    Value callable = OBJ_VAL(blkClosure);
+    push(callable);
+    for (int i = 0; i < argCount; i++) {
+        push(args[i]);
+    }
+    callCallable(callable, argCount, false, NULL);
+    return pop();
+}
+
 // Register atExit handler for process
 Value lxAtExit(int argCount, Value *args) {
     CHECK_ARITY("atExit", 1, 1, argCount);

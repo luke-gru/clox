@@ -1,3 +1,5 @@
-a.map() -> (b) {
-  b + 1;
+var a = [1,2,3];
+var c = a.map() -> (b) {
+  return b + 1;
 };
+print c;
