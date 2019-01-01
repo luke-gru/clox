@@ -101,6 +101,7 @@ typedef struct CallInfo {
     int numKwargs;
     bool usesSplat;
     Token kwargNames[LX_MAX_KWARGS];
+    ObjFunction *block;
 } CallInfo;
 
 typedef struct CompilerOpts {

@@ -993,8 +993,80 @@ static void emitIn(Node *n) {
     inINBlock = oldIn;
 }
 
+static CallInfo *emitCall(Node *n) {
+    int nArgs = n->children->length-1;
+    // arbitrary, but we don't want the VM op stack to blow by pushing a whole
+    // bunch of arguments
+    if (nArgs > 8) {
+        error("too many arguments given to function (%d), maximum 8", nArgs);
+        return NULL;
+    }
+    Node *arg = NULL;
+    int i = 0;
+    Node *lhs = vec_first(n->children);
+    int argc = n->children->length; // num regular arguments
+    int numKwargs = 0;
+    CallInfo *callInfoData;
+    if (nodeKind(lhs) == PROP_ACCESS_EXPR) {
+        emitChildren(lhs); // the instance
+        uint8_t methodNameArg = identifierConstant(&lhs->tok);
+        vec_foreach(n->children, arg, i) {
+            if (i == 0) continue;
+            if (arg->type.kind == KWARG_IN_CALL_STMT) {
+                argc--;
+                numKwargs++;
+            }
+            emitNode(arg);
+        }
+        callInfoData = ALLOCATE(CallInfo, 1);
+        ASSERT_MEM(callInfoData);
+        callInfoData->nameTok = n->tok;
+        callInfoData->argc = argc;
+        callInfoData->numKwargs = numKwargs;
+        i = 0; int idx = 0;
+        vec_foreach(n->children, arg, i) {
+            if (arg->type.kind == KWARG_IN_CALL_STMT) {
+                callInfoData->kwargNames[idx] = arg->tok;
+                idx++;
+            }
+        }
+        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL);
+        hideFromGC((Obj*)callInfoObj);
+        uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
+        emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
+    } else {
+        emitNode(lhs); // the function itself
+        i = 0;
+        vec_foreach(n->children, arg, i) {
+            if (i == 0) continue;
+            if (arg->type.kind == KWARG_IN_CALL_STMT) {
+                argc--;
+                numKwargs++;
+            }
+            emitNode(arg);
+        }
+        callInfoData = ALLOCATE(CallInfo, 1);
+        ASSERT_MEM(callInfoData);
+        callInfoData->nameTok = n->tok;
+        callInfoData->argc = argc;
+        callInfoData->numKwargs = numKwargs;
+        i = 0; int idx = 0;
+        vec_foreach(n->children, arg, i) {
+            if (arg->type.kind == KWARG_IN_CALL_STMT) {
+                callInfoData->kwargNames[idx] = arg->tok;
+                idx++;
+            }
+        }
+        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL);
+        hideFromGC((Obj*)callInfoObj);
+        uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
+        emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);
+    }
+    return callInfoData;
+}
+
 // emit function or method
-static void emitFunction(Node *n, FunctionType ftype) {
+static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     Compiler fCompiler;
     initCompiler(&fCompiler, current->scopeDepth,
         ftype, &n->tok, NULL);
@@ -1066,7 +1138,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
     }
 
     if (ftype == FUN_TYPE_TOP_LEVEL) {
-        return;
+        return func;
     }
 
     if (ftype != FUN_TYPE_ANON) {
@@ -1092,6 +1164,7 @@ static void emitFunction(Node *n, FunctionType ftype) {
             }
         }
     }
+    return func;
 }
 
 static void pushVarSlots() {
@@ -1539,73 +1612,13 @@ static void emitNode(Node *n) {
         break;
     }
     case CALL_EXPR: {
-        int nArgs = n->children->length-1;
-        // arbitrary, but we don't want the VM op stack to blow by pushing a whole
-        // bunch of arguments
-        if (nArgs > 8) {
-            error("too many arguments given to function (%d), maximum 8", nArgs);
-            return;
-        }
-        Node *arg = NULL;
-        int i = 0;
-        Node *lhs = vec_first(n->children);
-        int argc = n->children->length; // num regular arguments
-        int numKwargs = 0;
-        if (nodeKind(lhs) == PROP_ACCESS_EXPR) {
-            emitChildren(lhs); // the instance
-            uint8_t methodNameArg = identifierConstant(&lhs->tok);
-            vec_foreach(n->children, arg, i) {
-                if (i == 0) continue;
-                if (arg->type.kind == KWARG_IN_CALL_STMT) {
-                    argc--;
-                    numKwargs++;
-                }
-                emitNode(arg);
-            }
-            CallInfo *callInfoData = ALLOCATE(CallInfo, 1);
-            ASSERT_MEM(callInfoData);
-            callInfoData->nameTok = n->tok;
-            callInfoData->argc = argc;
-            callInfoData->numKwargs = numKwargs;
-            i = 0; int idx = 0;
-            vec_foreach(n->children, arg, i) {
-                if (arg->type.kind == KWARG_IN_CALL_STMT) {
-                    callInfoData->kwargNames[idx] = arg->tok;
-                    idx++;
-                }
-            }
-            ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL);
-            hideFromGC((Obj*)callInfoObj);
-            uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
-            emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
-        } else {
-            emitNode(lhs); // the function itself
-            i = 0;
-            vec_foreach(n->children, arg, i) {
-                if (i == 0) continue;
-                if (arg->type.kind == KWARG_IN_CALL_STMT) {
-                    argc--;
-                    numKwargs++;
-                }
-                emitNode(arg);
-            }
-            CallInfo *callInfoData = ALLOCATE(CallInfo, 1);
-            ASSERT_MEM(callInfoData);
-            callInfoData->nameTok = n->tok;
-            callInfoData->argc = argc;
-            callInfoData->numKwargs = numKwargs;
-            i = 0; int idx = 0;
-            vec_foreach(n->children, arg, i) {
-                if (arg->type.kind == KWARG_IN_CALL_STMT) {
-                    callInfoData->kwargNames[idx] = arg->tok;
-                    idx++;
-                }
-            }
-            ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL);
-            hideFromGC((Obj*)callInfoObj);
-            uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
-            emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);
-        }
+        emitCall(n);
+        break;
+    }
+    case CALL_BLOCK_EXPR: {
+        CallInfo *cinfo = emitCall(n->children->data[0]);
+        ObjFunction *block = emitFunction(n->children->data[1], FUNCTION_TYPE_BLOCK);
+        cinfo->block = block;
         break;
     }
     case SPLAT_EXPR: {
