@@ -1,0 +1,55 @@
+fun makeFun() {
+  var i = 0;
+  return fun() {
+    i = i + 1;
+    return i;
+  };
+}
+
+
+var func = makeFun();
+print func();
+print func();
+
+__END__
+
+== Bytecode: ==
+0000    5 OP_CLOSURE          0 '<fun makeFun>' (upvals: 0)
+0002    | OP_SET_GLOBAL       1 'makeFun'
+0004   10 OP_GET_GLOBAL       1 'makeFun'
+0006    | OP_CALL             (name=makeFun, argc=1, kwargs=0, splat=0)
+0009    | OP_DEFINE_GLOBAL    3 'func'
+0011   11 OP_GET_GLOBAL       3 'func'
+0013    | OP_CALL             (name=func, argc=1, kwargs=0, splat=0)
+0016    | OP_PRINT
+0017   12 OP_GET_GLOBAL       3 'func'
+0019    | OP_CALL             (name=func, argc=1, kwargs=0, splat=0)
+0022    | OP_PRINT
+0023    | OP_LEAVE
+-- Function makeFun --
+== makeFun ==
+0000    2 OP_CONSTANT         0 '0'
+0002    | OP_SET_LOCAL        'i' [slot 1]
+0005    5 OP_CLOSURE          2 '<fun (Anon)>' (upvals: 1)
+0009    | OP_RETURN
+0010    | OP_CLOSE_UPVALUE
+0011    | OP_NIL
+0012    | OP_RETURN
+-- Function (anon) --
+== (anon) ==
+0000    4 OP_GET_UPVALUE      'i' [slot 0]
+0003    | OP_CONSTANT         1 '1'
+0005    | OP_ADD
+0006    | OP_SET_UPVALUE      'i' [slot 0]
+0009    | OP_POP
+0010    5 OP_GET_UPVALUE      'i' [slot 0]
+0013    | OP_RETURN
+0014    | OP_NIL
+0015    | OP_RETURN
+== /(anon) ==
+----
+== /makeFun ==
+----
+== /Bytecode: ==
+1
+2

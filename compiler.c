@@ -187,13 +187,14 @@ static void emitReturn(Compiler *compiler) {
         if (breakBlock) {
             ASSERT(compiler->type == FUN_TYPE_BLOCK); // TODO: error()
             // TODO: push nil if empty function
-            if (compiler->function->chunk->count == 0) {
+            if (compiler->iseq.count == 0) {
                 emitOp0(OP_NIL);
             }
             emitOp0(OP_BLOCK_CONTINUE); // continue with last evaluated statement
         } else if (compiler->type == FUN_TYPE_BLOCK) {
-            if (compiler->function->chunk->count == 0) {
+            if (compiler->iseq.count == 0) {
                 emitOp0(OP_NIL);
+                emitOp0(OP_POP);
             }
             emitOp0(OP_BLOCK_CONTINUE); // continue with last evaluated statement
         } else {
@@ -1164,24 +1165,19 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
 
     // save the chunk as a constant in the parent (now current) chunk
     if (ftype != FUN_TYPE_BLOCK) {
-        fprintf(stderr, "Saving constant in parent (not block)\n");
         uint8_t funcIdx = makeConstant(OBJ_VAL(func), CONST_T_CODE);
         emitOp1(OP_CLOSURE, funcIdx);
-    } else {
-        fprintf(stderr, "skipped saving constant in parent\n");
     }
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
-    if (func->upvalueCount > 0) {
-        func->upvaluesInfo = malloc(sizeof(Upvalue)*LX_MAX_UPVALUES);
-        ASSERT_MEM(func->upvaluesInfo);
+    func->upvaluesInfo = malloc(sizeof(Upvalue)*LX_MAX_UPVALUES);
+    ASSERT_MEM(func->upvaluesInfo);
+    for (int i = 0; i < func->upvalueCount; i++) {
         if (ftype != FUN_TYPE_BLOCK) {
-            for (int i = 0; i < func->upvalueCount; i++) {
-                emitOp0(fCompiler.upvalues[i].isLocal ? 1 : 0);
-                emitOp0(fCompiler.upvalues[i].index);
-                func->upvaluesInfo[i] = fCompiler.upvalues[i]; // copy upvalue info
-            }
+            emitOp0(fCompiler.upvalues[i].isLocal ? 1 : 0);
+            emitOp0(fCompiler.upvalues[i].index);
         }
+        func->upvaluesInfo[i] = fCompiler.upvalues[i]; // copy upvalue info
     }
 
     if (ftype == FUN_TYPE_TOP_LEVEL || ftype == FUN_TYPE_BLOCK ||
@@ -1527,6 +1523,7 @@ static void emitNode(Node *n) {
         if (breakBlock) {
             if (current->function->chunk->count == 0) {
                 emitOp0(OP_NIL);
+                emitOp0(OP_POP);
             }
             emitOp0(OP_BLOCK_CONTINUE);
         } else {
@@ -1660,7 +1657,6 @@ static void emitNode(Node *n) {
                 ASSERT(current->type == FUN_TYPE_BLOCK); // TODO: error
                 emitOp0(OP_BLOCK_RETURN);
             } else {
-                popScope(COMPILE_SCOPE_BLOCK);
                 emitOp0(OP_RETURN);
             }
             COMP_TRACE("Emitting explicit return (children)");
@@ -1670,7 +1666,11 @@ static void emitNode(Node *n) {
                 emitOp0(OP_NIL);
                 emitOp0(OP_BLOCK_RETURN);
             } else {
-                emitReturn(current);
+                if (current->type == FUN_TYPE_BLOCK) {
+                    emitOp0(OP_BLOCK_CONTINUE);
+                } else {
+                    emitReturn(current);
+                }
             }
         }
         break;

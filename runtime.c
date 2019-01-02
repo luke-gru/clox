@@ -136,20 +136,23 @@ static CallFrame *getOuterClosureFrame() {
 }
 
 static void fillClosureUpvalues(ObjClosure *block, ObjClosure *outer, CallFrame *frame) {
-    fprintf(stderr, "Fill closure upvalues\n");
+    /*fprintf(stderr, "Fill closure upvalues\n");*/
     ObjFunction *blockFn = block->function;
     ASSERT(blockFn);
-    debugFrame(frame);
+    ASSERT(frame);
+    /*debugFrame(frame);*/
     for (int i = 0; i < blockFn->upvalueCount; i++) {
-        fprintf(stderr, "Fill closure upvalues iter\n");
         uint8_t index = blockFn->upvaluesInfo[i].index;
         if (blockFn->upvaluesInfo[i].isLocal) {
-            // FIXME: frame->slots should be frame->innerSlots
-            fprintf(stderr, "captureUpvalue\n");
+            /*fprintf(stderr, "captureUpvalue i: %d, index: %d, slots: %p\n", i, index, frame->slots);*/
             block->upvalues[i] = captureUpvalue(frame->slots+index);
+            /*printValue(stderr, *block->upvalues[i]->value, true, -1);*/
         } else {
-            fprintf(stderr, "take from outer\n");
+            /*fprintf(stderr, "take from outer i: %d, index: %d\n", i, index);*/
+            ASSERT(outer->upvalues);
             block->upvalues[i] = outer->upvalues[index];
+            /*printValue(stderr, block->upvalues[i]->closed, true, -1);*/
+            ASSERT(block->upvalues[i]);
         }
     }
 }

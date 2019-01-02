@@ -1,6 +1,7 @@
 fun local() {
   var i = 0;
   return [1,2,3].map() -> (num) {
+    i += 1;
     i + num;
   };
 }
@@ -9,4 +10,4 @@ print local();
 
 __END__
 -- expect: --
-[1,2,3];
+[2,4,6]

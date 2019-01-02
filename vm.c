@@ -664,7 +664,7 @@ CallFrame *getFrame(void) {
 
 void debugFrame(CallFrame *frame) {
     const char *fnName = frame->isCCall ? frame->nativeFunc->name->chars :
-        frame->closure->function->name->chars;
+        (frame->closure->function->name ? frame->closure->function->name->chars : "(anon)");
     fprintf(stderr, "CallFrame:\n");
     fprintf(stderr, "  name: %s\n", fnName);
     fprintf(stderr, "  native? %c\n", frame->isCCall ? 't' : 'f');
@@ -2235,7 +2235,7 @@ static InterpretResult vm_run() {
           break; // unreached
       }
       case OP_BLOCK_CONTINUE: {
-          Value ret = pop();
+          Value ret = *THREAD()->lastValue;
           Value err = newError(lxContinueBlockErrClass, NIL_VAL);
           setProp(err, INTERN("ret"), ret);
           throwError(err); // blocks catch this, not propagated
@@ -2396,7 +2396,7 @@ static InterpretResult vm_run() {
           push(OBJ_VAL(bmethod));
           break;
       }
-      // return from function/method
+      // return from function/method, and close all upvalues in the callframe frame
       case OP_RETURN: {
           Value result = pop(); // pop from caller's frame
           ASSERT(!getFrame()->isCCall);
