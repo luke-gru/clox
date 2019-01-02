@@ -39,7 +39,7 @@ size_t tableCapacity(Table *table);
   if ((tbl)->count > 0)\
     for ((idx) = 0;\
          (((idx) < (tbl)->capacityMask+1) &&\
-         (entry = (tbl)->entries[idx]).key != UNDEF_VAL); (idx)++)\
+         (entry = (tbl)->entries[idx]).key != QNAN); (idx)++)\
         if (entry.key == UNDEF_VAL) { continue; } else
 #else
 // NOTE: condition with value '555' uses this value just so that the rhs of

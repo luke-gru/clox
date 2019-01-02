@@ -671,7 +671,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
         return AS_NUMBER(lhs) == AS_NUMBER(rhs);
 #endif
     } else if (IS_NIL(lhs)) { // 2 nils, are equal
-        return true;
+        return IS_NIL(rhs);
     } else if (IS_BOOL(lhs)) {
 #ifdef NAN_TAGGING
         return lhs == rhs;
