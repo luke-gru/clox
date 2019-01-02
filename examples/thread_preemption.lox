@@ -1,0 +1,19 @@
+/**
+ * Tests that current thread gets pre-empted every once in while (GVL lock
+ * released)
+ */
+var threads = [];
+[1,2,3].each() -> (num) {
+  threads << newThread(fun() {
+    for (var i = 0; i < 5000; i+=1) {
+      if (i % 1000 == 0) {
+        print i;
+      }
+    }
+  });
+};
+
+threads.each() -> (t) { joinThread(t); };
+
+__END__
+-- noexpect: --

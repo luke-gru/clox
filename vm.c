@@ -1890,6 +1890,15 @@ static InterpretResult vm_run() {
 
   /*fprintf(stderr, "VM run level: %d\n", vmRunLvl);*/
   for (;;) {
+      th->opsRemaining--;
+      if (th->opsRemaining <= 0) {
+          th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
+          if (!isOnlyThread()) {
+              releaseGVL();
+              threadSleepNano(th, 100);
+              acquireGVL();
+          }
+      }
       if (th->hadError) {
           (th->vmRunLvl)--;
           return INTERPRET_RUNTIME_ERROR;
@@ -2977,6 +2986,8 @@ void acquireGVL(void) {
     }
     vm.GVLockStatus = 1;
     vm.curThread = FIND_THREAD(pthread_self());
+    if (vm.curThread)
+        vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
     GVLOwner = pthread_self();
     pthread_mutex_unlock(&vm.GVLock);
 }
@@ -3039,6 +3050,7 @@ LxThread *THREAD() {
         vm.curThread = FIND_THREAD(pthread_self());
         DBG_ASSERT(vm.curThread);
         DBG_ASSERT(vm.curThread->tid == GVLOwner);
+        vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
     }
     return vm.curThread;
 }

@@ -9,7 +9,6 @@
 typedef struct Obj Obj;
 typedef struct ObjString ObjString;
 
-
 #ifdef NAN_TAGGING
 typedef uint64_t Value;
 

@@ -37,7 +37,6 @@ get/set a different sigil maybe, like @prop.
 
 Improvements
 ------------
-* NAN tagging for Values
 * Get threads running concurrently even with at least 1 mutex (right now, any
 mutex held blocks release of GVL)
 * Allow more constants in a chunk (more than 256 bytes)

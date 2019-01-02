@@ -121,6 +121,21 @@ static void threadSleep(LxThread *th, int secs) {
     pthread_mutex_unlock(&th->sleepMutex);
 }
 
+void threadSleepNano(LxThread *th, int secs) {
+    pthread_mutex_lock(&th->sleepMutex);
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += secs;
+    THREAD_DEBUG(1, "Sleeping %lu\n", pthread_self());
+    int res = pthread_cond_timedwait(&th->sleepCond, &th->sleepMutex, &ts);
+    if (res == 0) {
+        THREAD_DEBUG(1, "Woke up %lu\n", pthread_self());
+    } else {
+        THREAD_DEBUG(1, "Woke up with error: (err=%d) %lu\n", res, pthread_self());
+    }
+    pthread_mutex_unlock(&th->sleepMutex);
+}
+
 Value lxSleep(int argCount, Value *args) {
     CHECK_ARITY("sleep", 1, 1, argCount);
     Value nsecs = *args;

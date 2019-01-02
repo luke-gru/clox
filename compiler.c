@@ -184,9 +184,7 @@ static void emitReturn(Compiler *compiler) {
         emitOp0(OP_GET_THIS);
         emitOp0(OP_RETURN);
     } else {
-        if (breakBlock) {
-            ASSERT(compiler->type == FUN_TYPE_BLOCK); // TODO: error()
-            // TODO: push nil if empty function
+        if (breakBlock && compiler->type == FUN_TYPE_BLOCK) {
             if (compiler->iseq.count == 0) {
                 emitOp0(OP_NIL);
             }

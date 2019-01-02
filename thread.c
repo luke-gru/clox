@@ -39,6 +39,22 @@ pthread_t threadGetId(Value thread) {
     return th->tid;
 }
 
+bool isOnlyThread() {
+    if (vm.threads.length <= 1) {
+        return true;
+    }
+    ObjInstance *thI; int thIdx = 0;
+    vec_foreach(&vm.threads, thI, thIdx) {
+        LxThread *found = THREAD_GETHIDDEN(OBJ_VAL(thI));
+        if (found != vm.curThread && found->status != THREAD_ZOMBIE) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void LxThreadSetup(LxThread *th) {
     th->tid = pthread_self();
     th->status = THREAD_STOPPED;
@@ -64,6 +80,7 @@ static void LxThreadSetup(LxThread *th) {
     vec_init(&th->stackObjects);
     pthread_mutex_init(&th->sleepMutex, NULL);
     pthread_cond_init(&th->sleepCond, NULL);
+    th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
 }
 
 static void LxThreadCleanup(LxThread *th) {

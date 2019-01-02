@@ -86,6 +86,8 @@ typedef enum ThreadStatus {
     THREAD_ZOMBIE,
 } ThreadStatus;
 
+#define THREAD_OPS_UNTIL_SWITCH 10000
+
 typedef struct LxThread {
     pthread_t tid;
     ThreadStatus status;
@@ -114,6 +116,7 @@ typedef struct LxThread {
     int mutexCounter;
     pthread_mutex_t sleepMutex;
     pthread_cond_t sleepCond;
+    int opsRemaining;
 } LxThread;
 
 // threads
@@ -121,6 +124,7 @@ void threadSetStatus(Value thread, ThreadStatus status);
 void threadSetId(Value thread, pthread_t tid);
 ThreadStatus threadGetStatus(Value thread);
 pthread_t threadGetId(Value thread);
+bool isOnlyThread(void);
 
 typedef struct VM {
     Table globals; // global variables

@@ -39,6 +39,7 @@ Value lxRequireScript(int argCount, Value *args);
 Value lxDebugger(int argCount, Value *args);
 Value lxEval(int argCount, Value *args);
 Value lxSleep(int argCount, Value *args);
+void threadSleepNano(LxThread *th, int secs);
 Value lxYield(int argCount, Value *args);
 Value lxExit(int argCount, Value *args);
 Value lxNewThread(int argCount, Value *args);
