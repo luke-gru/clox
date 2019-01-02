@@ -15,10 +15,10 @@
 extern VM vm;
 
 static Obj *allocateObject(size_t size, ObjType type) {
-    Obj *object = getNewObject(type, size);
     ASSERT(type > OBJ_T_NONE);
-    object->type = type;
+    Obj *object = getNewObject(type, size);
     object->isDark = true; // don't collect right away, wait at least 1 round of GC
+    object->type = type;
     object->isFrozen = false;
 
     if (vm.inited && vm.curThread && THREAD()->inCCall > 0) {
@@ -442,8 +442,10 @@ ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCM
         );
     } else {
         obj = ALLOCATE(ObjInternal, 1);
+        memset(obj, 0, sizeof(ObjInternal));
         obj->object.type = OBJ_T_INTERNAL;
         obj->object.GCGen = 0;
+        obj->object.isDark = false;
     }
     obj->data = data;
     obj->dataSz = dataSz;

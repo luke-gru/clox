@@ -344,9 +344,10 @@ static inline void pop_EC(void) {
     VMExecContext *ctx = (VMExecContext*)vec_pop(&th->v_ecs);
     freeTable(&ctx->roGlobals);
     FREE(VMExecContext, ctx);
-    th->ec = (VMExecContext*)vec_last(&th->v_ecs);
     if (th->v_ecs.length == 0) {
         th->ec = NULL;
+    } else {
+        th->ec = (VMExecContext*)vec_last(&th->v_ecs);
     }
 }
 
