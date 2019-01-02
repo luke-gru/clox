@@ -1,0 +1,16 @@
+/**
+ * Should only take ~ 2 secs to complete
+ */
+var threads = [];
+for (var i = 0; i < 3; i+=1) {
+  var t = newThread(fun() {
+    sleep(2);
+  });
+  threads << t;
+}
+threads.each() -> (t) {
+  joinThread(t);
+};
+
+__END__
+-- noexpect: --

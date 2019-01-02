@@ -19,7 +19,7 @@ interpreter
 * Add Class#ancestors
 * Add signal trap handlers (`trap(signame, fun() { })`)
 * release GVL after performing n instructions, or add timer thread
-* Add time class
+* Add Time class
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Integrate regexes from regex.c
 * Add Process module, with static methods 'waitall'

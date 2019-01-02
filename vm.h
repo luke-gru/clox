@@ -112,6 +112,8 @@ typedef struct LxThread {
     // collected during GC.
     vec_void_t stackObjects;
     int mutexCounter;
+    pthread_mutex_t sleepMutex;
+    pthread_cond_t sleepCond;
 } LxThread;
 
 // threads
@@ -164,6 +166,17 @@ LxThread *THREAD();
 LxThread *FIND_THREAD(pthread_t tid);
 LxThread *FIND_NEW_THREAD();
 ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid);
+
+#define GVL_UNLOCK_BEGIN() do { \
+  LxThread *thStored = THREAD(); \
+  pthread_mutex_unlock(&vm.GVLock); \
+  vm.curThread = NULL; GVLOwner = -1; \
+  vm.GVLockStatus = 0
+
+#define GVL_UNLOCK_END() \
+  pthread_mutex_lock(&vm.GVLock); \
+  threadSetCurrent(thStored); \
+} while(0)
 
 typedef enum {
   INTERPRET_OK = 1,

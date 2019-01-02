@@ -106,14 +106,30 @@ Value lxEval(int argCount, Value *args) {
     return VMEval(csrc, "(eval)", 1);
 }
 
+static void threadSleep(LxThread *th, int secs) {
+    pthread_mutex_lock(&th->sleepMutex);
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_sec += secs;
+    THREAD_DEBUG(1, "Sleeping %lu\n", pthread_self());
+    int res = pthread_cond_timedwait(&th->sleepCond, &th->sleepMutex, &ts);
+    if (res == 0) {
+        THREAD_DEBUG(1, "Woke up %lu\n", pthread_self());
+    } else {
+        THREAD_DEBUG(1, "Woke up with error: (err=%d) %lu\n", res, pthread_self());
+    }
+    pthread_mutex_unlock(&th->sleepMutex);
+}
+
 Value lxSleep(int argCount, Value *args) {
     CHECK_ARITY("sleep", 1, 1, argCount);
     Value nsecs = *args;
     CHECK_ARG_BUILTIN_TYPE(nsecs, IS_NUMBER_FUNC, "number", 1);
     int secs = (int)AS_NUMBER(nsecs);
     if (secs > 0) {
+        LxThread *th = THREAD();
         releaseGVL();
-        sleep(secs); // NOTE: could be interrupted by signal handler
+        threadSleep(th, secs);
         acquireGVL();
     }
     return NIL_VAL;
@@ -185,7 +201,7 @@ Value lxYield(int argCount, Value *args) {
         .isYield = true // tell callCallable to adjust frame stack in popFrame()
     };
     callCallable(callable, argCount, false, &cinfo);
-    UNREACHABLE("should throw in yield");
+    UNREACHABLE("block didn't longjmp?"); // blocks should always longjmp out
 }
 
 // Register atExit handler for process

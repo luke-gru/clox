@@ -13,17 +13,6 @@ ObjNative *nativeThreadInit = NULL;
 ObjString *thKey;
 ObjString *mutexKey;
 
-#define GVL_UNLOCK_BEGIN() do { \
-  LxThread *thStored = THREAD(); \
-  pthread_mutex_unlock(&vm.GVLock); \
-  vm.curThread = NULL; GVLOwner = -1; \
-  vm.GVLockStatus = 0
-
-#define GVL_UNLOCK_END() \
-  pthread_mutex_lock(&vm.GVLock); \
-  threadSetCurrent(thStored); \
-} while(0)
-
 #define BLOCKING_REGION_CORE(exec) do { \
     GVL_UNLOCK_BEGIN(); {\
 	    exec; \
@@ -73,10 +62,14 @@ static void LxThreadSetup(LxThread *th) {
     th->mutexCounter = 0;
     th->lastSplatNumArgs = -1;
     vec_init(&th->stackObjects);
+    pthread_mutex_init(&th->sleepMutex, NULL);
+    pthread_cond_init(&th->sleepCond, NULL);
 }
 
 static void LxThreadCleanup(LxThread *th) {
     vec_deinit(&th->stackObjects);
+    pthread_mutex_destroy(&th->sleepMutex);
+    pthread_cond_destroy(&th->sleepCond);
 }
 
 // NOTE: vm.curThread is NOT the current thread here, and doesn't hold
@@ -196,6 +189,7 @@ Value lxJoinThread(int argCount, Value *args) {
     double num = AS_NUMBER(tidNum);
     THREAD_DEBUG(2, "Joining thread id %lu\n", (unsigned long)num);
     int ret = 0;
+
     releaseGVL();
     // blocking call until given thread ends execution
     if ((ret = pthread_join((pthread_t)num, NULL)) != 0) {
