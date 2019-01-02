@@ -1,5 +1,5 @@
 CC=gcc
-DEFINES=-D_GNU_SOURCE
+DEFINES=-D_GNU_SOURCE -DNAN_TAGGING
 CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -I. -Ivendor -pthread ${DEFINES}
 SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c io.c file.c thread.c rand.c repl.c debugger.c vendor/linenoise.c
 TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c io.c file.c thread.c rand.c debugger.c

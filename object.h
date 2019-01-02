@@ -291,6 +291,15 @@ typedef struct LxFile {
 #define ARRAY_SIZE(value)        (arraySize(value))
 #define ARRAY_GETHIDDEN(value)   (arrayGetHidden(value))
 
+#ifdef NAN_TAGGING
+#define LXARRAY_FOREACH(ary, el, idx) \
+    for (idx = 0; idx < ARRAY_SIZE(ary) && \
+        (el = ARRAY_GET(ary, idx)) && !IS_UNDEF(el); idx++)
+
+#define LXARRAY_FOREACH_REV(ary, el, idx) \
+    for (idx = ARRAY_SIZE(ary)-1; idx >= 0 && \
+        (el = ARRAY_GET(ary, idx)) && !IS_UNDEF(el); idx--)
+#else
 #define LXARRAY_FOREACH(ary, el, idx) \
     for (idx = 0; idx < ARRAY_SIZE(ary) && \
         (el = ARRAY_GET(ary, idx)).type != VAL_T_UNDEF; idx++)
@@ -298,6 +307,7 @@ typedef struct LxFile {
 #define LXARRAY_FOREACH_REV(ary, el, idx) \
     for (idx = ARRAY_SIZE(ary)-1; idx >= 0 && \
         (el = ARRAY_GET(ary, idx)).type != VAL_T_UNDEF; idx--)
+#endif
 
 #define MAP_GET(mapVal, valKey, pval)   (mapGet(mapVal, valKey, pval))
 #define MAP_SIZE(mapVal)          (mapSize(mapVal))

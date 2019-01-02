@@ -34,6 +34,14 @@ Entry tableNthEntry(Table *table, int n, int *entryIdx);
 
 size_t tableCapacity(Table *table);
 
+#ifdef NAN_TAGGING
+#define TABLE_FOREACH(tbl, entry, idx)\
+  if ((tbl)->count > 0)\
+    for ((idx) = 0;\
+         (((idx) < (tbl)->capacityMask+1) &&\
+         (entry = (tbl)->entries[idx]).key != UNDEF_VAL); (idx)++)\
+        if (entry.key == UNDEF_VAL) { continue; } else
+#else
 // NOTE: condition with value '555' uses this value just so that the rhs of
 // the expression results in a valid test expression, instead of just the
 // assignment itself. This test always returns true.
@@ -43,6 +51,7 @@ size_t tableCapacity(Table *table);
          (((idx) < (tbl)->capacityMask+1) &&\
          (entry = (tbl)->entries[idx]).key.type != 555); (idx)++)\
         if (entry.key.type == VAL_T_UNDEF) { continue; } else
+#endif
 
 ObjString *tableFindString(Table* table, const char* chars, int length,
                            uint32_t hash);

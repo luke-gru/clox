@@ -178,7 +178,11 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             );
         }
     }
+#ifdef NAN_TAGGING
+    fprintf(file, "Unknown value: %lu. Cannot print!\n", value);
+#else
     fprintf(file, "Unknown value type: %d. Cannot print!\n", value.type);
+#endif
     UNREACHABLE("BUG");
     return -1;
 #undef PRINTNUM
@@ -353,10 +357,36 @@ uint32_t valHash(Value val) {
     }
 }
 
+// a == b
 bool valEqual(Value a, Value b) {
+#ifdef NAN_TAGGING
+    switch (a) {
+        case TRUE_VAL:
+            return b == TRUE_VAL;
+        case FALSE_VAL:
+            return b == FALSE_VAL;
+        case NIL_VAL:
+            return b == NIL_VAL;
+        case UNDEF_VAL:
+            return false;
+        default: {
+            // internal string equality (ObjString)
+            if (IS_STRING(a) && IS_STRING(b)) {
+                return strcmp(VAL_TO_STRING(a)->chars,
+                        VAL_TO_STRING(b)->chars) == 0;
+            }
+            if (IS_INSTANCE_LIKE(a)) { // including lox strings
+                return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b));
+            }
+            return a == b;
+        }
+    }
+#else
     switch (a.type) {
-        case VAL_T_BOOL:
-            return b.type == VAL_T_BOOL && AS_BOOL(a) == AS_BOOL(b);
+        case VAL_T_TRUE:
+            return b.type == VAL_T_TRUE;
+        case VAL_T_FALSE:
+            return b.type == VAL_T_FALSE;
         case VAL_T_NIL:
             return b.type == VAL_T_NIL;
         case VAL_T_NUMBER:
@@ -373,8 +403,9 @@ bool valEqual(Value a, Value b) {
             UNREACHABLE_RETURN(false);
         }
         case VAL_T_UNDEF: return false;
-        default: UNREACHABLE("");
+        default: UNREACHABLE("valEqual");
     }
+#endif
 }
 
 bool isCallable(Value val) {

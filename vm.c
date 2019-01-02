@@ -588,15 +588,30 @@ static inline Value falseValue(void) {
 }
 
 static bool isTruthy(Value val) {
+#ifdef NAN_TAGGING
+    switch (val) {
+    case NIL_VAL: return false;
+    case TRUE_VAL: return true;
+    case FALSE_VAL: return false;
+    case UNDEF_VAL: UNREACHABLE("undefined value found?");
+    default:
+        // all other values are truthy
+        return true;
+
+    }
+#else
     switch (val.type) {
     case VAL_T_NIL: return false;
-    case VAL_T_BOOL: return AS_BOOL(val);
+    case VAL_T_TRUE:
+    case VAL_T_FALSE:
+        return AS_BOOL(val);
     case VAL_T_UNDEF: UNREACHABLE("undefined value found?");
     default:
         // all other values are truthy
         return true;
 
     }
+#endif
 }
 
 static inline bool canCmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
@@ -630,9 +645,12 @@ static int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
 }
 
 static bool isValueOpEqual(Value lhs, Value rhs) {
+#ifdef NAN_TAGGING
+#else
     if (lhs.type != rhs.type) {
         return false;
     }
+#endif
     if (IS_OBJ(lhs)) {
         if (IS_INSTANCE_LIKE(lhs)) {
             ObjString *opEquals = internedString("opEquals", 8);
@@ -647,13 +665,25 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
         // 2 objects, same pointers to Obj are equal
         return AS_OBJ(lhs) == AS_OBJ(rhs);
     } else if (IS_NUMBER(lhs)) { // 2 numbers, same values are equal
+#ifdef NAN_TAGGING
+        return lhs == rhs;
+#else
         return AS_NUMBER(lhs) == AS_NUMBER(rhs);
+#endif
     } else if (IS_NIL(lhs)) { // 2 nils, are equal
         return true;
     } else if (IS_BOOL(lhs)) {
+#ifdef NAN_TAGGING
+        return lhs == rhs;
+#else
         return AS_BOOL(lhs) == AS_BOOL(rhs);
+#endif
     } else {
+#ifdef NAN_TAGGING
+        return lhs == rhs;
+#else
         return false;
+#endif
     }
 }
 

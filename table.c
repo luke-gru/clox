@@ -17,6 +17,13 @@
  */
 
 // sentinel value for NULL key
+#ifdef NAN_TAGGING
+Value TBL_EMPTY_KEY = UNDEF_VAL;
+Entry TBL_EMPTY_ENTRY = {
+    .key = UNDEF_VAL,
+    .value = NIL_VAL
+};
+#else
 Value TBL_EMPTY_KEY = {
     .type = VAL_T_UNDEF,
     .as = { .number = (double)0.00 }
@@ -29,6 +36,7 @@ Entry TBL_EMPTY_ENTRY = {
     },
     .value = NIL_VAL
 };
+#endif
 
 void initTable(Table *table) {
     table->count = 0;
@@ -71,7 +79,7 @@ static uint32_t findEntry(Entry *entries, int capacityMask, Value key) {
         Entry *entry = &entries[index];
 
         // NOTE: valEqual() can call `opEquals()` if entry key is an instance
-        if ((entry->key.type == VAL_T_UNDEF) || (valEqual(entry->key, key))) {
+        if ((IS_UNDEF(entry->key)) || (valEqual(entry->key, key))) {
             return index;
         }
 
@@ -85,7 +93,7 @@ bool tableGet(Table *table, Value key, Value *value) {
 
     uint32_t index = findEntry(table->entries, table->capacityMask, key);
     Entry *entry = &table->entries[index];
-    if (entry->key.type == VAL_T_UNDEF) return false;
+    if (IS_UNDEF(entry->key)) return false;
     *value = entry->value;
     return true;
 }
@@ -100,7 +108,7 @@ static void resize(Table *table, int capacityMask) {
     table->count = 0;
     for (int i = 0; i <= table->capacityMask; i++) {
         Entry *entry = &table->entries[i];
-        if (entry->key.type == VAL_T_UNDEF) continue;
+        if (IS_UNDEF(entry->key)) continue;
 
         uint32_t index = findEntry(entries, capacityMask, entry->key);
         Entry *dest = &entries[index];
@@ -129,7 +137,7 @@ bool tableSet(Table *table, Value key, Value value) {
     uint32_t index = findEntry(table->entries, table->capacityMask, key);
     /*fprintf(stderr, "/findEntry\n");*/
     Entry *entry = &table->entries[index];
-    bool isNewKey = entry->key.type == VAL_T_UNDEF;
+    bool isNewKey = IS_UNDEF(entry->key);
     entry->key = key;
     entry->value = value;
 
@@ -143,7 +151,7 @@ bool tableDelete(Table* table, Value key) {
 
     uint32_t index = findEntry(table->entries, table->capacityMask, key);
     Entry *entry = &table->entries[index];
-    if (entry->key.type == VAL_T_UNDEF) return false;
+    if (IS_UNDEF(entry->key)) return false;
 
     // Remove the entry.
     entry->key = TBL_EMPTY_KEY;
@@ -157,7 +165,7 @@ bool tableDelete(Table* table, Value key) {
         index = (index + 1) & table->capacityMask;
         entry = &table->entries[index];
 
-        if (entry->key.type == VAL_T_UNDEF) break;
+        if (IS_UNDEF(entry->key)) break;
 
         Value tempKey = entry->key;
         Value tempValue = entry->value;
@@ -176,7 +184,7 @@ void tableEachEntry(Table *table, TableEntryCb cb) {
     if (table->count == 0) return;
     for (int i = 0; i < numEntrySlots; i++) {
         Entry e = table->entries[i];
-        if (e.key.type != VAL_T_UNDEF) {
+        if (!IS_UNDEF(e.key)) {
             cb(&e);
         }
     }
@@ -186,7 +194,7 @@ void tableAddAll(Table *from, Table *to) {
     if (from->entries == NULL) return;
     for (int i = 0; i <= from->capacityMask; i++) {
         Entry *entry = &from->entries[i];
-        if (entry->key.type != VAL_T_UNDEF) {
+        if (!IS_UNDEF(entry->key)) {
             tableSet(to, entry->key, entry->value);
         }
     }
@@ -202,7 +210,7 @@ ObjString *tableFindString(Table *table, const char* chars, int length,
     for (;;) {
         Entry *entry = &table->entries[index];
 
-        if (entry->key.type == VAL_T_UNDEF) return NULL;
+        if (IS_UNDEF(entry->key)) return NULL;
         if (IS_STRING(entry->key) || IS_A_STRING(entry->key)) {
             ObjString *stringKey = VAL_TO_STRING(entry->key);
             if (stringKey->length == length &&
@@ -238,7 +246,7 @@ void tableRemoveWhite(Table *table) {
     if (table->count == 0) return;
     for (int i = 0; i <= table->capacityMask; i++) {
         Entry *entry = &table->entries[i];
-        if (entry->key.type == VAL_T_UNDEF) {
+        if (IS_UNDEF(entry->key)) {
             continue;
         }
         if (IS_OBJ(entry->key) && !AS_OBJ(entry->key)->isDark) {
@@ -252,7 +260,7 @@ void grayTable(Table *table) {
     for (int i = 0; i <= table->capacityMask; i++) {
         ASSERT(table->entries);
         Entry *entry = &table->entries[i];
-        if (!entry || (entry->key.type == VAL_T_UNDEF)) continue;
+        if (!entry || (IS_UNDEF(entry->key))) continue;
         ASSERT(entry);
         grayValue(entry->key);
         grayValue(entry->value);
@@ -264,7 +272,7 @@ void blackenTable(Table *table) {
     for (int i = 0; i <= table->capacityMask; i++) {
         ASSERT(table->entries);
         Entry *entry = &table->entries[i];
-        if (!entry || (entry->key.type == VAL_T_UNDEF)) continue;
+        if (!entry || (IS_UNDEF(entry->key))) continue;
         ASSERT(entry);
         if (IS_OBJ(entry->key)) {
             blackenObject(AS_OBJ(entry->key));
