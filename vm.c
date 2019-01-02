@@ -403,6 +403,7 @@ void initVM() {
     vm.grayCount = 0;
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
+    vm.lastOp = -1;
 
     initTable(&vm.globals);
     initTable(&vm.strings); // interned strings
@@ -413,7 +414,6 @@ void initVM() {
     resetStack();
 
     vec_init(&vm.loadedScripts);
-    vm.openUpvalues = NULL;
     vm.printBuf = NULL;
     curLine = 1;
 
@@ -474,7 +474,6 @@ void freeVM(void) {
     vm.dirString = NULL;
     vm.printBuf = NULL;
     vm.printToStdout = true;
-    vm.openUpvalues = NULL;
     vec_deinit(&vm.hiddenObjs);
     vec_deinit(&vm.loadedScripts);
     isClassHierarchyCreated = false;
@@ -494,6 +493,7 @@ void freeVM(void) {
     vm.curThread = NULL;
     vm.mainThread = NULL;
     vec_deinit(&vm.threads);
+    vm.lastOp = -1;
 
     VM_DEBUG("freeVM() end");
 }
@@ -1708,9 +1708,10 @@ void printVMStack(FILE *f, LxThread *th) {
 }
 
 ObjUpvalue *captureUpvalue(Value *local) {
-    if (vm.openUpvalues == NULL) {
-        vm.openUpvalues = newUpvalue(local);
-        return vm.openUpvalues;
+    LxThread *th = THREAD();
+    if (th->openUpvalues == NULL) {
+        th->openUpvalues = newUpvalue(local);
+        return th->openUpvalues;
     }
 
     if (CLOX_OPTION_T(debugVM)) {
@@ -1720,7 +1721,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
     }
 
     ObjUpvalue* prevUpvalue = NULL;
-    ObjUpvalue* upvalue = vm.openUpvalues;
+    ObjUpvalue* upvalue = th->openUpvalues;
 
     // Walk towards the bottom of the stack until we find a previously existing
     // upvalue or reach where it should be.
@@ -1740,7 +1741,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
 
     if (prevUpvalue == NULL) {
         // The new one is the first one in the list.
-        vm.openUpvalues = createdUpvalue;
+        th->openUpvalues = createdUpvalue;
     } else {
         prevUpvalue->next = createdUpvalue;
     }
@@ -1749,16 +1750,17 @@ ObjUpvalue *captureUpvalue(Value *local) {
 }
 
 static void closeUpvalues(Value *last) {
-  while (vm.openUpvalues != NULL && vm.openUpvalues->value >= last) {
-    ObjUpvalue *upvalue = vm.openUpvalues;
+    LxThread *th = THREAD();
+    while (th->openUpvalues != NULL && th->openUpvalues->value >= last) {
+        ObjUpvalue *upvalue = th->openUpvalues;
 
-    // Move the value into the upvalue itself and point the upvalue to it.
-    upvalue->closed = *upvalue->value;
-    upvalue->value = &upvalue->closed;
+        // Move the value into the upvalue itself and point the upvalue to it.
+        upvalue->closed = *upvalue->value;
+        upvalue->value = &upvalue->closed;
 
-    // Pop it off the open upvalue list.
-    vm.openUpvalues = upvalue->next;
-  }
+        // Pop it off the open upvalue list.
+        th->openUpvalues = upvalue->next;
+    }
 }
 
 static Value unpackValue(Value val, uint8_t idx) {
@@ -1912,6 +1914,9 @@ static InterpretResult vm_run() {
 #endif
 
     uint8_t instruction = READ_BYTE();
+#ifndef NDEBUG
+    vm.lastOp = instruction;
+#endif
     switch (instruction) {
       case OP_CONSTANT: { // numbers, code chunks
         Value constant = READ_CONSTANT();
@@ -3002,8 +3007,8 @@ ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid) {
 LxThread *THREAD() {
     if (!vm.curThread) {
         vm.curThread = FIND_THREAD(pthread_self());
-        ASSERT(vm.curThread->tid == GVLOwner);
-        ASSERT(vm.curThread);
+        DBG_ASSERT(vm.curThread);
+        DBG_ASSERT(vm.curThread->tid == GVLOwner);
     }
     return vm.curThread;
 }

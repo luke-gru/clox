@@ -24,11 +24,17 @@ NORETURN void die(const char *fmt, ...) {
 NORETURN void diePrintCBacktrace(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    fprintf(stderr, "Error in thread: %lld", THREAD() ? (long long)THREAD()->tid : -1);
-    if (vm.mainThread == THREAD()) {
-        fprintf(stderr, " (main)");
+    if (vm.inited) {
+        fprintf(stderr, "Error in thread: %lld", THREAD() ? (long long)THREAD()->tid : -1);
+        if (vm.mainThread == THREAD()) {
+            fprintf(stderr, " (main)\n");
+        } else {
+            fprintf(stderr, "\n");
+        }
     }
-    fprintf(stderr, "\n");
+    if (vm.lastOp != -1) {
+        fprintf(stderr, "Last VM operation: %s\n", opName(vm.lastOp));
+    }
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");

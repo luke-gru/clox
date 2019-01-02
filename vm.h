@@ -91,6 +91,7 @@ typedef struct LxThread {
     ThreadStatus status;
     VMExecContext *ec; // current execution context of vm
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
+    ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
     Obj *thisObj;
     ObjFunction *curBlock;
     ObjFunction *lastBlock;
@@ -120,7 +121,6 @@ ThreadStatus threadGetStatus(Value thread);
 pthread_t threadGetId(Value thread);
 
 typedef struct VM {
-    ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive, FIXME: should be in LxThread (per-thread)
     Table globals; // global variables
     Table strings; // interned strings
     ObjString *initString;
@@ -153,6 +153,7 @@ typedef struct VM {
     volatile LxThread *curThread;
     LxThread *mainThread;
     vec_void_t threads; // list of current thread ObjInstance pointers
+    int lastOp; // for debugging when error
 } VM; // singleton
 
 extern VM vm;

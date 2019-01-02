@@ -55,6 +55,7 @@ static void LxThreadSetup(LxThread *th) {
     th->status = THREAD_STOPPED;
     th->ec = NULL;
     vec_init(&th->v_ecs);
+    th->openUpvalues = NULL;
     th->thisObj = NULL;
     th->curBlock = NULL;
     th->lastBlock = NULL; // this field for convenience, not necessary if we track it somewhere else
@@ -130,6 +131,7 @@ static void newThreadSetup(LxThread *parentThread) {
 static void exitingThread() {
     ASSERT(vm.curThread);
     vm.curThread->status = THREAD_ZOMBIE;
+    vm.curThread->openUpvalues = NULL;
     int idx = 0;
     vec_find(&vm.threads, FIND_THREAD_INSTANCE(vm.curThread->tid), idx);
     ASSERT(idx > -1);

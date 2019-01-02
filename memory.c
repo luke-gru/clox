@@ -782,6 +782,7 @@ void collectGarbage(void) {
     // gray active function closure objects
     VMExecContext *ctx = NULL; int ctxIdx = 0;
     int numFramesFound = 0;
+    int numOpenUpsFound = 0;
     thObj = NULL; thIdx = 0;
     vec_foreach(&vm.threads, thObj, thIdx) {
         LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
@@ -797,20 +798,17 @@ void collectGarbage(void) {
                 numFramesFound++;
             }
         }
-    }
-    GC_TRACE_DEBUG(2, "%d frame functions found", numFramesFound);
-
-    GC_TRACE_DEBUG(2, "Marking open upvalues");
-    int numOpenUpsFound = 0;
-    if (vm.openUpvalues) {
-        ObjUpvalue *up = vm.openUpvalues;
-        while (up) {
-            ASSERT(up->value);
-            grayValue(*up->value);
-            up = up->next;
-            numOpenUpsFound++;
+        if (th->openUpvalues) {
+            ObjUpvalue *up = th->openUpvalues;
+            while (up) {
+                ASSERT(up->value);
+                grayValue(*up->value);
+                up = up->next;
+                numOpenUpsFound++;
+            }
         }
     }
+    GC_TRACE_DEBUG(2, "%d frame functions found", numFramesFound);
     GC_TRACE_DEBUG(3, "Open upvalues found: %d", numOpenUpsFound);
 
     GC_TRACE_DEBUG(2, "Marking globals (%d found)", vm.globals.count);

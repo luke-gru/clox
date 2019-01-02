@@ -1,0 +1,34 @@
+/**
+ * NOTE: not running by default in ./bin/test_examples right now because
+ * it causes errors in subsequent test runs. It runs fine standalone, though.
+ */
+var threads = [];
+fun counter() {
+  var i = 0;
+  return fun() {
+    i += 1;
+    return i;
+  };
+}
+
+for (var i = 0; i < 100; i+=1) {
+  newThread(fun() {
+    var c = counter();
+    [1,2,3,4,5].each() -> (n) {
+      c();
+      c();
+      c();
+      var f = File("chunk.c"); // let another thread get scheduled
+      f.close();
+      c();
+      c();
+      c();
+    };
+  });
+}
+threads.each() -> (t) {
+  joinThread(t);
+};
+
+__END__
+-- noexpect: --

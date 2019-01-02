@@ -679,7 +679,7 @@ static int test_closures_env_saved(void) {
     const char *expected = "30\n50\n";
     T_ASSERT_STREQ(expected, buf->chars);
     T_ASSERT_EQ(0, VMNumStackFrames());
-    T_ASSERT_EQ(NULL, vm.openUpvalues);
+    T_ASSERT_EQ(NULL, THREAD()->openUpvalues);
 cleanup:
     unsetPrintBuf();
     freeVM();
