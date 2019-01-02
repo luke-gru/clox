@@ -1046,7 +1046,9 @@ static CallInfo *emitCall(Node *n) {
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
+        callInfoData->usesSplat = false;
         callInfoData->isYield = false;
+        callInfoData->block = NULL;
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
@@ -1074,7 +1076,9 @@ static CallInfo *emitCall(Node *n) {
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
+        callInfoData->usesSplat = false;
         callInfoData->isYield = false;
+        callInfoData->block = NULL;
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
