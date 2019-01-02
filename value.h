@@ -174,6 +174,7 @@ void initValueArray(ValueArray *array);
 void initValueArrayWithCapa(ValueArray *array, int capa);
 void writeValueArrayEnd(ValueArray *array, Value value);
 void writeValueArrayBeg(ValueArray *array, Value value);
+void writeValueArrayBulk(ValueArray *array, size_t offset, size_t num, Value value);
 
 void freeValueArray(ValueArray *array);
 bool removeValueArray(ValueArray *array, int idx);

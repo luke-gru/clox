@@ -36,6 +36,14 @@ void writeValueArrayEnd(ValueArray *array, Value value) {
     array->count++;
 }
 
+void writeValueArrayBulk(ValueArray *ary, size_t offset, size_t num, Value fill) {
+    ASSERT(ary->values);
+    for (size_t i = 0; i < num; i++) {
+        memcpy(ary->values+offset+i, &fill, sizeof(Value));
+    }
+    ary->count+=num;
+}
+
 void writeValueArrayBeg(ValueArray *array, Value value) {
     if (array->capacity < array->count + 1) {
         int oldCapacity = array->capacity;

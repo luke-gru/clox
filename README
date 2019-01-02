@@ -12,6 +12,7 @@ Added features:
 * Keyword arguments
 * Mutable strings
 * Modules similar to Ruby's
+* Blocks similar to Ruby's
 * Integrated debugger
 * Integrated REPL
 * Multi-process support using fork() syscall
@@ -33,7 +34,6 @@ right now)
 Future features:
 * Support for regex
 * Add some standard library and networking support
-* Improve threading story, add mutex objects to start with
 * Support non-ascii strings
 * Add constants (no redefinitions, will given compiler or runtime error)
 * Improve managed heaps memory waste
@@ -48,4 +48,4 @@ See examples folder. These are also tests run by the ./bin/test_examples
 binary (see Makefile for more details).
 
 Thanks:
-Thanks to Bob Nystrom for the book and github repo.
+Thanks to Bob Nystrom for the book and github repo!

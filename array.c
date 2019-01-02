@@ -250,6 +250,33 @@ static Value lxArrayHashKey(int argCount, Value *args) {
     return NUMBER_VAL(hash);
 }
 
+static Value lxArrayFillStatic(int argCount, Value *args) {
+    CHECK_ARITY("Array.fill", 2, 3, argCount);
+    Value capa = args[1];
+    Value fill = NIL_VAL;
+    CHECK_ARG_BUILTIN_TYPE(capa, IS_NUMBER_FUNC, "number", 1);
+    if (argCount == 3) {
+        fill = args[2];
+    }
+    int capaNum = (int)AS_NUMBER(capa);
+    Value ret = OBJ_VAL(newInstance(lxAryClass));
+    ObjInstance *selfObj = AS_INSTANCE(ret);
+    ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalAry, freeInternalAry);
+    ValueArray *ary = ALLOCATE(ValueArray, 1);
+    if (capaNum > 1) {
+        initValueArrayWithCapa(ary, capaNum);
+        writeValueArrayBulk(ary, 0, (size_t)capaNum, fill);
+    } else {
+        initValueArray(ary);
+        writeValueArrayEnd(ary, fill);
+    }
+    internalObj->data = ary;
+    internalObj->dataSz = sizeof(ValueArray);
+    tableSet(selfObj->hiddenFields, OBJ_VAL(aryStr), OBJ_VAL(internalObj));
+    selfObj->internal = internalObj;
+    return ret;
+}
+
 static Value lxArrayEach(int argCount, Value *args) {
     CHECK_ARITY("Array#each", 1, 1, argCount);
     ValueArray *ary = ARRAY_GETHIDDEN(*args);
@@ -345,6 +372,7 @@ void Init_ArrayClass() {
     nativeArrayInit = addNativeMethod(arrayClass, "init", lxArrayInit);
     // static methods
     addNativeMethod(arrayStatic, "wrap", lxArrayWrapStatic);
+    addNativeMethod(arrayStatic, "fill", lxArrayFillStatic);
 
     // methods
     addNativeMethod(arrayClass, "dup", lxArrayDup);

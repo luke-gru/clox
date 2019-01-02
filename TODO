@@ -71,6 +71,6 @@ Optimizations
 * Add tailcall optimization
 * simple JIT, maybe?
 * different GC strategies, maybe support copying GC and/or generational GC
-* optimize array and string method lookup with an inline cache in the
-bytecode, and benchmark the lookup results
+* optimize method lookup with a polymorphic inline cache and benchmark the lookup results
 * Add internalObject heap to reduce mallocs
+* Threaded internal VM loop using computed gotos
