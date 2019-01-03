@@ -167,28 +167,21 @@ static CallFrame *getOuterClosureFrame() {
 }
 
 static void fillClosureUpvalues(ObjClosure *block, ObjClosure *outer, CallFrame *frame) {
-    /*fprintf(stderr, "Fill closure upvalues\n");*/
     ObjFunction *blockFn = block->function;
     ASSERT(blockFn);
     ASSERT(frame);
-    /*debugFrame(frame);*/
     for (int i = 0; i < blockFn->upvalueCount; i++) {
         uint8_t index = blockFn->upvaluesInfo[i].index;
         if (blockFn->upvaluesInfo[i].isLocal) {
-            /*fprintf(stderr, "captureUpvalue i: %d, index: %d, slots: %p\n", i, index, frame->slots);*/
             block->upvalues[i] = captureUpvalue(frame->slots+index);
-            /*printValue(stderr, *block->upvalues[i]->value, true, -1);*/
         } else {
-            /*fprintf(stderr, "take from outer i: %d, index: %d\n", i, index);*/
-            ASSERT(outer->upvalues);
+            DBG_ASSERT(outer->upvalues);
             block->upvalues[i] = outer->upvalues[index];
-            /*printValue(stderr, block->upvalues[i]->closed, true, -1);*/
-            ASSERT(block->upvalues[i]);
+            DBG_ASSERT(block->upvalues[i]);
         }
     }
 }
 
-// TODO: setup closures
 static ObjClosure *getBlockClosure(void) {
     ObjFunction *block = THREAD()->curBlock;
     if (!block) {
@@ -204,6 +197,49 @@ static ObjClosure *getBlockClosure(void) {
 }
 
 Value lxYield(int argCount, Value *args) {
+    CallFrame *frame = getFrame()->prev;
+    ASSERT(frame->callInfo);
+    ASSERT(frame->callInfo->block);
+    ObjFunction *block = frame->callInfo->block;
+    ObjClosure *blockClosure = closureFromFn(block);
+    CallFrame *outerFrame = getOuterClosureFrame();
+    ObjClosure *outerClosure = outerFrame->closure;
+    ASSERT(outerClosure);
+    fillClosureUpvalues(blockClosure, outerClosure, outerFrame);
+    Value callable = OBJ_VAL(blockClosure);
+    push(callable);
+    for (int i = 0; i < argCount; i++) {
+        push(args[i]);
+    }
+    CallInfo cinfo = {
+        .argc = argCount,
+        .block = block,
+        .isYield = true // tell callCallable to adjust frame stack in popFrame()
+    };
+    int status = 0;
+    SETUP_BLOCK(block, status)
+    while (true) {
+        if (status == TAG_NONE) {
+            break;
+        } else if (status == TAG_RAISE) {
+            ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
+            ASSERT(errInst);
+            if (errInst->klass == lxBreakBlockErrClass) {
+                return NIL_VAL;
+            } else if (errInst->klass == lxContinueBlockErrClass) { // continue
+                return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+            } else if (errInst->klass == lxReturnBlockErrClass) {
+                return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+            } else {
+                throwError(THREAD()->lastErrorThrown);
+            }
+        }
+    }
+    callCallable(callable, argCount, false, &cinfo);
+    UNREACHABLE("block didn't longjmp?"); // blocks should always longjmp out
+}
+
+NORETURN void yieldFromC(int argCount, Value *args) {
     ObjClosure *blkClosure = getBlockClosure();
     Value callable = OBJ_VAL(blkClosure);
     push(callable);

@@ -42,6 +42,7 @@ typedef struct CallFrame {
     ObjFunction *block; // if block, this is the block function
     ObjFunction *lastBlock;
     int stackAdjustOnPop; // used for blocks
+    CallInfo *callInfo;
 } CallFrame; // represents a local scope (block, function, etc)
 
 typedef enum ErrTag {
@@ -248,17 +249,20 @@ Value callFunctionValue(Value callable, int argCount, Value *args);
 Value callSuper(int argCount, Value *args, CallInfo *cinfo);
 // NOTE: must be called before lxYield to setup error handlers.
 // Similar code to vm_protect.
-#define SETUP_BLOCK(status) {\
-    ASSERT(THREAD()->curBlock);\
+#define SETUP_BLOCK(block, status) {\
+    ASSERT(block);\
     addErrInfo(lxErrClass);\
     ErrTagInfo *errInfo = THREAD()->errInfo;\
-    ObjFunction *blk = THREAD()->curBlock;\
+    ObjFunction *blk = block;\
+    ObjFunction *lastBlk = THREAD()->lastBlock;\
+    THREAD()->curBlock = blk;\
     int jmpres = 0;\
     if ((jmpres = setjmp(errInfo->jmpBuf)) == JUMP_SET) {\
         status = TAG_NONE;\
     } else if (jmpres == JUMP_PERFORMED) {\
         unwindJumpRecover(errInfo);\
         THREAD()->curBlock = blk;\
+        THREAD()->lastBlock = lastBlk;\
         ASSERT(THREAD()->errInfo == errInfo);\
         errInfo->status = TAG_RAISE;\
         errInfo->caughtError = THREAD()->lastErrorThrown;\

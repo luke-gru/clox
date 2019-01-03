@@ -1,0 +1,13 @@
+fun yielder(num) {
+  yield(num+2);
+  yield(num+3);
+}
+
+yielder(3) -> (num) {
+  print num;
+};
+
+__END__
+-- expect: --
+5
+6

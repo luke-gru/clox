@@ -9,9 +9,9 @@ print [1,2,3].map() -> (num) { return; };
 
 __END__
 -- expect: --
+[1,2,3]
 nil
-nil
-nil
+[1,2,3]
 nil
 [nil,nil,nil]
 nil

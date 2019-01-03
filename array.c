@@ -283,7 +283,7 @@ static Value lxArrayEach(int argCount, Value *args) {
     Value el; int valIdx = 0;
     int status = 0;
     int iterStart = 0;
-    SETUP_BLOCK(status)
+    SETUP_BLOCK(THREAD()->curBlock, status)
     while (true) {
         if (status == TAG_NONE) {
             break;
@@ -293,7 +293,7 @@ static Value lxArrayEach(int argCount, Value *args) {
             if (errInst->klass == lxBreakBlockErrClass) {
                 return NIL_VAL;
             } else if (errInst->klass == lxContinueBlockErrClass) {
-                SETUP_BLOCK(status)
+                SETUP_BLOCK(THREAD()->curBlock, status)
             } else if (errInst->klass == lxReturnBlockErrClass) {
                 return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
             } else {
@@ -302,12 +302,11 @@ static Value lxArrayEach(int argCount, Value *args) {
         }
     }
 
-    Value ret = NIL_VAL;
     VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
         iterStart++;
-        ret = lxYield(1, &el);
+        yieldFromC(1, &el);
     }
-    return ret;
+    return *args;
 }
 
 static Value lxArrayMap(int argCount, Value *args) {
@@ -317,7 +316,7 @@ static Value lxArrayMap(int argCount, Value *args) {
     int status = 0;
     int iterStart = 0;
     Value ret = newArray();
-    SETUP_BLOCK(status)
+    SETUP_BLOCK(THREAD()->curBlock, status)
     while (true) {
             if (status == TAG_NONE) {
                 break;
@@ -329,7 +328,7 @@ static Value lxArrayMap(int argCount, Value *args) {
                 } else if (errInst->klass == lxContinueBlockErrClass) { // continue
                     Value newEl = getProp(THREAD()->lastErrorThrown, INTERN("ret"));
                     arrayPush(ret, newEl);
-                    SETUP_BLOCK(status)
+                    SETUP_BLOCK(THREAD()->curBlock, status)
                 } else if (errInst->klass == lxReturnBlockErrClass) {
                     return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
                 } else {
@@ -339,8 +338,7 @@ static Value lxArrayMap(int argCount, Value *args) {
     }
     VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
         iterStart++;
-        Value newEl = lxYield(1, &el);
-        arrayPush(ret, newEl);
+        yieldFromC(1, &el);
     }
     return ret;
 }

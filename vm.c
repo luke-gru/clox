@@ -1099,6 +1099,7 @@ CallFrame *pushFrame(void) {
     frame->block = NULL;
     frame->lastBlock = NULL;
     frame->stackAdjustOnPop = 0;
+    frame->callInfo = NULL;
     return frame;
 }
 
@@ -1224,6 +1225,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 DBG_ASSERT(instance);
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
+                newFrame->callInfo = callInfo;
                 nativeInit->function(argCount+1, EC->stackTop-argCount-1);
                 th->thisObj = oldThis;
                 newFrame->slots = EC->stackTop-argCount-1;
@@ -1284,6 +1286,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         newFrame->klass = frameClass;
         newFrame->block = th->curBlock;
         newFrame->lastBlock = th->lastBlock;
+        newFrame->callInfo = callInfo;
         Value val = native->function(argCount, EC->stackTop-argCount);
         newFrame->slots = EC->stackTop-argCountActual;
         if (th->returnedFromNativeErr) {
@@ -1434,6 +1437,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     frame->block = th->curBlock;
     frame->lastBlock = th->lastBlock;
     frame->instance = instance;
+    frame->callInfo = callInfo;
     if (instance && !frameClass) frameClass = instance->klass;
     frame->klass = frameClass;
     if (funcOffset > 0) {
