@@ -1875,7 +1875,7 @@ static ObjString *methodNameForBinop(OpCode code) {
  * Run the VM's instructions.
  */
 static InterpretResult vm_run() {
-    volatile LxThread *th = THREAD();
+    register LxThread *th = THREAD();
     if (CLOX_OPTION_T(parseOnly) || CLOX_OPTION_T(compileOnly)) {
         return INTERPRET_OK;
     }
@@ -1888,26 +1888,31 @@ static InterpretResult vm_run() {
             VM_DEBUG("VM set rootVMLoopJumpBuf");
         } else {
             VM_DEBUG("VM caught error in rootVMLoopJumpBuf");
-            showUncaughtError(th->lastErrorThrown);
+            showUncaughtError(THREAD()->lastErrorThrown);
             return INTERPRET_RUNTIME_ERROR;
         }
     }
     th->vmRunLvl++;
-    volatile Chunk *ch = currentChunk();
+    register Chunk *ch = currentChunk();
+    register Value *constantSlots = ch->constants->values;
+    register CallFrame *frame = getFrame();
     if (ch->catchTbl != NULL) {
-        CallFrame *f = getFrame();
-        int jumpRes = setjmp(f->jmpBuf);
+        int jumpRes = setjmp(frame->jmpBuf);
         if (jumpRes == JUMP_SET) {
-            f->jmpBufSet = true;
+            frame->jmpBufSet = true;
             VM_DEBUG("VM set catch table for call frame (vm_run lvl %d)", th->vmRunLvl-1);
         } else {
             VM_DEBUG("VM caught error for call frame (vm_run lvl %d)", th->vmRunLvl-1);
+            th = THREAD();
             th->hadError = false;
+            ch = currentChunk();
+            constantSlots = ch->constants->values;
+            frame = getFrame();
             // stack is already unwound to proper frame
         }
     }
-#define READ_BYTE() (*getFrame()->ip++)
-#define READ_CONSTANT() (ch->constants->values[READ_BYTE()])
+#define READ_BYTE() (*(frame->ip++))
+#define READ_CONSTANT() (constantSlots[READ_BYTE()])
 #define BINARY_OP(op, opcode, type) \
     do { \
       Value b = pop(); \
@@ -1958,7 +1963,7 @@ static InterpretResult vm_run() {
           ASSERT(0);
       }
 
-      int byteCount = (int)(getFrame()->ip - ch->code);
+      int byteCount = (int)(frame->ip - ch->code);
       curLine = ch->lines[byteCount];
       int lastLine = -1;
       int ndepth = ch->ndepths[byteCount];
