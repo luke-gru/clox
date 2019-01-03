@@ -1149,6 +1149,14 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             emitChildren(param);
             emitOp2(OP_SET_LOCAL, localSlot, identifierConstant(&param->tok));
             patchJump(ifJumpStart, -1, NULL);
+        } else if (param->type.kind == PARAM_NODE_BLOCK) {
+            uint8_t localSlot = declareVariable(&param->tok);
+            defineVariable(localSlot, true);
+            func->hasBlockArg = true;
+        } else if (param->type.kind == PARAM_NODE_REGULAR) {
+            // default with first, above
+        } else {
+            UNREACHABLE("Unknown parameter type (kind): %d", param->type.kind);
         }
     }
     bool oldBreakBlock = breakBlock;

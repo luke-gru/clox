@@ -199,8 +199,10 @@ static ObjClosure *getBlockClosure(void) {
 Value lxYield(int argCount, Value *args) {
     CallFrame *frame = getFrame()->prev;
     ASSERT(frame->callInfo);
-    ASSERT(frame->callInfo->block);
     ObjFunction *block = frame->callInfo->block;
+    if (!block) {
+        throwErrorFmt(lxErrClass, "Cannot yield, no block given");
+    }
     ObjClosure *blockClosure = closureFromFn(block);
     CallFrame *outerFrame = getOuterClosureFrame();
     ObjClosure *outerClosure = outerFrame->closure;
@@ -218,21 +220,18 @@ Value lxYield(int argCount, Value *args) {
     };
     int status = 0;
     SETUP_BLOCK(block, status)
-    while (true) {
-        if (status == TAG_NONE) {
-            break;
-        } else if (status == TAG_RAISE) {
-            ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
-            ASSERT(errInst);
-            if (errInst->klass == lxBreakBlockErrClass) {
-                return NIL_VAL;
-            } else if (errInst->klass == lxContinueBlockErrClass) { // continue
-                return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
-            } else if (errInst->klass == lxReturnBlockErrClass) {
-                return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
-            } else {
-                throwError(THREAD()->lastErrorThrown);
-            }
+    if (status == TAG_NONE) {
+    } else if (status == TAG_RAISE) {
+        ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
+        ASSERT(errInst);
+        if (errInst->klass == lxBreakBlockErrClass) {
+            return NIL_VAL;
+        } else if (errInst->klass == lxContinueBlockErrClass) { // continue
+            return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+        } else if (errInst->klass == lxReturnBlockErrClass) {
+            return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+        } else {
+            throwError(THREAD()->lastErrorThrown);
         }
     }
     callCallable(callable, argCount, false, &cinfo);

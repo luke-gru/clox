@@ -76,6 +76,7 @@ typedef struct ObjFunction {
   unsigned short upvalueCount;
   bool isSingletonMethod;
   bool hasRestArg;
+  bool hasBlockArg;
   bool isBlock;
 } ObjFunction;
 
@@ -164,6 +165,7 @@ extern ObjClass *lxMapClass;
 extern ObjClass *lxIteratorClass;
 extern ObjClass *lxFileClass;
 extern ObjClass *lxThreadClass;
+extern ObjClass *lxBlockClass;
 extern ObjClass *lxMutexClass;
 extern ObjModule *lxGCModule;
 extern ObjModule *lxProcessMod;
@@ -390,6 +392,9 @@ Table      *mapGetHidden(Value map);
 Value newThread(void);
 typedef struct LxThread LxThread; // fwd decl
 LxThread *threadGetHidden(Value thread);
+
+// blocks
+Value newBlock(ObjClosure *closure);
 
 // Object creation functions
 ObjFunction *newFunction(Chunk *chunk, Node *funcNode);

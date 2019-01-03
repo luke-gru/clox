@@ -1,0 +1,19 @@
+fun yielder(num, &blk) {
+  yielder2(num, blk);
+}
+
+fun yielder2(num, &blk) {
+  blk.yield(num+5);
+  blk.yield(num+10);
+  blk.yield(num+15);
+}
+
+yielder(5) -> (num) {
+  print num;
+};
+
+__END__
+-- expect: --
+10
+15
+20

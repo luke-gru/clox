@@ -765,8 +765,19 @@ static Node *funDeclaration(ParseFunctionType fnType) {
                 vec_push(paramNodes, n);
                 numParams++;
                 lastParamKind = nType.kind;
+            } else if (match(TOKEN_AMP)) { // block param
+                consume(TOKEN_IDENTIFIER, "Expect block parameter to have a name");
+                Token paramTok = current->previous;
+                node_type_t nType = {
+                    .type = NODE_OTHER,
+                    .kind = PARAM_NODE_BLOCK,
+                };
+                Node *n = createNode(nType, paramTok, NULL);
+                vec_push(paramNodes, n);
+                numParams++;
+                lastParamKind = nType.kind;
                 if (!check(TOKEN_RIGHT_PAREN)) {
-                    errorAtCurrent("Expect ')' after rest parameter (must be final parameter)");
+                    error("Expected block parameter to be last parameter");
                 }
             } else {
                 break;

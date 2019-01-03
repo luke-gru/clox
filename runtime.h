@@ -94,6 +94,9 @@ ObjNative *nativeIteratorInit;
 Value lxThreadInit(int argCount, Value *args);
 ObjNative *nativeThreadInit;
 
+// class Block
+ObjNative *nativeBlockInit;
+
 // module GC
 Value lxGCStats(int argCount, Value *args);
 Value lxGCCollect(int argCount, Value *args);
@@ -131,6 +134,8 @@ void Init_ProcessModule(void);
 void Init_rand(void);
 // class Thread
 void Init_ThreadClass(void);
+// class Block
+void Init_BlockClass(void);
 
 // API for adding classes/modules/methods
 void addGlobalFunction(const char *name, NativeFn func);

@@ -261,9 +261,9 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo);
         status = TAG_NONE;\
     } else if (jmpres == JUMP_PERFORMED) {\
         unwindJumpRecover(errInfo);\
+        ASSERT(THREAD()->errInfo == errInfo);\
         THREAD()->curBlock = blk;\
         THREAD()->lastBlock = lastBlk;\
-        ASSERT(THREAD()->errInfo == errInfo);\
         errInfo->status = TAG_RAISE;\
         errInfo->caughtError = THREAD()->lastErrorThrown;\
         status = TAG_RAISE;\

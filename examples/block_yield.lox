@@ -7,7 +7,16 @@ yielder(3) -> (num) {
   print num;
 };
 
+var err = nil;
+try {
+  yielder(4);
+} catch (Error e) {
+  err = e;
+}
+print err != nil;
+
 __END__
 -- expect: --
 5
 6
+true

@@ -111,8 +111,9 @@ static const char *stmtTypeNames[] = {
 typedef enum eOtherType {
     PARAM_NODE_REGULAR = 1,
     PARAM_NODE_DEFAULT_ARG,
-    PARAM_NODE_SPLAT,
     PARAM_NODE_KWARG,
+    PARAM_NODE_SPLAT,
+    PARAM_NODE_BLOCK,
     TOKEN_NODE
 } OtherType;
 

@@ -1052,6 +1052,14 @@ LxThread *threadGetHidden(Value thread) {
     return (LxThread*)i->data;
 }
 
+Value newBlock(ObjClosure *closure) {
+    DBG_ASSERT(nativeBlockInit);
+    ObjInstance *instance = newInstance(lxBlockClass);
+    Value closureArg = OBJ_VAL(closure);
+    callVMMethod(instance, OBJ_VAL(nativeBlockInit), 1, &closureArg);
+    return pop();
+}
+
 bool isInstanceLikeObj(Obj *obj) {
     switch (obj->type) {
         case OBJ_T_INSTANCE:

@@ -247,6 +247,7 @@ static void defineNativeClasses(void) {
     Init_IOClass();
     Init_FileClass();
     Init_ThreadClass();
+    Init_BlockClass();
     isClassHierarchyCreated = true;
 }
 
@@ -1154,7 +1155,7 @@ static void captureNativeError(void) {
 
 static bool checkFunctionArity(ObjFunction *func, int argCount) {
     int arityMin = func->arity;
-    int arityMax = arityMin + func->numDefaultArgs + func->numKwargs;
+    int arityMax = arityMin + func->numDefaultArgs + func->numKwargs + (func->hasBlockArg ? 1 : 0);
     if (func->hasRestArg) arityMax = 20; // TODO: make a #define
     if (argCount < arityMin || argCount > arityMax) {
         if (arityMin == arityMax) {
@@ -1332,7 +1333,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         vec_foreach_rev(params, param, pi) {
             if (param->type.kind == PARAM_NODE_KWARG) {
                 char *kwname = tokStr(&param->tok);
-                ObjString *kwStr = copyString(kwname, strlen(kwname));
+                ObjString *kwStr = internedString(kwname, strlen(kwname));
                 for (int i = 0; i < callInfo->numKwargs; i++) {
                     // keyword argument given, is on stack, we pop it off
                     if (strcmp(kwname, tokStr(callInfo->kwargNames+i)) == 0) {
@@ -1429,6 +1430,17 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 break;
             }
         }
+    }
+
+    if (func->hasBlockArg && callInfo->block) {
+        // TODO: get closure created here, with upvals.
+        // Also, cache proc object instead of re-creating it each time it's
+        // passed.
+        push(newBlock(newClosure(callInfo->block)));
+        argCountWithRestAry++;
+    } else if (func->hasBlockArg) {
+        push(NIL_VAL); // TODO: get closure created here!
+        argCountWithRestAry++;
     }
 
     // add frame
