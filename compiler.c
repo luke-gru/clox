@@ -875,7 +875,6 @@ static void initCompiler(
     case FUN_TYPE_SETTER:
     case FUN_TYPE_METHOD:
     case FUN_TYPE_CLASS_METHOD: {
-        fprintf(stderr, "FUN TYPE %d\n", ftype);
         ASSERT(currentClassOrModule || inINBlock);
         char *className = "";
         if (currentClassOrModule) {

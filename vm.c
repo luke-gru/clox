@@ -496,6 +496,7 @@ void freeVM(void) {
 
     THREAD_DEBUG(1, "VM lock destroying...");
     pthread_mutex_destroy(&vm.GVLock);
+    pthread_cond_destroy(&vm.GVCond);
 
     vm.curThread = NULL;
     vm.mainThread = NULL;
@@ -1598,7 +1599,7 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
             } else { // more frames in this context to go through
                 ASSERT(EC->frameCount > 1);
                 currentIpOff = getFrame()->start;
-                ASSERT(EC->stackTop > getFrame()->slots);
+                ASSERT(EC->stackTop >= getFrame()->slots);
                 EC->stackTop = getFrame()->slots;
                 popFrame();
                 VM_DEBUG("frame popped");

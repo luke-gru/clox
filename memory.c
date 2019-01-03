@@ -998,6 +998,10 @@ bool isThreadObj(Obj *obj) {
 // Force free all objects, regardless of noGC field on the object.
 // Happens during VM shutdown.
 void freeObjects(void) {
+    if (OPTION_T(disableGC)) {
+        GC_TRACE_DEBUG(1, "freeObjects: skipping due to disableGC");
+        return;
+    }
     GC_TRACE_DEBUG(2, "freeObjects -> begin FREEing all objects");
     if (GET_OPTION(traceGCLvl) >= 2) {
         printGCStats();

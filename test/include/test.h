@@ -166,7 +166,7 @@ static inline void parseTestOptions(int argc, char *argv[]) {
     ASSERT_MEM(skips);
     vec_init(skips);
     while (argv[i] != NULL) {
-        if (i == 0) { i+= 1; continue; }
+        if (i == 0) { i+= 1; continue; } // program name
         if ((incrOpt = parseOption(argv, i)) > 0) {
             i+=incrOpt;
         } else if (strcmp(argv[i], "--only") == 0) {
