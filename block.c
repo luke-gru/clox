@@ -51,7 +51,7 @@ static Value lxBlockYield(int argCount, Value *args) {
     int status = 0;
     ObjFunction *func = blk->closure->function;
     THREAD()->curBlock = blk->closure->function;
-    SETUP_BLOCK(func, status)
+    SETUP_BLOCK(func, status, THREAD()->errInfo, THREAD()->lastBlock)
     if (status == TAG_NONE) {
     } else if (status == TAG_RAISE) {
         ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);

@@ -181,7 +181,7 @@ void addHeap() {
     if (heapsUsed == heapListSize) {
         /* Realloc heaps */
         heapListSize += HEAPLIST_INCREMENT;
-        size_t newHeapListSz = heapListSize*sizeof(void*);
+        size_t newHeapListSz = heapListSize*sizeof(ObjAny*);
         heapList = (heapsUsed > 0) ?
             (ObjAny**)realloc(heapList, newHeapListSz) :
             (ObjAny**)malloc(newHeapListSz);
@@ -219,7 +219,7 @@ void freeHeap(ObjAny *heap) {
     int i = 0;
     ObjAny *curHeap = NULL;
     int heapIdx = -1;
-    for (i = 0; i < heapListSize; i++) {
+    for (i = 0; i < heapsUsed; i++) {
         curHeap = heapList[i];
         if (curHeap && curHeap == heap) {
             heapIdx = i;
@@ -893,6 +893,9 @@ freeLoop:
         ObjAny *newFreeList = NULL;
         if (phase == 2) newFreeList = freeList;
         p = heapList[i];
+        if (!p) {
+            fprintf(stderr, "NULL heap page? %p, i=%d, heapsUsed: %d, heapListSize: %d\n", p, i, heapsUsed, heapListSize);
+        }
         ASSERT(p);
         pend = p + HEAP_SLOTS;
 
@@ -952,7 +955,7 @@ freeLoop:
     }
 
     bool freedHeap = false;
-    if (vFreeHeaps.length > 0 && hasOtherFreeishHeap) {
+    if (vFreeHeaps.length > 100 && hasOtherFreeishHeap) {
         ObjAny *heap; int heapIdx = 0;
         vec_foreach(&vFreeHeaps, heap, heapIdx) {
             ASSERT(heap);
@@ -1049,11 +1052,12 @@ freeLoop:
 
     Entry e;
     Obj *sym; int eidx = 0;
-    TABLE_FOREACH(&vm.strings, e, eidx) {
+    TABLE_FOREACH(&vm.strings, e, eidx, {
         sym = AS_OBJ(e.key);
-        if (sym->noGC) continue;
+        if (sym->noGC)
+            continue;
         freeObject(sym);
-    }
+    })
 
     for (int i = 0; i < heapsUsed; i++) {
         p = heapList[i];

@@ -91,9 +91,9 @@ static Value lxMapDup(int argCount, Value *args) {
     dupObj->internal = internalMap;
 
     Entry e; int idx = 0;
-    TABLE_FOREACH(mapOrig, e, idx) {
+    TABLE_FOREACH(mapOrig, e, idx, {
         tableSet(mapDup, e.key, e.value);
-    }
+    })
 
     return dup;
 }
@@ -107,7 +107,7 @@ static Value lxMapToString(int argCount, Value *args) {
     Table *map = MAP_GETHIDDEN(self);
     Entry e; int idx = 0;
     int sz = map->count; int i = 0;
-    TABLE_FOREACH(map, e, idx) {
+    TABLE_FOREACH(map, e, idx, {
         if (IS_OBJ(e.key) && AS_OBJ(e.key) == selfObj) {
             pushCString(bufRet, "{...}", 5);
         } else {
@@ -126,7 +126,7 @@ static Value lxMapToString(int argCount, Value *args) {
             pushCString(bufRet, ", ", 2);
         }
         i++;
-    }
+    })
 
     pushCString(bufRet, "}", 1);
 
@@ -166,9 +166,9 @@ static Value lxMapKeys(int argCount, Value *args) {
     Table *map = MAP_GETHIDDEN(self);
     Entry entry; int i = 0;
     Value ary = newArray();
-    TABLE_FOREACH(map, entry, i) {
+    TABLE_FOREACH(map, entry, i, {
         arrayPush(ary, entry.key);
-    }
+    })
     return ary;
 }
 
@@ -178,9 +178,9 @@ static Value lxMapValues(int argCount, Value *args) {
     Table *map = MAP_GETHIDDEN(self);
     Entry entry; int i = 0;
     Value ary = newArray();
-    TABLE_FOREACH(map, entry, i) {
+    TABLE_FOREACH(map, entry, i, {
         arrayPush(ary, entry.value);
-    }
+    })
     return ary;
 }
 
@@ -202,13 +202,13 @@ static Value lxMapHashKey(int argCount, Value *args) {
     uint32_t hash = 166779; // XXX: no reason for this number
     Table *map = MAP_GETHIDDEN(self);
     Entry e; int idx = 0;
-    TABLE_FOREACH(map, e, idx) {
+    TABLE_FOREACH(map, e, idx, {
         if (AS_OBJ(e.key) == selfObj || AS_OBJ(e.value) == selfObj) { // avoid infinite recursion
             hash = hash ^ 16667; // XXX: no reason for this number
             continue;
         }
         hash = hash ^ (valHash(e.key) ^ valHash(e.value));
-    }
+    })
     return NUMBER_VAL(hash);
 }
 
@@ -258,9 +258,9 @@ static Value lxMapMerge(int argCount, Value *args) {
     Value ret = callMethod(AS_OBJ(self), internedString("dup", 3), 0, NULL);
     Table *retMap = MAP_GETHIDDEN(ret);
     Entry e; int idx = 0;
-    TABLE_FOREACH(otherMap, e, idx) {
+    TABLE_FOREACH(otherMap, e, idx, {
         tableSet(retMap, e.key, e.value);
-    }
+    });
     return ret;
 }
 
@@ -276,9 +276,9 @@ static Value lxMapMergeWith(int argCount, Value *args) {
         throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
     }
     Entry e; int idx = 0;
-    TABLE_FOREACH(otherMap, e, idx) {
+    TABLE_FOREACH(otherMap, e, idx, {
         tableSet(myMap, e.key, e.value);
-    }
+    })
     return self;
 }
 
@@ -309,9 +309,9 @@ static Value lxMapRehash(int argCount, Value *args) {
     Table *mapNew = ALLOCATE(Table, 1);
     initTableWithCapa(mapNew, tableCapacity(mapOld));
     Entry e; int idx = 0;
-    TABLE_FOREACH(mapOld, e, idx) {
+    TABLE_FOREACH(mapOld, e, idx, {
         tableSet(mapNew, e.key, e.value);
-    }
+    })
     Value internalVal;
     ASSERT(tableGet(selfObj->hiddenFields, OBJ_VAL(mapStr), &internalVal));
     ObjInternal *internal = AS_INTERNAL(internalVal);

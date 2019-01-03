@@ -10,7 +10,7 @@
 
 static Chunk *chunk = NULL;
 
-static void _freeChunk() {
+static void _freeChunk(void) {
     if (chunk) {
         freeChunk(chunk);
         chunk = NULL;
@@ -41,7 +41,7 @@ static bool evalLines(char *lines[], int numLines) {
     resetStack();
     if (ires != INTERPRET_OK) {
         fprintf(stderr, "%s", "Error evaluating code\n");
-        _freeChunk(chunk);
+        _freeChunk();
         return false;
     }
     return true;
@@ -116,7 +116,7 @@ NORETURN void repl(void) {
         // resets the VM, re-inits the code chunk
         if (numLines == 0 && strcmp(line, "reset") == 0) {
             fprintf(stderr, "Resetting VM... ");
-            _freeChunk(chunk);
+            _freeChunk();
             freeVM();
             initVM();
             _resetScanner();

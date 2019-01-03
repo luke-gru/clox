@@ -421,7 +421,7 @@ bool isCallable(Value val) {
         IS_BOUND_METHOD(val) || IS_CLOSURE(val);
 }
 
-void fillCallableName(Value callable, const char buf[], size_t buflen) {
+void fillCallableName(Value callable, const char *buf, size_t buflen) {
     memset(buf, 0, buflen);
     ASSERT(isCallable(callable));
     if (IS_CLASS(callable)) {

@@ -861,14 +861,14 @@ bool mapEquals(Value self, Value other) {
     if (map1->count != map2->count) return false;
     Entry e; int idx = 0;
     Value val2;
-    TABLE_FOREACH(map1, e, idx) {
+    TABLE_FOREACH(map1, e, idx, {
         if (!tableGet(map2, e.key, &val2)) {
             return false;
         }
         if (!valEqual(e.value, val2)) {
             return false;
         }
-    }
+    })
     return true;
 }
 
@@ -1176,7 +1176,7 @@ bool is_obj_bound_method_p(Obj *obj) {
     return obj->type == OBJ_T_BOUND_METHOD;
 }
 bool is_value_bound_method_p(Value val) {
-    return IS_BOUND_METHOD_FUNC(val);
+    return IS_BOUND_METHOD(val);
 }
 bool is_obj_upvalue_p(Obj *obj) {
     return obj->type == OBJ_T_UPVALUE;

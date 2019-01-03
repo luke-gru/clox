@@ -230,8 +230,8 @@ Value lxYield(int argCount, Value *args) {
         .block = block,
         .isYield = true // tell callCallable to adjust frame stack in popFrame()
     };
-    int status = 0;
-    SETUP_BLOCK(block, status)
+    volatile int status = 0;
+    SETUP_BLOCK(block, status, THREAD()->errInfo, THREAD()->lastBlock)
     if (status == TAG_NONE) {
     } else if (status == TAG_RAISE) {
         ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
@@ -257,7 +257,7 @@ NORETURN void yieldFromC(int argCount, Value *args) {
     for (int i = 0; i < argCount; i++) {
         push(args[i]);
     }
-    CallInfo cinfo = {
+    volatile CallInfo cinfo = {
         .argc = argCount,
         .block = THREAD()->curBlock,
         .isYield = true // tell callCallable to adjust frame stack in popFrame()
@@ -436,13 +436,13 @@ Value lxObjectDup(int argCount, Value *args) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInstance *newObj = newInstance(selfObj->klass); // XXX: Call initialize on new instance?
     Entry e; int idx = 0;
-    TABLE_FOREACH(selfObj->fields, e, idx) {
+    TABLE_FOREACH(selfObj->fields, e, idx, {
         tableSet(newObj->fields, e.key, e.value);
-    }
+    })
     idx = 0;
-    TABLE_FOREACH(selfObj->hiddenFields, e, idx) {
+    TABLE_FOREACH(selfObj->hiddenFields, e, idx, {
         tableSet(newObj->hiddenFields, e.key, e.value);
-    }
+    })
     return OBJ_VAL(newObj);
 }
 

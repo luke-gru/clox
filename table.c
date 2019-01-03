@@ -228,15 +228,15 @@ ObjString *tableFindString(Table *table, const char* chars, int length,
 }
 
 Entry tableNthEntry(Table *table, int n, int *entryIndex) {
-    Entry e; int entryIdx = 0;
+    Entry e = TBL_EMPTY_ENTRY; int entryIdx = 0;
     int validEntryIdx = 0;
-    TABLE_FOREACH(table, e, entryIdx) {
+    TABLE_FOREACH(table, e, entryIdx, {
         if (n == validEntryIdx) {
             *entryIndex = entryIdx;
             return e;
         }
         validEntryIdx++;
-    }
+    })
     *entryIndex = -1;
     return e; // trashed data in this case, caller should always check entryIndex out value
 }

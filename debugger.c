@@ -88,7 +88,7 @@ static void deleteBreakpt(Debugger *dbg, char *file, int line) {
     Breakpoint *bp = NULL; int i = 0;
     int foundIdx = -1;
     vec_foreach(&dbg->v_breakpoints, bp, i) {
-        if (strcmp(bp->file, file) == 0 && line == line) {
+        if (strcmp(bp->file, file) == 0 && bp->line == line) {
             foundIdx = i;
             break;
         }

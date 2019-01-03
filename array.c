@@ -281,9 +281,9 @@ static Value lxArrayEach(int argCount, Value *args) {
     CHECK_ARITY("Array#each", 1, 1, argCount);
     ValueArray *ary = ARRAY_GETHIDDEN(*args);
     Value el; int valIdx = 0;
-    int status = 0;
-    int iterStart = 0;
-    SETUP_BLOCK(THREAD()->curBlock, status)
+    volatile int status = 0;
+    volatile int iterStart = 0;
+    SETUP_BLOCK(THREAD()->curBlock, status, THREAD()->errInfo, THREAD()->lastBlock)
     while (true) {
         if (status == TAG_NONE) {
             break;
@@ -293,7 +293,7 @@ static Value lxArrayEach(int argCount, Value *args) {
             if (errInst->klass == lxBreakBlockErrClass) {
                 return NIL_VAL;
             } else if (errInst->klass == lxContinueBlockErrClass) {
-                SETUP_BLOCK(THREAD()->curBlock, status)
+                SETUP_BLOCK(THREAD()->curBlock, status, THREAD()->errInfo, THREAD()->lastBlock)
             } else if (errInst->klass == lxReturnBlockErrClass) {
                 return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
             } else {
@@ -313,10 +313,11 @@ static Value lxArrayMap(int argCount, Value *args) {
     CHECK_ARITY("Array#map", 1, 1, argCount);
     ValueArray *ary = ARRAY_GETHIDDEN(*args);
     Value el; int valIdx = 0;
-    int status = 0;
-    int iterStart = 0;
+    volatile int status = 0;
+    volatile int iterStart = 0;
     Value ret = newArray();
-    SETUP_BLOCK(THREAD()->curBlock, status)
+    ObjFunction *blk = THREAD()->curBlock;
+    SETUP_BLOCK(blk, status, THREAD()->errInfo, THREAD()->lastBlock)
     while (true) {
             if (status == TAG_NONE) {
                 break;
@@ -328,7 +329,7 @@ static Value lxArrayMap(int argCount, Value *args) {
                 } else if (errInst->klass == lxContinueBlockErrClass) { // continue
                     Value newEl = getProp(THREAD()->lastErrorThrown, INTERN("ret"));
                     arrayPush(ret, newEl);
-                    SETUP_BLOCK(THREAD()->curBlock, status)
+                    SETUP_BLOCK(THREAD()->curBlock, status, THREAD()->errInfo, THREAD()->lastBlock)
                 } else if (errInst->klass == lxReturnBlockErrClass) {
                     return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
                 } else {

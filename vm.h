@@ -94,15 +94,15 @@ typedef struct LxThread {
     ThreadStatus status;
     VMExecContext *ec; // current execution context of vm
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
-    ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
+    volatile ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
     Obj *thisObj;
-    ObjFunction *curBlock;
-    ObjFunction *lastBlock;
-    ObjFunction *outermostBlock;
+    volatile ObjFunction *curBlock;
+    volatile ObjFunction *lastBlock;
+    volatile ObjFunction *outermostBlock;
     Value *lastValue;
     bool hadError;
-    ErrTagInfo *errInfo;
-    Value lastErrorThrown; // TODO: change to Obj pointer
+    volatile ErrTagInfo *errInfo;
+    volatile Value lastErrorThrown; // TODO: change to Obj pointer
     int inCCall;
     bool cCallThrew;
     bool returnedFromNativeErr;
@@ -249,23 +249,20 @@ Value callFunctionValue(Value callable, int argCount, Value *args);
 Value callSuper(int argCount, Value *args, CallInfo *cinfo);
 // NOTE: must be called before lxYield to setup error handlers.
 // Similar code to vm_protect.
-#define SETUP_BLOCK(block, status) {\
+#define SETUP_BLOCK(block, status, errInf, lastBlk) {\
     ASSERT(block);\
     addErrInfo(lxErrClass);\
-    ErrTagInfo *errInfo = THREAD()->errInfo;\
-    ObjFunction *blk = block;\
-    ObjFunction *lastBlk = THREAD()->lastBlock;\
-    THREAD()->curBlock = blk;\
+    THREAD()->curBlock = block;\
     int jmpres = 0;\
-    if ((jmpres = setjmp(errInfo->jmpBuf)) == JUMP_SET) {\
+    if ((jmpres = setjmp(errInf->jmpBuf)) == JUMP_SET) {\
         status = TAG_NONE;\
     } else if (jmpres == JUMP_PERFORMED) {\
-        unwindJumpRecover(errInfo);\
-        ASSERT(THREAD()->errInfo == errInfo);\
-        THREAD()->curBlock = blk;\
+        unwindJumpRecover(errInf);\
+        ASSERT(THREAD()->errInfo == errInf);\
+        THREAD()->curBlock = block;\
         THREAD()->lastBlock = lastBlk;\
-        errInfo->status = TAG_RAISE;\
-        errInfo->caughtError = THREAD()->lastErrorThrown;\
+        errInf->status = TAG_RAISE;\
+        errInf->caughtError = THREAD()->lastErrorThrown;\
         status = TAG_RAISE;\
         popErrInfo();\
     }\

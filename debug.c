@@ -272,7 +272,7 @@ void printDisassembledChunk(FILE *f, Chunk *chunk, const char *name) {
     fprintf(f, "== /%s ==\n", name);
 }
 
-static int printConstantInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printConstantInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
     fprintf(f, "%-16s %4" PRId8 " '", op, constantIdx);
     Value constant = getConstant(chunk, constantIdx);
@@ -281,7 +281,7 @@ static int printConstantInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 // instruction has 1 operand, a constant slot index
-static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int constantInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
 
     Value constant = getConstant(chunk, constantIdx);
@@ -297,7 +297,7 @@ static int constantInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-static int printStringInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printStringInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
     uint8_t isStatic = chunk->code[i + 2];
     fprintf(f, "%-16s %04d '", op, constantIdx);
@@ -307,7 +307,7 @@ static int printStringInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     return i+3;
 }
 
-static int stringInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int stringInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     uint8_t constantIdx = chunk->code[i + 1];
     uint8_t isStatic = chunk->code[i + 2];
     Value constant = getConstant(chunk, constantIdx);
@@ -320,29 +320,29 @@ static int stringInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+3;
 }
 
-static int printArrayInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printArrayInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t keyValLen = chunk->code[i + 1];
     fprintf(f, "%-16s    len=%03d\n", op, keyValLen);
     return i+2;
 }
 
-static int arrayInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int arrayInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     // TODO
     return i+2;
 }
 
-static int printMapInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printMapInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t keyValLen = chunk->code[i + 1];
     fprintf(f, "%-16s    len=%03d\n", op, keyValLen);
     return i+2;
 }
 
-static int mapInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int mapInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     // TODO
     return i+2;
 }
 
-static int printLocalVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printLocalVarInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
     uint8_t varNameIdx = chunk->code[i + 2];
     Value varName = getConstant(chunk, varNameIdx);
@@ -350,7 +350,7 @@ static int printLocalVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
     return i+3;
 }
 
-static int printUnpackSetVarInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printUnpackSetVarInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
     uint8_t unpackIdx = chunk->code[i + 2];
     uint8_t varNameIdx = chunk->code[i + 3];
@@ -359,12 +359,12 @@ static int printUnpackSetVarInstruction(FILE *f, char *op, Chunk *chunk, int i) 
     return i+4;
 }
 
-static int unpackSetVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int unpackSetVarInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     // TODO
     return i+3;
 }
 
-static int printClosureInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+static int printClosureInstruction(FILE *f, const char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t funcConstIdx = chunk->code[i + 1];
     Value constant = getConstant(chunk, funcConstIdx);
     ASSERT(IS_FUNCTION(constant));
@@ -378,7 +378,7 @@ static int printClosureInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_f
     return i+2+(numUpvalues*2);
 }
 
-static int closureInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+static int closureInstruction(ObjString *buf, const char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t funcConstIdx = chunk->code[i + 1];
     Value constant = getConstant(chunk, funcConstIdx);
     ASSERT(IS_FUNCTION(constant));
@@ -398,14 +398,14 @@ static int closureInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec
     return i+2+(numUpvalues*2);
 }
 
-static int printJumpInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printJumpInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t jumpOffset = chunk->code[i + 1];
     /*ASSERT(jumpOffset != 0); // should have been patched*/
     fprintf(f, "%-16s\t%04" PRId8 "\t(addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
     return i+2;
 }
 
-static int jumpInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int jumpInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     char *cbuf = calloc(strlen(op)+1+18, 1);
     ASSERT_MEM(cbuf);
     uint8_t jumpOffset = chunk->code[i + 1];
@@ -416,13 +416,13 @@ static int jumpInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-static int printLoopInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printLoopInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t loopOffset = chunk->code[i + 1];
     fprintf(f, "%-16s %4" PRId8 " (addr=%04" PRId8 ")\n", op, loopOffset, (i-loopOffset));
     return i+2;
 }
 
-static int loopInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int loopInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     char *cbuf = calloc(strlen(op)+1+18, 1);
     ASSERT_MEM(cbuf);
     uint8_t loopOffset = chunk->code[i + 1];
@@ -432,7 +432,7 @@ static int loopInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
-static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+static int printCallInstruction(FILE *f, const char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t numArgs = chunk->code[i + 1];
     (void)numArgs; // unused
     uint8_t constantSlot = chunk->code[i + 2];
@@ -457,7 +457,7 @@ static int printCallInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_func
 }
 
 // TODO: make it like printCallInstruction (show callInfo)
-static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+static int callInstruction(ObjString *buf, const char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     char *cbuf = calloc(strlen(op)+1+11, 1);
     ASSERT_MEM(cbuf);
     uint8_t numArgs = chunk->code[i + 1];
@@ -478,7 +478,7 @@ static int callInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_fu
 }
 
 // TODO: show callInfo
-static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+static int printInvokeInstruction(FILE *f, const char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t methodNameArg = chunk->code[i + 1];
     uint8_t callInfoSlot = chunk->code[i + 3];
     Value callInfoVal = getConstant(chunk, callInfoSlot);
@@ -498,7 +498,7 @@ static int printInvokeInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_fu
 }
 
 // TODO: show callInfo
-static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
+static int invokeInstruction(ObjString *buf, const char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t methodNameArg = chunk->code[i + 1];
     uint8_t callInfoSlot = chunk->code[i + 3];
     Value callInfoVal = getConstant(chunk, callInfoSlot);
@@ -521,21 +521,21 @@ static int invokeInstruction(ObjString *buf, char *op, Chunk *chunk, int i, vec_
     return i+4;
 }
 
-static int printCheckKeywordInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+static int printCheckKeywordInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t kwargSlot = chunk->code[i+1];
     uint8_t kwargMapSlot = chunk->code[i+2];
     fprintf(f, "%-16s    kwslot=%d mapslot=%d\n", op, kwargSlot, kwargMapSlot);
     return i+3;
 }
 
-static int checkKeywordInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int checkKeywordInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     /*uint8_t kwargMapSlot = chunk->code[i + 1];*/
     /*uint8_t kwargSlot = chunk->code[i+2];*/
     // FIXME:
     return i+3;
 }
 
-static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+static int localVarInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     uint8_t slotIdx = chunk->code[i + 1];
     uint8_t varNameIdx = chunk->code[i + 2];
     Value varName = getConstant(chunk, varNameIdx);
@@ -548,13 +548,13 @@ static int localVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
 }
 
 // instruction has no operands
-static int printSimpleInstruction(FILE *f, char *op, int i) {
+static int printSimpleInstruction(FILE *f, const char *op, int i) {
     fprintf(f, "%s\n", op);
     return i+1;
 }
 
 // instruction has no operands
-static int simpleInstruction(ObjString *buf, char *op, int i) {
+static int simpleInstruction(ObjString *buf, const char *op, int i) {
     pushCString(buf, op, strlen(op));
     pushCString(buf, "\n", 1);
     return i+1;

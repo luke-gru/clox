@@ -1197,7 +1197,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         frameClass = instance->klass; // TODO: make class the callable's class, not the instance class
     } else {
         // wrong usage of callCallable, callable should be on stack, below the arguments
-        ASSERT(isCallable(EC->stackTop[-argCount-1])); // should be same as `callable`
+        ASSERT(isCallable(*(EC->stackTop-argCount-1))); // should be same as `callable`
     }
     if (IS_CLOSURE(callable)) { // lox function
         closure = AS_CLOSURE(callable);
@@ -1273,8 +1273,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     } else if (IS_NATIVE_FUNCTION(callable)) {
 #ifndef NDEBUG
         static const char callableNameBuf[200];
-        fillCallableName(callable, callableNameBuf, 200);
-        VM_DEBUG("Calling native %s %s with %d args", isMethod ? "method" : "function", callableNameBuf, argCount);
+        /*fillCallableName(callable, callableNameBuf, 200);*/
+        /*VM_DEBUG("Calling native %s %s with %d args", isMethod ? "method" : "function", callableNameBuf, argCount);*/
 #endif
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
         int argCountActual = argCount; // includes the callable on the stack, or the receiver if it's a method
