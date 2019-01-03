@@ -283,21 +283,22 @@ static Value lxArrayEach(int argCount, Value *args) {
     Value el; int valIdx = 0;
     volatile int status = 0;
     volatile int iterStart = 0;
-    SETUP_BLOCK(THREAD()->curBlock, status, THREAD()->errInfo, THREAD()->lastBlock)
+    volatile LxThread *th = THREAD();
+    SETUP_BLOCK(th->curBlock, status, THREAD()->errInfo, th->lastBlock)
     while (true) {
         if (status == TAG_NONE) {
             break;
         } else if (status == TAG_RAISE) {
-            ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
+            ObjInstance *errInst = AS_INSTANCE(th->lastErrorThrown);
             ASSERT(errInst);
             if (errInst->klass == lxBreakBlockErrClass) {
                 return NIL_VAL;
             } else if (errInst->klass == lxContinueBlockErrClass) {
-                SETUP_BLOCK(THREAD()->curBlock, status, THREAD()->errInfo, THREAD()->lastBlock)
+                SETUP_BLOCK(th->curBlock, status, th->errInfo, THREAD()->lastBlock)
             } else if (errInst->klass == lxReturnBlockErrClass) {
-                return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+                return getProp(th->lastErrorThrown, INTERN("ret"));
             } else {
-                throwError(THREAD()->lastErrorThrown);
+                throwError(th->lastErrorThrown);
             }
         }
     }

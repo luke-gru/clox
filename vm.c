@@ -1143,16 +1143,16 @@ static void pushNativeFrame(ObjNative *native) {
 
 // sets up VM/C call jumpbuf if not set
 static void captureNativeError(void) {
-    LxThread *th = THREAD();
+    volatile LxThread *th = THREAD();
     if (th->inCCall == 0) {
         VM_DEBUG("%s", "Setting VM/C error jump buffer");
-        VM_DEBUG("setting VM/C error jump buf\n");
+        VM_DEBUG("setting VM/C error jump buf");
         int jumpRes = setjmp(th->cCallJumpBuf);
         if (jumpRes == JUMP_SET) { // jump is set, prepared to enter C land
             th->cCallJumpBufSet = true;
             return;
         } else { // C call longjmped here from throwError()
-            th = THREAD();
+            VM_DEBUG("longmped to VM/C error jump buf");
             ASSERT(th->inCCall > 0);
             ASSERT(th->cCallThrew);
             th->cCallThrew = false;
@@ -1212,12 +1212,12 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         instance = newInstance(klass); // setup the new instance object
         frameClass = klass;
         instanceVal = OBJ_VAL(instance);
-        Obj *oldThis = th->thisObj;
+        volatile Obj *oldThis = th->thisObj;
         th->thisObj = (Obj*)instance;
         /*ASSERT(IS_CLASS(EC->stackTop[-argCount - 1])); this holds true if the # of args is correct for the function */
         EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
         // Call the initializer, if there is one.
-        Value initializer;
+        volatile Value initializer;
         Obj *init = instanceFindMethod(instance, vm.initString);
         isMethod = true;
         if (init) {
@@ -1229,17 +1229,21 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 ObjNative *nativeInit = AS_NATIVE_FUNCTION(initializer);
                 ASSERT(nativeInit->function);
                 pushNativeFrame(nativeInit);
-                CallFrame *newFrame = getFrame();
+                volatile CallFrame *newFrame = getFrame();
                 newFrame->block = th->curBlock;
                 newFrame->lastBlock = th->lastBlock;
                 DBG_ASSERT(instance);
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
                 newFrame->callInfo = callInfo;
+                volatile int argc = argCount;
+                volatile VMExecContext *ec = EC;
                 nativeInit->function(argCount+1, EC->stackTop-argCount-1);
+                th = THREAD();
                 th->thisObj = oldThis;
-                newFrame->slots = EC->stackTop-argCount-1;
-                if (th->returnedFromNativeErr) {
+                newFrame->slots = ec->stackTop-argc-1;
+                if (THREAD()->returnedFromNativeErr) {
+                    th = THREAD();
                     th->returnedFromNativeErr = false;
                     VM_DEBUG("native initializer returned from error");
                     vec_clear(&THREAD()->stackObjects);
@@ -1247,6 +1251,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                         popFrame();
                     }
                     ASSERT(th->inCCall == 0);
+                    VM_DEBUG("Rethrowing inside VM");
                     throwError(th->lastErrorThrown); // re-throw inside VM
                     return false;
                 } else {
@@ -1276,7 +1281,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         /*fillCallableName(callable, callableNameBuf, 200);*/
         /*VM_DEBUG("Calling native %s %s with %d args", isMethod ? "method" : "function", callableNameBuf, argCount);*/
 #endif
-        ObjNative *native = AS_NATIVE_FUNCTION(callable);
+        volatile ObjNative *native = AS_NATIVE_FUNCTION(callable);
         int argCountActual = argCount; // includes the callable on the stack, or the receiver if it's a method
         if (isMethod) {
             argCount++;
@@ -1289,24 +1294,29 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         } else {
             argCountActual++;
         }
-        captureNativeError();
+        volatile int argci = argCount;
+        volatile int argcActuali = argCountActual;
         pushNativeFrame(native);
-        CallFrame *newFrame = getFrame();
+        volatile CallFrame *newFrame = getFrame();
+        volatile LxThread *thOld = THREAD();
+        volatile VMExecContext *ec = EC;
+        captureNativeError();
         newFrame->instance = instance;
         newFrame->klass = frameClass;
         newFrame->block = th->curBlock;
         newFrame->lastBlock = th->lastBlock;
         newFrame->callInfo = callInfo;
-        Value val = native->function(argCount, EC->stackTop-argCount);
-        newFrame->slots = EC->stackTop-argCountActual;
-        if (th->returnedFromNativeErr) {
+        Value val = native->function(argci, EC->stackTop - argci);
+        newFrame->slots = ec->stackTop - argcActuali;
+        if (THREAD()->returnedFromNativeErr) {
             VM_DEBUG("Returned from native function with error");
-            th->returnedFromNativeErr = false;
+            THREAD()->returnedFromNativeErr = false;
             while (getFrame() >= newFrame) {
                 popFrame();
             }
-            ASSERT(th->inCCall == 0);
-            throwError(th->lastErrorThrown); // re-throw inside VM
+            THREAD()->inCCall = 0;
+            VM_DEBUG("Rethrowing inside VM");
+            throwError(THREAD()->lastErrorThrown); // re-throw inside VM
             return false;
         } else {
             VM_DEBUG("Returned from native function without error");
@@ -1854,7 +1864,7 @@ static ObjString *methodNameForBinop(OpCode code) {
  * Run the VM's instructions.
  */
 static InterpretResult vm_run() {
-    LxThread *th = THREAD();
+    volatile LxThread *th = THREAD();
     if (CLOX_OPTION_T(parseOnly) || CLOX_OPTION_T(compileOnly)) {
         return INTERPRET_OK;
     }
@@ -1867,12 +1877,12 @@ static InterpretResult vm_run() {
             VM_DEBUG("VM set rootVMLoopJumpBuf");
         } else {
             VM_DEBUG("VM caught error in rootVMLoopJumpBuf");
-            showUncaughtError(THREAD()->lastErrorThrown);
+            showUncaughtError(th->lastErrorThrown);
             return INTERPRET_RUNTIME_ERROR;
         }
     }
     th->vmRunLvl++;
-    Chunk *ch = currentChunk();
+    volatile Chunk *ch = currentChunk();
     if (ch->catchTbl != NULL) {
         CallFrame *f = getFrame();
         int jumpRes = setjmp(f->jmpBuf);
@@ -2937,7 +2947,7 @@ void unwindJumpRecover(ErrTagInfo *info) {
 void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status) {
     LxThread *th = THREAD();
     addErrInfo(errClass);
-    ErrTagInfo *errInfo = th->errInfo;
+    volatile ErrTagInfo *errInfo = th->errInfo;
     int jmpres = 0;
     if ((jmpres = setjmp(errInfo->jmpBuf)) == JUMP_SET) {
         *status = TAG_NONE;
@@ -2950,6 +2960,7 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
         return res;
     } else if (jmpres == JUMP_PERFORMED) {
         VM_DEBUG("vm_protect got to longjmp");
+        th = THREAD();
         ASSERT(errInfo == th->errInfo);
         unwindJumpRecover(errInfo);
         errInfo->status = TAG_RAISE;

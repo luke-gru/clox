@@ -92,7 +92,7 @@ typedef enum ThreadStatus {
 typedef struct LxThread {
     pthread_t tid;
     ThreadStatus status;
-    VMExecContext *ec; // current execution context of vm
+    volatile VMExecContext *ec; // current execution context of vm
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
     volatile ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
     Obj *thisObj;
@@ -156,7 +156,7 @@ typedef struct VM {
     // threading
     pthread_mutex_t GVLock; // global VM lock
     pthread_cond_t GVCond;
-    int GVLockStatus;
+    volatile int GVLockStatus;
     volatile LxThread *curThread;
     LxThread *mainThread;
     vec_void_t threads; // list of current thread ObjInstance pointers

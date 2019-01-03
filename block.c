@@ -48,7 +48,7 @@ static Value lxBlockYield(int argCount, Value *args) {
     for (int i = 1; i < argCount; i++) {
         push(args[i]);
     }
-    int status = 0;
+    volatile int status = 0;
     ObjFunction *func = blk->closure->function;
     THREAD()->curBlock = blk->closure->function;
     SETUP_BLOCK(func, status, THREAD()->errInfo, THREAD()->lastBlock)
