@@ -81,11 +81,12 @@ ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
     size_t nread = 0;
     size_t justRead = 0;
     char fileReadBuf[READBUF_SZ];
-    size_t maxRead = untilEOF ? READBUF_SZ : (numBytes > READBUF_SZ ? READBUF_SZ : numBytes);
+    size_t maxRead = untilEOF ? READBUF_SZ-1 : (numBytes > (READBUF_SZ-1) ? (READBUF_SZ-1) : numBytes);
     int last = errno;
     releaseGVL();
     while ((justRead = read(fd, fileReadBuf, maxRead)) > 0) {
         acquireGVL();
+        fileReadBuf[justRead] = '\0';
         pushCString(retBuf, fileReadBuf, justRead);
         releaseGVL();
         nread += justRead;
@@ -103,13 +104,14 @@ ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
 ObjString *IOReadlineFd(int fd, size_t maxLen) {
     ObjString *retBuf = NULL;
     if (maxLen == 0) maxLen = READBUF_SZ;
+    if (maxLen > READBUF_SZ) maxLen = READBUF_SZ;
     char fileReadBuf[READBUF_SZ];
     FILE *file = fdopen(fd, "r");
-    ASSERT(file); // TODO: handle uncommon error, it's already open...
+    ASSERT(file); // TODO: handle uncommon error, as it's already open this should not fail
     char *line = NULL;
     int last = errno;
     releaseGVL();
-    line = fgets(fileReadBuf, maxLen+1, file);
+    line = fgets(fileReadBuf, maxLen, file);
     acquireGVL();
     if (line == NULL) {
         errno = last;
