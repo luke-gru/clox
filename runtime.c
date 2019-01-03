@@ -150,11 +150,11 @@ Value lxSleep(int argCount, Value *args) {
     return NIL_VAL;
 }
 
-static ObjClosure *closureFromFn(ObjFunction *func) {
+static inline ObjClosure *closureFromFn(ObjFunction *func) {
     return newClosure(func);
 }
 
-static CallFrame *getOuterClosureFrame() {
+static inline CallFrame *getOuterClosureFrame() {
     CallFrame *frame = getFrame()->prev;
     while (frame) {
         if (!frame->closure) {

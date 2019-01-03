@@ -130,6 +130,8 @@ void Init_ProcessModule(void);
 void Init_rand(void);
 // class Thread
 void Init_ThreadClass(void);
+// Time
+void Init_TimeClass(void);
 
 // API for adding classes/modules/methods
 void addGlobalFunction(const char *name, NativeFn func);
