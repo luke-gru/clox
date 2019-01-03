@@ -18,7 +18,7 @@ NORETURN void die(const char *fmt, ...) {
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");
-    exit(1);
+    pthread_exit(NULL);
 }
 
 NORETURN void diePrintCBacktrace(const char *fmt, ...) {
@@ -39,7 +39,7 @@ NORETURN void diePrintCBacktrace(const char *fmt, ...) {
     va_end(ap);
     fprintf(stderr, "\n");
     printCBacktrace();
-    exit(1);
+    pthread_exit(NULL);
 }
 
 const char *opName(OpCode code) {

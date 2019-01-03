@@ -118,6 +118,7 @@ typedef struct LxThread {
     pthread_mutex_t sleepMutex;
     pthread_cond_t sleepCond;
     int opsRemaining;
+    int exitStatus;
 } LxThread;
 
 // threads

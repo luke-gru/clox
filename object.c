@@ -631,11 +631,7 @@ int arraySize(Value aryVal) {
 ValueArray *arrayGetHidden(Value aryVal) {
     ASSERT(IS_AN_ARRAY(aryVal));
     ObjInstance *inst = AS_INSTANCE(aryVal);
-    Value internalObjVal;
-    ASSERT(tableGet(inst->hiddenFields, OBJ_VAL(internedString("ary", 3)), &internalObjVal));
-    ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
-    ASSERT(ary);
-    return ary;
+    return (ValueArray*)inst->internal->data;
 }
 
 Value newArray(void) {
@@ -875,11 +871,7 @@ bool mapEquals(Value self, Value other) {
 Table *mapGetHidden(Value mapVal) {
     ASSERT(IS_A_MAP(mapVal));
     ObjInstance *inst = AS_INSTANCE(mapVal);
-    Value internalObjVal;
-    ASSERT(tableGet(inst->hiddenFields, OBJ_VAL(internedString("map", 3)), &internalObjVal));
-    Table *map = (Table*)internalGetData(AS_INTERNAL(internalObjVal));
-    ASSERT(map);
-    return map;
+    return (Table*)inst->internal->data;
 }
 
 ObjString *stringGetHidden(Value instance) {

@@ -426,7 +426,7 @@ void blackenObject(Obj *obj) {
             ObjClosure *closure = (ObjClosure*)obj;
             grayObject((Obj*)closure->function);
             for (int i = 0; i < closure->upvalueCount; i++) {
-                grayObject((Obj*)closure->upvalues[i]);
+                grayObject((Obj*)closure->upvalues[i]); // closed upvalues
             }
             break;
         }
@@ -1010,6 +1010,8 @@ void freeObjects(void) {
     struct timeval tRunStart;
     startGCRunProfileTimer(&tRunStart);
 
+    THREAD()->openUpvalues = NULL; // NOTE: should do this to all threads, really
+
     ObjAny *p, *pend;
 
     int phase = 1;
@@ -1029,13 +1031,7 @@ freeLoop:
                 continue;
             }
             if (phase == 2) {
-                if (isInternedStringObj(obj) || isThreadObj(obj)) {
-                    p++;
-                    continue;
-                }
-                if (obj->noGC) {
-                    unhideFromGC(obj);
-                }
+                unhideFromGC(obj);
                 freeObject(obj);
             } else { // phase 1
                 if (hasFinalizer(obj)) {
@@ -1092,8 +1088,8 @@ freeLoop:
     stopGCRunProfileTimer(&tRunStart);
     GCProf.totalRuns++;
 
-    /*ASSERT(GCStats.heapSize == 0);*/
-    /*ASSERT(GCStats.heapUsed == 0);*/
-    /*ASSERT(GCStats.heapUsedWaste == 0);*/
+    ASSERT(GCStats.heapSize == 0);
+    ASSERT(GCStats.heapUsed == 0);
+    ASSERT(GCStats.heapUsedWaste == 0);
     inGC = false;
 }

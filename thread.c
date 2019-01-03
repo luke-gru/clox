@@ -78,6 +78,7 @@ static void LxThreadSetup(LxThread *th) {
     pthread_mutex_init(&th->sleepMutex, NULL);
     pthread_cond_init(&th->sleepCond, NULL);
     th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
+    th->exitStatus = 0;
 }
 
 static void LxThreadCleanup(LxThread *th) {

@@ -1266,7 +1266,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                     VM_DEBUG("native initializer returned");
                     ec->stackTop = getFrame()->slots;
                     popFrame();
-                    ASSERT(IS_INSTANCE(val));
+                    ASSERT(IS_INSTANCE_LIKE(val));
                     push(val);
                     return true;
                 }
@@ -3015,9 +3015,10 @@ NORETURN void stopVM(int status) {
             printGCProfile();
         }
         vm.exited = true;
-        _exit(status);
+        exit(status);
     } else {
-        _exit(status);
+        THREAD()->exitStatus = status;
+        pthread_exit(NULL);
     }
 }
 

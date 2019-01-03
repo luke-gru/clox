@@ -20,7 +20,7 @@ static void markInternalBlock(Obj *internalObj) {
 }
 
 static LxBlock *blockGetHidden(Value block) {
-    return AS_INTERNAL(getHiddenProp(block, INTERN("blk")))->data;
+    return (LxBlock*) AS_INSTANCE(block)->internal->data;
 }
 
 static Value lxBlockInit(int argCount, Value *args) {
