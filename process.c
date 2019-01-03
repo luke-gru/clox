@@ -26,7 +26,7 @@ static Value getPpid(void) {
 
 static Value lxFork(int argCount, Value *args) {
     CHECK_ARITY("fork", 0, 1, argCount);
-    Value func;
+    Value func = NIL_VAL;
     if (argCount == 1) {
         func = *args;
         if (!isCallable(func)) {

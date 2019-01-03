@@ -106,7 +106,7 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
     Value ary = newArray();
     size_t nread = 0;
     releaseGVL();
-    Value line;
+    Value line = NIL_VAL;
     bool leftoverLine = false;
     char fileReadBuf[READBUF_SZ];
     while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
