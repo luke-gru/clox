@@ -301,7 +301,7 @@ static Value loadScriptHelper(Value fname, bool checkLoaded) {
         fileFound = true;
     } else {
         Value el; int i = 0;
-        LXARRAY_FOREACH(lxLoadPath, el, i) {
+        LXARRAY_FOREACH(OBJ_VAL(lxLoadPath), el, i) {
             if (!IS_A_STRING(el)) {
                 fprintf(stderr, "Warning: non-string found in loadPath: type=%s\n", typeOfVal(el));
                 continue;

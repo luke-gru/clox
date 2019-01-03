@@ -5,8 +5,8 @@
 #include "nodes.h"
 
 static CloxOptions options;
-int origArgc;
-char **origArgv;
+int origArgc = -1;
+char **origArgv = NULL;
 
 char *boolOptNames[] = { // order doesn't matter
     "printAST",

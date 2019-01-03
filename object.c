@@ -118,7 +118,7 @@ ObjString *internedString(char *chars, int length) {
     uint32_t hash = hashString(chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (!interned) {
-        interned = copyString(chars, length);
+        interned = hiddenString(chars, length);
         ASSERT(tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL));
         interned->isInterned = true;
         objFreeze((Obj*)interned);
@@ -639,9 +639,9 @@ ValueArray *arrayGetHidden(Value aryVal) {
 }
 
 Value newArray(void) {
-    DBG_ASSERT(nativeArrayInit);
     ObjInstance *instance = newInstance(lxAryClass);
     callVMMethod(instance, OBJ_VAL(nativeArrayInit), 0, NULL);
+    ASSERT(IS_AN_ARRAY(peek(0)));
     return pop();
 }
 
@@ -1047,8 +1047,10 @@ Value newThreadFromOldCurrentThread(void) {
 }
 
 LxThread *threadGetHidden(Value thread) {
-    Value internal = getHiddenProp(thread, internedString("th", 2));
+    Value internal;
+    internal = OBJ_VAL(AS_INSTANCE(thread)->internal);
     ObjInternal *i = AS_INTERNAL(internal);
+    ASSERT(i);
     ASSERT(i->data);
     return (LxThread*)i->data;
 }

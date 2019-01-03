@@ -1,11 +1,11 @@
-CC=clang
-DEFINES=-D_GNU_SOURCE -DNAN_TAGGING
-CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-incompatible-pointer-types-discards-qualifiers -Wno-tautological-constant-out-of-range-compare -I. -Ivendor -pthread ${DEFINES}
+CC=gcc
+DEFINES=-D_GNU_SOURCE
+CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -Wno-tautological-constant-out-of-range-compare -I. -Ivendor -pthread ${DEFINES}
 SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c io.c file.c thread.c block.c rand.c repl.c debugger.c vendor/linenoise.c
 TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c io.c file.c thread.c block.c rand.c debugger.c
 TEST_FILES = test/test_object.c test/test_nodes.c test/test_compiler.c test/test_vm.c test/test_gc.c test/test_examples.c test/test_regex.c
-DEBUG_FLAGS=-O2 -g -rdynamic
-TEST_FLAGS=-O2 -g -rdynamic -Itest/include -I.
+DEBUG_FLAGS=-O0 -g -rdynamic
+TEST_FLAGS=-O0 -g -rdynamic -Itest/include -I.
 RELEASE_FLAGS=-O3 -DNDEBUG
 BUILD_DIR=bin
 BUILD_FILE_RELEASE=clox

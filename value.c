@@ -425,17 +425,17 @@ void fillCallableName(Value callable, const char *buf, size_t buflen) {
     memset(buf, 0, buflen);
     ASSERT(isCallable(callable));
     if (IS_CLASS(callable)) {
-        sprintf(buf, "%s#init", className(AS_CLASS(callable)));
+        snprintf(buf, buflen, "%s#init", className(AS_CLASS(callable)));
     } else if (IS_NATIVE_FUNCTION_FUNC(callable)) {
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
         char *nameStr = native->name->chars;
         if (native->klass) { // method
             char *classNm = className((ObjClass*)native->klass);
             bool isStatic = native->isStatic;
-            sprintf(buf, "%s%c%s", classNm, isStatic ? '.' : '#',
+            snprintf(buf, buflen, "%s%c%s", classNm, isStatic ? '.' : '#',
                     nameStr);
         } else {
-            sprintf(buf, "%s", nameStr);
+            snprintf(buf, buflen, "%s", nameStr);
         }
     } else if (IS_CLOSURE(callable)) {
         ObjFunction *func = AS_CLOSURE(callable)->function;
@@ -443,13 +443,13 @@ void fillCallableName(Value callable, const char *buf, size_t buflen) {
             ObjClass *klass = (ObjClass*)func->klass;
             char *classNm = className(klass);
             bool isStatic = func->isSingletonMethod;
-            sprintf(buf, "%s%c%s", classNm, isStatic ? '.' : '#',
+            snprintf(buf, buflen, "%s%c%s", classNm, isStatic ? '.' : '#',
                     func->name->chars);
         } else {
-            sprintf(buf, "%s", func->name ? func->name->chars : "(anon");
+            snprintf(buf, buflen, "%s", func->name ? func->name->chars : "(anon");
         }
     } else {
-        sprintf(buf, "%s", "TODO"); // TODO
+        snprintf(buf, buflen, "%s", "TODO"); // TODO
     }
 }
 

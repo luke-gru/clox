@@ -182,9 +182,6 @@ extern ObjClass *lxBreakBlockErrClass;
 extern ObjClass *lxContinueBlockErrClass;
 extern ObjClass *lxReturnBlockErrClass;
 
-extern Value lxLoadPath;
-extern Value lxArgv;
-
 typedef struct ObjInstance {
   Obj object;
   ObjClass *klass;
@@ -194,6 +191,9 @@ typedef struct ObjInstance {
   Table *hiddenFields;
   ObjInternal *internal;
 } ObjInstance;
+
+extern ObjInstance *lxLoadPath;
+extern ObjInstance *lxArgv;
 
 typedef struct ObjBoundMethod {
   Obj object;

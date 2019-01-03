@@ -130,8 +130,8 @@ ObjClass *lxBreakBlockErrClass;
 ObjClass *lxContinueBlockErrClass;
 ObjClass *lxReturnBlockErrClass;
 
-Value lxLoadPath; // load path for loadScript/requireScript (-L flag)
-Value lxArgv;
+ObjInstance *lxLoadPath; // load path for loadScript/requireScript (-L flag)
+ObjInstance *lxArgv;
 
 ObjNative *nativeObjectInit = NULL;
 ObjNative *nativeIteratorInit = NULL;
@@ -253,9 +253,11 @@ static void defineNativeClasses(void) {
 
 // NOTE: this initialization function can create Lox runtime objects
 static void defineGlobalVariables(void) {
-    lxLoadPath = newArray();
+    Value loadPathVal = newArray();
+    ASSERT(IS_INSTANCE(loadPathVal));
+    lxLoadPath = AS_INSTANCE(loadPathVal);
     ObjString *loadPathStr = internedString("loadPath", 8);
-    ASSERT(tableSet(&vm.globals, OBJ_VAL(loadPathStr), lxLoadPath));
+    ASSERT(tableSet(&vm.globals, OBJ_VAL(loadPathStr), loadPathVal));
     // populate load path from -L option given to commandline
     char *lpath = GET_OPTION(initialLoadPath);
     if (lpath && strlen(lpath) > 0) {
@@ -263,23 +265,25 @@ static void defineGlobalVariables(void) {
         char *end = NULL;
         while ((end = strchr(beg, ':'))) {
             ObjString *str = copyString(beg, end - beg);
-            arrayPush(lxLoadPath, newStringInstance(str));
+            arrayPush(loadPathVal, newStringInstance(str));
             beg = end+1;
         }
     }
 
     ObjString *argvStr = internedString("ARGV", 4);
-    lxArgv = newArray();
-    ASSERT(tableSet(&vm.globals, OBJ_VAL(argvStr), lxArgv));
+    Value argvVal = newArray();
+    ASSERT(IS_INSTANCE(argvVal));
+    lxArgv = AS_INSTANCE(argvVal);
+    ASSERT(tableSet(&vm.globals, OBJ_VAL(argvStr), argvVal));
+    ASSERT(origArgv);
+    ASSERT(origArgc >= 1);
     for (int i = 0; i < origArgc; i++) {
         ObjString *argStr = copyString(origArgv[i], strlen(origArgv[i]));
         Value arg = newStringInstance(argStr);
-        hideFromGC(AS_OBJ(arg));
-        arrayPush(lxArgv, arg);
-        // FIXME: for some reason, GC fails sometimes when we don't hide this.
-        // Really not sure why, we are marking vm.globals.
-        unhideFromGC(AS_OBJ(arg));
+        arrayPush(OBJ_VAL(lxArgv), arg);
     }
+    hideFromGC((Obj*)lxArgv);
+    hideFromGC((Obj*)lxLoadPath);
 }
 
 static bool isIterableType(Value val) {
@@ -409,8 +413,8 @@ void initVM() {
 
     initTable(&vm.globals);
     initTable(&vm.strings); // interned strings
-
     vec_init(&vm.hiddenObjs);
+
     ObjInstance *mainT = initMainThread();
     push_EC();
     resetStack();
@@ -428,6 +432,7 @@ void initVM() {
     vm.instructionStepperOn = CLOX_OPTION_T(stepVMExecution);
 
     vm.inited = true; // NOTE: VM has to be inited before creation of strings
+    tableSet(mainT->hiddenFields, OBJ_VAL(INTERN("th")), OBJ_VAL(mainT->internal));
     vm.exited = false;
     vm.initString = internedString("init", 4);
     vm.fileString = internedString("__FILE__", 8);
@@ -1142,7 +1147,7 @@ static void pushNativeFrame(ObjNative *native) {
 }
 
 // sets up VM/C call jumpbuf if not set
-static void captureNativeError(void) {
+static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args) {
     volatile LxThread *th = THREAD();
     if (th->inCCall == 0) {
         VM_DEBUG("%s", "Setting VM/C error jump buffer");
@@ -1150,7 +1155,8 @@ static void captureNativeError(void) {
         int jumpRes = setjmp(th->cCallJumpBuf);
         if (jumpRes == JUMP_SET) { // jump is set, prepared to enter C land
             th->cCallJumpBufSet = true;
-            return;
+            Value ret = nativeFunc->function(argCount, args);
+            return ret;
         } else { // C call longjmped here from throwError()
             VM_DEBUG("longmped to VM/C error jump buf");
             ASSERT(th->inCCall > 0);
@@ -1158,7 +1164,10 @@ static void captureNativeError(void) {
             th->cCallThrew = false;
             th->returnedFromNativeErr = true;
             th->cCallJumpBufSet = false;
+            return UNDEF_VAL;
         }
+    } else {
+        return nativeFunc->function(argCount, args);
     }
 }
 
@@ -1187,7 +1196,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     LxThread *th = THREAD();
     ObjClosure *closure = NULL;
     Value instanceVal;
-    ObjInstance *instance = NULL;
+    volatile ObjInstance *instance = NULL;
     ObjClass *frameClass = NULL;
     if (isMethod) {
         instance = AS_INSTANCE(EC->stackTop[-argCount-1]);
@@ -1224,8 +1233,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
             VM_DEBUG("callable is initializer for class %s", klassName);
             initializer = OBJ_VAL(init);
             if (IS_NATIVE_FUNCTION(initializer)) {
-                captureNativeError();
-                VM_DEBUG("calling native initializer for class %s with %d args", klassName, argCount);
                 ObjNative *nativeInit = AS_NATIVE_FUNCTION(initializer);
                 ASSERT(nativeInit->function);
                 pushNativeFrame(nativeInit);
@@ -1238,12 +1245,12 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 newFrame->callInfo = callInfo;
                 volatile int argc = argCount;
                 volatile VMExecContext *ec = EC;
-                nativeInit->function(argCount+1, EC->stackTop-argCount-1);
+                VM_DEBUG("calling native initializer for class %s with %d args", klassName, argCount);
+                Value val = captureNativeError(nativeInit, argCount+1, EC->stackTop-argCount-1);
                 th = THREAD();
                 th->thisObj = oldThis;
                 newFrame->slots = ec->stackTop-argc-1;
                 if (THREAD()->returnedFromNativeErr) {
-                    th = THREAD();
                     th->returnedFromNativeErr = false;
                     VM_DEBUG("native initializer returned from error");
                     vec_clear(&THREAD()->stackObjects);
@@ -1256,9 +1263,10 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                     return false;
                 } else {
                     VM_DEBUG("native initializer returned");
-                    EC->stackTop = getFrame()->slots;
+                    ec->stackTop = getFrame()->slots;
                     popFrame();
-                    push(OBJ_VAL(instance));
+                    ASSERT(IS_INSTANCE(val));
+                    push(val);
                     return true;
                 }
             }
@@ -1277,9 +1285,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         return doCallCallable(OBJ_VAL(callable), argCount, true, callInfo);
     } else if (IS_NATIVE_FUNCTION(callable)) {
 #ifndef NDEBUG
-        static const char callableNameBuf[200];
-        /*fillCallableName(callable, callableNameBuf, 200);*/
-        /*VM_DEBUG("Calling native %s %s with %d args", isMethod ? "method" : "function", callableNameBuf, argCount);*/
+        const char callableNameBuf[200];
+        fillCallableName(callable, callableNameBuf, 200);
+        VM_DEBUG("Calling native %s %s with %d args", isMethod ? "method" : "function", callableNameBuf, argCount);
 #endif
         volatile ObjNative *native = AS_NATIVE_FUNCTION(callable);
         int argCountActual = argCount; // includes the callable on the stack, or the receiver if it's a method
@@ -1298,15 +1306,13 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         volatile int argcActuali = argCountActual;
         pushNativeFrame(native);
         volatile CallFrame *newFrame = getFrame();
-        volatile LxThread *thOld = THREAD();
         volatile VMExecContext *ec = EC;
-        captureNativeError();
         newFrame->instance = instance;
         newFrame->klass = frameClass;
         newFrame->block = th->curBlock;
         newFrame->lastBlock = th->lastBlock;
         newFrame->callInfo = callInfo;
-        Value val = native->function(argci, EC->stackTop - argci);
+        volatile Value val = captureNativeError(native, argci, EC->stackTop-argci);
         newFrame->slots = ec->stackTop - argcActuali;
         if (THREAD()->returnedFromNativeErr) {
             VM_DEBUG("Returned from native function with error");
@@ -1320,8 +1326,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
             return false;
         } else {
             VM_DEBUG("Returned from native function without error");
-            EC->stackTop = getFrame()->slots;
+            ec->stackTop = getFrame()->slots;
             popFrame();
+            ASSERT(!IS_UNDEF(val));
             push(val);
         }
         return true;
@@ -1612,6 +1619,9 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
                 // found target catch
                 *ipOut = currentChunk()->code + row->itarget;
                 *rowFound = row;
+                while (getFrame()->isCCall) {
+                    popFrame();
+                }
                 VM_DEBUG("Catch jump location found");
                 return true;
             }
@@ -1678,9 +1688,9 @@ NORETURN void throwError(Value self) {
     if (findThrowJumpLoc(klass, &ipNew, &catchRow)) {
         ASSERT(ipNew);
         ASSERT(catchRow);
-        ASSERT(getFrame());
         catchRow->lastThrownValue = self;
         getFrame()->ip = ipNew;
+        DBG_ASSERT(getFrame()->closure->function->chunk->catchTbl);
         ASSERT(getFrame()->jmpBufSet);
         longjmp(getFrame()->jmpBuf, JUMP_PERFORMED);
     } else {

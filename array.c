@@ -7,7 +7,6 @@
 ObjClass *lxAryClass;
 
 extern ObjNative *nativeArrayInit;
-static ObjString *aryStr;
 
 static void markInternalAry(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
@@ -55,7 +54,7 @@ static Value lxArrayInit(int argCount, Value *args) {
     }
     internalObj->data = ary;
     internalObj->dataSz = sizeof(ValueArray);
-    tableSet(selfObj->hiddenFields, OBJ_VAL(aryStr), OBJ_VAL(internalObj));
+    tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("ary")), OBJ_VAL(internalObj));
     selfObj->internal = internalObj;
     for (int i = 1; i < argCount; i++) {
         writeValueArrayEnd(ary, args[i]);
@@ -75,7 +74,7 @@ static Value lxArrayDup(int argCount, Value *args) {
     initValueArray(dupAry);
     internalObj->data = dupAry;
     internalObj->dataSz = sizeof(ValueArray);
-    tableSet(dupObj->hiddenFields, OBJ_VAL(aryStr), OBJ_VAL(internalObj));
+    tableSet(dupObj->hiddenFields, OBJ_VAL(INTERN("ary")), OBJ_VAL(internalObj));
     dupObj->internal = internalObj;
 
     // XXX: might be slow to dup large arrays, should bulk copy memory using memcpy or similar
@@ -205,7 +204,7 @@ static Value lxArrayOpIndexSet(int argCount, Value *args) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
     Value internalObjVal;
-    ASSERT(tableGet(selfObj->hiddenFields, OBJ_VAL(aryStr), &internalObjVal));
+    ASSERT(tableGet(selfObj->hiddenFields, OBJ_VAL(INTERN("ary")), &internalObjVal));
     ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
     ASSERT(ary);
     int idx = (int)AS_NUMBER(num);
@@ -272,15 +271,15 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
     }
     internalObj->data = ary;
     internalObj->dataSz = sizeof(ValueArray);
-    tableSet(selfObj->hiddenFields, OBJ_VAL(aryStr), OBJ_VAL(internalObj));
+    tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("ary")), OBJ_VAL(internalObj));
     selfObj->internal = internalObj;
     return ret;
 }
 
 static Value lxArrayEach(int argCount, Value *args) {
     CHECK_ARITY("Array#each", 1, 1, argCount);
-    ValueArray *ary = ARRAY_GETHIDDEN(*args);
-    Value el; int valIdx = 0;
+    volatile ValueArray *ary = ARRAY_GETHIDDEN(*args);
+    volatile Value el; volatile int valIdx = 0;
     volatile int status = 0;
     volatile int iterStart = 0;
     volatile LxThread *th = THREAD();
@@ -312,11 +311,11 @@ static Value lxArrayEach(int argCount, Value *args) {
 
 static Value lxArrayMap(int argCount, Value *args) {
     CHECK_ARITY("Array#map", 1, 1, argCount);
-    ValueArray *ary = ARRAY_GETHIDDEN(*args);
-    Value el; int valIdx = 0;
+    volatile ValueArray *ary = ARRAY_GETHIDDEN(*args);
+    volatile Value el; int valIdx = 0;
     volatile int status = 0;
     volatile int iterStart = 0;
-    Value ret = newArray();
+    volatile Value ret = newArray();
     ObjFunction *blk = THREAD()->curBlock;
     SETUP_BLOCK(blk, status, THREAD()->errInfo, THREAD()->lastBlock)
     while (true) {
@@ -362,8 +361,6 @@ static Value lxArrayWrapStatic(int argCount, Value *args) {
 }
 
 void Init_ArrayClass() {
-    aryStr = internedString("ary", 3);
-
     // class Array
     ObjClass *arrayClass = addGlobalClass("Array", lxObjClass);
     ObjClass *arrayStatic = classSingletonClass(arrayClass);

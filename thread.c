@@ -10,9 +10,6 @@ ObjClass *lxThreadClass;
 ObjClass *lxMutexClass;
 ObjNative *nativeThreadInit = NULL;
 
-ObjString *thKey;
-ObjString *mutexKey;
-
 #define BLOCKING_REGION_CORE(exec) do { \
     GVL_UNLOCK_BEGIN(); {\
 	    exec; \
@@ -102,7 +99,7 @@ static void newThreadSetup(LxThread *parentThread) {
     LxThread *th = ALLOCATE(LxThread, 1);
     LxThreadSetup(th);
     internalObj->data = th;
-    tableSet(thInstance->hiddenFields, OBJ_VAL(thKey), OBJ_VAL(internalObj));
+    tableSet(thInstance->hiddenFields, OBJ_VAL(INTERN("th")), OBJ_VAL(internalObj));
 
     // set thread state from current (last) thread
     VMExecContext *ctx = NULL; int ctxIdx = 0;
@@ -237,9 +234,11 @@ Value lxThreadInit(int argCount, Value *args) {
     LxThreadSetup(th);
     internalObj->data = th;
     selfObj->internal = internalObj;
-    // NOTE: use INTERN("th") here because thKey may not be initialized (this
-    // function can be called during initVM).
-    tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("th")), OBJ_VAL(internalObj));
+    if (vm.inited) {
+        tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("th")), OBJ_VAL(internalObj));
+    } else {
+        tableSet(selfObj->hiddenFields, NUMBER_VAL(1), OBJ_VAL(internalObj));
+    }
     return self;
 }
 
@@ -306,7 +305,7 @@ void unlockMutex(LxMutex *mutex) {
 }
 
 static LxMutex *mutexGetHidden(Value mutex) {
-    Value internal = getHiddenProp(mutex, mutexKey);
+    Value internal = getHiddenProp(mutex, INTERN("mutex"));
     ASSERT(IS_INTERNAL(internal));
     LxMutex *m = AS_INTERNAL(internal)->data;
     return m;
@@ -322,7 +321,7 @@ static Value lxMutexInit(int argCount, Value *args) {
     setupMutex(mutex);
     internalObj->data = mutex;
     selfObj->internal = internalObj;
-    tableSet(selfObj->hiddenFields, OBJ_VAL(mutexKey), OBJ_VAL(internalObj));
+    tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("mutex")), OBJ_VAL(internalObj));
     return self;
 }
 
@@ -357,8 +356,4 @@ void Init_ThreadClass() {
     addNativeMethod(mutexClass, "init", lxMutexInit);
     addNativeMethod(mutexClass, "lock", lxMutexLock);
     addNativeMethod(mutexClass, "unlock", lxMutexUnlock);
-
-    thKey = INTERN("th");
-    hideFromGC((Obj*)thKey);
-    mutexKey = INTERN("mutex");
 }

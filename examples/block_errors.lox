@@ -12,25 +12,26 @@ try {
 }
 print typeof(err);
 
-/*err = nil;*/
+err = nil;
 
-/*for (var i = 0; i < 5; i += 1) {*/
-  /*try {*/
-    /*[1,2,3].each() -> (num) {*/
-      /*if (num == 2) {*/
-        /*throw Error("from block");*/
-      /*}*/
-    /*};*/
-  /*} catch (Error e) {*/
-    /*print "caught error 2";*/
-    /*err = e;*/
-  /*}*/
-/*}*/
-/*print typeof(err);*/
+for (var i = 0; i < 5; i += 1) {
+  try {
+    [1,2,3].each() -> (num) {
+      if (num == 2) {
+        throw Error("from block");
+      }
+    };
+  } catch (Error e) {
+    print "caught error 2";
+    err = e;
+  }
+}
+print typeof(err);
 
 __END__
 -- expect: --
 1
+2
 caught error 1
 instance
 caught error 2

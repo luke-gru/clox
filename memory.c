@@ -664,6 +664,7 @@ void setGCOnOff(bool turnOn) {
 
 void hideFromGC(Obj *obj) {
     DBG_ASSERT(obj);
+    DBG_ASSERT(vm.inited);
     if (!obj->noGC) {
         vec_push(&vm.hiddenObjs, obj);
         obj->noGC = true;
@@ -672,6 +673,7 @@ void hideFromGC(Obj *obj) {
 
 void unhideFromGC(Obj *obj) {
     DBG_ASSERT(obj);
+    DBG_ASSERT(vm.inited);
     if (obj->noGC) {
         vec_remove(&vm.hiddenObjs, obj);
         obj->noGC = false;
