@@ -1941,7 +1941,8 @@ static InterpretResult vm_run() {
     } while (0)
 
   /*fprintf(stderr, "VM run level: %d\n", vmRunLvl);*/
-  for (;;) {
+  /* Main vm loop */
+vmLoop:
       th->opsRemaining--;
       if (th->opsRemaining <= 0) {
           th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
@@ -2004,67 +2005,85 @@ static InterpretResult vm_run() {
     }
 #endif
 
+#ifdef COMPUTED_GOTO
+    static void *dispatchTable[] = {
+    #define OPCODE(name) &&code_##name,
+    #include "opcodes.h.inc"
+    #undef OPCODE
+    };
+    #define CASE_OP(name)     code_##name
+
+    #define DISPATCH_TOP      goto *dispatchTable[instruction];
+    #define DISPATCH_BOTTOM() goto vmLoop
+#else
+    #define CASE_OP(name)     case OP_##name
+    #define DISPATCH_BOTTOM() goto vmLoop
+#endif
+
     uint8_t instruction = READ_BYTE();
 #ifndef NDEBUG
     vm.lastOp = instruction;
 #endif
+
+#ifdef COMPUTED_GOTO
+    DISPATCH_TOP
+#else
     switch (instruction) {
-      case OP_CONSTANT: { // numbers, code chunks
-        Value constant = READ_CONSTANT();
-        push(constant);
-        break;
+#endif
+      CASE_OP(CONSTANT): { // numbers, code chunks
+          Value constant = READ_CONSTANT();
+          push(constant);
+          DISPATCH_BOTTOM();
       }
-      case OP_ADD:      BINARY_OP(+,OP_ADD, double); break;
-      case OP_SUBTRACT: BINARY_OP(-,OP_SUBTRACT, double); break;
-      case OP_MULTIPLY: BINARY_OP(*,OP_MULTIPLY, double); break;
-      case OP_DIVIDE:   BINARY_OP(/,OP_DIVIDE, double); break;
-      case OP_MODULO:   BINARY_OP(%,OP_MODULO, int); break;
-      case OP_BITOR:    BINARY_OP(|,OP_BITOR, int); break;
-      case OP_BITAND:   BINARY_OP(&,OP_BITAND, int); break;
-      case OP_BITXOR:   BINARY_OP(^,OP_BITXOR, int); break;
-      case OP_SHOVEL_L: BINARY_OP(<<,OP_SHOVEL_L,int); break;
-      case OP_SHOVEL_R: BINARY_OP(>>,OP_SHOVEL_R,int); break;
-      case OP_NEGATE: {
-        Value val = pop();
-        if (!IS_NUMBER(val)) {
-            throwErrorFmt(lxTypeErrClass, "Can only negate numbers, type=%s", typeOfVal(val));
-        }
-        push(NUMBER_VAL(-AS_NUMBER(val)));
-        break;
+      CASE_OP(ADD):      BINARY_OP(+,OP_ADD, double); DISPATCH_BOTTOM();
+      CASE_OP(SUBTRACT): BINARY_OP(-,OP_SUBTRACT, double); DISPATCH_BOTTOM();
+      CASE_OP(MULTIPLY): BINARY_OP(*,OP_MULTIPLY, double); DISPATCH_BOTTOM();
+      CASE_OP(DIVIDE):   BINARY_OP(/,OP_DIVIDE, double); DISPATCH_BOTTOM();
+      CASE_OP(MODULO):   BINARY_OP(%,OP_MODULO, int); DISPATCH_BOTTOM();
+      CASE_OP(BITOR):    BINARY_OP(|,OP_BITOR, int); DISPATCH_BOTTOM();
+      CASE_OP(BITAND):   BINARY_OP(&,OP_BITAND, int); DISPATCH_BOTTOM();
+      CASE_OP(BITXOR):   BINARY_OP(^,OP_BITXOR, int); DISPATCH_BOTTOM();
+      CASE_OP(SHOVEL_L): BINARY_OP(<<,OP_SHOVEL_L,int); DISPATCH_BOTTOM();
+      CASE_OP(SHOVEL_R): BINARY_OP(>>,OP_SHOVEL_R,int); DISPATCH_BOTTOM();
+      CASE_OP(NEGATE): {
+          Value val = pop();
+          if (!IS_NUMBER(val)) {
+              throwErrorFmt(lxTypeErrClass, "Can only negate numbers, type=%s", typeOfVal(val));
+          }
+          push(NUMBER_VAL(-AS_NUMBER(val)));
+          DISPATCH_BOTTOM();
       }
-      case OP_LESS: {
-        Value rhs = pop(); // rhs
-        Value lhs = pop(); // lhs
-        if (!canCmpValues(lhs, rhs, instruction)) {
-            throwErrorFmt(lxTypeErrClass,
-                "Can only compare 2 numbers or 2 strings with '<', lhs=%s, rhs=%s",
-                typeOfVal(lhs), typeOfVal(rhs));
-            break;
-        }
-        if (cmpValues(lhs, rhs, instruction) == -1) {
-            push(trueValue());
-        } else {
-            push(falseValue());
-        }
-        break;
+      CASE_OP(LESS): {
+          Value rhs = pop(); // rhs
+          Value lhs = pop(); // lhs
+          if (!canCmpValues(lhs, rhs, instruction)) {
+              throwErrorFmt(lxTypeErrClass,
+                      "Can only compare 2 numbers or 2 strings with '<', lhs=%s, rhs=%s",
+                      typeOfVal(lhs), typeOfVal(rhs));
+          }
+          if (cmpValues(lhs, rhs, instruction) == -1) {
+              push(trueValue());
+          } else {
+              push(falseValue());
+          }
+          DISPATCH_BOTTOM();
       }
-      case OP_GREATER: {
+      CASE_OP(GREATER): {
         Value rhs = pop();
         Value lhs = pop();
         if (!canCmpValues(lhs, rhs, instruction)) {
             throwErrorFmt(lxTypeErrClass,
                 "Can only compare 2 numbers or 2 strings with '>', lhs=%s, rhs=%s",
                 typeOfVal(lhs), typeOfVal(rhs));
-            break;
         }
         if (cmpValues(lhs, rhs, instruction) == 1) {
             push(trueValue());
         } else {
             push(falseValue());
         }
-        break;
+        DISPATCH_BOTTOM();
       }
-      case OP_EQUAL: {
+      CASE_OP(EQUAL): {
           Value rhs = pop();
           Value lhs = pop();
           if (isValueOpEqual(lhs, rhs)) {
@@ -2072,9 +2091,9 @@ static InterpretResult vm_run() {
           } else {
               push(falseValue());
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_NOT_EQUAL: {
+      CASE_OP(NOT_EQUAL): {
           Value rhs = pop();
           Value lhs = pop();
           if (isValueOpEqual(lhs, rhs)) {
@@ -2082,62 +2101,60 @@ static InterpretResult vm_run() {
           } else {
               push(trueValue());
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_NOT: {
+      CASE_OP(NOT): {
           Value val = pop();
           push(BOOL_VAL(!isTruthy(val)));
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_GREATER_EQUAL: {
+      CASE_OP(GREATER_EQUAL): {
           Value rhs = pop();
           Value lhs = pop();
           if (!canCmpValues(lhs, rhs, instruction)) {
               throwErrorFmt(lxTypeErrClass,
                   "Can only compare 2 numbers or 2 strings with '>=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
-              break;
           }
           if (cmpValues(lhs, rhs, instruction) != -1) {
               push(trueValue());
           } else {
               push(falseValue());
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_LESS_EQUAL: {
+      CASE_OP(LESS_EQUAL): {
           Value rhs = pop();
           Value lhs = pop();
           if (!canCmpValues(lhs, rhs, instruction)) {
               throwErrorFmt(lxTypeErrClass,
                   "Can only compare 2 numbers or 2 strings with '<=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
-              break;
           }
           if (cmpValues(lhs, rhs, instruction) != 1) {
               push(trueValue());
           } else {
               push(falseValue());
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_PRINT: {
-        Value val = pop();
-        if (!vm.printBuf || vm.printToStdout) {
-            printValue(stdout, val, true, -1);
-            printf("\n");
-            fflush(stdout);
-        }
-        if (vm.printBuf) {
-            ObjString *out = valueToString(val, hiddenString);
-            ASSERT(out);
-            pushCString(vm.printBuf, out->chars, strlen(out->chars));
-            pushCString(vm.printBuf, "\n", 1);
-            unhideFromGC((Obj*)out);
-        }
-        break;
+      CASE_OP(PRINT): {
+          Value val = pop();
+          if (!vm.printBuf || vm.printToStdout) {
+              printValue(stdout, val, true, -1);
+              printf("\n");
+              fflush(stdout);
+          }
+          if (vm.printBuf) {
+              ObjString *out = valueToString(val, hiddenString);
+              ASSERT(out);
+              pushCString(vm.printBuf, out->chars, strlen(out->chars));
+              pushCString(vm.printBuf, "\n", 1);
+              unhideFromGC((Obj*)out);
+          }
+          DISPATCH_BOTTOM();
       }
-      case OP_DEFINE_GLOBAL: {
+      CASE_OP(DEFINE_GLOBAL): {
           Value varName = READ_CONSTANT();
           char *name = AS_CSTRING(varName);
           if (isUnredefinableGlobal(name)) {
@@ -2147,43 +2164,43 @@ static InterpretResult vm_run() {
           Value val = peek(0);
           tableSet(&vm.globals, varName, val);
           pop();
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_GET_GLOBAL: {
-        Value varName = READ_CONSTANT();
-        Value val;
-        if (tableGet(&EC->roGlobals, varName, &val)) {
-            push(val);
-        } else if (tableGet(&vm.globals, varName, &val)) {
-            push(val);
-        } else {
-            throwErrorFmt(lxNameErrClass, "Undefined global variable '%s'.", AS_STRING(varName)->chars);
-        }
-        break;
+      CASE_OP(GET_GLOBAL): {
+          Value varName = READ_CONSTANT();
+          Value val;
+          if (tableGet(&EC->roGlobals, varName, &val)) {
+              push(val);
+          } else if (tableGet(&vm.globals, varName, &val)) {
+              push(val);
+          } else {
+              throwErrorFmt(lxNameErrClass, "Undefined global variable '%s'.", AS_STRING(varName)->chars);
+          }
+          DISPATCH_BOTTOM();
       }
-      case OP_SET_GLOBAL: {
-        Value val = peek(0);
-        Value varName = READ_CONSTANT();
-        char *name = AS_CSTRING(varName);
-        if (isUnredefinableGlobal(name)) {
-            throwErrorFmt(lxNameErrClass, "Can't redefine global variable '%s'", name);
-        }
-        tableSet(&vm.globals, varName, val);
-        break;
+      CASE_OP(SET_GLOBAL): {
+          Value val = peek(0);
+          Value varName = READ_CONSTANT();
+          char *name = AS_CSTRING(varName);
+          if (isUnredefinableGlobal(name)) {
+              throwErrorFmt(lxNameErrClass, "Can't redefine global variable '%s'", name);
+          }
+          tableSet(&vm.globals, varName, val);
+          DISPATCH_BOTTOM();
       }
-      case OP_NIL: {
-        push(nilValue());
-        break;
+      CASE_OP(NIL): {
+          push(nilValue());
+          DISPATCH_BOTTOM();
       }
-      case OP_TRUE: {
-        push(BOOL_VAL(true));
-        break;
+      CASE_OP(TRUE): {
+          push(BOOL_VAL(true));
+          DISPATCH_BOTTOM();
       }
-      case OP_FALSE: {
-        push(BOOL_VAL(false));
-        break;
+      CASE_OP(FALSE): {
+          push(BOOL_VAL(false));
+          DISPATCH_BOTTOM();
       }
-      case OP_AND: {
+      CASE_OP(AND): {
           Value rhs = pop();
           Value lhs = pop();
           (void)lhs;
@@ -2191,27 +2208,27 @@ static InterpretResult vm_run() {
           // short-circuited (a JUMP_IF_FALSE is output in the bytecode for
           // the lhs).
           push(isTruthy(rhs) ? rhs : BOOL_VAL(false));
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_OR: {
+      CASE_OP(OR): {
           Value rhs = pop();
           Value lhs = pop();
           push(isTruthy(lhs) || isTruthy(rhs) ? rhs : lhs);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_POP: {
+      CASE_OP(POP): {
           pop();
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_SET_LOCAL: {
+      CASE_OP(SET_LOCAL): {
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
           ASSERT(slot >= 0);
           getFrame()->slots[slot] = peek(0); // locals are popped at end of scope by VM
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_UNPACK_SET_LOCAL: {
+      CASE_OP(UNPACK_SET_LOCAL): {
           uint8_t slot = READ_BYTE();
           uint8_t unpackIdx = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
@@ -2225,36 +2242,36 @@ static InterpretResult vm_run() {
               peekIdx++;
           }
           getFrame()->slots[slot] = unpackValue(peek(peekIdx+unpackIdx), unpackIdx); // locals are popped at end of scope by VM
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_GET_LOCAL: {
+      CASE_OP(GET_LOCAL): {
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
           ASSERT(slot >= 0);
           push(getFrame()->slots[slot]);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_GET_UPVALUE: {
+      CASE_OP(GET_UPVALUE): {
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
           push(*getFrame()->closure->upvalues[slot]->value);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_SET_UPVALUE: {
+      CASE_OP(SET_UPVALUE): {
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
           *getFrame()->closure->upvalues[slot]->value = peek(0);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_CLOSE_UPVALUE: {
+      CASE_OP(CLOSE_UPVALUE): {
           closeUpvalues(EC->stackTop - 1);
           pop(); // pop the variable from the stack frame
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_CLOSURE: {
+      CASE_OP(CLOSURE): {
           Value funcVal = READ_CONSTANT();
           ASSERT(IS_FUNCTION(funcVal));
           ObjFunction *func = AS_FUNCTION(funcVal);
@@ -2273,78 +2290,78 @@ static InterpretResult vm_run() {
                   closure->upvalues[i] = getFrame()->closure->upvalues[index];
               }
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_JUMP_IF_FALSE: {
+      CASE_OP(JUMP_IF_FALSE): {
           Value cond = pop();
           uint8_t ipOffset = READ_BYTE();
           if (!isTruthy(cond)) {
               ASSERT(ipOffset > 0);
               getFrame()->ip += (ipOffset-1);
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_JUMP_IF_TRUE: {
+      CASE_OP(JUMP_IF_TRUE): {
           Value cond = pop();
           uint8_t ipOffset = READ_BYTE();
           if (isTruthy(cond)) {
               ASSERT(ipOffset > 0);
               getFrame()->ip += (ipOffset-1);
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_JUMP_IF_FALSE_PEEK: {
+      CASE_OP(JUMP_IF_FALSE_PEEK): {
           Value cond = peek(0);
           uint8_t ipOffset = READ_BYTE();
           if (!isTruthy(cond)) {
               ASSERT(ipOffset > 0);
               getFrame()->ip += (ipOffset-1);
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_JUMP_IF_TRUE_PEEK: {
+      CASE_OP(JUMP_IF_TRUE_PEEK): {
           Value cond = peek(0);
           uint8_t ipOffset = READ_BYTE();
           if (isTruthy(cond)) {
               ASSERT(ipOffset > 0);
               getFrame()->ip += (ipOffset-1);
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_JUMP: {
+      CASE_OP(JUMP): {
           uint8_t ipOffset = READ_BYTE();
           ASSERT(ipOffset > 0);
           getFrame()->ip += (ipOffset-1);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_LOOP: {
+      CASE_OP(LOOP): {
           uint8_t ipOffset = READ_BYTE();
           ASSERT(ipOffset > 0);
           // add 1 for the instruction we just read, and 1 to go 1 before the
           // instruction we want to execute next.
           getFrame()->ip -= (ipOffset+2);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_BLOCK_BREAK: {
+      CASE_OP(BLOCK_BREAK): {
           Value err = newError(lxBreakBlockErrClass, NIL_VAL);
           throwError(err); // blocks catch this, not propagated
-          break; // unreached
+          DISPATCH_BOTTOM();
       }
-      case OP_BLOCK_CONTINUE: {
+      CASE_OP(BLOCK_CONTINUE): {
           Value ret = *THREAD()->lastValue;
           Value err = newError(lxContinueBlockErrClass, NIL_VAL);
           setProp(err, INTERN("ret"), ret);
           throwError(err); // blocks catch this, not propagated
-          break; // unreached
+          DISPATCH_BOTTOM();
       }
-      case OP_BLOCK_RETURN: {
+      CASE_OP(BLOCK_RETURN): {
           Value ret = pop();
           Value err = newError(lxReturnBlockErrClass, NIL_VAL);
           setProp(err, INTERN("ret"), ret);
           throwError(err); // blocks catch this, not propagated
-          break; // unreached
+          DISPATCH_BOTTOM();
       }
-      case OP_CALL: {
+      CASE_OP(CALL): {
           uint8_t numArgs = READ_BYTE();
           if (th->lastSplatNumArgs > 0) {
               numArgs += (th->lastSplatNumArgs-1);
@@ -2365,26 +2382,26 @@ static InterpretResult vm_run() {
               Value strVal = pop();
               pop();
               push(strVal);
-              break;
+              DISPATCH_BOTTOM();
           }
           callCallable(callableVal, numArgs, false, callInfo);
           ASSERT_VALID_STACK();
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_CHECK_KEYWORD: {
-        Value kwMap = peek(0);
-        ASSERT(IS_T_MAP(kwMap));
-        uint8_t kwSlot = READ_BYTE();
-        uint8_t mapSlot = READ_BYTE();
-        (void)mapSlot; // unused
-        if (IS_UNDEF(getFrame()->slots[kwSlot])) {
-            push(BOOL_VAL(false));
-        } else {
-            push(BOOL_VAL(true));
-        }
-        break;
+      CASE_OP(CHECK_KEYWORD): {
+          Value kwMap = peek(0);
+          ASSERT(IS_T_MAP(kwMap));
+          uint8_t kwSlot = READ_BYTE();
+          uint8_t mapSlot = READ_BYTE();
+          (void)mapSlot; // unused
+          if (IS_UNDEF(getFrame()->slots[kwSlot])) {
+              push(BOOL_VAL(false));
+          } else {
+              push(BOOL_VAL(true));
+          }
+          DISPATCH_BOTTOM();
       }
-      case OP_INVOKE: { // invoke methods (includes static methods)
+      CASE_OP(INVOKE): { // invoke methods (includes static methods)
           Value methodName = READ_CONSTANT();
           ObjString *mname = AS_STRING(methodName);
           uint8_t numArgs = READ_BYTE();
@@ -2453,14 +2470,14 @@ static InterpretResult vm_run() {
               throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfVal(instanceVal));
           }
           ASSERT_VALID_STACK();
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_GET_THIS: {
+      CASE_OP(GET_THIS): {
           ASSERT(th->thisObj);
           push(OBJ_VAL(th->thisObj));
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_SPLAT_ARRAY: {
+      CASE_OP(SPLAT_ARRAY): {
           Value ary = pop();
           if (!IS_AN_ARRAY(ary)) {
               throwErrorFmt(lxTypeErrClass, "Splatted expression must evaluate to an Array (type=%s)",
@@ -2470,9 +2487,9 @@ static InterpretResult vm_run() {
           for (int i = 0; i < th->lastSplatNumArgs; i++) {
               push(ARRAY_GET(ary, i));
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_GET_SUPER: {
+      CASE_OP(GET_SUPER): {
           Value methodName = READ_CONSTANT();
           ASSERT(th->thisObj);
           Value instanceVal = OBJ_VAL(th->thisObj);
@@ -2490,10 +2507,10 @@ static InterpretResult vm_run() {
           }
           ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method));
           push(OBJ_VAL(bmethod));
-          break;
+          DISPATCH_BOTTOM();
       }
       // return from function/method, and close all upvalues in the callframe frame
-      case OP_RETURN: {
+      CASE_OP(RETURN): {
           Value result = pop(); // pop from caller's frame
           ASSERT(!getFrame()->isCCall);
           Value *newTop = getFrame()->slots;
@@ -2504,7 +2521,7 @@ static InterpretResult vm_run() {
           (th->vmRunLvl)--;
           return INTERPRET_OK;
       }
-      case OP_ITER: {
+      CASE_OP(ITER): {
           Value iterable = peek(0);
           if (!isIterableType(iterable)) {
               throwErrorFmt(lxTypeErrClass, "Non-iterable value given to 'foreach' statement. Type found: %s",
@@ -2515,17 +2532,17 @@ static InterpretResult vm_run() {
           DBG_ASSERT(isIterableType(peek(0)));
           pop(); // iterable
           push(iterator);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_ITER_NEXT: {
+      CASE_OP(ITER_NEXT): {
           Value iterator = peek(0);
           ASSERT(isIterator(iterator));
           Value next = iteratorNext(iterator);
           ASSERT(!IS_UNDEF(next));
           push(next);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_CLASS: { // add or re-open class
+      CASE_OP(CLASS): { // add or re-open class
           Value className = READ_CONSTANT();
           Value existingClass;
           // FIXME: not perfect, if class is declared non-globally this won't
@@ -2533,7 +2550,7 @@ static InterpretResult vm_run() {
           if (tableGet(&vm.globals, className, &existingClass)) {
               if (IS_CLASS(existingClass)) { // re-open class
                   push(existingClass);
-                  break;
+                  DISPATCH_BOTTOM();
               } else if (IS_MODULE(existingClass)) {
                   const char *classStr = AS_CSTRING(className);
                   throwErrorFmt(lxTypeErrClass, "Tried to define class %s, but it's a module",
@@ -2543,9 +2560,9 @@ static InterpretResult vm_run() {
           ObjClass *klass = newClass(AS_STRING(className), lxObjClass);
           push(OBJ_VAL(klass));
           setThis(0);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_MODULE: { // add or re-open module
+      CASE_OP(MODULE): { // add or re-open module
           Value modName = READ_CONSTANT();
           Value existingMod;
           // FIXME: not perfect, if class is declared non-globally this won't
@@ -2553,7 +2570,7 @@ static InterpretResult vm_run() {
           if (tableGet(&vm.globals, modName, &existingMod)) {
               if (IS_MODULE(existingMod)) {
                 push(existingMod); // re-open the module
-                break;
+                DISPATCH_BOTTOM();
               } else if (IS_CLASS(existingMod)) {
                   const char *modStr = AS_CSTRING(modName);
                   throwErrorFmt(lxTypeErrClass, "Tried to define module %s, but it's a class",
@@ -2563,9 +2580,9 @@ static InterpretResult vm_run() {
           ObjModule *mod = newModule(AS_STRING(modName));
           push(OBJ_VAL(mod));
           setThis(0);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_SUBCLASS: { // add new class inheriting from an existing class
+      CASE_OP(SUBCLASS): { // add new class inheriting from an existing class
           Value className = READ_CONSTANT();
           Value superclass =  pop();
           if (!IS_CLASS(superclass)) {
@@ -2591,9 +2608,9 @@ static InterpretResult vm_run() {
           );
           push(OBJ_VAL(klass));
           setThis(0);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_IN: {
+      CASE_OP(IN): {
           Value classOrInst = pop();
           if (IS_CLASS(classOrInst) || IS_MODULE(classOrInst)) {
               push(classOrInst);
@@ -2606,33 +2623,33 @@ static InterpretResult vm_run() {
               push(OBJ_VAL(klass));
           }
           setThis(0);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_METHOD: { // method definition in class or module
+      CASE_OP(METHOD): { // method definition in class or module
           Value methodName = READ_CONSTANT();
           ObjString *methStr = AS_STRING(methodName);
           defineMethod(methStr);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_CLASS_METHOD: { // method definition
+      CASE_OP(CLASS_METHOD): { // method definition
           Value methodName = READ_CONSTANT();
           ObjString *methStr = AS_STRING(methodName);
           defineStaticMethod(methStr);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_GETTER: { // getter method definition
+      CASE_OP(GETTER): { // getter method definition
           Value methodName = READ_CONSTANT();
           ObjString *methStr = AS_STRING(methodName);
           defineGetter(methStr);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_SETTER: { // setter method definition
+      CASE_OP(SETTER): { // setter method definition
           Value methodName = READ_CONSTANT();
           ObjString *methStr = AS_STRING(methodName);
           defineSetter(methStr);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_PROP_GET: {
+      CASE_OP(PROP_GET): {
           Value propName = READ_CONSTANT();
           ObjString *propStr = AS_STRING(propName);
           ASSERT(propStr && propStr->chars);
@@ -2643,9 +2660,9 @@ static InterpretResult vm_run() {
           }
           pop();
           push(propertyGet(AS_INSTANCE(instance), propStr));
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_PROP_SET: {
+      CASE_OP(PROP_SET): {
           Value propName = READ_CONSTANT();
           ObjString *propStr = AS_STRING(propName);
           Value rval = peek(0);
@@ -2658,9 +2675,9 @@ static InterpretResult vm_run() {
           pop(); // leave rval on stack
           pop();
           push(rval);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_INDEX_GET: {
+      CASE_OP(INDEX_GET): {
           Value lval = peek(1); // ex: Array/String/instance object
           if (!IS_INSTANCE_LIKE(lval)) {
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
@@ -2668,9 +2685,9 @@ static InterpretResult vm_run() {
           ObjInstance *instance = AS_INSTANCE(lval);
           Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexGet", 10));
           callCallable(OBJ_VAL(method), 1, true, NULL);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_INDEX_SET: {
+      CASE_OP(INDEX_SET): {
           Value lval = peek(2);
           if (!IS_INSTANCE_LIKE(lval)) {
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexSet ('[]=') on a non-instance, found a: %s", typeOfVal(lval));
@@ -2678,9 +2695,9 @@ static InterpretResult vm_run() {
           ObjInstance *instance = AS_INSTANCE(lval);
           Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexSet", 10));
           callCallable(OBJ_VAL(method), 2, true, NULL);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_THROW: {
+      CASE_OP(THROW): {
           Value throwable = pop();
           if (IS_A_STRING(throwable)) {
               Value msg = throwable;
@@ -2694,7 +2711,7 @@ static InterpretResult vm_run() {
           throwError(throwable);
           UNREACHABLE("after throw");
       }
-      case OP_GET_THROWN: {
+      CASE_OP(GET_THROWN): {
           Value catchTblIdx = READ_CONSTANT();
           ASSERT(IS_NUMBER(catchTblIdx));
           double idx = AS_NUMBER(catchTblIdx);
@@ -2704,9 +2721,9 @@ static InterpretResult vm_run() {
               ASSERT(0);
           }
           push(tblRow->lastThrownValue);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_STRING: {
+      CASE_OP(STRING): {
           Value strLit = READ_CONSTANT();
           ASSERT(IS_STRING(strLit));
           uint8_t isStatic = READ_BYTE();
@@ -2723,9 +2740,9 @@ static InterpretResult vm_run() {
           if (isStatic == 1) {
               objFreeze(AS_OBJ(peek(0)));
           }
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_ARRAY: {
+      CASE_OP(ARRAY): {
           uint8_t numEls = READ_BYTE();
           Value aryVal = newArray();
           ValueArray *ary = ARRAY_GETHIDDEN(aryVal);
@@ -2734,9 +2751,9 @@ static InterpretResult vm_run() {
               writeValueArrayEnd(ary, el);
           }
           push(aryVal);
-          break;
+          DISPATCH_BOTTOM();
       }
-      case OP_MAP: {
+      CASE_OP(MAP): {
           uint8_t numKeyVals = READ_BYTE();
           DBG_ASSERT(numKeyVals % 2 == 0);
           Value mapVal = newMap();
@@ -2747,23 +2764,24 @@ static InterpretResult vm_run() {
               tableSet(map, key, val);
           }
           push(mapVal);
-          break;
+          DISPATCH_BOTTOM();
       }
       // exit interpreter, or evaluation context if in eval() or
       // loadScript/requireScript
-      case OP_LEAVE: {
+      CASE_OP(LEAVE): {
           if (th == vm.mainThread && !isInEval() && !isInLoadedScript()) {
               vm.exited = true;
           }
           (th->vmRunLvl)--;
           return INTERPRET_OK;
       }
+#ifndef COMPUTED_GOTO
       default:
           errorPrintScriptBacktrace("Unknown opcode instruction: %s (%d)", opName(instruction), instruction);
           (th->vmRunLvl)--;
           return INTERPRET_RUNTIME_ERROR;
-    }
-  }
+    } // switch
+#endif
 
   UNREACHABLE_RETURN(INTERPRET_RUNTIME_ERROR);
 #undef READ_BYTE

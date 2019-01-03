@@ -1,5 +1,5 @@
 CC=gcc
-DEFINES=-D_GNU_SOURCE -DNAN_TAGGING
+DEFINES=-D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO
 GCC_CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -I. -Ivendor -pthread ${DEFINES}
 CLANG_CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-incompatible-pointer-types-discards-qualifiers -Wno-tautological-constant-out-of-range-compare -I. -Ivendor -pthread ${DEFINES}
 ifeq ($(CC),clang)
