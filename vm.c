@@ -577,16 +577,24 @@ Value *getLastValue(void) {
     }
 }
 
-static inline Value nilValue(void) {
+static inline Value nilValue() {
     return NIL_VAL;
 }
 
-static inline Value trueValue(void) {
+static inline Value trueValue() {
+#ifdef NAN_TAGGING
+    return TRUE_VAL;
+#else
     return BOOL_VAL(true);
+#endif
 }
 
-static inline Value falseValue(void) {
+static inline Value falseValue() {
+#ifdef NAN_TAGGING
+    return FALSE_VAL;
+#else
     return BOOL_VAL(false);
+#endif
 }
 
 static bool isTruthy(Value val) {
@@ -684,7 +692,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
 #ifdef NAN_TAGGING
         return lhs == rhs;
 #else
-        return false;
+        return false; // type check was made way above, so false here
 #endif
     }
 }
@@ -1051,13 +1059,15 @@ void popFrame(void) {
     unwindErrInfo(frame);
     if (frame->isCCall) {
         if (th->inCCall > 0) {
-            ASSERT(th->inCCall > 0);
             th->inCCall--;
             if (th->inCCall == 0) {
                 vec_clear(&THREAD()->stackObjects);
             }
         }
     }
+    // FIXME: incorrect logic here, because frame->block is an ObjFunction,
+    // and nested calls of the same function will set outermost to NULL before
+    // it's supposed to.
     if (frame->block == th->outermostBlock) {
         th->outermostBlock = NULL;
     }
@@ -1093,7 +1103,6 @@ CallFrame *pushFrame(void) {
     CallFrame *frame = &EC->frames[EC->frameCount++];
     memset(frame, 0, sizeof(*frame));
     frame->callLine = curLine;
-    /*Value curFile;*/
     ASSERT(vm.fileString);
     frame->file = EC->filename;
     frame->prev = prev;
@@ -1433,13 +1442,13 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     }
 
     if (func->hasBlockArg && callInfo->block) {
-        // TODO: get closure created here, with upvals.
-        // Also, cache proc object instead of re-creating it each time it's
-        // passed.
-        push(newBlock(newClosure(callInfo->block)));
+        // TODO: get closure created here with upvals!
+        Value blockClosure = OBJ_VAL(newClosure(callInfo->block));
+        ObjClosure *blkClosure = AS_CLOSURE(blockClosure);
+        push(newBlock(blkClosure));
         argCountWithRestAry++;
     } else if (func->hasBlockArg) {
-        push(NIL_VAL); // TODO: get closure created here!
+        push(NIL_VAL);
         argCountWithRestAry++;
     }
 
@@ -1897,11 +1906,11 @@ static InterpretResult vm_run() {
             callable = instanceFindMethod(inst, methodName);\
           }\
           if (!callable) {\
-              throwErrorFmt(lxNameErrClass, "method %s not found for operation '%s'", methodName->chars, #op);\
+              throwErrorFmt(lxNameErrClass, "Method %s#%s not found for operation '%s'", className(inst->klass), methodName->chars, #op);\
           }\
           callCallable(OBJ_VAL(callable), 1, true, NULL);\
       } else {\
-          throwErrorFmt(lxTypeErrClass, "binary operation type error, op=%s, lhs=%s, rhs=%s", #op, typeOfVal(a), typeOfVal(b));\
+          throwErrorFmt(lxTypeErrClass, "Binary operation type error, op=%s, lhs=%s, rhs=%s", #op, typeOfVal(a), typeOfVal(b));\
       }\
     } while (0)
 

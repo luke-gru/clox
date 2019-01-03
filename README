@@ -13,10 +13,11 @@ Added features:
 * Mutable strings
 * Modules similar to Ruby's
 * Blocks similar to Ruby's
-* Integrated debugger
 * Integrated REPL
 * Multi-process support using fork() syscall
-* Basic multi-threading with libpthread and a global VM lock
+* Basic multi-threading with libpthread and a global VM lock. Threads can run
+concurrently for IO and other blocking operations, but cannot run
+concurrently in the VM itself.
 * try/catch blocks
 * Iterators and foreach() statement
 * String interpolation
@@ -38,6 +39,7 @@ Future features:
 * Add constants (no redefinitions, will given compiler or runtime error)
 * Improve managed heaps memory waste
 * Add generational GC
+* See TODO for more info
 
 OS/compiler support:
 * Only tested on linux (Ubuntu 16.04), uses fork() and libpthread, as well as C99 features.

@@ -182,10 +182,15 @@ static void fillClosureUpvalues(ObjClosure *block, ObjClosure *outer, CallFrame 
     }
 }
 
-static ObjClosure *getBlockClosure(void) {
+static ObjClosure *getCFrameBlockClosure(void) {
     ObjFunction *block = THREAD()->curBlock;
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
+    }
+    CallFrame *cFrame = getFrame();
+    ASSERT(cFrame->callInfo);
+    if (cFrame->callInfo->cachedBlock) {
+        return cFrame->callInfo->cachedBlock;
     }
     ObjClosure *blockClosure = closureFromFn(block);
     CallFrame *frame = getOuterClosureFrame();
@@ -193,6 +198,7 @@ static ObjClosure *getBlockClosure(void) {
     ObjClosure *lastClosure = frame->closure;
     ASSERT(lastClosure);
     fillClosureUpvalues(blockClosure, lastClosure, frame);
+    cFrame->callInfo->cachedBlock = blockClosure;
     return blockClosure;
 }
 
@@ -203,11 +209,17 @@ Value lxYield(int argCount, Value *args) {
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
-    ObjClosure *blockClosure = closureFromFn(block);
-    CallFrame *outerFrame = getOuterClosureFrame();
-    ObjClosure *outerClosure = outerFrame->closure;
-    ASSERT(outerClosure);
-    fillClosureUpvalues(blockClosure, outerClosure, outerFrame);
+    ObjClosure *blockClosure;
+    if (frame->callInfo->cachedBlock) {
+        blockClosure = frame->callInfo->cachedBlock;
+    } else {
+        blockClosure = closureFromFn(block);
+        CallFrame *outerFrame = getOuterClosureFrame();
+        ObjClosure *outerClosure = outerFrame->closure;
+        ASSERT(outerClosure);
+        fillClosureUpvalues(blockClosure, outerClosure, outerFrame);
+        frame->callInfo->cachedBlock = blockClosure;
+    }
     Value callable = OBJ_VAL(blockClosure);
     push(callable);
     for (int i = 0; i < argCount; i++) {
@@ -239,7 +251,7 @@ Value lxYield(int argCount, Value *args) {
 }
 
 NORETURN void yieldFromC(int argCount, Value *args) {
-    ObjClosure *blkClosure = getBlockClosure();
+    ObjClosure *blkClosure = getCFrameBlockClosure();
     Value callable = OBJ_VAL(blkClosure);
     push(callable);
     for (int i = 0; i < argCount; i++) {

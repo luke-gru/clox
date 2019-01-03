@@ -8,12 +8,18 @@ fun yielder2(num, &blk) {
   blk.yield(num+15);
 }
 
+var i = 0;
 yielder(5) -> (num) {
   print num;
+  i += 1;
+  print i;
 };
 
 __END__
 -- expect: --
 10
+1
 15
+2
 20
+3
