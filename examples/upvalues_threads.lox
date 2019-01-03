@@ -11,8 +11,8 @@ fun counter() {
   };
 }
 
-for (var i = 0; i < 100; i+=1) {
-  newThread(fun() {
+for (var i = 0; i < 10; i+=1) {
+  threads << newThread(fun() {
     var c = counter();
     [1,2,3,4,5].each() -> (n) {
       c();
