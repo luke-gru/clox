@@ -21,14 +21,14 @@ static Obj *allocateObject(size_t size, ObjType type) {
     object->type = type;
     object->isFrozen = false;
 
-    if (vm.inited && vm.curThread && THREAD()->inCCall > 0) {
-        vec_push(&THREAD()->stackObjects, object);
+    if (vm.inited && vm.curThread && vm.curThread->inCCall > 0) {
+        vec_push(&vm.curThread->stackObjects, object);
     }
 
     object->objectId = (size_t)object;
     object->noGC = false;
     object->GCGen = 0;
-    GCStats.generations[object->noGC]++;
+    GCStats.generations[object->GCGen]++;
 
     return object;
 }
@@ -379,6 +379,21 @@ ObjModule *newModule(ObjString *name) {
     return mod;
 }
 
+ObjArray *allocateArray(void) {
+    ObjArray *ary = ALLOCATE_OBJ(
+        ObjArray, OBJ_T_ARRAY
+    );
+    ary->klass = lxAryClass;
+    ary->singletonKlass = NULL;
+    ary->finalizerFunc = NULL;
+    void *tablesMem = ALLOCATE(Table, 1);
+    ary->fields = (Table*)tablesMem;
+    initTable(ary->fields);
+    initValueArray(&ary->valAry);
+    ary->valAry.count = 0;
+    return ary;
+}
+
 // allocates a new instance object, doesn't call its constructor
 ObjInstance *newInstance(ObjClass *klass) {
     if (vm.inited) ASSERT(klass);
@@ -388,6 +403,8 @@ ObjInstance *newInstance(ObjClass *klass) {
     if (vm.inited) {
         if (klass == lxModuleClass) {
             return (ObjInstance*)newModule(NULL);
+        } else if (klass == lxAryClass) {
+            return (ObjInstance*)allocateArray();
         } else if (klass == lxClassClass) {
             return (ObjInstance*)newClass(NULL, lxObjClass);
         }
@@ -582,6 +599,7 @@ const char *typeOfObj(Obj *obj) {
     DBG_ASSERT(obj);
     switch (obj->type) {
     case OBJ_T_INSTANCE:
+    case OBJ_T_ARRAY:
         return "instance";
     case OBJ_T_STRING:
         return "string";
@@ -610,24 +628,19 @@ const char *typeOfObj(Obj *obj) {
  * ARRAY_SIZE(value)
  */
 Value arrayGet(Value aryVal, int idx) {
-    ValueArray *ary = ARRAY_GETHIDDEN(aryVal);
+    ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
     return ary->values[idx];
 }
 
 int arraySize(Value aryVal) {
-    ValueArray *ary = ARRAY_GETHIDDEN(aryVal);
+    ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
     return ary->count;
 }
 
-ValueArray *arrayGetHidden(Value aryVal) {
-    ASSERT(IS_AN_ARRAY(aryVal));
-    ObjInstance *inst = AS_INSTANCE(aryVal);
-    return (ValueArray*)inst->internal->data;
-}
-
 Value newArray(void) {
-    ObjInstance *instance = newInstance(lxAryClass);
-    callVMMethod(instance, OBJ_VAL(nativeArrayInit), 0, NULL);
+    DBG_ASSERT(nativeArrayInit);
+    ObjArray *ary = allocateArray();
+    callVMMethod((ObjInstance*)ary, OBJ_VAL(nativeArrayInit), 0, NULL);
     DBG_ASSERT(IS_AN_ARRAY(peek(0)));
     return pop();
 }
@@ -722,11 +735,11 @@ bool stringEquals(Value a, Value b) {
 }
 
 void arrayPush(Value self, Value el) {
-    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjArray *selfObj = AS_ARRAY(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
-    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    ValueArray *ary = &selfObj->valAry;
     writeValueArrayEnd(ary, el);
 }
 
@@ -738,7 +751,7 @@ int arrayDelete(Value self, Value el) {
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
-    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    ValueArray *ary = &AS_ARRAY(self)->valAry;
     Value val; int idx = 0; int found = -1;
     VALARRAY_FOREACH(ary, val, idx) {
         if (valEqual(el, val)) {
@@ -753,11 +766,11 @@ int arrayDelete(Value self, Value el) {
 }
 
 Value arrayPop(Value self) {
-    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjArray *selfObj = AS_ARRAY(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
-    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    ValueArray *ary = &selfObj->valAry;
     if (ary->count == 0) return NIL_VAL;
     Value found = arrayGet(self, ary->count-1);
     removeValueArray(ary, ary->count-1);
@@ -765,11 +778,11 @@ Value arrayPop(Value self) {
 }
 
 Value arrayPopFront(Value self) {
-    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjArray *selfObj = AS_ARRAY(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
-    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    ValueArray *ary = &selfObj->valAry;
     if (ary->count == 0) return NIL_VAL;
     Value found = arrayGet(self, 0);
     removeValueArray(ary, 0);
@@ -777,27 +790,27 @@ Value arrayPopFront(Value self) {
 }
 
 void arrayPushFront(Value self, Value el) {
-    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjArray *selfObj = AS_ARRAY(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
-    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    ValueArray *ary = &selfObj->valAry;
     writeValueArrayBeg(ary, el);
 }
 
 // NOTE: doesn't check frozenness or type of `self`
 void arrayClear(Value self) {
-    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjArray *selfObj = AS_ARRAY(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
-    freeValueArray(ARRAY_GETHIDDEN(self));
+    freeValueArray(&selfObj->valAry);
 }
 
 bool arrayEquals(Value self, Value other) {
     if (!IS_AN_ARRAY(other)) return false;
-    ValueArray *buf1 = ARRAY_GETHIDDEN(self);
-    ValueArray *buf2 = ARRAY_GETHIDDEN(other);
+    ValueArray *buf1 = &AS_ARRAY(self)->valAry;
+    ValueArray *buf2 = &AS_ARRAY(other)->valAry;
     if (buf1->count != buf2->count) return false;
     for (int i = 0; i < buf1->count; i++) {
         if (!valEqual(buf1->values[i], buf2->values[i])) {
@@ -1040,6 +1053,7 @@ Value newBlock(ObjClosure *closure) {
 bool isInstanceLikeObj(Obj *obj) {
     switch (obj->type) {
         case OBJ_T_INSTANCE:
+        case OBJ_T_ARRAY:
         case OBJ_T_CLASS:
         case OBJ_T_MODULE:
             return true;

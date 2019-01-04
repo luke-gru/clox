@@ -1,0 +1,5 @@
+class MyObject { init() { super.init(); } }
+var o = nil;
+for (var i = 0; i < 1000000; i+=1) {
+  o = MyObject();
+}

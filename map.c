@@ -53,7 +53,8 @@ static Value lxMapInit(int argCount, Value *args) {
     if (argCount == 2) {
         Value ary = args[1];
         CHECK_ARG_IS_INSTANCE_OF(ary, lxAryClass, 1);
-        ValueArray *aryInt = ARRAY_GETHIDDEN(ary);
+        ObjArray *aryObj = AS_ARRAY(ary);
+        ValueArray *aryInt = &aryObj->valAry;
         for (int i = 0; i < aryInt->count; i++) {
             Value el = aryInt->values[i];
             if (!IS_AN_ARRAY(el)) {

@@ -8,30 +8,6 @@ ObjClass *lxAryClass;
 
 extern ObjNative *nativeArrayInit;
 
-static void markInternalAry(Obj *internalObj) {
-    ASSERT(internalObj->type == OBJ_T_INTERNAL);
-    ObjInternal *internal = (ObjInternal*)internalObj;
-    ASSERT(internal);
-    ValueArray *valAry = internal->data;
-    ASSERT(valAry);
-    for (int i = 0; i < valAry->count; i++) {
-        Value val = valAry->values[i];
-        if (!IS_OBJ(val)) { // non-object values don't need marking
-            continue;
-        }
-        grayObject(AS_OBJ(val));
-    }
-}
-
-static void freeInternalAry(Obj *internalObj) {
-    ASSERT(internalObj->type == OBJ_T_INTERNAL);
-    ObjInternal *internal = (ObjInternal*)internalObj;
-    ValueArray *valAry = internal->data;
-    ASSERT(valAry);
-    freeValueArray(valAry);
-    FREE(ValueArray, valAry); // release the actual memory
-}
-
 // ex: var a = Array();
 //     var b = ["hi", 2, Map()];
 static Value lxArrayInit(int argCount, Value *args) {
@@ -39,18 +15,14 @@ static Value lxArrayInit(int argCount, Value *args) {
     callSuper(0, NULL, NULL);
     Value self = *args;
     DBG_ASSERT(IS_AN_ARRAY(self));
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalAry, freeInternalAry);
-    ValueArray *ary = ALLOCATE(ValueArray, 1);
+    ObjArray *selfObj = AS_ARRAY(self);
+    ValueArray *ary = &selfObj->valAry;
     int capa = argCount-1;
     if (capa > 1) {
         initValueArrayWithCapa(ary, capa);
     } else {
         initValueArray(ary);
     }
-    internalObj->data = ary;
-    internalObj->dataSz = sizeof(ValueArray);
-    selfObj->internal = internalObj;
     for (int i = 1; i < argCount; i++) {
         writeValueArrayEnd(ary, args[i]);
     }
@@ -62,15 +34,10 @@ static Value lxArrayDup(int argCount, Value *args) {
     CHECK_ARITY("Array#dup", 1, 1, argCount);
     Value self = *args;
     Value dup = callSuper(0, NULL, NULL);
-    ObjInstance *dupObj = AS_INSTANCE(dup);
-    ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalAry, freeInternalAry);
-    ValueArray *selfAry = ARRAY_GETHIDDEN(self);
-    ValueArray *dupAry = ALLOCATE(ValueArray, 1);
-    initValueArray(dupAry);
-    internalObj->data = dupAry;
-    internalObj->dataSz = sizeof(ValueArray);
-    dupObj->internal = internalObj;
-
+    ObjArray *selfObj = AS_ARRAY(self);
+    ObjArray *dupObj = AS_ARRAY(dup);
+    ValueArray *selfAry = &selfObj->valAry;
+    ValueArray *dupAry = &dupObj->valAry;
     // XXX: might be slow to dup large arrays, should bulk copy memory using memcpy or similar
     Value el; int idx = 0;
     VALARRAY_FOREACH(selfAry, el, idx) {
@@ -147,7 +114,8 @@ static Value lxArrayToString(int argCount, Value *args) {
     Obj *selfObj = AS_OBJ(self);
     Value ret = newStringInstance(copyString("[", 1));
     ObjString *bufRet = STRING_GETHIDDEN(ret);
-    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    ObjArray *aryObj = AS_ARRAY(self);
+    ValueArray *ary = &aryObj->valAry;
     for (int i = 0; i < ary->count; i++) {
         Value elVal = ary->values[i];
         if (IS_OBJ(elVal) && (AS_OBJ(elVal) == selfObj)) {
@@ -173,7 +141,7 @@ static Value lxArrayOpIndexGet(int argCount, Value *args) {
     Value self = args[0];
     Value num = args[1];
     CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
-    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    ValueArray *ary = &AS_ARRAY(self)->valAry;
     int idx = (int)AS_NUMBER(num);
     if (idx < 0) {
         // FIXME: throw error
@@ -190,14 +158,14 @@ static Value lxArrayOpIndexGet(int argCount, Value *args) {
 static Value lxArrayOpIndexSet(int argCount, Value *args) {
     CHECK_ARITY("Array#[]=", 3, 3, argCount);
     Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjArray *selfObj = AS_ARRAY(self);
     Value num = args[1];
     Value rval = args[2];
     CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
-    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    ValueArray *ary = &selfObj->valAry;
     int idx = (int)AS_NUMBER(num);
     if (idx < 0) {
         // FIXME: throw error, or allow negative indices?
@@ -228,7 +196,7 @@ static Value lxArrayHashKey(int argCount, Value *args) {
     CHECK_ARITY("Array#hashKey", 1, 1, argCount);
     Value self = *args;
     uint32_t hash = 16679; // XXX: no reason for this number
-    ValueArray *ary = ARRAY_GETHIDDEN(self);
+    ValueArray *ary = &AS_ARRAY(self)->valAry;
     Value el; int idx = 0;
     VALARRAY_FOREACH(ary, el, idx) {
         if (AS_OBJ(el) == AS_OBJ(self)) { // avoid infinite recursion
@@ -250,9 +218,8 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
     }
     int capaNum = (int)AS_NUMBER(capa);
     Value ret = OBJ_VAL(newInstance(lxAryClass));
-    ObjInstance *selfObj = AS_INSTANCE(ret);
-    ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalAry, freeInternalAry);
-    ValueArray *ary = ALLOCATE(ValueArray, 1);
+    ObjArray *selfObj = AS_ARRAY(ret);
+    ValueArray *ary = &selfObj->valAry;
     if (capaNum > 1) {
         initValueArrayWithCapa(ary, capaNum);
         writeValueArrayBulk(ary, 0, (size_t)capaNum, fill);
@@ -260,20 +227,17 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
         initValueArray(ary);
         writeValueArrayEnd(ary, fill);
     }
-    internalObj->data = ary;
-    internalObj->dataSz = sizeof(ValueArray);
-    selfObj->internal = internalObj;
     return ret;
 }
 
 static Value lxArrayEach(int argCount, Value *args) {
     CHECK_ARITY("Array#each", 1, 1, argCount);
-    volatile ValueArray *ary = ARRAY_GETHIDDEN(*args);
+    volatile ValueArray *ary = &AS_ARRAY(*args)->valAry;
     volatile Value el; volatile int valIdx = 0;
     volatile int status = 0;
     volatile int iterStart = 0;
-    volatile LxThread *th = THREAD();
-    SETUP_BLOCK(th->curBlock, status, THREAD()->errInfo, th->lastBlock)
+    volatile LxThread *th = vm.curThread;
+    SETUP_BLOCK(th->curBlock, status, th->errInfo, th->lastBlock)
     while (true) {
         if (status == TAG_NONE) {
             break;
@@ -301,7 +265,7 @@ static Value lxArrayEach(int argCount, Value *args) {
 
 static Value lxArrayMap(int argCount, Value *args) {
     CHECK_ARITY("Array#map", 1, 1, argCount);
-    volatile ValueArray *ary = ARRAY_GETHIDDEN(*args);
+    volatile ValueArray *ary = &AS_ARRAY(*args)->valAry;
     volatile Value el; int valIdx = 0;
     volatile int status = 0;
     volatile int iterStart = 0;
@@ -335,7 +299,7 @@ static Value lxArrayMap(int argCount, Value *args) {
 }
 
 static Value lxArrayGetSize(int argCount, Value *args) {
-    ValueArray *ary = ARRAY_GETHIDDEN(*args);
+    ValueArray *ary = &AS_ARRAY(*args)->valAry;
     return NUMBER_VAL(ary->count);
 }
 

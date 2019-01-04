@@ -122,7 +122,7 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             } else {
                 return fprintf(file, "<fun %.*s>", PRINTNUM(6, maxLen), func->name->chars);
             }
-        } else if (IS_INSTANCE(value)) {
+        } else if (IS_INSTANCE_LIKE(value)) {
             ObjInstance *inst = AS_INSTANCE(value);
             Obj *callable = instanceFindMethod(inst, internedString("toString", 8));
             if (callable && vm.inited && canCallMethods) {
@@ -239,7 +239,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
                 ret = stringConstructor(buf, strlen(buf));
                 xfree(buf);
             }
-        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE) {
+        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE || OBJ_TYPE(value) == OBJ_T_ARRAY) {
             ObjInstance *inst = AS_INSTANCE(value);
             Obj *toString = instanceFindMethod(inst, internedString("toString", 8));
             if (toString && vm.inited) {

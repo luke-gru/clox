@@ -130,8 +130,8 @@ ObjClass *lxBreakBlockErrClass;
 ObjClass *lxContinueBlockErrClass;
 ObjClass *lxReturnBlockErrClass;
 
-ObjInstance *lxLoadPath; // load path for loadScript/requireScript (-L flag)
-ObjInstance *lxArgv;
+ObjArray *lxLoadPath; // load path for loadScript/requireScript (-L flag)
+ObjArray *lxArgv;
 
 ObjNative *nativeObjectInit = NULL;
 ObjNative *nativeIteratorInit = NULL;
@@ -254,8 +254,8 @@ static void defineNativeClasses(void) {
 // NOTE: this initialization function can create Lox runtime objects
 static void defineGlobalVariables(void) {
     Value loadPathVal = newArray();
-    ASSERT(IS_INSTANCE(loadPathVal));
-    lxLoadPath = AS_INSTANCE(loadPathVal);
+    ASSERT(IS_ARRAY(loadPathVal));
+    lxLoadPath = AS_ARRAY(loadPathVal);
     ObjString *loadPathStr = INTERN("loadPath");
     ASSERT(tableSet(&vm.globals, OBJ_VAL(loadPathStr), loadPathVal));
     // add 'lib' path as default load path
@@ -279,8 +279,8 @@ static void defineGlobalVariables(void) {
 
     ObjString *argvStr = INTERN("ARGV");
     Value argvVal = newArray();
-    ASSERT(IS_INSTANCE(argvVal));
-    lxArgv = AS_INSTANCE(argvVal);
+    ASSERT(IS_ARRAY(argvVal));
+    lxArgv = AS_ARRAY(argvVal);
     ASSERT(tableSet(&vm.globals, OBJ_VAL(argvStr), argvVal));
     ASSERT(origArgv);
     ASSERT(origArgc >= 1);
@@ -999,7 +999,7 @@ static void defineSetter(ObjString *name) {
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
     VM_DEBUG("Calling VM method");
     push(OBJ_VAL(instance));
-    Obj *oldThis = THREAD()->thisObj;
+    Obj *oldThis = vm.curThread->thisObj;
     setThis(0);
     for (int i = 0; i < argCount; i++) {
         ASSERT(args);
@@ -1007,7 +1007,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     }
     VM_DEBUG("call begin");
     callCallable(callable, argCount, true, NULL); // pushes return value to stack
-    THREAD()->thisObj = oldThis;
+    vm.curThread->thisObj = oldThis;
     VM_DEBUG("call end");
     return peek(0);
 }
@@ -1937,7 +1937,7 @@ static InterpretResult vm_run() {
               throwErrorFmt(lxErrClass, "Can't divide by 0");\
           }\
           push(NUMBER_VAL((type)AS_NUMBER(a) op (type)AS_NUMBER(b))); \
-      } else if (IS_INSTANCE(a)) {\
+      } else if (IS_INSTANCE_LIKE(a)) {\
           push(a);\
           push(b);\
           ObjInstance *inst = AS_INSTANCE(a);\
@@ -2752,7 +2752,7 @@ vmLoop:
       CASE_OP(ARRAY): {
           uint8_t numEls = READ_BYTE();
           Value aryVal = newArray();
-          ValueArray *ary = ARRAY_GETHIDDEN(aryVal);
+          ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
           for (int i = 0; i < numEls; i++) {
               Value el = pop();
               writeValueArrayEnd(ary, el);

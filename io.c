@@ -255,7 +255,7 @@ Value lxIOSelectStatic(int argCount, Value *args) {
     ValueArray *valueArrays[3];
     for (int i = 1; i < 4; i++) {
         CHECK_ARG_IS_A(args[i], lxAryClass, i);
-        ValueArray *ary = ARRAY_GETHIDDEN(args[i]);
+        ValueArray *ary = &AS_ARRAY(args[i])->valAry;
         Value el; int valIdx = 0;
         VALARRAY_FOREACH(ary, el, valIdx) {
             if (!IS_A(el, lxIOClass)) {

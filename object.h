@@ -12,6 +12,7 @@ typedef enum ObjType {
   OBJ_T_STRING,   // internal string value only, Strings in lox are instances
   OBJ_T_FUNCTION,
   OBJ_T_INSTANCE, // includes Strings, Arrays, Maps
+  OBJ_T_ARRAY,
   OBJ_T_CLASS,
   OBJ_T_MODULE,
   OBJ_T_NATIVE_FUNCTION,
@@ -46,6 +47,7 @@ typedef struct ObjString {
   bool isStatic;
   bool isInterned;
 } ObjString;
+
 
 typedef void (*GCMarkFunc)(Obj *obj);
 typedef void (*GCFreeFunc)(Obj *obj);
@@ -192,8 +194,20 @@ typedef struct ObjInstance {
   ObjInternal *internal;
 } ObjInstance;
 
-extern ObjInstance *lxLoadPath;
-extern ObjInstance *lxArgv;
+typedef struct ObjArray {
+    Obj obj;
+    ObjClass *klass; // always lxAryClass
+    ObjClass *singletonKlass;
+    Obj *finalizerFunc; // ObjClosure* or ObjNative*
+    Table *fields;
+    //union {
+        ValueArray valAry;
+        // TODO: add embed
+    //} as;
+} ObjArray;
+
+extern ObjArray *lxLoadPath;
+extern ObjArray *lxArgv;
 
 typedef struct ObjBoundMethod {
   Obj object;
@@ -228,13 +242,14 @@ typedef struct LxFile {
 } LxFile;
 
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))
+#define IS_ARRAY(value)        (isObjType(value, OBJ_T_ARRAY))
 #define IS_FUNCTION(value)      (isObjType(value, OBJ_T_FUNCTION))
 #define IS_CLOSURE(value)       (isObjType(value, OBJ_T_CLOSURE))
 #define IS_NATIVE_FUNCTION(value) (isObjType(value, OBJ_T_NATIVE_FUNCTION))
 #define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
 #define IS_MODULE(value)        (isObjType(value, OBJ_T_MODULE))
 #define IS_INSTANCE(value)      (isObjType(value, OBJ_T_INSTANCE))
-#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_CLASS(value) || IS_MODULE(value))
+#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_ARRAY(value) || IS_CLASS(value) || IS_MODULE(value))
 #define IS_UPVALUE(value)       (isObjType(value, OBJ_T_UPVALUE))
 #define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
 #define IS_INTERNAL(value)      (isObjType(value, OBJ_T_INTERNAL))
@@ -246,7 +261,7 @@ typedef struct LxFile {
 #define IS_INSTANCE_OF_FUNC (is_value_instance_of_p)
 #define IS_A_FUNC (is_value_a_p)
 
-#define IS_A(value,klass)       (IS_INSTANCE(value) && instanceIsA(AS_INSTANCE(value), klass))
+#define IS_A(value,klass)       ((IS_INSTANCE(value) || IS_ARRAY(value)) && instanceIsA(AS_INSTANCE(value), klass))
 
 #define IS_A_MODULE(value)      (IS_A(value, lxModuleClass))
 #define IS_AN_ARRAY(value)      (IS_A(value, lxAryClass))
@@ -271,11 +286,11 @@ typedef struct LxFile {
 #define AS_CLASS(value)         ((ObjClass*)AS_OBJ(value))
 #define AS_MODULE(value)        ((ObjModule*)AS_OBJ(value))
 #define AS_INSTANCE(value)      ((ObjInstance*)AS_OBJ(value))
+#define AS_ARRAY(value)         ((ObjArray*)AS_OBJ(value))
 #define AS_INTERNAL(value)      ((ObjInternal*)AS_OBJ(value))
 
 #define ARRAY_GET(value, idx)    (arrayGet(value, idx))
 #define ARRAY_SIZE(value)        (arraySize(value))
-#define ARRAY_GETHIDDEN(value)   (arrayGetHidden(value))
 
 #ifdef NAN_TAGGING
 #define LXARRAY_FOREACH(ary, el, idx) \
@@ -362,7 +377,6 @@ Value       arrayPopFront(Value aryVal);
 int         arrayDelete(Value aryVal, Value el);
 void        arrayClear(Value aryVal);
 bool        arrayEquals(Value self, Value other);
-ValueArray *arrayGetHidden(Value aryVal);
 
 // errors
 Value       newError(ObjClass *errClass, Value msg);
@@ -389,6 +403,7 @@ ObjFunction *newFunction(Chunk *chunk, Node *funcNode);
 ObjClass *newClass(ObjString *name, ObjClass *superclass);
 ObjModule *newModule(ObjString *name);
 ObjInstance *newInstance(ObjClass *klass);
+ObjArray *allocateArray(void);
 ObjNative *newNative(ObjString *name, NativeFn function);
 ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
 ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCMarkFunc markFn, GCFreeFunc freeFn);
