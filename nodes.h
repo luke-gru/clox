@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "vec.h"
 #include "scanner.h"
+#include "debug.h"
 
 struct sNode;
 typedef vec_t(struct sNode*) vec_nodep_t;
@@ -160,15 +161,24 @@ typedef void (*NodeCallback)(Node *n, int idx);
 
 Node *createNode(node_type_t type, Token tok, vec_nodep_t *children);
 void nodeAddChild(Node *node, Node *child);
-void nodeAddData(Node *node, void *data);
 static inline void *nodeGetData(Node *node) {
     return node->data;
+}
+static inline void nodeAddData(Node *node, void *data) {
+    node->data = data;
 }
 void nodeForeachChild(Node *node, NodeCallback cb);
 void freeNode(Node *node, bool freeChildren);
 
-NodeType nodeType(Node *n); // expr or stmt or other
-int nodeKind(Node *n); // the actual node kind
+static inline NodeType nodeType(Node *n) {
+    DBG_ASSERT(n);
+    return n->type.type;
+}
+
+static inline int nodeKind(Node *n) {
+    DBG_ASSERT(n);
+    return n->type.kind;
+}
 
 char *outputASTString(Node *node, int indentLevel);
 

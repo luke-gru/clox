@@ -109,11 +109,11 @@ static void freeCompiler(Compiler *c, bool freeErrMessages) {
     freeIseq(&c->iseq);
 }
 
-static Chunk *currentChunk() {
+static inline Chunk *currentChunk() {
   return current->function->chunk;
 }
 
-static Iseq *currentIseq() {
+static inline Iseq *currentIseq() {
     return &current->iseq;
 }
 
@@ -227,16 +227,16 @@ static void popScope(CompileScopeType stype) {
     current->scopeDepth--;
 }
 
-static Insn *emitBytes(uint8_t code, uint8_t op) {
+static inline Insn *emitBytes(uint8_t code, uint8_t op) {
     return emitOp1(code, op);
 }
 
-static void emitNil() {
+static inline void emitNil() {
     emitOp0(OP_NIL);
 }
 
 // exit from script
-static void emitLeave() {
+static inline void emitLeave() {
     emitOp0(OP_LEAVE);
 }
 
@@ -324,7 +324,7 @@ static int resolveUpvalue(Compiler *compiler, Token *name) {
     return -1;
 }
 
-static void writeChunkByte(Chunk *chunk, uint8_t byte, int lineno, int nDepth, int nWidth) {
+static inline void writeChunkByte(Chunk *chunk, uint8_t byte, int lineno, int nDepth, int nWidth) {
     writeChunk(chunk, byte, lineno, nDepth, nWidth);
 }
 
@@ -414,15 +414,11 @@ static bool isJump(Insn *in) {
     }
 }
 
-static Insn *jumpToInsn(Insn *in) {
-    return in->jumpTo;
-}
-
-static bool isJumpNextInsn(Insn *in) {
+static inline bool isJumpNextInsn(Insn *in) {
     return in->operands[0] == 0;
 }
 
-static bool isJumpOrLoop(Insn *in) {
+static inline bool isJumpOrLoop(Insn *in) {
     return isJump(in) || in->code == OP_LOOP;
 }
 
@@ -504,15 +500,15 @@ static bool noSideEffectsConst(Insn *insn) {
     return isConst(insn);
 }
 
-static bool isJumpIfFalse(Insn *insn) {
+static inline bool isJumpIfFalse(Insn *insn) {
     return insn->code == OP_JUMP_IF_FALSE;
 }
 
-static bool isJumpIfTrue(Insn *insn) {
+static inline bool isJumpIfTrue(Insn *insn) {
     return insn->code == OP_JUMP_IF_TRUE_PEEK;
 }
 
-static bool isPop(Insn *insns) {
+static inline bool isPop(Insn *insns) {
     return insns->code == OP_POP;
 }
 
@@ -693,7 +689,7 @@ static void emitChildren(Node *n) {
 }
 
 // emit a jump (forwards) instruction, returns a pointer to the byte that needs patching
-static Insn *emitJump(OpCode jumpOp) {
+static inline Insn *emitJump(OpCode jumpOp) {
     return emitOp1(jumpOp, 0); // patched later
 }
 
@@ -739,7 +735,7 @@ static void emitLoop(int loopStart) {
   emitOp1(OP_LOOP, offset);
 }
 
-static bool isBreak(Insn *in) {
+static inline bool isBreak(Insn *in) {
     return (in->code == OP_JUMP &&
             (in->flags & INSN_FL_BREAK) != 0);
 }

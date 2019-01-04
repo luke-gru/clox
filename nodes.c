@@ -29,10 +29,6 @@ void nodeAddChild(Node *node, Node *child) {
         child->parent = node;
 }
 
-void nodeAddData(Node *node, void *data) {
-    node->data = data;
-}
-
 void nodeForeachChild(Node *node, NodeCallback cb) {
     int i = 0;
     Node *n = NULL;
@@ -744,14 +740,4 @@ char *outputASTString(Node *node, int indentLevel) {
         }
     }
     UNREACHABLE("%s", "invalid node type");
-}
-
-NodeType nodeType(Node *n) {
-    DBG_ASSERT(n);
-    return n->type.type;
-}
-
-int nodeKind(Node *n) {
-    DBG_ASSERT(n);
-    return n->type.kind;
 }
