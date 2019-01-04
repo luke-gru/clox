@@ -79,6 +79,8 @@ static void LxThreadSetup(LxThread *th) {
     pthread_cond_init(&th->sleepCond, NULL);
     th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
     th->exitStatus = 0;
+    th->joined = false;
+    th->detached = false;
 }
 
 static void LxThreadCleanup(LxThread *th) {
@@ -214,6 +216,10 @@ Value lxJoinThread(int argCount, Value *args) {
         throwErrorFmt(lxErrClass, "Error joining thread");
     }
     acquireGVL();
+    LxThread *th = FIND_THREAD(num);
+    if (th) {
+        th->joined = true;
+    }
     THREAD_DEBUG(2, "Joined thread id %lu\n", (unsigned long)num);
     return NIL_VAL;
 }

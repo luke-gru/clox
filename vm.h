@@ -84,6 +84,7 @@ typedef enum ThreadStatus {
     THREAD_STOPPED = 0,
     THREAD_READY,
     THREAD_RUNNING,
+    THREAD_KILLED,
     THREAD_ZOMBIE,
 } ThreadStatus;
 
@@ -119,6 +120,8 @@ typedef struct LxThread {
     pthread_cond_t sleepCond;
     int opsRemaining;
     int exitStatus;
+    bool joined;
+    bool detached;
 } LxThread;
 
 // threads
@@ -156,11 +159,13 @@ typedef struct VM {
 
     // threading
     pthread_mutex_t GVLock; // global VM lock
-    pthread_cond_t GVCond;
+    pthread_cond_t GVLCond;
     volatile int GVLockStatus;
+    int GVLWaiters;
     volatile LxThread *curThread;
     LxThread *mainThread;
     vec_void_t threads; // list of current thread ObjInstance pointers
+    int numDetachedThreads;
     int lastOp; // for debugging when error
 } VM; // singleton
 
@@ -283,8 +288,6 @@ Value createIterator(Value iterable);
 
 // threads
 void acquireGVL(void);
-void acquireGVLTid(pthread_t tid);
-void acquireGVLMaybe(void);
 void releaseGVL(void);
 void thread_debug(int lvl, const char *format, ...);
 volatile long long GVLOwner;

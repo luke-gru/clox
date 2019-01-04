@@ -375,13 +375,14 @@ static ObjInstance *initMainThread(void) {
     if (pthread_mutex_init(&vm.GVLock, NULL) != 0) {
         die("Global VM lock unable to initialize");
     }
-    if (pthread_cond_init(&vm.GVCond, NULL) != 0) {
+    if (pthread_cond_init(&vm.GVLCond, NULL) != 0) {
         die("Global VM lock cond unable to initialize");
     }
-
     vm.GVLockStatus = 0;
+    vm.GVLWaiters = 0;
     vm.curThread = NULL;
     vm.mainThread = NULL;
+    vm.numDetachedThreads = 0;
 
     Value mainThread = newThread();
     LxThread *th = THREAD_GETHIDDEN(mainThread);
@@ -492,11 +493,13 @@ void freeVM(void) {
 
     while (THREAD()->ec) { pop_EC(); }
 
+    THREAD_DEBUG(1, "VM lock destroying... # threads: %d, # waiters: %d", vm.threads.length, vm.GVLWaiters);
     releaseGVL();
-
-    THREAD_DEBUG(1, "VM lock destroying...");
-    pthread_mutex_destroy(&vm.GVLock);
-    pthread_cond_destroy(&vm.GVCond);
+    if (vm.numDetachedThreads <= 0) {
+        pthread_mutex_destroy(&vm.GVLock);
+        pthread_cond_destroy(&vm.GVLCond);
+    }
+    vm.GVLWaiters = 0;
 
     vm.curThread = NULL;
     vm.mainThread = NULL;
@@ -3030,8 +3033,28 @@ void runAtExitHooks(void) {
     }
 }
 
+static void threadDetach(LxThread *th) {
+    ASSERT(th && th != vm.curThread);
+    th->detached = true;
+    pthread_detach(th->tid);
+    vm.numDetachedThreads++;
+}
+
+static void detachUnjoinedThreads() {
+    ObjInstance *threadInst = NULL; int tidx = 0;
+    vec_foreach(&vm.threads, threadInst, tidx) {
+        LxThread *th = (LxThread*)threadInst->internal->data;
+        if (th == vm.mainThread) continue;
+        if (th->status != THREAD_ZOMBIE && th->status != THREAD_KILLED && th->tid != -1) {
+            THREAD_DEBUG(1, "Main thread detaching unjoined thread %lu on exit", th->tid);
+            threadDetach(th);
+        }
+    }
+}
+
 NORETURN void stopVM(int status) {
     if (THREAD() == vm.mainThread) {
+        detachUnjoinedThreads();
         runAtExitHooks();
         freeVM();
         if (GET_OPTION(profileGC)) {
@@ -3048,20 +3071,34 @@ NORETURN void stopVM(int status) {
 void acquireGVL(void) {
     pthread_mutex_lock(&vm.GVLock);
     LxThread *th = vm.curThread;
+    // this is because a releaseGVL() call may not have actually released the
+    // GVL due to held mutex, so the next acquireGVL() has to take that into account
     if (th && th->mutexCounter > 0 && GVLOwner == th->tid && th->tid == pthread_self()) {
         THREAD_DEBUG(1, "Thread %lu skipping acquire of GVL due to held mutex\n", pthread_self());
         pthread_mutex_unlock(&vm.GVLock);
         return;
     }
+    vm.GVLWaiters++;
     while (vm.GVLockStatus > 0) {
-        pthread_cond_wait(&vm.GVCond, &vm.GVLock); // block on wait queue
+        pthread_cond_wait(&vm.GVLCond, &vm.GVLock); // block on wait queue
     }
+    vm.GVLWaiters--;
     vm.GVLockStatus = 1;
     vm.curThread = FIND_THREAD(pthread_self());
-    if (vm.curThread)
+    if (vm.curThread) {
         vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
+    }
     GVLOwner = pthread_self();
     pthread_mutex_unlock(&vm.GVLock);
+    if (th && th->status == THREAD_KILLED) {
+        THREAD_DEBUG(1, "Thread %lu (KILLED) exiting in acquireGVL", pthread_self());
+        vm.GVLockStatus = 0;
+        vm.curThread = NULL;
+        GVLOwner = -1;
+        th->joined = true;
+        pthread_cond_signal(&vm.GVLCond);
+        pthread_exit(NULL);
+    }
 }
 
 void releaseGVL(void) {
@@ -3076,7 +3113,7 @@ void releaseGVL(void) {
     GVLOwner = -1;
     vm.curThread = NULL;
     pthread_mutex_unlock(&vm.GVLock);
-    pthread_cond_signal(&vm.GVCond); // signal waiters
+    pthread_cond_signal(&vm.GVLCond); // signal waiters
 }
 
 void threadSetCurrent(LxThread *th) {
