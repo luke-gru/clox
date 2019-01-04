@@ -739,7 +739,7 @@ void collectGarbage(void) {
         GC_TRACE_DEBUG(1, "GC run skipped (GC OFF)");
         return;
     }
-    if (inGC) {
+    if (UNLIKELY(inGC)) {
         fprintf(stderr, "[BUG]: GC tried to start during a GC run?\n");
         ASSERT(0);
     }
@@ -877,7 +877,7 @@ void collectGarbage(void) {
 
     ASSERT(numHiddenFound == numHiddenRoots);
 
-    if (numHiddenFound < numHiddenRoots) {
+    if (UNLIKELY(numHiddenFound < numHiddenRoots)) {
         fprintf(stderr, "GC ERR: Hidden roots found: %d, hidden roots: %d\n",
             numHiddenFound, numHiddenRoots);
         ASSERT(0);
@@ -917,10 +917,10 @@ freeLoop:
         ObjAny *newFreeList = NULL;
         if (phase == 2) newFreeList = freeList;
         p = heapList[i];
-        if (!p) {
+        if (UNLIKELY(!p)) {
             fprintf(stderr, "NULL heap page? %p, i=%d, heapsUsed: %d, heapListSize: %d\n", p, i, heapsUsed, heapListSize);
+            ASSERT(0);
         }
-        ASSERT(p);
         pend = p + HEAP_SLOTS;
 
         int objectsFree = 0;
@@ -940,7 +940,7 @@ freeLoop:
                     numObjectsFreed++;
                 } else { // phase 1, call finalizers
                     ASSERT(phase == 1);
-                    if (hasFinalizer(obj)) {
+                    if (UNLIKELY(hasFinalizer(obj))) {
                         ASSERT(((ObjInstance*) obj)->finalizerFunc->type != OBJ_T_NONE);
                         callFinalizer(obj);
                         if (activeFinalizers == 0) {
@@ -979,14 +979,15 @@ freeLoop:
     }
 
     bool freedHeap = false;
-    if (vFreeHeaps.length > 100 && hasOtherFreeishHeap) {
-        ObjAny *heap; int heapIdx = 0;
-        vec_foreach(&vFreeHeaps, heap, heapIdx) {
-            ASSERT(heap);
-            freeHeap(heap);
-        }
-        freedHeap = true;
-    }
+    (void)hasOtherFreeishHeap;
+    /*if (vFreeHeaps.length > 1 && hasOtherFreeishHeap) {*/
+        /*ObjAny *heap; int heapIdx = 0;*/
+        /*vec_foreach(&vFreeHeaps, heap, heapIdx) {*/
+            /*ASSERT(heap);*/
+            /*freeHeap(heap);*/
+        /*}*/
+        /*freedHeap = true;*/
+    /*}*/
 
     if (!freedHeap && numObjectsFreed < FREE_MIN) {
         addHeap();

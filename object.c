@@ -1091,28 +1091,30 @@ size_t sizeofObjType(ObjType type) {
 
 const char *objTypeName(ObjType type) {
     switch (type) {
-        case OBJ_T_NONE:
-            return "T_NONE";
         case OBJ_T_STRING:
             return "T_STRING";
-        case OBJ_T_FUNCTION:
-            return "T_FUNCTION";
+        case OBJ_T_ARRAY:
+            return "T_ARRAY";
         case OBJ_T_INSTANCE:
             return "T_INSTANCE";
+        case OBJ_T_FUNCTION:
+            return "T_FUNCTION";
         case OBJ_T_CLASS:
             return "T_CLASS";
         case OBJ_T_MODULE:
             return "T_MODULE";
         case OBJ_T_NATIVE_FUNCTION:
             return "T_NATIVE_FUNCTION";
+        case OBJ_T_CLOSURE:
+            return "T_CLOSURE";
         case OBJ_T_BOUND_METHOD:
             return "T_BOUND_METHOD";
         case OBJ_T_UPVALUE:
             return "T_UPVALUE";
-        case OBJ_T_CLOSURE:
-            return "T_CLOSURE";
         case OBJ_T_INTERNAL:
             return "T_INTERNAL";
+        case OBJ_T_NONE:
+            return "T_NONE";
         default:
             UNREACHABLE_RETURN("invalid type");
     }
