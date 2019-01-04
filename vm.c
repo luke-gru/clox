@@ -1013,13 +1013,13 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
 }
 
 Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
-    if (obj->type == OBJ_T_INSTANCE) {
+    if (obj->type == OBJ_T_INSTANCE || obj->type == OBJ_T_ARRAY) {
         ObjInstance *instance = (ObjInstance*)obj;
         Obj *callable = instanceFindMethod(instance, methodName);
         if (!callable && argCount == 0) {
             callable = instanceFindGetter(instance, methodName);
         }
-        if (!callable) {
+        if (UNLIKELY(!callable)) {
             ObjString *className = CLASSINFO(instance->klass)->name;
             const char *classStr = className->chars ? className->chars : "(anon)";
             throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, methodName->chars);
@@ -1032,7 +1032,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
         /*if (!callable && numArgs == 0) {*/
         /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
         /*}*/
-        if (!callable) {
+        if (UNLIKELY(!callable)) {
             ObjString *className = CLASSINFO(klass)->name;
             const char *classStr = className ? className->chars : "(anon)";
             throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, methodName->chars);
@@ -1042,7 +1042,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
     } else if (obj->type == OBJ_T_MODULE) {
         ObjModule *mod = (ObjModule*)obj;
         Obj *callable = moduleFindStaticMethod(mod, methodName);
-        if (!callable) {
+        if (UNLIKELY(!callable)) {
             ObjString *modName = CLASSINFO(mod)->name;
             const char *modStr = modName ? modName->chars : "(anon)";
             throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, methodName->chars);
@@ -2426,7 +2426,7 @@ vmLoop:
               if (!oldBlock) th->outermostBlock = th->curBlock;
           }
           Value instanceVal = peek(numArgs);
-          if (IS_INSTANCE(instanceVal)) {
+          if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal)) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
               Obj *callable = instanceFindMethod(inst, mname);
               if (!callable && numArgs == 0) {

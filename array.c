@@ -5,7 +5,6 @@
 #include "memory.h"
 
 ObjClass *lxAryClass;
-
 extern ObjNative *nativeArrayInit;
 
 // ex: var a = Array();

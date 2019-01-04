@@ -454,9 +454,10 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_ARRAY: {
-            ObjArray *ary = (ObjArray*)ary;
+            GC_TRACE_DEBUG(5, "Blackening array %p", obj);
+            ObjArray *ary = (ObjArray*)obj;
             ValueArray *valAry = &ary->valAry;
-            GC_TRACE_DEBUG(5, "Blackening array %p, count: %ld", obj, valAry->count);
+            GC_TRACE_DEBUG(5, "Array count: %ld", valAry->count);
             for (int i = 0; i < valAry->count; i++) {
                 Value val = valAry->values[i];
                 grayValue(val);

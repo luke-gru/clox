@@ -1139,8 +1139,8 @@ bool is_value_closure_p(Value val) {
     return IS_CLOSURE(val);
 }
 bool is_value_instance_of_p(Value val, ObjClass *klass) {
-    return IS_INSTANCE(val) && AS_INSTANCE(val)->klass == klass;
+    return IS_INSTANCE_LIKE(val) && AS_INSTANCE(val)->klass == klass;
 }
 bool is_value_a_p(Value val, ObjClass *klass) {
-    return IS_INSTANCE(val) && instanceIsA(AS_INSTANCE(val), klass);
+    return IS_INSTANCE_LIKE(val) && instanceIsA(AS_INSTANCE(val), klass);
 }

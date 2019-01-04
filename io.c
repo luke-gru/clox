@@ -246,7 +246,7 @@ Value lxIOPipeStatic(int argCount, Value *args) {
 
 // IO.select(rds, wrs, errs, [timeout]);
 Value lxIOSelectStatic(int argCount, Value *args) {
-    CHECK_ARITY("IO.write", 4, 5, argCount);
+    CHECK_ARITY("IO.select", 4, 5, argCount);
     fd_set fds[3];
     FD_ZERO(&fds[0]);
     FD_ZERO(&fds[1]);

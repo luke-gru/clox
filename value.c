@@ -327,7 +327,7 @@ uint32_t valHash(Value val) {
     if (IS_OBJ(val)) {
         if (IS_STRING(val) || IS_A_STRING(val)) {
             ObjString *string = VAL_TO_STRING(val);
-            if (string->hash > 0) {
+            if (LIKELY(string->hash > 0)) {
                 return string->hash;
             } else {
                 uint32_t hash = hashString(string->chars, string->length);
@@ -335,19 +335,19 @@ uint32_t valHash(Value val) {
                 return hash;
             }
         } else {
-            if (IS_INSTANCE(val)) {
-                if (!vm.inited) {
+            if (IS_INSTANCE(val) || IS_ARRAY(val)) {
+                if (UNLIKELY(!vm.inited)) {
                     fprintf(stderr, "val type: %s\n", typeOfVal(val));
                     ASSERT(0);
                 }
                 Value hashKey = callMethod(AS_OBJ(val), internedString("hashKey", 7), 0, NULL);
-                if (!IS_NUMBER(hashKey)) {
+                if (UNLIKELY(!IS_NUMBER(hashKey))) {
                     throwErrorFmt(lxTypeErrClass, "%s", "return of hashKey() method must be a number!");
                 }
                 return (uint32_t)AS_NUMBER(hashKey);
             }
             char buf[20] = {'\0'};
-            sprintf(buf, "%p", AS_OBJ(val));
+            snprintf(buf, 20, "%p", AS_OBJ(val));
             return hashString(buf, strlen(buf)); // hash the pointer string
         }
     } else if (IS_NUMBER(val)) {
