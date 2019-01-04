@@ -2,13 +2,12 @@
 #define clox_memory_h
 
 #include <stdio.h>
+#include "common.h"
 #include "object.h"
 #include "value.h"
 
 #define GC_GEN_YOUNG_MAX 2
 #define GC_GEN_MAX 5
-
-#define xstr(a) #a
 
 // NOTE: zeroes the memory
 #define ALLOCATE(type, count)\

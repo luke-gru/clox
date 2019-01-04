@@ -10,6 +10,9 @@
 #define JUMP_SET 0
 #define JUMP_PERFORMED 1
 
+#define xstr(a) #a
+#define QUOTE(x) xstr(x)
+
 // NOTE: when adding/removing from here, add/remove from opName() function in debug.c!
 typedef enum {
     #define OPCODE(name) OP_##name,

@@ -256,8 +256,15 @@ static void defineGlobalVariables(void) {
     Value loadPathVal = newArray();
     ASSERT(IS_INSTANCE(loadPathVal));
     lxLoadPath = AS_INSTANCE(loadPathVal);
-    ObjString *loadPathStr = internedString("loadPath", 8);
+    ObjString *loadPathStr = INTERN("loadPath");
     ASSERT(tableSet(&vm.globals, OBJ_VAL(loadPathStr), loadPathVal));
+    // add 'lib' path as default load path
+    ObjString *libPath = hiddenString("", 0);
+    // FIXME: this won't work if user moves their clox binary after building
+    pushCString(libPath, QUOTE(LX_BUILT_DIR), strlen(QUOTE(LX_BUILT_DIR)));
+    pushCString(libPath, "/lib", strlen("/lib"));
+    arrayPush(loadPathVal, newStringInstance(libPath));
+    unhideFromGC((Obj*)libPath);
     // populate load path from -L option given to commandline
     char *lpath = GET_OPTION(initialLoadPath);
     if (lpath && strlen(lpath) > 0) {
@@ -270,7 +277,7 @@ static void defineGlobalVariables(void) {
         }
     }
 
-    ObjString *argvStr = internedString("ARGV", 4);
+    ObjString *argvStr = INTERN("ARGV");
     Value argvVal = newArray();
     ASSERT(IS_INSTANCE(argvVal));
     lxArgv = AS_INSTANCE(argvVal);
