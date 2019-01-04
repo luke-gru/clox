@@ -66,6 +66,7 @@ static void LxThreadSetup(LxThread *th) {
     th->hadError = false;
     th->errInfo = NULL;
     th->lastErrorThrown = NIL_VAL;
+    th->errorToThrow = NIL_VAL;
     th->inCCall = 0;
     th->cCallThrew = false;
     th->returnedFromNativeErr = false;
@@ -237,9 +238,15 @@ Value lxJoinThread(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+Value lxThreadMainStatic(int argCount, Value *args) {
+    CHECK_ARITY("Thread.main", 1, 1, argCount);
+    return OBJ_VAL(vec_first(&vm.threads));
+}
 
 Value lxThreadScheduleStatic(int argCount, Value *args) {
+    CHECK_ARITY("Thread.schedule", 1, 1, argCount);
     releaseGVL();
+    pthread_yield();
     acquireGVL();
     return NIL_VAL;
 }
@@ -256,10 +263,32 @@ Value lxThreadInit(int argCount, Value *args) {
     selfObj->internal = internalObj;
     if (vm.inited) {
         tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("th")), OBJ_VAL(internalObj));
-    } else {
-        tableSet(selfObj->hiddenFields, NUMBER_VAL(1), OBJ_VAL(internalObj));
     }
     return self;
+}
+
+static void threadSchedule(LxThread *th) {
+    // TODO: wake thread up pre-emptively if sleeping or blocked on IO
+    (void)th;
+    releaseGVL();
+    pthread_cond_signal(&th->sleepCond);
+    acquireGVL();
+}
+
+Value lxThreadThrow(int argCount, Value *args) {
+    CHECK_ARITY("Thread#throw", 2, 2, argCount);
+    Value self = *args;
+    Value err = args[1];
+    CHECK_ARG_IS_A(err, lxErrClass, 1);
+    LxThread *th = THREAD_GETHIDDEN(self);
+    Value ret = NIL_VAL;
+    if (th->status == THREAD_STOPPED || th->status == THREAD_RUNNING) {
+        if (IS_NIL(th->lastErrorThrown)) {
+            th->errorToThrow = err;
+        }
+        threadSchedule(th);
+    }
+    return ret;
 }
 
 typedef struct LxMutex {
@@ -367,9 +396,11 @@ void Init_ThreadClass() {
     lxThreadClass = threadClass;
 
     ObjClass *threadStatic = classSingletonClass(threadClass);
+    addNativeMethod(threadStatic, "main", lxThreadMainStatic);
     addNativeMethod(threadStatic, "schedule", lxThreadScheduleStatic);
 
     nativeThreadInit = addNativeMethod(threadClass, "init", lxThreadInit);
+    nativeThreadInit = addNativeMethod(threadClass, "throw", lxThreadThrow);
 
     ObjClass *mutexClass = addGlobalClass("Mutex", lxObjClass);
     lxMutexClass = mutexClass;

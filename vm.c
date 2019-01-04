@@ -3090,6 +3090,11 @@ void acquireGVL(void) {
     }
     GVLOwner = pthread_self();
     pthread_mutex_unlock(&vm.GVLock);
+    if (vm.curThread && !(IS_NIL(vm.curThread->errorToThrow))) {
+        Value err = vm.curThread->errorToThrow;
+        vm.curThread->errorToThrow = NIL_VAL;
+        throwError(err);
+    }
 
 }
 
