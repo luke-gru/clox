@@ -3090,15 +3090,7 @@ void acquireGVL(void) {
     }
     GVLOwner = pthread_self();
     pthread_mutex_unlock(&vm.GVLock);
-    if (th && th->status == THREAD_KILLED) {
-        THREAD_DEBUG(1, "Thread %lu (KILLED) exiting in acquireGVL", pthread_self());
-        vm.GVLockStatus = 0;
-        vm.curThread = NULL;
-        GVLOwner = -1;
-        th->joined = true;
-        pthread_cond_signal(&vm.GVLCond);
-        pthread_exit(NULL);
-    }
+
 }
 
 void releaseGVL(void) {
@@ -3156,10 +3148,12 @@ ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid) {
 
 LxThread *THREAD() {
     if (!vm.curThread) {
+        pthread_mutex_lock(&vm.GVLock);
         vm.curThread = FIND_THREAD(pthread_self());
         DBG_ASSERT(vm.curThread);
         DBG_ASSERT(vm.curThread->tid == GVLOwner);
         vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
+        pthread_mutex_unlock(&vm.GVLock);
     }
     return vm.curThread;
 }

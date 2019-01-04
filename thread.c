@@ -89,11 +89,16 @@ static void LxThreadCleanup(LxThread *th) {
     pthread_cond_destroy(&th->sleepCond);
 }
 
+typedef struct NewThreadArgs {
+    ObjClosure *func;
+    LxThread *th;
+} NewThreadArgs;
+
 // NOTE: vm.curThread is NOT the current thread here, and doesn't hold
 // the GVL. We can't call ANY functions that call THREAD() in them, as they'll
 // fail (phthread_self() tid is NOT in vm.threads vector until end of
 // function).
-static void newThreadSetup(LxThread *parentThread) {
+static ObjInstance *newThreadSetup(LxThread *parentThread) {
     ASSERT(parentThread);
     THREAD_DEBUG(3, "New thread setup");
     ObjInstance *thInstance = newInstance(lxThreadClass);
@@ -106,7 +111,6 @@ static void newThreadSetup(LxThread *parentThread) {
 
     // set thread state from current (last) thread
     VMExecContext *ctx = NULL; int ctxIdx = 0;
-    // FIXME: figure out if it's safe to copy all this data (CallFrame too)
     vec_foreach(&parentThread->v_ecs, ctx, ctxIdx) {
         VMExecContext *newCtx = ALLOCATE(VMExecContext, 1);
         memcpy(newCtx, ctx, sizeof(VMExecContext));
@@ -118,9 +122,6 @@ static void newThreadSetup(LxThread *parentThread) {
         vec_push(&th->v_ecs, newCtx);
     }
     th->ec = vec_last(&th->v_ecs);
-    /*fprintf(stderr, "NEW VM STACK\n");*/
-    /*printVMStack(stderr, th);*/
-    /*fprintf(stderr, "/NEW VM STACK\n");*/
     th->thisObj = parentThread->thisObj;
     th->lastValue = NULL;
     th->errInfo = NULL; // TODO: copy
@@ -136,6 +137,7 @@ static void newThreadSetup(LxThread *parentThread) {
     th->tid = -1; // unknown, not yet created
     vec_push(&vm.threads, thInstance);
     THREAD_DEBUG(3, "New thread setup done");
+    return thInstance;
 }
 
 static void exitingThread() {
@@ -152,14 +154,17 @@ static void exitingThread() {
 static void *runCallableInNewThread(void *arg) {
     acquireGVL();
     pthread_t tid = pthread_self();
-    ObjClosure *closure = arg;
+    NewThreadArgs *tArgs = (NewThreadArgs*)arg;
+    ObjClosure *closure = tArgs->func;
     ASSERT(closure);
     THREAD_DEBUG(2, "in new thread %lu", pthread_self());
-    LxThread *th = FIND_NEW_THREAD();
+    LxThread *th = tArgs->th;
+    FREE(NewThreadArgs, tArgs);
     ASSERT(th);
     th->tid = tid;
     th->status = THREAD_RUNNING;
     vm.curThread = th;
+    GVLOwner = tid;
     ASSERT(tid == pthread_self());
     ASSERT(vm.curThread->tid == pthread_self());
     push(OBJ_VAL(closure));
@@ -184,12 +189,21 @@ Value lxNewThread(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(closure, IS_CLOSURE_FUNC, "function", 1);
     ObjClosure *func = AS_CLOSURE(closure);
     pthread_t tnew;
-    newThreadSetup(vm.curThread);
+    ObjInstance *threadInst = newThreadSetup(vm.curThread);
+    LxThread *th = (LxThread*)threadInst->internal->data;
+    ASSERT(th);
+    // Argument to pthread_create not called right away, only called when new
+    // thread is switched to. This is why we malloc the thread argument memory
+    // instead of using stack space, which would get corrupted.
+    NewThreadArgs *thArgs = ALLOCATE(NewThreadArgs, 1);
+    thArgs->func = func;
+    thArgs->th = th;
     releaseGVL();
-    if (pthread_create(&tnew, NULL, runCallableInNewThread, func) == 0) {
+    if (pthread_create(&tnew, NULL, runCallableInNewThread, thArgs) == 0) {
         acquireGVL();
+        th->tid = tnew;
         THREAD_DEBUG(2, "created thread id %lu", (unsigned long)tnew);
-        return NUMBER_VAL((unsigned long)tnew);
+        return OBJ_VAL(threadInst);
     } else {
         acquireGVL();
         THREAD_DEBUG(2, "Error making new thread, throwing\n");
@@ -201,26 +215,25 @@ Value lxNewThread(int argCount, Value *args) {
 // usage: joinThread(t);
 Value lxJoinThread(int argCount, Value *args) {
     CHECK_ARITY("joinThread", 1, 1, argCount);
-    Value tidNum = *args;
-    CHECK_ARG_BUILTIN_TYPE(tidNum, IS_NUMBER_FUNC, "number", 1);
-    double num = AS_NUMBER(tidNum);
-    THREAD_DEBUG(2, "Joining thread id %lu\n", (unsigned long)num);
+    Value threadVal = *args;
+    CHECK_ARG_IS_A(threadVal, lxThreadClass, 1);
+    LxThread *th = THREAD_GETHIDDEN(threadVal);
+    ASSERT(th->tid != -1);
+    ASSERT(th);
+    THREAD_DEBUG(2, "Joining thread id %lu\n", th->tid);
     int ret = 0;
 
     releaseGVL();
     // blocking call until given thread ends execution
-    if ((ret = pthread_join((pthread_t)num, NULL)) != 0) {
+    if ((ret = pthread_join(th->tid, NULL)) != 0) {
         THREAD_DEBUG(1, "Error joining thread: (ret=%d), throwing", ret);
         acquireGVL();
         // TODO: throw lxThreadErrClass
         throwErrorFmt(lxErrClass, "Error joining thread");
     }
     acquireGVL();
-    LxThread *th = FIND_THREAD(num);
-    if (th) {
-        th->joined = true;
-    }
-    THREAD_DEBUG(2, "Joined thread id %lu\n", (unsigned long)num);
+    th->joined = true;
+    THREAD_DEBUG(2, "Joined thread id %lu\n", th->tid);
     return NIL_VAL;
 }
 
