@@ -14,8 +14,8 @@ static ObjString *bufStr;
 // ex: var s2 = String("string");
 Value lxStringInit(int argCount, Value *args) {
     CHECK_ARITY("String#init", 1, 2, argCount);
-    callSuper(0, NULL, NULL);
     Value self = *args;
+    callSuper(0, NULL, NULL);
     ObjInstance *selfObj = AS_INSTANCE(self);
     if (argCount == 2) {
         Value internalStrVal = args[1];

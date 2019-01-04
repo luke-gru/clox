@@ -33,10 +33,6 @@ void nodeAddData(Node *node, void *data) {
     node->data = data;
 }
 
-void *nodeGetData(Node *node) {
-    return node->data;
-}
-
 void nodeForeachChild(Node *node, NodeCallback cb) {
     int i = 0;
     Node *n = NULL;

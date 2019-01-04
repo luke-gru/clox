@@ -356,11 +356,15 @@ uint32_t hashString(char *key, int length);
 // misc
 void objFreeze(Obj*);
 void objUnfreeze(Obj*);
-bool isFrozen(Obj*);
+static inline bool isFrozen(Obj *obj) {
+    return obj->isFrozen;
+}
 void  setProp(Value self, ObjString *propName, Value val);
 Value getProp(Value self, ObjString *propName);
 Value getHiddenProp(Value self, ObjString *propName);
-void *internalGetData(ObjInternal *obj);
+static inline void *internalGetData(ObjInternal *obj) {
+    return obj->data;
+}
 void setObjectFinalizer(ObjInstance *obj, Obj *callable);
 
 // arrays
@@ -438,6 +442,12 @@ bool isInstanceLikeObj(Obj *obj);
 size_t sizeofObjType(ObjType type);
 const char *objTypeName(ObjType type);
 char *className(ObjClass *klass);
+
+
+static inline bool isCallable(Value val) {
+    return IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
+        IS_BOUND_METHOD(val) || IS_CLOSURE(val);
+}
 
 typedef bool (*obj_type_p)(Obj*);
 bool is_obj_function_p(Obj*);

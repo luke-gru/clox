@@ -173,10 +173,9 @@ typedef struct VM {
 extern VM vm;
 extern volatile bool settingUpThread;
 
-#define EC (THREAD()->ec)
+#define EC (vm.curThread->ec)
 LxThread *THREAD();
 LxThread *FIND_THREAD(pthread_t tid);
-LxThread *FIND_NEW_THREAD();
 ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid);
 
 #define GVL_UNLOCK_BEGIN() do { \

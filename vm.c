@@ -542,40 +542,44 @@ bool VMLoadedScript(char *fname) {
 
 #define ASSERT_VALID_STACK() ASSERT(EC->stackTop >= EC->stack)
 
-static bool isOpStackEmpty(void) {
+static inline bool isOpStackEmpty(void) {
     ASSERT_VALID_STACK();
     return EC->stackTop == EC->stack;
 }
 
 void push(Value value) {
     ASSERT_VALID_STACK();
-    if (EC->stackTop == EC->stack + STACK_MAX) {
+    register VMExecContext *ctx = EC;
+    if (ctx->stackTop == ctx->stack + STACK_MAX) {
         fprintf(stderr, "Stack overflow!\n");
         exit(1);
     }
     if (IS_OBJ(value)) {
         ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
     }
-    *EC->stackTop = value;
-    EC->stackTop++;
+    *ctx->stackTop = value;
+    ctx->stackTop++;
 }
 
 Value pop(void) {
-    ASSERT(EC->stackTop > EC->stack);
-    EC->stackTop--;
-    EC->lastValue = EC->stackTop;
-    THREAD()->lastValue = EC->lastValue;
-    return *(THREAD()->lastValue);
+    VMExecContext *ctx = EC;
+    ASSERT(ctx->stackTop > ctx->stack);
+    ctx->stackTop--;
+    ctx->lastValue = ctx->stackTop;
+    vm.curThread->lastValue = ctx->lastValue;
+    return *(vm.curThread->lastValue);
 }
 
 Value peek(unsigned n) {
-    ASSERT((EC->stackTop-n) > EC->stack);
-    return *(EC->stackTop-1-n);
+    VMExecContext *ctx = EC;
+    ASSERT((ctx->stackTop-n) > ctx->stack);
+    return *(ctx->stackTop-1-n);
 }
 
 static inline void setThis(unsigned n) {
-    ASSERT((EC->stackTop-n) > EC->stack);
-    THREAD()->thisObj = AS_OBJ(*(EC->stackTop-1-n));
+    VMExecContext *ctx = EC;
+    ASSERT((ctx->stackTop-n) > ctx->stack);
+    vm.curThread->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
 }
 
 Value *getLastValue(void) {
@@ -707,8 +711,15 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
 }
 
 CallFrame *getFrame(void) {
-    ASSERT(EC->frameCount >= 1);
-    return &EC->frames[EC->frameCount-1];
+    VMExecContext *ctx = EC;
+    ASSERT(ctx->frameCount >= 1);
+    return &ctx->frames[ctx->frameCount-1];
+}
+
+static inline CallFrame *getFrameI(void) {
+    VMExecContext *ctx = EC;
+    ASSERT(ctx->frameCount >= 1);
+    return &ctx->frames[ctx->frameCount-1];
 }
 
 void debugFrame(CallFrame *frame) {
@@ -731,7 +742,7 @@ static inline CallFrame *getFrameOrNull(void) {
 }
 
 static inline Chunk *currentChunk(void) {
-    return getFrame()->closure->function->chunk;
+    return getFrameI()->closure->function->chunk;
 }
 
 void errorPrintScriptBacktrace(const char *format, ...) {
@@ -1048,29 +1059,29 @@ Value callFunctionValue(Value callable, int argCount, Value *args) {
 }
 
 static void unwindErrInfo(CallFrame *frame) {
-    ErrTagInfo *info = THREAD()->errInfo;
+    ErrTagInfo *info = vm.curThread->errInfo;
     while (info && info->frame == frame) {
         ErrTagInfo *prev = info->prev;
         FREE(ErrTagInfo, info);
         info = prev;
     }
-    THREAD()->errInfo = info;
+    vm.curThread->errInfo = info;
 }
 
 
 void popFrame(void) {
     DBG_ASSERT(vm.inited);
-    LxThread *th = THREAD();
+    register LxThread *th = vm.curThread;
     ASSERT(EC->frameCount >= 1);
-    VM_DEBUG("popping callframe (%s)", getFrame()->isCCall ? "native" : "non-native");
-    CallFrame *frame = getFrame();
+    CallFrame *frame = getFrameI();
+    VM_DEBUG("popping callframe (%s)", frame->isCCall ? "native" : "non-native");
     int stackAdjust = frame->stackAdjustOnPop;
     unwindErrInfo(frame);
     if (frame->isCCall) {
         if (th->inCCall > 0) {
             th->inCCall--;
             if (th->inCCall == 0) {
-                vec_clear(&THREAD()->stackObjects);
+                vec_clear(&vm.curThread->stackObjects);
             }
         }
     }
@@ -1112,7 +1123,6 @@ CallFrame *pushFrame(void) {
     CallFrame *frame = &EC->frames[EC->frameCount++];
     memset(frame, 0, sizeof(*frame));
     frame->callLine = curLine;
-    ASSERT(vm.fileString);
     frame->file = EC->filename;
     frame->prev = prev;
     frame->block = NULL;
@@ -1136,7 +1146,7 @@ static void pushNativeFrame(ObjNative *native) {
         errorPrintScriptBacktrace("Stack overflow.");
         return;
     }
-    CallFrame *prevFrame = getFrame();
+    CallFrame *prevFrame = getFrameI();
     CallFrame *newFrame = pushFrame();
     newFrame->closure = prevFrame->closure;
     newFrame->ip = prevFrame->ip;
@@ -1147,7 +1157,7 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->file = EC->filename;
     newFrame->block = NULL;
     newFrame->stackAdjustOnPop = 0;
-    THREAD()->inCCall++;
+    vm.curThread->inCCall++;
 }
 
 // sets up VM/C call jumpbuf if not set
@@ -1175,7 +1185,7 @@ static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args
     }
 }
 
-static bool checkFunctionArity(ObjFunction *func, int argCount) {
+static inline bool checkFunctionArity(ObjFunction *func, int argCount) {
     int arityMin = func->arity;
     int arityMax = arityMin + func->numDefaultArgs + func->numKwargs + (func->hasBlockArg ? 1 : 0);
     if (func->hasRestArg) arityMax = 20; // TODO: make a #define
@@ -1197,7 +1207,7 @@ static bool checkFunctionArity(ObjFunction *func, int argCount) {
 // new instance and puts it in the proper spot in the stack. The return value
 // is pushed to the stack.
 static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo *callInfo) {
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     ObjClosure *closure = NULL;
     Value instanceVal;
     volatile ObjInstance *instance = NULL;
@@ -1508,7 +1518,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
  */
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     DBG_ASSERT(vm.inited);
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     int lenBefore = th->stackObjects.length;
     bool ret = doCallCallable(callable, argCount, isMethod, info);
     int lenAfter = th->stackObjects.length;
@@ -1564,7 +1574,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
         if (!superMethod) {
             throwErrorFmt(lxErrClass, "No super method found for callSuper");
         }
-        LxThread *th = THREAD();
+        LxThread *th = vm.curThread;
         int inCCall = th->inCCall;
         callVMMethod(frame->instance, OBJ_VAL(superMethod), argCount, args);
         ASSERT(th->inCCall == inCCall);
@@ -1705,11 +1715,11 @@ NORETURN void throwError(Value self) {
 }
 
 void popErrInfo(void) {
-    THREAD()->errInfo = THREAD()->errInfo->prev;
+    vm.curThread->errInfo = vm.curThread->errInfo->prev;
 }
 
 void unsetErrInfo(void) {
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     th->lastErrorThrown = NIL_VAL;
     ASSERT(th->errInfo);
     th->errInfo = th->errInfo->prev;
@@ -1736,7 +1746,7 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     hideFromGC((Obj*)buf);
     Value msg = newStringInstance(buf);
     Value err = newError(klass, msg);
-    THREAD()->lastErrorThrown = err;
+    vm.curThread->lastErrorThrown = err;
     unhideFromGC((Obj*)buf);
     throwError(err);
     UNREACHABLE("thrown");
@@ -1788,7 +1798,7 @@ void printVMStack(FILE *f, LxThread *th) {
 }
 
 ObjUpvalue *captureUpvalue(Value *local) {
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     if (th->openUpvalues == NULL) {
         th->openUpvalues = newUpvalue(local);
         return th->openUpvalues;
@@ -1830,7 +1840,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
 }
 
 static void closeUpvalues(Value *last) {
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     while (th->openUpvalues != NULL && th->openUpvalues->value >= last) {
         ObjUpvalue *upvalue = th->openUpvalues;
 
@@ -2379,14 +2389,6 @@ vmLoop:
           }
           Value callInfoVal = READ_CONSTANT();
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
-          // ex: String("hi"), "hi" already evaluates to a string instance, so we just
-          // return that.
-          if (numArgs == 1 && strcmp(tokStr(&callInfo->nameTok), "String") == 0 && IS_A_STRING(peek(0))) {
-              Value strVal = pop();
-              pop();
-              push(strVal);
-              DISPATCH_BOTTOM();
-          }
           callCallable(callableVal, numArgs, false, callInfo);
           ASSERT_VALID_STACK();
           DISPATCH_BOTTOM();
@@ -3015,7 +3017,7 @@ ErrTagInfo *addErrInfo(ObjClass *errClass) {
     struct ErrTagInfo *info = ALLOCATE(ErrTagInfo, 1);
     info->status = TAG_NONE;
     info->errClass = errClass;
-    info->frame = getFrame();
+    info->frame = getFrameI();
     info->prev = th->errInfo;
     th->errInfo = info;
     info->caughtError = NIL_VAL;
@@ -3122,20 +3124,9 @@ LxThread *FIND_THREAD(pthread_t tid) {
     ObjInstance *threadInstance; int thIdx = 0;
     LxThread *th = NULL;
     vec_foreach(&vm.threads, threadInstance, thIdx) {
-        th = THREAD_GETHIDDEN(OBJ_VAL(threadInstance));
+        th = (LxThread*)threadInstance->internal->data;
         ASSERT(th);
         if (th->tid == tid) return th;
-    }
-    return NULL;
-}
-
-LxThread *FIND_NEW_THREAD(pthread_t tid) {
-    ObjInstance *threadInstance; int thIdx = 0;
-    LxThread *th = NULL;
-    vec_foreach_rev(&vm.threads, threadInstance, thIdx) {
-        th = THREAD_GETHIDDEN(OBJ_VAL(threadInstance));
-        ASSERT(th);
-        if (th->status == THREAD_READY) return th;
     }
     return NULL;
 }
@@ -3144,7 +3135,7 @@ ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid) {
     ObjInstance *threadInstance; int thIdx = 0;
     LxThread *th = NULL;
     vec_foreach(&vm.threads, threadInstance, thIdx) {
-        th = THREAD_GETHIDDEN(OBJ_VAL(threadInstance));
+        th = (LxThread*)threadInstance->internal->data;
         ASSERT(th);
         if (th->tid == tid) return threadInstance;
     }

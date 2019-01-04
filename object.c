@@ -67,11 +67,6 @@ void objUnfreeze(Obj *obj) {
     obj->isFrozen = false;
 }
 
-bool isFrozen(Obj *obj) {
-    ASSERT(obj);
-    return obj->isFrozen;
-}
-
 uint32_t hashString(char *key, int length) {
     // FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
     uint32_t hash = 2166136261u;
@@ -575,10 +570,6 @@ Obj *moduleFindStaticMethod(ObjModule *mod, ObjString *name) {
     return NULL;
 }
 
-void *internalGetData(ObjInternal *obj) {
-    return obj->data;
-}
-
 void setObjectFinalizer(ObjInstance *obj, Obj *callable) {
     ASSERT(isCallable(OBJ_VAL(callable)));
     if (obj->finalizerFunc == NULL) {
@@ -590,22 +581,22 @@ void setObjectFinalizer(ObjInstance *obj, Obj *callable) {
 const char *typeOfObj(Obj *obj) {
     DBG_ASSERT(obj);
     switch (obj->type) {
+    case OBJ_T_INSTANCE:
+        return "instance";
     case OBJ_T_STRING:
         return "string";
     case OBJ_T_CLASS:
         return "class";
     case OBJ_T_MODULE:
         return "module";
-    case OBJ_T_INSTANCE:
-        return "instance";
+    case OBJ_T_CLOSURE:
+        return "closure";
+    case OBJ_T_INTERNAL:
+        return "internal";
     case OBJ_T_FUNCTION:
     case OBJ_T_NATIVE_FUNCTION:
     case OBJ_T_BOUND_METHOD:
         return "function";
-    case OBJ_T_INTERNAL:
-        return "internal";
-    case OBJ_T_CLOSURE:
-        return "closure";
     case OBJ_T_UPVALUE:
         return "upvalue";
     default: {

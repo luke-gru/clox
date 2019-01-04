@@ -416,11 +416,6 @@ bool valEqual(Value a, Value b) {
 #endif
 }
 
-bool isCallable(Value val) {
-    return IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
-        IS_BOUND_METHOD(val) || IS_CLOSURE(val);
-}
-
 void fillCallableName(Value callable, const char *buf, size_t buflen) {
     memset(buf, 0, buflen);
     ASSERT(isCallable(callable));

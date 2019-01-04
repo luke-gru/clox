@@ -161,7 +161,9 @@ typedef void (*NodeCallback)(Node *n, int idx);
 Node *createNode(node_type_t type, Token tok, vec_nodep_t *children);
 void nodeAddChild(Node *node, Node *child);
 void nodeAddData(Node *node, void *data);
-void *nodeGetData(Node *node);
+static inline void *nodeGetData(Node *node) {
+    return node->data;
+}
 void nodeForeachChild(Node *node, NodeCallback cb);
 void freeNode(Node *node, bool freeChildren);
 
