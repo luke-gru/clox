@@ -163,7 +163,7 @@ typedef struct VM {
     pthread_cond_t GVLCond;
     volatile int GVLockStatus;
     int GVLWaiters;
-    volatile LxThread *curThread;
+    LxThread *curThread;
     LxThread *mainThread;
     vec_void_t threads; // list of current thread ObjInstance pointers
     int numDetachedThreads;

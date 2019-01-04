@@ -546,7 +546,7 @@ bool VMLoadedScript(char *fname) {
     return false;
 }
 
-#define ASSERT_VALID_STACK() ASSERT(EC->stackTop >= EC->stack)
+#define ASSERT_VALID_STACK() ASSERT(LIKELY(EC->stackTop >= EC->stack))
 
 static inline bool isOpStackEmpty(void) {
     ASSERT_VALID_STACK();
@@ -556,12 +556,12 @@ static inline bool isOpStackEmpty(void) {
 void push(Value value) {
     ASSERT_VALID_STACK();
     register VMExecContext *ctx = EC;
-    if (ctx->stackTop == ctx->stack + STACK_MAX) {
+    if (UNLIKELY(ctx->stackTop == ctx->stack + STACK_MAX)) {
         fprintf(stderr, "Stack overflow!\n");
         exit(1);
     }
     if (IS_OBJ(value)) {
-        ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
+        ASSERT(LIKELY(AS_OBJ(value)->type != OBJ_T_NONE));
     }
     *ctx->stackTop = value;
     ctx->stackTop++;
@@ -569,7 +569,7 @@ void push(Value value) {
 
 Value pop(void) {
     VMExecContext *ctx = EC;
-    ASSERT(ctx->stackTop > ctx->stack);
+    ASSERT(LIKELY(ctx->stackTop > ctx->stack));
     ctx->stackTop--;
     ctx->lastValue = ctx->stackTop;
     vm.curThread->lastValue = ctx->lastValue;
@@ -578,13 +578,13 @@ Value pop(void) {
 
 Value peek(unsigned n) {
     VMExecContext *ctx = EC;
-    ASSERT((ctx->stackTop-n) > ctx->stack);
+    ASSERT(LIKELY((ctx->stackTop-n) > ctx->stack));
     return *(ctx->stackTop-1-n);
 }
 
 static inline void setThis(unsigned n) {
     VMExecContext *ctx = EC;
-    ASSERT((ctx->stackTop-n) > ctx->stack);
+    ASSERT(LIKELY((ctx->stackTop-n) > ctx->stack));
     vm.curThread->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
 }
 
@@ -1131,10 +1131,6 @@ CallFrame *pushFrame(void) {
     frame->callLine = curLine;
     frame->file = EC->filename;
     frame->prev = prev;
-    frame->block = NULL;
-    frame->lastBlock = NULL;
-    frame->stackAdjustOnPop = 0;
-    frame->callInfo = NULL;
     return frame;
 }
 
@@ -1161,14 +1157,12 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->isCCall = true;
     newFrame->nativeFunc = native;
     newFrame->file = EC->filename;
-    newFrame->block = NULL;
-    newFrame->stackAdjustOnPop = 0;
     vm.curThread->inCCall++;
 }
 
 // sets up VM/C call jumpbuf if not set
 static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args) {
-    volatile LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     if (th->inCCall == 0) {
         VM_DEBUG("%s", "Setting VM/C error jump buffer");
         VM_DEBUG("setting VM/C error jump buf");
@@ -1179,6 +1173,7 @@ static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args
             return ret;
         } else { // C call longjmped here from throwError()
             VM_DEBUG("longmped to VM/C error jump buf");
+            th = THREAD();
             ASSERT(th->inCCall > 0);
             ASSERT(th->cCallThrew);
             th->cCallThrew = false;
@@ -1195,7 +1190,7 @@ static inline bool checkFunctionArity(ObjFunction *func, int argCount) {
     int arityMin = func->arity;
     int arityMax = arityMin + func->numDefaultArgs + func->numKwargs + (func->hasBlockArg ? 1 : 0);
     if (func->hasRestArg) arityMax = 20; // TODO: make a #define
-    if (argCount < arityMin || argCount > arityMax) {
+    if (UNLIKELY(argCount < arityMin || argCount > arityMax)) {
         if (arityMin == arityMax) {
             throwArgErrorFmt("Expected %d arguments but got %d.",
                     arityMin, argCount);
@@ -1220,7 +1215,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     ObjClass *frameClass = NULL;
     if (isMethod) {
         instance = AS_INSTANCE(EC->stackTop[-argCount-1]);
-        if (!isInstanceLikeObj((Obj*)instance)) {
+        if (UNLIKELY(!isInstanceLikeObj((Obj*)instance))) {
             throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfObj((Obj*)instance));
         }
         frameClass = instance->klass; // TODO: make class the callable's class, not the instance class
@@ -1235,7 +1230,10 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         }
     } else if (IS_CLASS(callable)) { // initializer
         ObjClass *klass = AS_CLASS(callable);
-        const char *klassName = CLASSINFO(klass)->name ? CLASSINFO(klass)->name->chars : "(anon)";
+        const char *klassName = NULL;
+#ifndef NDEBUG
+        klassName = className(klass);
+#endif
         (void)klassName;
         VM_DEBUG("calling callable class %s", klassName);
         instance = newInstance(klass); // setup the new instance object
@@ -1246,7 +1244,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         /*ASSERT(IS_CLASS(EC->stackTop[-argCount - 1])); this holds true if the # of args is correct for the function */
         EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
         // Call the initializer, if there is one.
-        volatile Value initializer;
+        Value initializer;
         Obj *init = instanceFindMethod(instance, vm.initString);
         isMethod = true;
         if (init) {
@@ -1263,17 +1261,15 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
                 newFrame->callInfo = callInfo;
-                volatile int argc = argCount;
-                volatile VMExecContext *ec = EC;
                 VM_DEBUG("calling native initializer for class %s with %d args", klassName, argCount);
                 Value val = captureNativeError(nativeInit, argCount+1, EC->stackTop-argCount-1);
                 th = THREAD();
                 th->thisObj = oldThis;
-                newFrame->slots = ec->stackTop-argc-1;
-                if (THREAD()->returnedFromNativeErr) {
+                newFrame->slots = EC->stackTop-argCount-1;
+                if (UNLIKELY(th->returnedFromNativeErr)) {
                     th->returnedFromNativeErr = false;
                     VM_DEBUG("native initializer returned from error");
-                    vec_clear(&THREAD()->stackObjects);
+                    vec_clear(&th->stackObjects);
                     while (getFrame() >= newFrame) {
                         popFrame();
                     }
@@ -1283,9 +1279,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                     return false;
                 } else {
                     VM_DEBUG("native initializer returned");
-                    ec->stackTop = getFrame()->slots;
+                    EC->stackTop = getFrameI()->slots;
                     popFrame();
-                    ASSERT(IS_INSTANCE_LIKE(val));
+                    ASSERT(LIKELY(IS_INSTANCE_LIKE(val)));
                     push(val);
                     return true;
                 }
@@ -1356,7 +1352,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         UNREACHABLE("bad callable value given to callCallable: %s", typeOfVal(callable));
     }
 
-    if (EC->frameCount >= FRAMES_MAX) {
+    if (UNLIKELY(EC->frameCount >= FRAMES_MAX)) {
         errorPrintScriptBacktrace("Stack overflow.");
         return false;
     }
@@ -1937,7 +1933,7 @@ static InterpretResult vm_run() {
       Value b = pop(); \
       Value a = pop(); \
       if (IS_NUMBER(a) && IS_NUMBER(b)) {\
-          if ((opcode == OP_DIVIDE || opcode == OP_MODULO) && AS_NUMBER(b) == 0.00) {\
+          if (UNLIKELY(((opcode == OP_DIVIDE || opcode == OP_MODULO) && AS_NUMBER(b) == 0.00))) {\
               throwErrorFmt(lxErrClass, "Can't divide by 0");\
           }\
           push(NUMBER_VAL((type)AS_NUMBER(a) op (type)AS_NUMBER(b))); \
@@ -1950,7 +1946,7 @@ static InterpretResult vm_run() {
           if (methodName) {\
             callable = instanceFindMethod(inst, methodName);\
           }\
-          if (!callable) {\
+          if (UNLIKELY(!callable)) {\
               throwErrorFmt(lxNameErrClass, "Method %s#%s not found for operation '%s'", className(inst->klass), methodName->chars, #op);\
           }\
           callCallable(OBJ_VAL(callable), 1, true, NULL);\
@@ -1963,7 +1959,7 @@ static InterpretResult vm_run() {
   /* Main vm loop */
 vmLoop:
       th->opsRemaining--;
-      if (th->opsRemaining <= 0) {
+      if (UNLIKELY(th->opsRemaining <= 0)) {
           th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
           if (!isOnlyThread()) {
               releaseGVL();
@@ -1971,15 +1967,15 @@ vmLoop:
               acquireGVL();
           }
       }
-      if (th->hadError) {
+      if (UNLIKELY(th->hadError)) {
           (th->vmRunLvl)--;
           return INTERPRET_RUNTIME_ERROR;
       }
-      if (vm.exited) {
+      if (UNLIKELY(vm.exited)) {
           (th->vmRunLvl)--;
           return INTERPRET_OK;
       }
-      if (EC->stackTop < EC->stack) {
+      if (UNLIKELY((EC->stackTop < EC->stack))) {
           ASSERT(0);
       }
 
@@ -1992,7 +1988,7 @@ vmLoop:
       if (byteCount > 0) {
           lastLine = ch->lines[byteCount-1];
       }
-      if (shouldEnterDebugger(&vm.debugger, "", curLine, lastLine, ndepth, nwidth)) {
+      if (UNLIKELY(shouldEnterDebugger(&vm.debugger, "", curLine, lastLine, ndepth, nwidth))) {
           enterDebugger(&vm.debugger, "", curLine, ndepth, nwidth);
       }
 
@@ -2066,7 +2062,7 @@ vmLoop:
       CASE_OP(SHOVEL_R): BINARY_OP(>>,OP_SHOVEL_R,int); DISPATCH_BOTTOM();
       CASE_OP(NEGATE): {
           Value val = pop();
-          if (!IS_NUMBER(val)) {
+          if (UNLIKELY(!IS_NUMBER(val))) {
               throwErrorFmt(lxTypeErrClass, "Can only negate numbers, type=%s", typeOfVal(val));
           }
           push(NUMBER_VAL(-AS_NUMBER(val)));
@@ -2075,7 +2071,7 @@ vmLoop:
       CASE_OP(LESS): {
           Value rhs = pop(); // rhs
           Value lhs = pop(); // lhs
-          if (!canCmpValues(lhs, rhs, instruction)) {
+          if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
               throwErrorFmt(lxTypeErrClass,
                       "Can only compare 2 numbers or 2 strings with '<', lhs=%s, rhs=%s",
                       typeOfVal(lhs), typeOfVal(rhs));
@@ -2090,7 +2086,7 @@ vmLoop:
       CASE_OP(GREATER): {
         Value rhs = pop();
         Value lhs = pop();
-        if (!canCmpValues(lhs, rhs, instruction)) {
+        if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
             throwErrorFmt(lxTypeErrClass,
                 "Can only compare 2 numbers or 2 strings with '>', lhs=%s, rhs=%s",
                 typeOfVal(lhs), typeOfVal(rhs));
@@ -2130,7 +2126,7 @@ vmLoop:
       CASE_OP(GREATER_EQUAL): {
           Value rhs = pop();
           Value lhs = pop();
-          if (!canCmpValues(lhs, rhs, instruction)) {
+          if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
               throwErrorFmt(lxTypeErrClass,
                   "Can only compare 2 numbers or 2 strings with '>=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
@@ -2145,7 +2141,7 @@ vmLoop:
       CASE_OP(LESS_EQUAL): {
           Value rhs = pop();
           Value lhs = pop();
-          if (!canCmpValues(lhs, rhs, instruction)) {
+          if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
               throwErrorFmt(lxTypeErrClass,
                   "Can only compare 2 numbers or 2 strings with '<=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
@@ -2176,7 +2172,7 @@ vmLoop:
       CASE_OP(DEFINE_GLOBAL): {
           Value varName = READ_CONSTANT();
           char *name = AS_CSTRING(varName);
-          if (isUnredefinableGlobal(name)) {
+          if (UNLIKELY(isUnredefinableGlobal(name))) {
               pop();
               throwErrorFmt(lxNameErrClass, "Can't redeclare global variable '%s'", name);
           }
@@ -2201,7 +2197,7 @@ vmLoop:
           Value val = peek(0);
           Value varName = READ_CONSTANT();
           char *name = AS_CSTRING(varName);
-          if (isUnredefinableGlobal(name)) {
+          if (UNLIKELY(isUnredefinableGlobal(name))) {
               throwErrorFmt(lxNameErrClass, "Can't redefine global variable '%s'", name);
           }
           tableSet(&vm.globals, varName, val);
@@ -2244,7 +2240,7 @@ vmLoop:
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
           ASSERT(slot >= 0);
-          getFrame()->slots[slot] = peek(0); // locals are popped at end of scope by VM
+          frame->slots[slot] = peek(0); // locals are popped at end of scope by VM
           DISPATCH_BOTTOM();
       }
       CASE_OP(UNPACK_SET_LOCAL): {
@@ -2256,11 +2252,11 @@ vmLoop:
           // make sure we don't clobber the unpack array with the setting of
           // this variable
           int peekIdx = 0;
-          while (getFrame()->slots+slot > EC->stackTop-1) {
+          while (frame->slots+slot > EC->stackTop-1) {
               push(NIL_VAL);
               peekIdx++;
           }
-          getFrame()->slots[slot] = unpackValue(peek(peekIdx+unpackIdx), unpackIdx); // locals are popped at end of scope by VM
+          frame->slots[slot] = unpackValue(peek(peekIdx+unpackIdx), unpackIdx); // locals are popped at end of scope by VM
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_LOCAL): {
@@ -2268,21 +2264,21 @@ vmLoop:
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
           ASSERT(slot >= 0);
-          push(getFrame()->slots[slot]);
+          push(frame->slots[slot]);
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_UPVALUE): {
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          push(*getFrame()->closure->upvalues[slot]->value);
+          push(*frame->closure->upvalues[slot]->value);
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_UPVALUE): {
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          *getFrame()->closure->upvalues[slot]->value = peek(0);
+          *frame->closure->upvalues[slot]->value = peek(0);
           DISPATCH_BOTTOM();
       }
       CASE_OP(CLOSE_UPVALUE): {
@@ -2387,7 +2383,7 @@ vmLoop:
               th->lastSplatNumArgs = -1;
           }
           Value callableVal = peek(numArgs);
-          if (!isCallable(callableVal)) {
+          if (UNLIKELY(!isCallable(callableVal))) {
               for (int i = 0; i < numArgs; i++) {
                   pop();
               }
@@ -2436,7 +2432,7 @@ vmLoop:
               if (!callable && numArgs == 0) {
                   callable = instanceFindGetter(inst, mname);
               }
-              if (!callable) {
+              if (UNLIKELY(!callable)) {
                   ObjString *className = CLASSINFO(inst->klass)->name;
                   const char *classStr = className->chars ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, mname->chars);
@@ -2451,7 +2447,7 @@ vmLoop:
               /*if (!callable && numArgs == 0) {*/
                   /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
               /*}*/
-              if (!callable) {
+              if (UNLIKELY(!callable)) {
                   ObjString *className = CLASSINFO(klass)->name;
                   const char *classStr = className ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, mname->chars);
@@ -2467,7 +2463,7 @@ vmLoop:
               /*if (!callable && numArgs == 0) {*/
                   /*callable = instanceFindGetter((ObjInstance*)mod, mname);*/
               /*}*/
-              if (!callable) {
+              if (UNLIKELY(!callable)) {
                   ObjString *modName = CLASSINFO(mod)->name;
                   const char *modStr = modName ? modName->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, mname->chars);
@@ -2490,7 +2486,7 @@ vmLoop:
       }
       CASE_OP(SPLAT_ARRAY): {
           Value ary = pop();
-          if (!IS_AN_ARRAY(ary)) {
+          if (UNLIKELY(!IS_AN_ARRAY(ary))) {
               throwErrorFmt(lxTypeErrClass, "Splatted expression must evaluate to an Array (type=%s)",
                       typeOfVal(ary));
           }
@@ -2512,7 +2508,7 @@ vmLoop:
           bool found = lookupMethod(
               AS_INSTANCE(instanceVal), klass,
               AS_STRING(methodName), &method, false);
-          if (!found) {
+          if (UNLIKELY(!found)) {
               throwErrorFmt(lxErrClass, "Could not find method for 'super': %s",
                       AS_CSTRING(methodName));
           }
@@ -2534,7 +2530,7 @@ vmLoop:
       }
       CASE_OP(ITER): {
           Value iterable = peek(0);
-          if (!isIterableType(iterable)) {
+          if (UNLIKELY(!isIterableType(iterable))) {
               throwErrorFmt(lxTypeErrClass, "Non-iterable value given to 'foreach' statement. Type found: %s",
                       typeOfVal(iterable));
           }
