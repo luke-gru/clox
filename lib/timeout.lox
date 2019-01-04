@@ -7,13 +7,14 @@ class Timeout {
     }
     var outerThread = Thread.current();
     var done = false;
-    newThread(fun() {
+    var newThread = newThread(fun() {
       sleep(secs);
       Thread.schedule();
       if (!done) {
         outerThread.throw(TimeoutError("timeout"));
       }
     });
+    newThread.detach();
     blk.yield();
     done = true;
   }

@@ -8,7 +8,7 @@ try {
 } catch (TimeoutError e) {
   err = e;
 }
-print err and err.message;
+print err and err.message; // should timeout after 3 seconds
 
 err = nil;
 try {
@@ -18,7 +18,7 @@ try {
 } catch (TimeoutError e) {
   err = e;
 }
-print err and err.message;
+print err and err.message; // should be nil
 
 __END__
 -- expect: --

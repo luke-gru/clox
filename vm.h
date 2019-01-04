@@ -171,7 +171,6 @@ typedef struct VM {
 } VM; // singleton
 
 extern VM vm;
-extern volatile bool settingUpThread;
 
 #define EC (vm.curThread->ec)
 LxThread *THREAD();
@@ -292,6 +291,8 @@ void releaseGVL(void);
 void thread_debug(int lvl, const char *format, ...);
 volatile long long GVLOwner;
 void threadSetCurrent(LxThread *th);
+void threadDetach(LxThread *th);
+void exitingThread(void);
 
 // debug
 void printVMStack(FILE *f, LxThread *th);

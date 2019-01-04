@@ -5,7 +5,7 @@
 #include "vm.h"
 
 #define CHECK_ARITY(func, min, max, actual) do {\
-    if (!checkArity(min, max, actual)) {\
+    if (UNLIKELY(!checkArity(min, max, actual))) {\
         if (min == max) {\
             throwArgErrorFmt("Error in %s, expected %d arg%s, got %d",\
                 func, min, max == 1 ? "" : "s", actual);\

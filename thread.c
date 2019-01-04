@@ -140,7 +140,7 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
     return thInstance;
 }
 
-static void exitingThread() {
+void exitingThread() {
     ASSERT(vm.curThread);
     vm.curThread->status = THREAD_ZOMBIE;
     vm.curThread->openUpvalues = NULL;
@@ -175,10 +175,7 @@ static void *runCallableInNewThread(void *arg) {
     }
     THREAD_DEBUG(2, "calling callable %lu", pthread_self());
     callCallable(OBJ_VAL(closure), 0, false, NULL);
-    exitingThread();
-    THREAD_DEBUG(2, "exiting thread %lu", pthread_self());
-    releaseGVL();
-    pthread_exit(NULL);
+    stopVM(0); // actually just exits the thread
 }
 
 
@@ -292,6 +289,27 @@ Value lxThreadThrow(int argCount, Value *args) {
     return ret;
 }
 
+void threadDetach(LxThread *th) {
+    ASSERT(th && th != vm.curThread);
+    th->detached = true;
+    pthread_detach(th->tid);
+    vm.numDetachedThreads++;
+}
+
+Value lxThreadDetach(int argCount, Value *args) {
+    CHECK_ARITY("Thread#detach", 1, 1, argCount);
+    Value self = *args;
+    LxThread *th = THREAD_GETHIDDEN(self);
+    if (th == vm.mainThread) {
+        return BOOL_VAL(false);
+    }
+    if (th->detached || th->status == THREAD_KILLED || th->status == THREAD_ZOMBIE) {
+        return BOOL_VAL(false);
+    }
+    threadDetach(th);
+    return BOOL_VAL(true);
+}
+
 typedef struct LxMutex {
     LxThread *owner;
     pthread_mutex_t lock;
@@ -400,7 +418,8 @@ void Init_ThreadClass() {
     addNativeMethod(threadStatic, "schedule", lxThreadScheduleStatic);
 
     nativeThreadInit = addNativeMethod(threadClass, "init", lxThreadInit);
-    nativeThreadInit = addNativeMethod(threadClass, "throw", lxThreadThrow);
+    addNativeMethod(threadClass, "throw", lxThreadThrow);
+    addNativeMethod(threadClass, "detach", lxThreadDetach);
 
     ObjClass *mutexClass = addGlobalClass("Mutex", lxObjClass);
     lxMutexClass = mutexClass;

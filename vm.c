@@ -3037,27 +3037,24 @@ void runAtExitHooks(void) {
     }
 }
 
-static void threadDetach(LxThread *th) {
-    ASSERT(th && th != vm.curThread);
-    th->detached = true;
-    pthread_detach(th->tid);
-    vm.numDetachedThreads++;
-}
-
 static void detachUnjoinedThreads() {
     ObjInstance *threadInst = NULL; int tidx = 0;
     vec_foreach(&vm.threads, threadInst, tidx) {
         LxThread *th = (LxThread*)threadInst->internal->data;
         if (th == vm.mainThread) continue;
-        if (th->status != THREAD_ZOMBIE && th->status != THREAD_KILLED && th->tid != -1) {
-            THREAD_DEBUG(1, "Main thread detaching unjoined thread %lu on exit", th->tid);
+        if (!th->detached && th->status != THREAD_ZOMBIE && th->status != THREAD_KILLED && th->tid != -1) {
+            THREAD_DEBUG(1, "Main thread detaching unjoined thread %lu due to exit", th->tid);
             threadDetach(th);
         }
     }
 }
 
+// TODO: rename to exitThread(), as this either stops the VM or exits the
+// current non-main thread
 NORETURN void stopVM(int status) {
-    if (THREAD() == vm.mainThread) {
+    LxThread *th = vm.curThread;
+    if (th == vm.mainThread) {
+        THREAD_DEBUG(1, "Main thread exiting with %d", status);
         detachUnjoinedThreads();
         runAtExitHooks();
         freeVM();
@@ -3067,7 +3064,15 @@ NORETURN void stopVM(int status) {
         vm.exited = true;
         exit(status);
     } else {
-        THREAD()->exitStatus = status;
+        exitingThread();
+        th->exitStatus = status;
+        if (th->detached && vm.numDetachedThreads > 0) {
+            THREAD_DEBUG(1, "Thread %lu [DETACHED] exiting with %d", th->tid, status);
+            vm.numDetachedThreads--;
+        } else {
+            THREAD_DEBUG(1, "Thread %lu exiting with %d", th->tid, status);
+        }
+        releaseGVL();
         pthread_exit(NULL);
     }
 }

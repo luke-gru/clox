@@ -284,7 +284,7 @@ Value lxExit(int argCount, Value *args) {
     Value status = *args;
     CHECK_ARG_BUILTIN_TYPE(status, IS_NUMBER_FUNC, "number", 1);
     stopVM((int)AS_NUMBER(status));
-    return NIL_VAL; // not reached
+    UNREACHABLE_RETURN(NIL_VAL);
 }
 
 #define SCRIPT_PATH_MAX (PATH_MAX+1)
@@ -719,19 +719,18 @@ bool checkArity(int min, int max, int actual) {
 }
 
 void checkBuiltinArgType(Value arg, value_type_p typechk_p, const char *typeExpect, int argnum) {
-    if (!typechk_p(arg)) {
+    if (UNLIKELY(!typechk_p(arg))) {
         const char *typeActual = typeOfVal(arg);
         throwArgErrorFmt("Expected argument %d to be a %s, got: %s", argnum, typeExpect, typeActual);
     }
 }
 
 void checkArgIsInstanceOf(Value arg, ObjClass *klass, int argnum) {
-    const char *typeExpect = CLASSINFO(klass)->name->chars;
-    if (!is_value_instance_of_p(arg, klass)) {
-        const char *typeActual;
+    if (UNLIKELY(!is_value_instance_of_p(arg, klass))) {
+        const char *typeExpect = CLASSINFO(klass)->name->chars;
+        const char *typeActual = NULL;
         if (IS_INSTANCE(arg)) {
-            ObjString *className = CLASSINFO(AS_INSTANCE(arg)->klass)->name;
-            typeActual = className ? className->chars : "(anon)";
+            typeActual = className(klass);
         } else {
             typeActual = typeOfVal(arg);
         }
@@ -740,12 +739,11 @@ void checkArgIsInstanceOf(Value arg, ObjClass *klass, int argnum) {
 }
 
 void checkArgIsA(Value arg, ObjClass *klass, int argnum) {
-    const char *typeExpect = CLASSINFO(klass)->name->chars;
-    if (!is_value_a_p(arg, klass)) {
-        const char *typeActual;
+    if (UNLIKELY(!is_value_a_p(arg, klass))) {
+        const char *typeExpect = NULL;
+        const char *typeActual = NULL;
         if (IS_INSTANCE(arg)) {
-            ObjString *className = CLASSINFO(AS_INSTANCE(arg)->klass)->name;
-            typeActual = className ? className->chars : "(anon)";
+            typeActual = className(klass);
         } else {
             typeActual = typeOfVal(arg);
         }
