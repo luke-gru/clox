@@ -628,7 +628,7 @@ ValueArray *arrayGetHidden(Value aryVal) {
 Value newArray(void) {
     ObjInstance *instance = newInstance(lxAryClass);
     callVMMethod(instance, OBJ_VAL(nativeArrayInit), 0, NULL);
-    ASSERT(IS_AN_ARRAY(peek(0)));
+    DBG_ASSERT(IS_AN_ARRAY(peek(0)));
     return pop();
 }
 
@@ -1024,17 +1024,8 @@ Value newThread(void) {
     }
 }
 
-Value newThreadFromOldCurrentThread(void) {
-    ObjInstance *instance = newInstance(lxThreadClass);
-    return OBJ_VAL(instance);
-}
-
 LxThread *threadGetHidden(Value thread) {
-    Value internal;
-    internal = OBJ_VAL(AS_INSTANCE(thread)->internal);
-    ObjInternal *i = AS_INTERNAL(internal);
-    ASSERT(i);
-    ASSERT(i->data);
+    ObjInternal *i = AS_INSTANCE(thread)->internal;
     return (LxThread*)i->data;
 }
 
@@ -1121,69 +1112,20 @@ char *className(ObjClass *klass) {
     }
 }
 
-bool is_obj_function_p(Obj *obj) {
-    return obj->type == OBJ_T_FUNCTION;
-}
-bool is_value_function_p(Value val) {
-    return IS_FUNCTION(val);
-}
-bool is_obj_closure_p(Obj *obj) {
-    return obj->type == OBJ_T_CLOSURE;
-}
-bool is_value_closure_p(Value val) {
-    return IS_CLOSURE(val);
-}
-bool is_obj_native_function_p(Obj *obj) {
-    return obj->type == OBJ_T_NATIVE_FUNCTION;
-}
-bool is_value_native_function_p(Value val) {
-    return IS_NATIVE_FUNCTION(val);
-}
-bool is_obj_class_p(Obj *obj) {
-    return obj->type == OBJ_T_CLASS;
-}
 bool is_value_class_p(Value val) {
     return IS_CLASS(val);
-}
-bool is_obj_module_p(Obj *obj) {
-    return obj->type == OBJ_T_MODULE;
 }
 bool is_value_module_p(Value val) {
     return IS_MODULE(val);
 }
-bool is_obj_instance_p(Obj *obj) {
-    return obj->type == OBJ_T_INSTANCE;
-}
 bool is_value_instance_p(Value val) {
     return IS_INSTANCE(val);
 }
-bool is_obj_bound_method_p(Obj *obj) {
-    return obj->type == OBJ_T_BOUND_METHOD;
-}
-bool is_value_bound_method_p(Value val) {
-    return IS_BOUND_METHOD(val);
-}
-bool is_obj_upvalue_p(Obj *obj) {
-    return obj->type == OBJ_T_UPVALUE;
-}
-bool is_value_upvalue_p(Value val) {
-    return IS_UPVALUE(val);
-}
-bool is_obj_internal_p(Obj *obj) {
-    return obj->type == OBJ_T_INTERNAL;
-}
-bool is_value_internal_p(Value val) {
-    return IS_INTERNAL(val);
-}
-
-bool is_obj_instance_of_p(Obj *obj, ObjClass *klass) {
-    return obj->type == OBJ_T_INSTANCE && ((ObjInstance*)obj)->klass == klass;
+bool is_value_closure_p(Value val) {
+    return IS_CLOSURE(val);
 }
 bool is_value_instance_of_p(Value val, ObjClass *klass) {
     return IS_INSTANCE(val) && AS_INSTANCE(val)->klass == klass;
-}
-bool is_obj_a_p(Obj* obj, ObjClass *klass) {
-    return obj->type == OBJ_T_INSTANCE && instanceIsA(((ObjInstance*)obj), klass);
 }
 bool is_value_a_p(Value val, ObjClass *klass) {
     return IS_INSTANCE(val) && instanceIsA(AS_INSTANCE(val), klass);

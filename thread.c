@@ -108,7 +108,6 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
     LxThread *th = ALLOCATE(LxThread, 1);
     LxThreadSetup(th);
     internalObj->data = th;
-    tableSet(thInstance->hiddenFields, OBJ_VAL(INTERN("th")), OBJ_VAL(internalObj));
 
     // set thread state from current (last) thread
     VMExecContext *ctx = NULL; int ctxIdx = 0;
@@ -243,6 +242,12 @@ Value lxThreadMainStatic(int argCount, Value *args) {
     return OBJ_VAL(vec_first(&vm.threads));
 }
 
+Value lxThreadCurrentStatic(int argCount, Value *args) {
+    CHECK_ARITY("Thread.current", 1, 1, argCount);
+    ObjInstance *curThread = FIND_THREAD_INSTANCE(vm.curThread->tid);
+    return OBJ_VAL(curThread);
+}
+
 Value lxThreadScheduleStatic(int argCount, Value *args) {
     CHECK_ARITY("Thread.schedule", 1, 1, argCount);
     releaseGVL();
@@ -261,15 +266,11 @@ Value lxThreadInit(int argCount, Value *args) {
     LxThreadSetup(th);
     internalObj->data = th;
     selfObj->internal = internalObj;
-    if (vm.inited) {
-        tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("th")), OBJ_VAL(internalObj));
-    }
     return self;
 }
 
 static void threadSchedule(LxThread *th) {
     // TODO: wake thread up pre-emptively if sleeping or blocked on IO
-    (void)th;
     releaseGVL();
     pthread_cond_signal(&th->sleepCond);
     acquireGVL();
@@ -354,9 +355,8 @@ void unlockMutex(LxMutex *mutex) {
 }
 
 static LxMutex *mutexGetHidden(Value mutex) {
-    Value internal = getHiddenProp(mutex, INTERN("mutex"));
-    ASSERT(IS_INTERNAL(internal));
-    LxMutex *m = AS_INTERNAL(internal)->data;
+    ObjInternal *internal = AS_INSTANCE(mutex)->internal;
+    LxMutex *m = (LxMutex*)internal->data;
     return m;
 }
 
@@ -370,7 +370,6 @@ static Value lxMutexInit(int argCount, Value *args) {
     setupMutex(mutex);
     internalObj->data = mutex;
     selfObj->internal = internalObj;
-    tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("mutex")), OBJ_VAL(internalObj));
     return self;
 }
 
@@ -397,6 +396,7 @@ void Init_ThreadClass() {
 
     ObjClass *threadStatic = classSingletonClass(threadClass);
     addNativeMethod(threadStatic, "main", lxThreadMainStatic);
+    addNativeMethod(threadStatic, "current", lxThreadCurrentStatic);
     addNativeMethod(threadStatic, "schedule", lxThreadScheduleStatic);
 
     nativeThreadInit = addNativeMethod(threadClass, "init", lxThreadInit);

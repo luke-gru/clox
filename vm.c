@@ -433,7 +433,6 @@ void initVM() {
     vm.instructionStepperOn = CLOX_OPTION_T(stepVMExecution);
 
     vm.inited = true; // NOTE: VM has to be inited before creation of strings
-    tableSet(mainT->hiddenFields, OBJ_VAL(INTERN("th")), OBJ_VAL(mainT->internal));
     vm.exited = false;
     vm.initString = internedString("init", 4);
     vm.fileString = internedString("__FILE__", 8);

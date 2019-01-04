@@ -239,27 +239,11 @@ typedef struct LxFile {
 #define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
 #define IS_INTERNAL(value)      (isObjType(value, OBJ_T_INTERNAL))
 
-#define IS_OBJ_FUNCTION_FUNC (is_obj_function_p)
-#define IS_FUNCTION_FUNC (is_value_function_p)
-#define IS_OBJ_CLOSURE_FUNC (is_obj_closure_p)
-#define IS_CLOSURE_FUNC (is_value_closure_p)
-#define IS_OBJ_NATIVE_FUNCTION_FUNC (is_obj_function_p)
-#define IS_NATIVE_FUNCTION_FUNC (is_value_native_function_p)
-#define IS_OBJ_CLASS_FUNC (is_obj_class_p)
 #define IS_CLASS_FUNC (is_value_class_p)
-#define IS_OBJ_MODULE_FUNC (is_obj_module_p)
 #define IS_MODULE_FUNC (is_value_module_p)
-#define IS_OBJ_INSTANCE_FUNC (is_obj_instance_p)
 #define IS_INSTANCE_FUNC (is_value_instance_p)
-#define IS_OBJ_BOUND_METHOD_FUNC (is_obj_bound_method_p)
-#define IS_BOUND_METHOD_FUNC (is_value_bound_method_p)
-#define IS_OBJ_UPVALUE_FUNC (is_obj_upvalue_p)
-#define IS_UPVALUE_FUNC (is_value_upvalue_p)
-#define IS_OBJ_INTERNAL_FUNC (is_obj_internal_p)
-#define IS_INTERNAL_FUNC (is_value_internal_p)
-#define IS_OBJ_INSTANCE_OF_FUNC (is_obj_instance_of_p)
+#define IS_CLOSURE_FUNC (is_value_closure_p)
 #define IS_INSTANCE_OF_FUNC (is_value_instance_of_p)
-#define IS_OBJ_A_FUNC (is_obj_a_p)
 #define IS_A_FUNC (is_value_a_p)
 
 #define IS_A(value,klass)       (IS_INSTANCE(value) && instanceIsA(AS_INSTANCE(value), klass))
@@ -443,35 +427,16 @@ size_t sizeofObjType(ObjType type);
 const char *objTypeName(ObjType type);
 char *className(ObjClass *klass);
 
-
 static inline bool isCallable(Value val) {
     return IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||
         IS_BOUND_METHOD(val) || IS_CLOSURE(val);
 }
 
-typedef bool (*obj_type_p)(Obj*);
-bool is_obj_function_p(Obj*);
-bool is_value_function_p(Value);
-bool is_obj_closure_p(Obj*);
-bool is_value_closure_p(Value);
-bool is_obj_native_function_p(Obj*);
-bool is_value_native_function_p(Value);
-bool is_obj_class_p(Obj*);
 bool is_value_class_p(Value);
-bool is_obj_module_p(Obj*);
 bool is_value_module_p(Value);
-bool is_obj_instance_p(Obj*);
 bool is_value_instance_p(Value);
-bool is_obj_bound_method_p(Obj*);
-bool is_value_bound_method_p(Value);
-bool is_obj_upvalue_p(Obj*);
-bool is_value_upvalue_p(Value);
-bool is_obj_internal_p(Obj*);
-bool is_value_internal_p(Value);
-
-bool is_obj_instance_of_p(Obj*, ObjClass*);
+bool is_value_closure_p(Value val);
 bool is_value_instance_of_p(Value, ObjClass*);
-bool is_obj_a_p(Obj*, ObjClass*);
 bool is_value_a_p(Value, ObjClass*);
 
 #endif

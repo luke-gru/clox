@@ -76,3 +76,4 @@ Optimizations
 * make VM loop use computed gotos instead of switch dispatch
 * Reduce allocations of ObjClosures for blocks, and re-use the ObjClosure and Block
 objects across some calls, when we can.
+* Shared maps/arrays/strings, only de-dup when mutate

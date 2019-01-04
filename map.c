@@ -44,7 +44,6 @@ static Value lxMapInit(int argCount, Value *args) {
     Table *map = ALLOCATE(Table, 1);
     initTable(map);
     internalMap->data = map;
-    tableSet(selfObj->hiddenFields, OBJ_VAL(mapStr), OBJ_VAL(internalMap));
     selfObj->internal = internalMap;
 
     if (argCount == 1) {
@@ -87,7 +86,6 @@ static Value lxMapDup(int argCount, Value *args) {
     Table *mapDup = ALLOCATE(Table, 1);
     initTable(mapDup);
     internalMap->data = mapDup;
-    tableSet(dupObj->hiddenFields, OBJ_VAL(mapStr), OBJ_VAL(internalMap));
     dupObj->internal = internalMap;
 
     Entry e; int idx = 0;
@@ -312,9 +310,7 @@ static Value lxMapRehash(int argCount, Value *args) {
     TABLE_FOREACH(mapOld, e, idx, {
         tableSet(mapNew, e.key, e.value);
     })
-    Value internalVal;
-    ASSERT(tableGet(selfObj->hiddenFields, OBJ_VAL(mapStr), &internalVal));
-    ObjInternal *internal = AS_INTERNAL(internalVal);
+    ObjInternal *internal = selfObj->internal;
     internal->data = mapNew;
     freeTable(mapOld);
     FREE(Table, mapOld);

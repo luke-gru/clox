@@ -1,0 +1,20 @@
+class TimeoutError < Error { }
+class Timeout {
+
+  class timeout(secs, &blk) {
+    if (!blk) {
+      throw ArgumentError("needs a block");
+    }
+    var outerThread = Thread.current();
+    var done = false;
+    newThread(fun() {
+      sleep(secs);
+      Thread.schedule();
+      if (!done) {
+        outerThread.throw(TimeoutError("timeout"));
+      }
+    });
+    blk.yield();
+    done = true;
+  }
+}

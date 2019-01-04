@@ -1,0 +1,26 @@
+requireScript("timeout");
+
+var err = nil;
+try {
+  Timeout.timeout(3) -> () {
+    sleep(4);
+  };
+} catch (TimeoutError e) {
+  err = e;
+}
+print err and err.message;
+
+err = nil;
+try {
+  Timeout.timeout(3) -> () {
+    sleep(3);
+  };
+} catch (TimeoutError e) {
+  err = e;
+}
+print err and err.message;
+
+__END__
+-- expect: --
+timeout
+nil

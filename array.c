@@ -19,17 +19,13 @@ static void markInternalAry(Obj *internalObj) {
         if (!IS_OBJ(val)) { // non-object values don't need marking
             continue;
         }
-        // FIXME: this check is needed here due to bug in GC
-        if (AS_OBJ(val)->type < OBJ_T_LAST) {
-            grayObject(AS_OBJ(val));
-        }
+        grayObject(AS_OBJ(val));
     }
 }
 
 static void freeInternalAry(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
-    ASSERT(internal);
     ValueArray *valAry = internal->data;
     ASSERT(valAry);
     freeValueArray(valAry);
@@ -54,7 +50,6 @@ static Value lxArrayInit(int argCount, Value *args) {
     }
     internalObj->data = ary;
     internalObj->dataSz = sizeof(ValueArray);
-    tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("ary")), OBJ_VAL(internalObj));
     selfObj->internal = internalObj;
     for (int i = 1; i < argCount; i++) {
         writeValueArrayEnd(ary, args[i]);
@@ -74,7 +69,6 @@ static Value lxArrayDup(int argCount, Value *args) {
     initValueArray(dupAry);
     internalObj->data = dupAry;
     internalObj->dataSz = sizeof(ValueArray);
-    tableSet(dupObj->hiddenFields, OBJ_VAL(INTERN("ary")), OBJ_VAL(internalObj));
     dupObj->internal = internalObj;
 
     // XXX: might be slow to dup large arrays, should bulk copy memory using memcpy or similar
@@ -203,10 +197,7 @@ static Value lxArrayOpIndexSet(int argCount, Value *args) {
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
-    Value internalObjVal;
-    ASSERT(tableGet(selfObj->hiddenFields, OBJ_VAL(INTERN("ary")), &internalObjVal));
-    ValueArray *ary = (ValueArray*)internalGetData(AS_INTERNAL(internalObjVal));
-    ASSERT(ary);
+    ValueArray *ary = ARRAY_GETHIDDEN(self);
     int idx = (int)AS_NUMBER(num);
     if (idx < 0) {
         // FIXME: throw error, or allow negative indices?
@@ -271,7 +262,6 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
     }
     internalObj->data = ary;
     internalObj->dataSz = sizeof(ValueArray);
-    tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("ary")), OBJ_VAL(internalObj));
     selfObj->internal = internalObj;
     return ret;
 }

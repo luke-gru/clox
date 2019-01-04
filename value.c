@@ -421,7 +421,7 @@ void fillCallableName(Value callable, const char *buf, size_t buflen) {
     ASSERT(isCallable(callable));
     if (IS_CLASS(callable)) {
         snprintf(buf, buflen, "%s#init", className(AS_CLASS(callable)));
-    } else if (IS_NATIVE_FUNCTION_FUNC(callable)) {
+    } else if (IS_NATIVE_FUNCTION(callable)) {
         ObjNative *native = AS_NATIVE_FUNCTION(callable);
         char *nameStr = native->name->chars;
         if (native->klass) { // method
