@@ -234,7 +234,6 @@ void freeHeap(ObjAny *heap) {
 }
 
 Obj *getNewObject(ObjType type, size_t sz) {
-    (void)type; // TODO: keep track of how many of each object type in GCStats struct
     Obj *obj = NULL;
 
 retry:
@@ -259,8 +258,8 @@ retry:
 // NOTE: memory is NOT initialized (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START(10, "reallocate");
-    if (newSize > 0) {
-        ASSERT(!inGC); // if we're in GC phase we shouldn't allocate memory
+    if (newSize > 0 && UNLIKELY(inGC)) {
+        ASSERT(0); // if we're in GC phase we shouldn't allocate memory
     }
 
     if (newSize > oldSize) {
@@ -279,12 +278,12 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     }
 
     void *ret = realloc(previous, newSize);
-    if (!ret) {
+    if (UNLIKELY(!ret)) {
         GC_TRACE_DEBUG(1, "REALLOC FAILED, trying GC");
         collectGarbage(); // NOTE: GCOn could be false here if set by user
         // try again after potentially freeing memory
         void *ret = realloc(previous, newSize);
-        if (!ret) {
+        if (UNLIKELY(!ret)) {
             fprintf(stderr, "Out of memory!\n");
             _exit(1);
         }
@@ -351,7 +350,7 @@ static void grayArray(ValueArray *ary) {
 
 // recursively gray an object's references
 void blackenObject(Obj *obj) {
-    if (obj->type == OBJ_T_NONE) return;
+    if (UNLIKELY(obj->type == OBJ_T_NONE)) return;
     TRACE_GC_FUNC_START(4, "blackenObject");
     switch (obj->type) {
         case OBJ_T_BOUND_METHOD: {
@@ -475,6 +474,17 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_STRING: { // no references
+            ObjString *str = (ObjString*)obj;
+            if (str->klass) {
+                grayObject((Obj*)str->klass);
+            }
+            if (str->singletonKlass) {
+                grayObject((Obj*)str->singletonKlass);
+            }
+            if (str->finalizerFunc) {
+                grayObject((Obj*)str->finalizerFunc);
+            }
+            grayTable(str->fields);
             GC_TRACE_DEBUG(5, "Blackening internal string %p", obj);
             break;
         }
@@ -493,36 +503,19 @@ static size_t sizeofObj(Obj *obj) {
 }
 
 void freeObject(Obj *obj) {
-    if (obj->type == OBJ_T_NONE) {
+    if (UNLIKELY(obj->type == OBJ_T_NONE)) {
         GC_TRACE_DEBUG(5, "freeObject called on OBJ_T_NONE: %p", obj);
         return; // already freed
     }
 
     ASSERT(!obj->noGC);
     TRACE_GC_FUNC_START(4, "freeObject");
-    if (vm.inited) {
-        ObjInstance *threadInst; int tidx = 0;
-        vec_foreach(&vm.threads, threadInst, tidx) {
-            LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(threadInst));
-            int stackObjFoundIdx = -1;
-            vec_find(&th->stackObjects, obj, stackObjFoundIdx);
-            if (stackObjFoundIdx != -1) {
-                if (inGC) {
-                    GC_TRACE_DEBUG(4, "Skipped freeing stack object: p=%p (in GC)", obj);
-                    return; // Don't free stack objects in a GC
-                }
-                GC_TRACE_DEBUG(5, "Freeing stack object: p=%p (must be manual call "
-                        "to freeObject(), not in GC)", obj);
-                vec_splice(&th->stackObjects, stackObjFoundIdx, 1);
-            }
-        }
-
-    }
 
     GC_TRACE_FREE(4, obj);
 
-    if (GCStats.generations[obj->GCGen])
+    if (LIKELY(GCStats.generations[obj->GCGen])) {
         GCStats.generations[obj->GCGen]--;
+    }
     GCStats.heapUsed -= sizeof(ObjAny);
     GCStats.heapUsedWaste -= (sizeof(ObjAny)-sizeofObj(obj));
     GCStats.demographics[obj->type]--;
@@ -613,7 +606,7 @@ void freeObject(Obj *obj) {
             if (internal->freeFunc) {
                 GC_TRACE_DEBUG(5, "Freeing internal object's references: p=%p, datap=%p", internal, internal->data);
                 internal->freeFunc(obj);
-            } else if (internal->data) {
+            } else if (LIKELY(internal->data != NULL)) {
                 GC_TRACE_DEBUG(5, "Freeing internal object data: p=%p", internal->data);
                 ASSERT(internal->dataSz > 0);
                 FREE_SIZE(internal->dataSz, internal->data);
@@ -710,7 +703,7 @@ void unhideFromGC(Obj *obj) {
 /*}*/
 
 static bool hasFinalizer(Obj *obj) {
-    if (obj->type != OBJ_T_INSTANCE && obj->type != OBJ_T_CLASS && obj->type != OBJ_T_MODULE) {
+    if (!isInstanceLikeObj(obj)) {
         return false;
     }
     ObjInstance *instance = (ObjInstance*)obj;
@@ -759,10 +752,12 @@ void collectGarbage(void) {
         }
         printVMStack(stderr, THREAD());
     }
+    vec_void_t v_stackObjs;
+    vec_init(&v_stackObjs);
     // Mark stack roots up the stack for every execution context in every thread
     Obj *thObj; int thIdx = 0;
     vec_foreach(&vm.threads, thObj, thIdx) {
-        ASSERT(thObj);
+        DBG_ASSERT(thObj);
         grayObject(thObj);
         LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
         ASSERT(th);
@@ -780,6 +775,7 @@ void collectGarbage(void) {
                 grayValue(*slot);
             }
         }
+        vec_extend(&v_stackObjs, &th->stackObjects);
     }
 
     GC_TRACE_DEBUG(2, "Marking per-thread VM C-call stack objects");
@@ -929,21 +925,30 @@ freeLoop:
                 p++;
                 continue;
             }
+
+            int rootedCStack = -1;
+            vec_find(&v_stackObjs, obj, rootedCStack);
             if (!obj->isDark && !obj->noGC) {
                 if (phase == 2) { // phase 2, reclaim unmarked objects
-                    numObjectsFreed++;
-                    obj->nextFree = newFreeList;
-                    freeObject(obj);
-                    newFreeList = p;
-                    numObjectsFreed++;
+                    if (rootedCStack == -1) {
+                        numObjectsFreed++;
+                        obj->nextFree = newFreeList;
+                        freeObject(obj);
+                        newFreeList = p;
+                        numObjectsFreed++;
+                    } else {
+                        GC_TRACE_DEBUG(4, "Skipped freeing stack object: p=%p", obj);
+                    }
                 } else { // phase 1, call finalizers
                     ASSERT(phase == 1);
-                    if (UNLIKELY(hasFinalizer(obj))) {
-                        ASSERT(((ObjInstance*) obj)->finalizerFunc->type != OBJ_T_NONE);
-                        callFinalizer(obj);
-                        if (activeFinalizers == 0) {
-                            phase = 2; i = 0;
-                            goto freeLoop;
+                    if (rootedCStack == -1) {
+                        if (UNLIKELY(hasFinalizer(obj))) {
+                            ASSERT(((ObjInstance*) obj)->finalizerFunc->type != OBJ_T_NONE);
+                            callFinalizer(obj);
+                            if (activeFinalizers == 0) {
+                                phase = 2; i = 0;
+                                goto freeLoop;
+                            }
                         }
                     }
                 }
@@ -1002,6 +1007,7 @@ freeLoop:
     GC_TRACE_DEBUG(1, "Done collecting garbage");
     stopGCRunProfileTimer(&tRunStart);
     GCProf.totalRuns++;
+    vec_deinit(&v_stackObjs);
     inGC = false;
 }
 

@@ -58,10 +58,10 @@ static Value lxMapInit(int argCount, Value *args) {
         ValueArray *aryInt = &aryObj->valAry;
         for (int i = 0; i < aryInt->count; i++) {
             Value el = aryInt->values[i];
-            if (!IS_AN_ARRAY(el)) {
+            if (UNLIKELY(!IS_AN_ARRAY(el))) {
                 throwErrorFmt(lxTypeErrClass, "Expected array element to be an array of length 2, got a: %s", typeOfVal(el));
             }
-            if (ARRAY_SIZE(el) != 2) {
+            if (UNLIKELY(ARRAY_SIZE(el) != 2)) {
                 throwArgErrorFmt("Wrong array size given, expected 2, got: %d",
                         ARRAY_SIZE(el));
             }
@@ -255,7 +255,7 @@ static Value lxMapMerge(int argCount, Value *args) {
     Value other = args[1];
     Table *otherMap = MAP_GETHIDDEN(other);
     CHECK_ARG_IS_A(other, lxMapClass, 1);
-    Value ret = callMethod(AS_OBJ(self), internedString("dup", 3), 0, NULL, NULL);
+    Value ret = callMethod(AS_OBJ(self), INTERN("dup"), 0, NULL, NULL);
     Table *retMap = MAP_GETHIDDEN(ret);
     Entry e; int idx = 0;
     TABLE_FOREACH(otherMap, e, idx, {
@@ -331,7 +331,7 @@ static Value lxMapEach(int argCount, Value *args) {
     volatile Table *map = MAP_GETHIDDEN(self);
     volatile int status = 0;
     volatile int startIdx = 0;
-    volatile NativeBlockFunction fn = getFrame()->callInfo->nativeBlockFunction;
+    volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
     volatile Value yieldArgs[2];
     while (true) {
         SETUP_BLOCK(th->curBlock, status, th->errInfo, th->lastBlock)
@@ -371,8 +371,8 @@ static Value lxMapEach(int argCount, Value *args) {
     return self;
 }
 
-static void mapIterBlk(int argCount, Value *args, Value ret, CallInfo *cinfo) {
-    arrayPush(*cinfo->nativeBlockIter, ret);
+static void mapIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+    arrayPush(*cinfo->blockIterRet, ret);
 }
 
 static Value lxMapMap(int argCount, Value *args) {
@@ -386,8 +386,8 @@ static Value lxMapMap(int argCount, Value *args) {
     volatile Value ret = newArray();
     CallInfo cinfo;
     memset(&cinfo, 0, sizeof(cinfo));
-    cinfo.nativeBlockFunction = mapIterBlk;
-    cinfo.nativeBlockIter = &ret;
+    cinfo.blockIterFunc = mapIter;
+    cinfo.blockIterRet = &ret;
     cinfo.block = vm.curThread->curBlock;
     Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
     if (IS_NIL(res)) {

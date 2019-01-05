@@ -231,7 +231,7 @@ Value lxYield(int argCount, Value *args) {
         .argc = argCount,
         .block = block,
         .isYield = true, // tell callCallable to adjust frame stack in popFrame()
-        .nativeBlockFunction = NULL,
+        .blockIterFunc = NULL,
     };
     volatile int status = 0;
     SETUP_BLOCK(block, status, THREAD()->errInfo, THREAD()->lastBlock)
@@ -264,7 +264,7 @@ NORETURN void yieldFromC(int argCount, Value *args) {
         .argc = argCount,
         .block = THREAD()->curBlock,
         .isYield = true, // tell callCallable to adjust frame stack in popFrame()
-        .nativeBlockFunction = NULL,
+        .blockIterFunc = NULL,
     };
     callCallable(callable, argCount, false, &cinfo);
     UNREACHABLE("block didn't longjmp?"); // blocks should always longjmp out

@@ -238,7 +238,7 @@ static Value lxArrayEach(int argCount, Value *args) {
     volatile int status = 0;
     volatile int iterStart = 0;
     volatile LxThread *th = vm.curThread;
-    volatile NativeBlockFunction fn = getFrame()->callInfo->nativeBlockFunction;
+    volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
     while (true) {
         SETUP_BLOCK(th->curBlock, status, th->errInfo, th->lastBlock)
         if (status == TAG_NONE) {
@@ -273,9 +273,9 @@ static Value lxArrayEach(int argCount, Value *args) {
     return *args;
 }
 
-static void arrayIterBlk(int argCount, Value *args, Value ret, CallInfo *cinfo) {
-    ASSERT(cinfo->nativeBlockIter);
-    arrayPush(*cinfo->nativeBlockIter, ret);
+static void mapIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+    DBG_ASSERT(cinfo->blockIterRet);
+    arrayPush(*cinfo->blockIterRet, ret);
 }
 
 static Value lxArrayMap(int argCount, Value *args) {
@@ -289,8 +289,8 @@ static Value lxArrayMap(int argCount, Value *args) {
     volatile Value ret = newArray();
     CallInfo cinfo;
     memset(&cinfo, 0, sizeof(CallInfo));
-    cinfo.nativeBlockFunction = arrayIterBlk;
-    cinfo.nativeBlockIter = &ret;
+    cinfo.blockIterFunc = mapIter;
+    cinfo.blockIterRet = &ret;
     Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
     if (IS_NIL(res)) {
         return NIL_VAL;
@@ -299,9 +299,9 @@ static Value lxArrayMap(int argCount, Value *args) {
     }
 }
 
-static void arraySelectBlk(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+static void selectIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
     if (isTruthy(ret)) {
-        arrayPush(*cinfo->nativeBlockIter, *args);
+        arrayPush(*cinfo->blockIterRet, *args);
     }
 }
 
@@ -316,8 +316,8 @@ static Value lxArraySelect(int argCount, Value *args) {
     volatile Value ret = newArray();
     CallInfo cinfo;
     memset(&cinfo, 0, sizeof(cinfo));
-    cinfo.nativeBlockFunction = arraySelectBlk;
-    cinfo.nativeBlockIter = &ret;
+    cinfo.blockIterFunc = selectIter;
+    cinfo.blockIterRet = &ret;
     cinfo.block = vm.curThread->curBlock;
     Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
     if (IS_NIL(res)) {

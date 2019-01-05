@@ -98,7 +98,7 @@ typedef enum {
 } CompileScopeType;
 
 typedef struct CallInfo CallInfo; // fwd decl
-typedef void (*NativeBlockFunction)(int blkArgCount, Value *blkArgs, Value blkRet, CallInfo *cinfo);
+typedef void (*BlockIterFunc)(int blkArgCount, Value *blkArgs, Value blkRet, CallInfo *cinfo);
 
 #ifdef NAN_TAGGING
 typedef Value uint64_t;
@@ -115,8 +115,8 @@ typedef struct CallInfo {
     // for blocks
     ObjFunction *block; // lox block
     ObjClosure *cachedBlock; // same as above, but cached closure
-    NativeBlockFunction nativeBlockFunction;
-    Value *nativeBlockIter;
+    BlockIterFunc blockIterFunc;
+    Value *blockIterRet;
     bool isYield;
 } CallInfo;
 
