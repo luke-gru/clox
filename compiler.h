@@ -96,14 +96,20 @@ typedef enum {
     COMPILE_SCOPE_MODULE,
 } CompileScopeType;
 
+typedef struct CallInfo CallInfo; // fwd decl
+typedef void (*NativeBlockFunction)(int argCount, Value *args, CallInfo *cinfo);
+
 typedef struct CallInfo {
     Token nameTok;
     int argc;
     int numKwargs;
     bool usesSplat;
     Token kwargNames[LX_MAX_KWARGS];
-    ObjFunction *block;
-    ObjClosure *cachedBlock;
+    // for blocks
+    ObjFunction *block; // lox block
+    ObjClosure *cachedBlock; // same as above, but cached closure
+    NativeBlockFunction *nativeBlock;
+    Value *nativeBlockIter;
     bool isYield;
 } CallInfo;
 

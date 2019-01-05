@@ -1,0 +1,4 @@
+var s = nil;
+for (var i = 0; i < 1000000; i+=1) {
+  s = "Hello, strings" << "!";
+}

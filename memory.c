@@ -632,13 +632,18 @@ void freeObject(Obj *obj) {
         case OBJ_T_STRING: {
             ObjString *string = (ObjString*)obj;
             ASSERT(string->chars);
-            GC_TRACE_DEBUG(5, "Freeing string chars: p=%p, interned=%s,static=%s",
+            GC_TRACE_DEBUG(5, "Freeing string chars: p=%p, interned=%s,static=%s,shared=%s",
                     string->chars,
                     string->isInterned ? "t" : "f",
-                    string->isStatic ? "t" : "f"
+                    string->isStatic ? "t" : "f",
+                    string->isShared ? "t" : "f"
             );
-            GC_TRACE_DEBUG(5, "Freeing string chars: s='%s' (len=%d, capa=%d)", string->chars, string->length, string->capacity);
-            FREE_ARRAY(char, string->chars, string->capacity + 1);
+            if (!string->isShared) {
+                GC_TRACE_DEBUG(5, "Freeing string chars: s='%s' (len=%d, capa=%d)", string->chars, string->length, string->capacity);
+                FREE_ARRAY(char, string->chars, string->capacity + 1);
+            }
+            freeTable(string->fields);
+            FREE_ARRAY(Table, string->fields, 1);
             string->chars = NULL;
             string->hash = 0;
             GC_TRACE_DEBUG(5, "Freeing ObjString: p=%p", obj);

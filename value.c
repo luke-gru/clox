@@ -126,7 +126,7 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             ObjInstance *inst = AS_INSTANCE(value);
             Obj *callable = instanceFindMethod(inst, internedString("toString", 8));
             if (callable && vm.inited && canCallMethods) {
-                Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL);
+                Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL, NULL);
                 if (!IS_A_STRING(stringVal)) {
                     pop();
                     throwErrorFmt(lxTypeErrClass, "TypeError, toString() returned non-string, is a: %s", typeOfVal(stringVal));
@@ -244,7 +244,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
             ObjInstance *inst = AS_INSTANCE(value);
             Obj *toString = instanceFindMethod(inst, INTERN("toString"));
             if (toString && vm.inited) {
-                Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL);
+                Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL, NULL);
                 if (!IS_A_STRING(stringVal)) {
                     pop();
                     throwErrorFmt(lxTypeErrClass, "TypeError, toString() returned non-string, is a: %s", typeOfVal(stringVal));
@@ -342,7 +342,7 @@ uint32_t valHash(Value val) {
                     fprintf(stderr, "val type: %s\n", typeOfVal(val));
                     ASSERT(0);
                 }
-                Value hashKey = callMethod(AS_OBJ(val), internedString("hashKey", 7), 0, NULL);
+                Value hashKey = callMethod(AS_OBJ(val), internedString("hashKey", 7), 0, NULL, NULL);
                 if (UNLIKELY(!IS_NUMBER(hashKey))) {
                     throwErrorFmt(lxTypeErrClass, "%s", "return of hashKey() method must be a number!");
                 }
@@ -386,7 +386,7 @@ bool valEqual(Value a, Value b) {
                         VAL_TO_STRING(b)->chars) == 0;
             }
             if (IS_INSTANCE_LIKE(a)) {
-                return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b));
+                return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b, NULL));
             }
             return a == b;
         }
@@ -408,7 +408,7 @@ bool valEqual(Value a, Value b) {
                         VAL_TO_STRING(b)->chars) == 0;
             }
             if (IS_INSTANCE_LIKE(a)) { // including lox strings
-                return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b));
+                return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b, NULL));
             }
             UNREACHABLE_RETURN(false);
         }

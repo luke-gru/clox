@@ -1,0 +1,14 @@
+var m = %{1:2, 2:4, 4:8};
+m.each() -> (k,v) {
+  print k;
+  print v;
+};
+
+__END__
+-- expect: --
+1
+2
+2
+4
+4
+8

@@ -313,13 +313,13 @@ Value createIterator(Value iterable) {
     ASSERT(isIterableType(iterable));
     if (IS_AN_ARRAY(iterable) || IS_A_MAP(iterable)) {
         ObjInstance *iterObj = newInstance(lxIteratorClass);
-        callVMMethod(iterObj, OBJ_VAL(nativeIteratorInit), 1, &iterable);
+        callVMMethod(iterObj, OBJ_VAL(nativeIteratorInit), 1, &iterable, NULL);
         return pop();
     } else if (IS_INSTANCE(iterable)) {
         ObjString *iterId = internedString("iter", 4);
         ObjInstance *instance = AS_INSTANCE(iterable);
         Obj *method = instanceFindMethodOrRaise(instance, iterId);
-        callVMMethod(instance, OBJ_VAL(method), 0, NULL);
+        callVMMethod(instance, OBJ_VAL(method), 0, NULL, NULL);
         Value ret = pop();
         if (IS_AN_ARRAY(ret) || IS_A_MAP(ret)) {
             return createIterator(ret);
@@ -686,7 +686,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
             ObjInstance *self = AS_INSTANCE(lhs);
             Obj *methodOpEq = instanceFindMethod(self, opEquals);
             if (methodOpEq) {
-                Value ret = callVMMethod(self, OBJ_VAL(methodOpEq), 1, &rhs);
+                Value ret = callVMMethod(self, OBJ_VAL(methodOpEq), 1, &rhs, NULL);
                 pop();
                 return isTruthy(ret);
             }
@@ -895,7 +895,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
         return ret;
     } else if ((getter = instanceFindGetter(obj, propName))) {
         VM_DEBUG("getter found");
-        callVMMethod(obj, OBJ_VAL(getter), 0, NULL);
+        callVMMethod(obj, OBJ_VAL(getter), 0, NULL, NULL);
         if (THREAD()->hadError) {
             return NIL_VAL;
         } else {
@@ -916,7 +916,7 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
     Obj *setter = NULL;
     if ((setter = instanceFindSetter(obj, propName))) {
         VM_DEBUG("setter found");
-        callVMMethod(obj, OBJ_VAL(setter), 1, &rval);
+        callVMMethod(obj, OBJ_VAL(setter), 1, &rval, NULL);
         pop();
     } else {
         tableSet(obj->fields, OBJ_VAL(propName), rval);
@@ -996,23 +996,24 @@ static void defineSetter(ObjString *name) {
 // Call method on instance, args are NOT expected to be pushed on to stack by
 // caller, nor is the instance. `argCount` does not include the implicit instance argument.
 // Return value is pushed to stack and returned.
-Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args) {
+Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args, CallInfo *cinfo) {
     VM_DEBUG("Calling VM method");
     push(OBJ_VAL(instance));
     Obj *oldThis = vm.curThread->thisObj;
     setThis(0);
     for (int i = 0; i < argCount; i++) {
-        ASSERT(args);
+        DBG_ASSERT(args); // can be null when if i = 0
         push(args[i]);
     }
     VM_DEBUG("call begin");
-    callCallable(callable, argCount, true, NULL); // pushes return value to stack
+    callCallable(callable, argCount, true, cinfo); // pushes return value to stack
     vm.curThread->thisObj = oldThis;
     VM_DEBUG("call end");
     return peek(0);
 }
 
-Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
+Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, CallInfo *cinfo) {
+    // FIXME: ugly condition...
     if (obj->type == OBJ_T_INSTANCE || obj->type == OBJ_T_ARRAY || obj->type == OBJ_T_STRING) {
         ObjInstance *instance = (ObjInstance*)obj;
         Obj *callable = instanceFindMethod(instance, methodName);
@@ -1024,7 +1025,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
             const char *classStr = className->chars ? className->chars : "(anon)";
             throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, methodName->chars);
         }
-        callVMMethod(instance, OBJ_VAL(callable), argCount, args);
+        callVMMethod(instance, OBJ_VAL(callable), argCount, args, cinfo);
         return pop();
     } else if (obj->type == OBJ_T_CLASS) {
         ObjClass *klass = (ObjClass*)obj;
@@ -1037,7 +1038,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
             const char *classStr = className ? className->chars : "(anon)";
             throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, methodName->chars);
         }
-        callVMMethod((ObjInstance*)klass, OBJ_VAL(callable), argCount, args);
+        callVMMethod((ObjInstance*)klass, OBJ_VAL(callable), argCount, args, cinfo);
         return pop();
     } else if (obj->type == OBJ_T_MODULE) {
         ObjModule *mod = (ObjModule*)obj;
@@ -1047,7 +1048,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
             const char *modStr = modName ? modName->chars : "(anon)";
             throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, methodName->chars);
         }
-        callVMMethod((ObjInstance*)mod, OBJ_VAL(callable), argCount, args);
+        callVMMethod((ObjInstance*)mod, OBJ_VAL(callable), argCount, args, cinfo);
         return pop();
     } else {
         throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfObj(obj));
@@ -1361,7 +1362,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // non-native function/method (defined in lox code)
     ASSERT(closure);
     ObjFunction *func = closure->function;
-    checkFunctionArity(func, argCount);
+    if (!closure->isBlock) {
+        checkFunctionArity(func, argCount);
+    }
 
     vec_nodep_t *params = (vec_nodep_t*)nodeGetData(func->funcNode);
     ASSERT(params);
@@ -1375,7 +1378,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         vec_foreach_rev(params, param, pi) {
             if (param->type.kind == PARAM_NODE_KWARG) {
                 char *kwname = tokStr(&param->tok);
-                ObjString *kwStr = internedString(kwname, strlen(kwname));
+                ObjString *kwStr = INTERN(kwname);
                 for (int i = 0; i < callInfo->numKwargs; i++) {
                     // keyword argument given, is on stack, we pop it off
                     if (strcmp(kwname, tokStr(callInfo->kwargNames+i)) == 0) {
@@ -1429,7 +1432,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         vec_foreach(params, param, pi) {
             if (param->type.kind == PARAM_NODE_KWARG) {
                 char *kwname = tokStr(&param->tok);
-                ObjString *kwStr = copyString(kwname, strlen(kwname));
+                ObjString *kwStr = INTERN(kwname);
                 Value val;
                 if (MAP_GET(kwargsMap, OBJ_VAL(kwStr), &val)) {
                     push(val);
@@ -1442,7 +1445,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         push(kwargsMap);
     }
 
-    int parentStart = getFrame()->ip - getFrame()->closure->function->chunk->code - 2;
+    CallFrame *f = getFrameI();
+    Chunk *ch = f->closure->function->chunk;
+    int parentStart = f->ip - ch->code - 2;
     ASSERT(parentStart >= 0);
 
     size_t funcOffset = 0;
@@ -1547,7 +1552,6 @@ static Obj *findMethod(ObjClass *klass, ObjString *methodName) {
 // API for calling 'super' in native C methods
 Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
     if (!isClassHierarchyCreated) return NIL_VAL;
-    (void)cinfo; // TODO: use
     CallFrame *frame = getFrame();
     DBG_ASSERT(frame->instance);
     DBG_ASSERT(frame->klass);
@@ -1578,7 +1582,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
         }
         LxThread *th = vm.curThread;
         int inCCall = th->inCCall;
-        callVMMethod(frame->instance, OBJ_VAL(superMethod), argCount, args);
+        callVMMethod(frame->instance, OBJ_VAL(superMethod), argCount, args, cinfo);
         ASSERT(th->inCCall == inCCall);
         return pop();
     } else {
@@ -2736,6 +2740,7 @@ vmLoop:
           uint8_t isStatic = READ_BYTE();
           push(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
+          buf->isInterned = true;
           if (UNLIKELY(isStatic)) {
               buf->isStatic = true;
               push(OBJ_VAL(buf));

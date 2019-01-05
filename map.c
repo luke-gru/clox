@@ -323,6 +323,70 @@ static Value lxMapGetSize(int argCount, Value *args) {
     return NUMBER_VAL(map->count);
 }
 
+static Value lxMapEach(int argCount, Value *args) {
+    CHECK_ARITY("Map#each", 1, 1, argCount);
+    volatile LxThread *th = vm.curThread;
+    Value self = *args;
+    volatile Table *map = MAP_GETHIDDEN(self);
+    volatile int status = 0;
+    volatile int startIdx = 0;
+    ASSERT(getFrame()->callInfo->nativeBlockIter);
+    SETUP_BLOCK(th->curBlock, status, th->errInfo, th->lastBlock)
+    while (true) {
+        if (status == TAG_NONE) {
+            break;
+        } else if (status == TAG_RAISE) {
+            ObjInstance *errInst = AS_INSTANCE(th->lastErrorThrown);
+            ASSERT(errInst);
+            if (errInst->klass == lxBreakBlockErrClass) {
+                if (
+                return NIL_VAL;
+            } else if (errInst->klass == lxContinueBlockErrClass) {
+                SETUP_BLOCK(th->curBlock, status, th->errInfo, THREAD()->lastBlock)
+            } else if (errInst->klass == lxReturnBlockErrClass) {
+                return getProp(th->lastErrorThrown, INTERN("ret"));
+            } else {
+                throwError(th->lastErrorThrown);
+            }
+        }
+    }
+
+    Entry e;
+    Value yieldArgs[2];
+    TABLE_FOREACH_IDX(map, e, startIdx, {
+        startIdx++;
+        yieldArgs[0] = e.key;
+        yieldArgs[1] = e.value;
+        yieldFromC(2, yieldArgs);
+    })
+
+    return self;
+}
+
+static void mapIterBlk(int argCount, Value *args, CallInfo *cinfo) {
+    ASSERT(argCount == 2);
+    arrayPush(*cinfo->nativeBlockIter, args[0]);
+    arrayPush(*cinfo->nativeBlockIter, args[1]);
+}
+
+static Value lxMapMap(int argCount, Value *args) {
+    CHECK_ARITY("Map#map", 1, 1, argCount);
+    Value self = *args;
+
+    if (!vm.curThread->curBlock) {
+        throwErrorFmt(lxErrClass, "no block given");
+    }
+
+    Value ret = newArray();
+    CallInfo cinfo;
+    memset(&cinfo, 0, sizeof(cinfo));
+    cinfo.nativeBlockFunction = mapIterBlk;
+    cinfo.nativeBlockIter = &ret;
+    cinfo.block = vm.curThread->curBlock;
+    callMethod(AS_OBJ(self), INTERN("each"), 0, cinfo);
+    return ret;
+}
+
 // ENV
 
 static Value lxEnvGet(int argCount, Value *args) {
@@ -426,6 +490,8 @@ void Init_MapClass() {
     addNativeMethod(mapClass, "mergeWith", lxMapMergeWith);
     addNativeMethod(mapClass, "delete", lxMapDelete);
     addNativeMethod(mapClass, "rehash", lxMapRehash);
+    addNativeMethod(mapClass, "each", lxMapEach);
+    addNativeMethod(mapClass, "map", lxMapMap);
 
     // getters
     addNativeGetter(mapClass, "size", lxMapGetSize);

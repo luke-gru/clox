@@ -182,8 +182,8 @@ static void fillClosureUpvalues(ObjClosure *block, ObjClosure *outer, CallFrame 
     }
 }
 
-static ObjClosure *getCFrameBlockClosure(void) {
-    ObjFunction *block = THREAD()->curBlock;
+static ObjClosure *getCFrameBlockClosure() {
+    Obj *block = THREAD()->curBlock;
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
@@ -193,6 +193,7 @@ static ObjClosure *getCFrameBlockClosure(void) {
         return cFrame->callInfo->cachedBlock;
     }
     ObjClosure *blockClosure = closureFromFn(block);
+    blockClosure->isBlock = true;
     CallFrame *frame = getOuterClosureFrame();
     ASSERT(frame);
     ObjClosure *lastClosure = frame->closure;
@@ -214,6 +215,7 @@ Value lxYield(int argCount, Value *args) {
         blockClosure = frame->callInfo->cachedBlock;
     } else {
         blockClosure = closureFromFn(block);
+        blockClosure->isBlock = true;
         CallFrame *outerFrame = getOuterClosureFrame();
         ObjClosure *outerClosure = outerFrame->closure;
         ASSERT(outerClosure);
@@ -228,7 +230,8 @@ Value lxYield(int argCount, Value *args) {
     CallInfo cinfo = {
         .argc = argCount,
         .block = block,
-        .isYield = true // tell callCallable to adjust frame stack in popFrame()
+        .isYield = true, // tell callCallable to adjust frame stack in popFrame()
+        .nativeBlockFunction = NULL,
     };
     volatile int status = 0;
     SETUP_BLOCK(block, status, THREAD()->errInfo, THREAD()->lastBlock)
@@ -257,10 +260,11 @@ NORETURN void yieldFromC(int argCount, Value *args) {
     for (int i = 0; i < argCount; i++) {
         push(args[i]);
     }
-    volatile CallInfo cinfo = {
+    CallInfo cinfo = {
         .argc = argCount,
         .block = THREAD()->curBlock,
-        .isYield = true // tell callCallable to adjust frame stack in popFrame()
+        .isYield = true, // tell callCallable to adjust frame stack in popFrame()
+        .nativeBlockFunction = NULL,
     };
     callCallable(callable, argCount, false, &cinfo);
     UNREACHABLE("block didn't longjmp?"); // blocks should always longjmp out

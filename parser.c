@@ -700,7 +700,7 @@ static vec_nodep_t *createNodeVec(void) {
 static Node *funDeclaration(ParseFunctionType fnType) {
     TRACE_START("funDeclaration");
     Token nameTok = current->previous;
-    if (fnType != FUNCTION_TYPE_ANON) {
+    if (fnType != FUNCTION_TYPE_ANON && fnType != FUNCTION_TYPE_BLOCK) {
         consume(TOKEN_IDENTIFIER, "Expect function name (identifier) after 'fun' keyword");
         nameTok = current->previous;
     }
@@ -712,7 +712,11 @@ static Node *funDeclaration(ParseFunctionType fnType) {
     int lastParamKind = -1;
     bool inKwargs = false;
     if (fnType != FUNCTION_TYPE_GETTER) {
-        consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");
+        if (fnType == FUNCTION_TYPE_BLOCK && check(TOKEN_LEFT_BRACE)) { // no args for block
+            // do nothing
+        } else {
+            consume(TOKEN_LEFT_PAREN, "Expect '(' after function name (identifier)");
+        }
         while (true) {
             if (match(TOKEN_IDENTIFIER)) { // regular/default/kwarg param
                 Token paramTok = current->previous;
@@ -788,7 +792,11 @@ static Node *funDeclaration(ParseFunctionType fnType) {
                 errorAt(&current->previous, "Expect a single regular parameter for setter function");
             }
         }
-        consume(TOKEN_RIGHT_PAREN, "Expect ')' after function parameters");
+        if (fnType == FUNCTION_TYPE_BLOCK && numParams == 0 && check(TOKEN_LEFT_BRACE)) {
+            // do nothing
+        } else {
+            consume(TOKEN_RIGHT_PAREN, "Expect ')' after function parameters");
+        }
     }
     consume(TOKEN_LEFT_BRACE, "Expect '{' after function parameter list");
     Token lbrace = current->previous;
@@ -825,7 +833,7 @@ static Node *funDeclaration(ParseFunctionType fnType) {
             .type = NODE_STMT,
             .kind = SETTER_STMT,
         };
-    } else if (fnType == FUNCTION_TYPE_ANON) {
+    } else if (fnType == FUNCTION_TYPE_ANON || fnType == FUNCTION_TYPE_BLOCK) {
         funcType = (node_type_t){
             .type = NODE_EXPR,
             .kind = ANON_FN_EXPR,
@@ -1144,7 +1152,7 @@ static Node *unary() {
 }
 
 static Node *blockDecl() {
-    return funDeclaration(FUNCTION_TYPE_ANON);
+    return funDeclaration(FUNCTION_TYPE_BLOCK);
 }
 
 static Node *call() {

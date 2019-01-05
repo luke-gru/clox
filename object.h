@@ -11,7 +11,7 @@ typedef enum ObjType {
   OBJ_T_NONE = 0, // when object is unitialized or freed
   OBJ_T_STRING,   // internal string value only, Strings in lox are instances
   OBJ_T_ARRAY,
-  OBJ_T_INSTANCE, // includes Strings, Arrays, Maps
+  OBJ_T_INSTANCE, // includes Maps
   OBJ_T_CLASS,
   OBJ_T_MODULE,
   OBJ_T_FUNCTION,
@@ -92,6 +92,7 @@ typedef struct ObjClosure {
   ObjFunction *function;
   ObjUpvalue **upvalues;
   int upvalueCount; // always same as function->upvalueCount
+  bool isBlock;
 } ObjClosure;
 
 typedef Value (*NativeFn)(int argCount, Value *args);
@@ -182,7 +183,7 @@ typedef struct ObjInstance {
 
 typedef struct ObjString {
     Obj object;
-    ObjClass *klass; // always lxAryClass
+    ObjClass *klass;
     ObjClass *singletonKlass;
     Obj *finalizerFunc; // ObjClosure* or ObjNative*
     Table *fields;
@@ -192,11 +193,12 @@ typedef struct ObjString {
     int capacity;
     bool isStatic;
     bool isInterned;
+    bool isShared;
 } ObjString;
 
 typedef struct ObjArray {
     Obj obj;
-    ObjClass *klass; // always lxAryClass
+    ObjClass *klass;
     ObjClass *singletonKlass;
     Obj *finalizerFunc; // ObjClosure* or ObjNative*
     Table *fields;

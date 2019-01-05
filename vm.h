@@ -240,12 +240,12 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *cinfo);
 // pushed to stack. argCount does not include instance.
 Value callVMMethod(
     ObjInstance *instance, Value callable,
-    int argCount, Value *args
+    int argCount, Value *args, CallInfo *cinfo
 );
 // high-level call function: instance and method name given, if no method then
 // error is raised. Value is returned, popped from stack. argCount does not
 // include instance.
-Value callMethod(Obj *instance, ObjString *methodName, int argCount, Value *args);
+Value callMethod(Obj *instance, ObjString *methodName, int argCount, Value *args, CallInfo *cinfo);
 // Nothing should be pushed to stack. On return, value is popped from stack.
 // Callable should not be a method.
 Value callFunctionValue(Value callable, int argCount, Value *args);

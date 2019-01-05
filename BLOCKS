@@ -1,0 +1,7 @@
+{1:2}.map { |k,v| [k,v] }
+
+CALLS
+{1:2}.each -> lxMapEach, with block
+I want to call the block on each, and have it add to my iterVal (an array)
+
+yieldFromC(2, k, v);

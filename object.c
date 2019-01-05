@@ -53,6 +53,7 @@ static ObjString *allocateString(char *chars, int length, ObjClass *klass) {
     string->hash = 0; // lazily computed
     string->isInterned = false;
     string->isStatic = false;
+    string->isShared = false;
     return string;
 }
 
@@ -65,7 +66,7 @@ void objUnfreeze(Obj *obj) {
     ASSERT(obj);
     if (obj->type == OBJ_T_STRING) {
         ObjString *buf = (ObjString*)obj;
-        if (buf->isStatic) {
+        if (UNLIKELY(buf->isStatic)) {
             throwErrorFmt(lxErrClass, "Tried to unfreeze static String");
         }
     }
@@ -294,6 +295,7 @@ ObjClosure *newClosure(ObjFunction *func) {
     closure->function = func;
     closure->upvalues = upvalues;
     closure->upvalueCount = func->upvalueCount;
+    closure->isBlock = false;
     return closure;
 }
 
@@ -344,7 +346,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     klass->classInfo->superclass = superclass;
     // during initial class hierarchy setup this is NULL
     if (nativeClassInit && isClassHierarchyCreated) {
-        callVMMethod((ObjInstance*)klass, OBJ_VAL(nativeClassInit), 0, NULL);
+        callVMMethod((ObjInstance*)klass, OBJ_VAL(nativeClassInit), 0, NULL, NULL);
         pop();
     }
     return klass;
@@ -364,7 +366,7 @@ ObjModule *newModule(ObjString *name) {
     mod->classInfo = newClassInfo(name);
     // during initial class hierarchy setup this is NULL
     if (nativeModuleInit && isClassHierarchyCreated) {
-        callVMMethod((ObjInstance*)mod, OBJ_VAL(nativeModuleInit), 0, NULL);
+        callVMMethod((ObjInstance*)mod, OBJ_VAL(nativeModuleInit), 0, NULL, NULL);
         pop();
     }
     return mod;
@@ -636,7 +638,7 @@ int arraySize(Value aryVal) {
 Value newArray(void) {
     DBG_ASSERT(nativeArrayInit);
     ObjArray *ary = allocateArray(lxAryClass);
-    callVMMethod((ObjInstance*)ary, OBJ_VAL(nativeArrayInit), 0, NULL);
+    callVMMethod((ObjInstance*)ary, OBJ_VAL(nativeArrayInit), 0, NULL, NULL);
     DBG_ASSERT(IS_AN_ARRAY(peek(0)));
     return pop();
 }
@@ -803,7 +805,7 @@ bool arrayEquals(Value self, Value other) {
 Value newMap(void) {
     DBG_ASSERT(nativeMapInit);
     ObjInstance *instance = newInstance(lxMapClass);
-    callVMMethod(instance, OBJ_VAL(nativeMapInit), 0, NULL);
+    callVMMethod(instance, OBJ_VAL(nativeMapInit), 0, NULL, NULL);
     return pop();
 }
 
@@ -990,7 +992,7 @@ Value newThread(void) {
         return threadVal;
     } else {
         ObjInstance *instance = newInstance(lxThreadClass);
-        callVMMethod(instance, OBJ_VAL(nativeThreadInit), 0, NULL);
+        callVMMethod(instance, OBJ_VAL(nativeThreadInit), 0, NULL, NULL);
         return pop();
     }
 }
@@ -1004,7 +1006,7 @@ Value newBlock(ObjClosure *closure) {
     DBG_ASSERT(nativeBlockInit);
     ObjInstance *instance = newInstance(lxBlockClass);
     Value closureArg = OBJ_VAL(closure);
-    callVMMethod(instance, OBJ_VAL(nativeBlockInit), 1, &closureArg);
+    callVMMethod(instance, OBJ_VAL(nativeBlockInit), 1, &closureArg, NULL);
     return pop();
 }
 
@@ -1025,6 +1027,8 @@ size_t sizeofObjType(ObjType type) {
     switch (type) {
         case OBJ_T_STRING:
             return sizeof(ObjString);
+        case OBJ_T_ARRAY:
+            return sizeof(ObjArray);
         case OBJ_T_FUNCTION:
             return sizeof(ObjFunction);
         case OBJ_T_INSTANCE:

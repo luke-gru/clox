@@ -299,7 +299,7 @@ static Value lxFileRewind(int argCount, Value *args) {
         NUMBER_VAL(0),
         NUMBER_VAL(SEEK_SET)
     };
-    return callMethod(AS_OBJ(*args), INTERN("seek"), 2, seekArgs);
+    return callMethod(AS_OBJ(*args), INTERN("seek"), 2, seekArgs, NULL);
 }
 
 void Init_FileClass(void) {

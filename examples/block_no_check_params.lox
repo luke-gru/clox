@@ -1,0 +1,19 @@
+[1,2,3].each() -> () { print "LOOK NO ARGS"; };
+[1].each() -> { print "And without parens"; };
+[1].each() -> (a,b,c,d) {
+  print typeof(a);
+  print typeof(b);
+  print typeof(c);
+  print typeof(d);
+};
+
+__END__
+-- expect: --
+LOOK NO ARGS
+LOOK NO ARGS
+LOOK NO ARGS
+And without parens
+number
+nil
+nil
+nil

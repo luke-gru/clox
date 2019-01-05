@@ -29,11 +29,16 @@ Value lxStringInit(int argCount, Value *args) {
     selfStr->hash = otherStr->hash;
     selfStr->length = otherStr->length;
     ((Obj*)selfStr)->isFrozen = false;
-    if (otherStr->chars) {
-        selfStr->chars = ALLOCATE(char, otherStr->capacity+1);
-        memcpy(selfStr->chars, otherStr->chars, selfStr->length+1);
+    if (otherStr->isInterned && otherStr->chars) {
+        selfStr->chars = otherStr->chars;
+        selfStr->isShared = true;
     } else {
-        selfStr->chars = NULL;
+        if (otherStr->chars) {
+            selfStr->chars = ALLOCATE(char, otherStr->capacity+1);
+            memcpy(selfStr->chars, otherStr->chars, selfStr->length+1);
+        } else {
+            selfStr->chars = NULL;
+        }
     }
     return *args;
 }
@@ -58,12 +63,22 @@ static Value lxStringOpAdd(int argCount, Value *args) {
     return OBJ_VAL(lhsBuf);
 }
 
+static inline void dedupString(ObjString *shared) {
+    if (shared->isShared) {
+        char *cpy = shared->chars;
+        shared->chars = ALLOCATE(char, shared->capacity+1);
+        memcpy(shared->chars, cpy, shared->length+1);
+        shared->isShared = false;
+    }
+}
+
 // var s = "hey"; s.push(" there!"); => "hey there!"
 static Value lxStringPush(int argCount, Value *args) {
     CHECK_ARITY("String#push", 2, 2, argCount);
     Value self = *args;
     Value rhs = args[1];
     CHECK_ARG_IS_A(rhs, lxStringClass, 1);
+    dedupString(AS_STRING(self));
     pushString(self, rhs);
     return self;
 }
@@ -93,8 +108,10 @@ static Value lxStringDup(int argCount, Value *args) {
 //     print s; => ""
 static Value lxStringClear(int argCount, Value *args) {
     CHECK_ARITY("String#clear", 1, 1, argCount);
-    clearString(*args);
-    return *args;
+    Value self = *args;
+    dedupString(AS_STRING(self));
+    clearString(self);
+    return self;
 }
 
 static Value lxStringInsertAt(int argCount, Value *args) {
@@ -104,6 +121,7 @@ static Value lxStringInsertAt(int argCount, Value *args) {
     Value at = args[2];
     CHECK_ARG_IS_A(insert, lxStringClass, 1);
     CHECK_ARG_BUILTIN_TYPE(at, IS_NUMBER_FUNC, "number", 2);
+    dedupString(AS_STRING(self));
     stringInsertAt(self, insert, (int)AS_NUMBER(at));
     return self;
 }
@@ -135,6 +153,7 @@ static Value lxStringOpIndexSet(int argCount, Value *args) {
     CHECK_ARG_IS_A(chrStr, lxStringClass, 3);
     // TODO: allow string longer than 1 char, or check size of given string
     char chr = VAL_TO_STRING(chrStr)->chars[0];
+    dedupString(AS_STRING(self));
     stringIndexSet(self, AS_NUMBER(index), chr);
     return self;
 }

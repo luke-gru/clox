@@ -1038,13 +1038,10 @@ static CallInfo *emitCall(Node *n) {
         }
         callInfoData = ALLOCATE(CallInfo, 1);
         ASSERT_MEM(callInfoData);
+        memset(callInfoData, 0, sizeof(CallInfo));
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
-        callInfoData->usesSplat = false;
-        callInfoData->isYield = false;
-        callInfoData->block = NULL;
-        callInfoData->cachedBlock = NULL;
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
@@ -1069,13 +1066,10 @@ static CallInfo *emitCall(Node *n) {
         }
         callInfoData = ALLOCATE(CallInfo, 1);
         ASSERT_MEM(callInfoData);
+        memset(callInfoData, 0, sizeof(CallInfo));
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
-        callInfoData->usesSplat = false;
-        callInfoData->isYield = false;
-        callInfoData->block = NULL;
-        callInfoData->cachedBlock = NULL;
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
