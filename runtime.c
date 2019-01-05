@@ -434,7 +434,7 @@ Value lxObjectGetObjectId(int argCount, Value *args) {
 Value lxObjectDup(int argCount, Value *args) {
     CHECK_ARITY("Object#dup", 1, 1, argCount);
     Value self = *args;
-    if (UNLIKELY(!IS_INSTANCE(self) && !IS_ARRAY(self) && !IS_STRING(self))) {
+    if (UNLIKELY(!IS_INSTANCE(self) && !IS_ARRAY(self) && !IS_STRING(self) && !IS_MAP(self))) {
         // Must be a module or class
         throwErrorFmt(lxTypeErrClass, "Cannot call dup() on a %s", typeOfVal(self));
     }
@@ -629,7 +629,7 @@ Value lxIteratorNext(int argCount, Value *args) {
             return ret;
         }
     } else if (iter->flags & FLAG_ITER_MAP) {
-        Table *map = MAP_GETHIDDEN(iterable);
+        Table *map = AS_MAP(iterable)->table;
         int nextIdx = ++(iter->index);
         if (nextIdx >= map->count) {
             return NIL_VAL;

@@ -17,35 +17,12 @@ ObjClass *lxEnvClass;
 ObjInstance *lxEnv;
 extern char **environ; // defined in unistd.h
 
-static void markInternalMap(Obj *internalObj) {
-    ASSERT(internalObj->type == OBJ_T_INTERNAL);
-    ObjInternal *internal = (ObjInternal*)internalObj;
-    Table *map = (Table*)internal->data;
-    ASSERT(map);
-    grayTable(map);
-}
-
-static void freeInternalMap(Obj *internalObj) {
-    ASSERT(internalObj->type == OBJ_T_INTERNAL);
-    ObjInternal *internal = (ObjInternal*)internalObj;
-    Table *map = (Table*)internal->data;
-    ASSERT(map);
-    freeTable(map);
-    FREE(Table, map);
-}
-
 static Value lxMapInit(int argCount, Value *args) {
     CHECK_ARITY("Map#init", 1, -1, argCount);
     callSuper(0, NULL, NULL);
     Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalMap = newInternalObject(false,
-        NULL, sizeof(Table), markInternalMap, freeInternalMap
-    );
-    Table *map = ALLOCATE(Table, 1);
-    initTable(map);
-    internalMap->data = map;
-    selfObj->internal = internalMap;
+    ObjMap *selfObj = AS_MAP(self);
+    Table *map = selfObj->table;
 
     if (argCount == 1) {
         return self;
@@ -78,17 +55,10 @@ static Value lxMapInit(int argCount, Value *args) {
 static Value lxMapDup(int argCount, Value *args) {
     CHECK_ARITY("Map#dup", 1, 1, argCount);
     Value dup = callSuper(0, NULL, NULL);
-    ObjInstance *dupObj = AS_INSTANCE(dup);
+    ObjMap *dupObj = AS_MAP(dup);
     Value orig = *args;
-    Table *mapOrig = MAP_GETHIDDEN(orig);
-
-    ObjInternal *internalMap = newInternalObject(false,
-        NULL, sizeof(Table), markInternalMap, freeInternalMap
-    );
-    Table *mapDup = ALLOCATE(Table, 1);
-    initTable(mapDup);
-    internalMap->data = mapDup;
-    dupObj->internal = internalMap;
+    Table *mapOrig = AS_MAP(orig)->table;
+    Table *mapDup = dupObj->table;
 
     Entry e; int idx = 0;
     TABLE_FOREACH(mapOrig, e, idx, {
@@ -104,7 +74,7 @@ static Value lxMapToString(int argCount, Value *args) {
     Obj *selfObj = AS_OBJ(self);
     Value ret = OBJ_VAL(copyString("{", 1));
     ObjString *bufRet = AS_STRING(ret);
-    Table *map = MAP_GETHIDDEN(self);
+    Table *map = AS_MAP(self)->table;
     Entry e; int idx = 0;
     int sz = map->count; int i = 0;
     TABLE_FOREACH(map, e, idx, {
@@ -136,7 +106,7 @@ static Value lxMapToString(int argCount, Value *args) {
 static Value lxMapGet(int argCount, Value *args) {
     CHECK_ARITY("Map#[]", 2, 2, argCount);
     Value self = args[0];
-    Table *map = MAP_GETHIDDEN(self);
+    Table *map = AS_MAP(self)->table;
     Value key = args[1];
     Value found;
     if (tableGet(map, key, &found)) {
@@ -149,11 +119,11 @@ static Value lxMapGet(int argCount, Value *args) {
 static Value lxMapSet(int argCount, Value *args) {
     CHECK_ARITY("Map#[]=", 3, 3, argCount);
     Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjMap *selfObj = AS_MAP(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
     }
-    Table *map = MAP_GETHIDDEN(self);
+    Table *map = selfObj->table;
     Value key = args[1];
     Value val = args[2];
     tableSet(map, key, val);
@@ -163,7 +133,7 @@ static Value lxMapSet(int argCount, Value *args) {
 static Value lxMapKeys(int argCount, Value *args) {
     CHECK_ARITY("Map#keys", 1, 1, argCount);
     Value self = args[0];
-    Table *map = MAP_GETHIDDEN(self);
+    Table *map = AS_MAP(self)->table;
     Entry entry; int i = 0;
     Value ary = newArray();
     TABLE_FOREACH(map, entry, i, {
@@ -175,7 +145,7 @@ static Value lxMapKeys(int argCount, Value *args) {
 static Value lxMapValues(int argCount, Value *args) {
     CHECK_ARITY("Map#values", 1, 1, argCount);
     Value self = args[0];
-    Table *map = MAP_GETHIDDEN(self);
+    Table *map = AS_MAP(self)->table;
     Entry entry; int i = 0;
     Value ary = newArray();
     TABLE_FOREACH(map, entry, i, {
@@ -200,7 +170,7 @@ static Value lxMapHashKey(int argCount, Value *args) {
     Value self = *args;
     Obj *selfObj = AS_OBJ(self);
     uint32_t hash = 166779; // XXX: no reason for this number
-    Table *map = MAP_GETHIDDEN(self);
+    Table *map = AS_MAP(self)->table;
     Entry e; int idx = 0;
     TABLE_FOREACH(map, e, idx, {
         if (AS_OBJ(e.key) == selfObj || AS_OBJ(e.value) == selfObj) { // avoid infinite recursion
@@ -215,7 +185,7 @@ static Value lxMapHashKey(int argCount, Value *args) {
 static Value lxMapClear(int argCount, Value *args) {
     CHECK_ARITY("Map#clear", 1, 1, argCount);
     Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjMap *selfObj = AS_MAP(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
     }
@@ -227,7 +197,7 @@ static Value lxMapHasKey(int argCount, Value *args) {
     CHECK_ARITY("Map#hasKey", 2, 2, argCount);
     Value self = args[0];
     Value key = args[1];
-    Table *map = MAP_GETHIDDEN(self);
+    Table *map = AS_MAP(self)->table;
     Value found;
     return BOOL_VAL(tableGet(map, key, &found));
 }
@@ -235,9 +205,9 @@ static Value lxMapHasKey(int argCount, Value *args) {
 static Value lxMapSlice(int argCount, Value *args) {
     CHECK_ARITY("Map#hasKey", 2, -1, argCount);
     Value self = args[0];
-    Table *map = MAP_GETHIDDEN(self);
+    Table *map = AS_MAP(self)->table;
     Value ret = newMap();
-    Table *mapRet = MAP_GETHIDDEN(ret);
+    Table *mapRet = AS_MAP(ret)->table;
     for (int i = 1; i < argCount; i++) {
         Value val;
         if (tableGet(map, args[i], &val)) {
@@ -253,10 +223,10 @@ static Value lxMapMerge(int argCount, Value *args) {
     CHECK_ARITY("Map#merge", 2, 2, argCount);
     Value self = args[0];
     Value other = args[1];
-    Table *otherMap = MAP_GETHIDDEN(other);
+    Table *otherMap = AS_MAP(other)->table;
     CHECK_ARG_IS_A(other, lxMapClass, 1);
     Value ret = callMethod(AS_OBJ(self), INTERN("dup"), 0, NULL, NULL);
-    Table *retMap = MAP_GETHIDDEN(ret);
+    Table *retMap = AS_MAP(ret)->table;
     Entry e; int idx = 0;
     TABLE_FOREACH(otherMap, e, idx, {
         tableSet(retMap, e.key, e.value);
@@ -269,8 +239,8 @@ static Value lxMapMergeWith(int argCount, Value *args) {
     CHECK_ARITY("Map#mergeWith", 2, 2, argCount);
     Value self = args[0];
     Value other = args[1];
-    Table *myMap = MAP_GETHIDDEN(self);
-    Table *otherMap = MAP_GETHIDDEN(other);
+    Table *myMap = AS_MAP(self)->table;
+    Table *otherMap = AS_MAP(other)->table;
     CHECK_ARG_IS_A(other, lxMapClass, 1);
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
@@ -285,7 +255,7 @@ static Value lxMapMergeWith(int argCount, Value *args) {
 static Value lxMapDelete(int argCount, Value *args) {
     CHECK_ARITY("Map#delete", 2, -1, argCount);
     Value self = args[0];
-    Table *map = MAP_GETHIDDEN(self);
+    Table *map = AS_MAP(self)->table;
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
     }
@@ -301,26 +271,25 @@ static Value lxMapDelete(int argCount, Value *args) {
 static Value lxMapRehash(int argCount, Value *args) {
     CHECK_ARITY("Map#rehash", 1, 1, argCount);
     Value self = args[0];
-    ObjInstance *selfObj = AS_INSTANCE(self);
+    ObjMap *selfObj = AS_MAP(self);
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Map is frozen, cannot modify");
     }
-    Table *mapOld = MAP_GETHIDDEN(self);
+    Table *mapOld = selfObj->table;
     Table *mapNew = ALLOCATE(Table, 1);
     initTableWithCapa(mapNew, tableCapacity(mapOld));
     Entry e; int idx = 0;
     TABLE_FOREACH(mapOld, e, idx, {
         tableSet(mapNew, e.key, e.value);
     })
-    ObjInternal *internal = selfObj->internal;
-    internal->data = mapNew;
     freeTable(mapOld);
     FREE(Table, mapOld);
+    selfObj->table = mapNew;
     return self;
 }
 
 static Value lxMapGetSize(int argCount, Value *args) {
-    Table *map = MAP_GETHIDDEN(*args);
+    Table *map = AS_MAP(*args)->table;
     return NUMBER_VAL(map->count);
 }
 
@@ -328,7 +297,7 @@ static Value lxMapEach(int argCount, Value *args) {
     CHECK_ARITY("Map#each", 1, 1, argCount);
     volatile LxThread *th = vm.curThread;
     Value self = *args;
-    volatile Table *map = MAP_GETHIDDEN(self);
+    volatile Table *map = AS_MAP(self)->table;
     volatile int status = 0;
     volatile int startIdx = 0;
     volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
@@ -433,7 +402,7 @@ static Value lxEnvSet(int argCount, Value *args) {
 static Value createEnvMap(void) {
     char **envp = environ;
     Value mapVal = newMap();
-    Table *map = MAP_GETHIDDEN(mapVal);
+    Table *map = AS_MAP(mapVal)->table;
     while (*envp) {
         char *eq = strchr(*envp, '=');
         if (!eq) {

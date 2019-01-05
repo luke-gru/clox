@@ -11,6 +11,7 @@ typedef enum ObjType {
   OBJ_T_NONE = 0, // when object is unitialized or freed
   OBJ_T_STRING,   // internal string value only, Strings in lox are instances
   OBJ_T_ARRAY,
+  OBJ_T_MAP,
   OBJ_T_INSTANCE, // includes Maps
   OBJ_T_CLASS,
   OBJ_T_MODULE,
@@ -208,6 +209,18 @@ typedef struct ObjArray {
     //} as;
 } ObjArray;
 
+typedef struct ObjMap {
+    Obj obj;
+    ObjClass *klass;
+    ObjClass *singletonKlass;
+    Obj *finalizerFunc; // ObjClosure* or ObjNative*
+    Table *fields;
+    //union {
+        Table *table;
+        // TODO: add embed
+    //} as;
+} ObjMap;
+
 extern ObjArray *lxLoadPath;
 extern ObjArray *lxArgv;
 
@@ -223,6 +236,7 @@ typedef struct ObjAny {
         Obj basic;
         ObjString string;
         ObjArray array;
+        ObjMap map;
         ObjInstance instance;
         ObjClass klass;
         ObjModule module;
@@ -244,15 +258,17 @@ typedef struct LxFile {
     ObjString *name; // copied (owned value)
 } LxFile;
 
+// is the value an instance of this type, no subtype check
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))
 #define IS_ARRAY(value)         (isObjType(value, OBJ_T_ARRAY))
+#define IS_MAP(value)           (isObjType(value, OBJ_T_MAP))
 #define IS_FUNCTION(value)      (isObjType(value, OBJ_T_FUNCTION))
 #define IS_CLOSURE(value)       (isObjType(value, OBJ_T_CLOSURE))
 #define IS_NATIVE_FUNCTION(value) (isObjType(value, OBJ_T_NATIVE_FUNCTION))
 #define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
 #define IS_MODULE(value)        (isObjType(value, OBJ_T_MODULE))
 #define IS_INSTANCE(value)      (isObjType(value, OBJ_T_INSTANCE))
-#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_STRING(value) || IS_ARRAY(value) || IS_CLASS(value) || IS_MODULE(value))
+#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_STRING(value) || IS_ARRAY(value) || IS_MAP(value) || IS_CLASS(value) || IS_MODULE(value))
 #define IS_UPVALUE(value)       (isObjType(value, OBJ_T_UPVALUE))
 #define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
 #define IS_INTERNAL(value)      (isObjType(value, OBJ_T_INTERNAL))
@@ -264,13 +280,13 @@ typedef struct LxFile {
 #define IS_INSTANCE_OF_FUNC (is_value_instance_of_p)
 #define IS_A_FUNC (is_value_a_p)
 
-#define IS_A(value,klass)       ((IS_INSTANCE(value) || IS_ARRAY(value) || IS_STRING(value)) && instanceIsA(AS_INSTANCE(value), klass))
+#define IS_A(value, klass)      ((IS_INSTANCE(value) || IS_ARRAY(value) || IS_STRING(value) || IS_MAP(value)) && instanceIsA(AS_INSTANCE(value), klass))
 
 #define IS_A_MODULE(value)      (IS_A(value, lxModuleClass))
 #define IS_AN_ARRAY(value)      (IS_A(value, lxAryClass))
 #define IS_T_ARRAY(value)       (AS_INSTANCE(value)->klass == lxAryClass)
 #define IS_A_MAP(value)         (IS_A(value, lxMapClass))
-#define IS_T_MAP(value)         (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxMapClass)
+#define IS_T_MAP(value)         (IS_MAP(value))
 #define IS_AN_ERROR(value)      (IS_A(value, lxErrClass))
 #define IS_A_THREAD(value)      (IS_A(value, lxThreadClass))
 #define IS_A_STRING(value)      (IS_STRING(value) || IS_A(value, lxStringClass))
@@ -290,6 +306,7 @@ typedef struct LxFile {
 #define AS_INSTANCE(value)      ((ObjInstance*)AS_OBJ(value))
 #define AS_ARRAY(value)         ((ObjArray*)AS_OBJ(value))
 #define AS_INTERNAL(value)      ((ObjInternal*)AS_OBJ(value))
+#define AS_MAP(value)           ((ObjMap*)AS_OBJ(value))
 
 #define ARRAY_GET(value, idx)    (arrayGet(value, idx))
 #define ARRAY_SIZE(value)        (arraySize(value))
@@ -312,9 +329,8 @@ typedef struct LxFile {
         (el = ARRAY_GET(ary, idx)).type != VAL_T_UNDEF; idx--)
 #endif
 
-#define MAP_GET(mapVal, valKey, pval)   (mapGet(mapVal, valKey, pval))
+#define MAP_GET(mapVal, valKey, pval) (mapGet(mapVal, valKey, pval))
 #define MAP_SIZE(mapVal)          (mapSize(mapVal))
-#define MAP_GETHIDDEN(mapVal)     (mapGetHidden(mapVal))
 
 #define FILE_GETHIDDEN(fileVal) (fileGetHidden(fileVal))
 #define THREAD_GETHIDDEN(thVal) (threadGetHidden(thVal))
@@ -406,7 +422,7 @@ static inline Table *mapGetHidden(Value mapVal) {
     return (Table*)inst->internal->data;
 }
 static inline bool mapGet(Value mapVal, Value key, Value *ret) {
-    Table *map = MAP_GETHIDDEN(mapVal);
+    Table *map = AS_MAP(mapVal)->table;
     if (tableGet(map, key, ret)) {
         return true;
     } else {
@@ -415,19 +431,19 @@ static inline bool mapGet(Value mapVal, Value key, Value *ret) {
 }
 // NOTE: doesn't check frozenness or type of `mapVal`
 static inline void mapSet(Value mapVal, Value key, Value val) {
-    Table *map = MAP_GETHIDDEN(mapVal);
+    Table *map = AS_MAP(mapVal)->table;
     tableSet(map, key, val);
 }
 
 // number of key-value pairs
 static inline Value mapSize(Value mapVal) {
-    Table *map = MAP_GETHIDDEN(mapVal);
+    Table *map = AS_MAP(mapVal)->table;
     return NUMBER_VAL(map->count);
 }
 
 // NOTE: doesn't check frozenness or type of `mapVal`
 static inline void mapClear(Value mapVal) {
-    Table *map = MAP_GETHIDDEN(mapVal);
+    Table *map = AS_MAP(mapVal)->table;
     freeTable(map);
 }
 
@@ -482,6 +498,7 @@ static inline bool isObjType(Value value, ObjType type) {
 }
 const char *typeOfObj(Obj *obj);
 bool isInstanceLikeObj(Obj *obj);
+bool isInstanceLikeObjNoClass(Obj *obj);
 size_t sizeofObjType(ObjType type);
 const char *objTypeName(ObjType type);
 char *className(ObjClass *klass);

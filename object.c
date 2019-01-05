@@ -381,6 +381,22 @@ ObjArray *allocateArray(ObjClass *klass) {
     return ary;
 }
 
+ObjMap *allocateMap(ObjClass *klass) {
+    ObjMap *map = ALLOCATE_OBJ(
+        ObjMap, OBJ_T_MAP
+    );
+    map->klass = klass;
+    map->singletonKlass = NULL;
+    map->finalizerFunc = NULL;
+    map->fields = ALLOCATE(Table, 1);
+    // NOTE: even though fields are consecutive in struct, do NOT allocate 2 tables in one allocation
+    // We might free `table` later.
+    map->table = ALLOCATE(Table, 1);
+    initTable(map->fields);
+    initTable(map->table);
+    return map;
+}
+
 // allocates a new instance object, doesn't call its constructor
 ObjInstance *newInstance(ObjClass *klass) {
     // NOTE: since this is called from vm.c's doCallCallable to initialize new
@@ -392,6 +408,8 @@ ObjInstance *newInstance(ObjClass *klass) {
             return (ObjInstance*)allocateArray(klass);
         } else if (IS_SUBCLASS(klass, lxStringClass)) {
             return (ObjInstance*)allocateString(NULL, 0, klass);
+        } else if (IS_SUBCLASS(klass, lxMapClass)) {
+            return (ObjInstance*)allocateMap(klass);
         } else if (klass == lxClassClass) {
             return (ObjInstance*)newClass(NULL, lxObjClass);
         } else if (klass == lxModuleClass) {
@@ -594,6 +612,8 @@ const char *typeOfObj(Obj *obj) {
         return "string";
     case OBJ_T_ARRAY:
         return "array";
+    case OBJ_T_MAP:
+        return "map";
     case OBJ_T_INSTANCE:
         return "instance";
     case OBJ_T_CLASS:
@@ -812,8 +832,8 @@ Value newMap(void) {
 
 bool mapEquals(Value self, Value other) {
     if (!IS_A_MAP(other)) return false;
-    Table *map1 = MAP_GETHIDDEN(self);
-    Table *map2 = MAP_GETHIDDEN(other);
+    Table *map1 = AS_MAP(self)->table;
+    Table *map2 = AS_MAP(other)->table;
     if (map1->count != map2->count) return false;
     Entry e; int idx = 0;
     Value val2;
@@ -848,10 +868,11 @@ void setProp(Value self, ObjString *propName, Value val) {
 
 bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
     ObjClass *instKlass = inst->klass;
+    if (instKlass == klass) return true;
     while (instKlass != NULL && instKlass != klass) {
         instKlass = CLASSINFO(instKlass)->superclass;
     }
-    return instKlass != NULL;
+    return instKlass == klass;
 }
 
 Value newError(ObjClass *errClass, Value msg) {
@@ -974,12 +995,29 @@ Value newBlock(ObjClosure *closure) {
 }
 
 bool isInstanceLikeObj(Obj *obj) {
+    if (!obj) return false;
+    if (!IS_OBJ(OBJ_VAL(obj))) return false;
     switch (obj->type) {
         case OBJ_T_INSTANCE:
         case OBJ_T_ARRAY:
+        case OBJ_T_MAP:
         case OBJ_T_STRING:
         case OBJ_T_CLASS:
         case OBJ_T_MODULE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool isInstanceLikeObjNoClass(Obj *obj) {
+    if (!obj) return false;
+    if (!IS_OBJ(OBJ_VAL(obj))) return false;
+    switch (obj->type) {
+        case OBJ_T_INSTANCE:
+        case OBJ_T_ARRAY:
+        case OBJ_T_MAP:
+        case OBJ_T_STRING:
             return true;
         default:
             return false;
@@ -992,6 +1030,8 @@ size_t sizeofObjType(ObjType type) {
             return sizeof(ObjString);
         case OBJ_T_ARRAY:
             return sizeof(ObjArray);
+        case OBJ_T_MAP:
+            return sizeof(ObjMap);
         case OBJ_T_FUNCTION:
             return sizeof(ObjFunction);
         case OBJ_T_INSTANCE:
@@ -1021,6 +1061,8 @@ const char *objTypeName(ObjType type) {
             return "T_STRING";
         case OBJ_T_ARRAY:
             return "T_ARRAY";
+        case OBJ_T_MAP:
+            return "T_MAP";
         case OBJ_T_INSTANCE:
             return "T_INSTANCE";
         case OBJ_T_FUNCTION:

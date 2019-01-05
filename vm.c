@@ -995,8 +995,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
 }
 
 Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, CallInfo *cinfo) {
-    // FIXME: ugly condition...
-    if (obj->type == OBJ_T_INSTANCE || obj->type == OBJ_T_ARRAY || obj->type == OBJ_T_STRING) {
+    if (obj->type == OBJ_T_INSTANCE || obj->type == OBJ_T_ARRAY || obj->type == OBJ_T_STRING || obj->type == OBJ_T_MAP) {
         ObjInstance *instance = (ObjInstance*)obj;
         Obj *callable = instanceFindMethod(instance, methodName);
         if (!callable && argCount == 0) {
@@ -2416,7 +2415,7 @@ vmLoop:
               if (!oldBlock) th->outermostBlock = th->curBlock;
           }
           Value instanceVal = peek(numArgs);
-          if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal)) {
+          if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal) || IS_MAP(instanceVal)) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
               Obj *callable = instanceFindMethod(inst, mname);
               if (!callable && numArgs == 0) {
@@ -2761,7 +2760,7 @@ vmLoop:
           uint8_t numKeyVals = READ_BYTE();
           DBG_ASSERT(numKeyVals % 2 == 0);
           Value mapVal = newMap();
-          Table *map = MAP_GETHIDDEN(mapVal);
+          Table *map = AS_MAP(mapVal)->table;
           for (int i = 0; i < numKeyVals; i+=2) {
               Value key = pop();
               Value val = pop();

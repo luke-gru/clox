@@ -240,7 +240,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
                 ret = stringConstructor(buf, strlen(buf));
                 xfree(buf);
             }
-        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE || OBJ_TYPE(value) == OBJ_T_ARRAY || OBJ_TYPE(value) == OBJ_T_STRING) {
+        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE || OBJ_TYPE(value) == OBJ_T_ARRAY || OBJ_TYPE(value) == OBJ_T_STRING || OBJ_TYPE(value) == OBJ_T_MAP) {
             ObjInstance *inst = AS_INSTANCE(value);
             Obj *toString = instanceFindMethod(inst, INTERN("toString"));
             if (toString && vm.inited) {
@@ -357,7 +357,7 @@ uint32_t valHash(Value val) {
                 return hash;
             }
         } else {
-            if (IS_INSTANCE(val) || IS_ARRAY(val) || IS_STRING(val)) {
+            if (IS_INSTANCE(val) || IS_ARRAY(val) || IS_STRING(val) || IS_MAP(val)) {
                 if (UNLIKELY(!vm.inited)) {
                     fprintf(stderr, "val type: %s\n", typeOfVal(val));
                     ASSERT(0);
@@ -421,7 +421,6 @@ bool valEqual(Value a, Value b) {
         case UNDEF_VAL:
             return false;
         default: {
-            // internal string equality (ObjString)
             if (IS_STRING(a) && IS_STRING(b)) {
                 ObjString *aStr = AS_STRING(a);
                 ObjString *bStr = AS_STRING(b);
@@ -447,12 +446,11 @@ bool valEqual(Value a, Value b) {
         case VAL_T_NUMBER:
             return b.type == VAL_T_NUMBER && AS_NUMBER(a) == AS_NUMBER(b);
         case VAL_T_OBJ: {
-            // internal string equality (ObjString)
             if (IS_STRING(a) && IS_STRING(b)) {
                 return strcmp(VAL_TO_STRING(a)->chars,
                         VAL_TO_STRING(b)->chars) == 0;
             }
-            if (IS_INSTANCE_LIKE(a)) { // including lox strings
+            if (IS_INSTANCE_LIKE(a)) {
                 return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b, NULL));
             }
             UNREACHABLE_RETURN(false);

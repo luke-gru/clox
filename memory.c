@@ -453,11 +453,32 @@ void blackenObject(Obj *obj) {
             GC_TRACE_DEBUG(5, "Blackening array %p", obj);
             ObjArray *ary = (ObjArray*)obj;
             ValueArray *valAry = &ary->valAry;
+            grayObject((Obj*)ary->klass);
+            if (ary->singletonKlass) {
+                grayObject((Obj*)ary->singletonKlass);
+            }
+            if (ary->finalizerFunc) {
+                grayObject(ary->finalizerFunc);
+            }
             GC_TRACE_DEBUG(5, "Array count: %ld", valAry->count);
             for (int i = 0; i < valAry->count; i++) {
                 Value val = valAry->values[i];
                 grayValue(val);
             }
+            break;
+        }
+        case OBJ_T_MAP: {
+            GC_TRACE_DEBUG(5, "Blackening map %p", obj);
+            ObjMap *map = (ObjMap*)obj;
+            grayObject((Obj*)map->klass);
+            if (map->singletonKlass) {
+                grayObject((Obj*)map->klass);
+            }
+            if (map->finalizerFunc) {
+                grayObject(map->finalizerFunc);
+            }
+            grayTable(map->fields);
+            grayTable(map->table);
             break;
         }
         case OBJ_T_INTERNAL: {
@@ -582,7 +603,7 @@ void freeObject(Obj *obj) {
             if (instance->internal) {
                 FREE(ObjInternal, instance->internal);
             }
-            GC_TRACE_DEBUG(5, "Freeing instance fields table: p=%p", &instance->fields);
+            GC_TRACE_DEBUG(5, "Freeing instance fields table: p=%p", instance->fields);
             freeTable(instance->fields);
             FREE_ARRAY(Table, instance->fields, 1);
             GC_TRACE_DEBUG(5, "Freeing ObjInstance: p=%p", obj);
@@ -591,12 +612,22 @@ void freeObject(Obj *obj) {
         }
         case OBJ_T_ARRAY: {
             ObjArray *ary = (ObjArray*)obj;
-            GC_TRACE_DEBUG(5, "Freeing array fields table: p=%p", &ary->fields);
+            GC_TRACE_DEBUG(5, "Freeing array fields table: p=%p", ary->fields);
             freeTable(ary->fields);
             FREE_ARRAY(Table, ary->fields, 1);
             GC_TRACE_DEBUG(5, "Freeing array ValueArray");
             freeValueArray(&ary->valAry);
             GC_TRACE_DEBUG(5, "Freeing ObjArray: p=%p", obj);
+            obj->type = OBJ_T_NONE;
+            break;
+        }
+        case OBJ_T_MAP: {
+            ObjMap *map = (ObjMap*)obj;
+            GC_TRACE_DEBUG(5, "Freeing map fields table: p=%p", map->fields);
+            freeTable(map->fields);
+            freeTable(map->table);
+            FREE(Table, map->fields);
+            FREE(Table, map->table);
             obj->type = OBJ_T_NONE;
             break;
         }
