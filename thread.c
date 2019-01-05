@@ -144,30 +144,28 @@ void exitingThread() {
     ASSERT(vm.curThread);
     vm.curThread->status = THREAD_ZOMBIE;
     vm.curThread->openUpvalues = NULL;
-    int idx = 0;
-    vec_find(&vm.threads, FIND_THREAD_INSTANCE(vm.curThread->tid), idx);
-    ASSERT(idx > -1);
-    vec_splice(&vm.threads, idx, 1);
     LxThreadCleanup(vm.curThread);
 }
 
 static void *runCallableInNewThread(void *arg) {
-    acquireGVL();
-    pthread_t tid = pthread_self();
     NewThreadArgs *tArgs = (NewThreadArgs*)arg;
+    pthread_t tid = pthread_self();
+    LxThread *th = tArgs->th;
+    th->tid = tid;
+    THREAD_DEBUG(2, "switching to newly created thread, acquiring lock %lu", th->tid);
+    acquireGVL();
+    th = vm.curThread;
+    th->status = THREAD_RUNNING;
+    THREAD_DEBUG(2, "in new thread %lu", th->tid);
     ObjClosure *closure = tArgs->func;
     ASSERT(closure);
-    THREAD_DEBUG(2, "in new thread %lu", pthread_self());
-    LxThread *th = tArgs->th;
     FREE(NewThreadArgs, tArgs);
     ASSERT(th);
-    th->tid = tid;
-    th->status = THREAD_RUNNING;
-    vm.curThread = th;
-    GVLOwner = tid;
+    ASSERT(GVLOwner == tid);
     ASSERT(tid == pthread_self());
     ASSERT(vm.curThread->tid == pthread_self());
     push(OBJ_VAL(closure));
+    unhideFromGC((Obj*)closure);
     if (vm.exited) {
         THREAD_DEBUG(2, "vm exited, quitting new thread %lu", pthread_self());
         releaseGVL();
@@ -175,6 +173,7 @@ static void *runCallableInNewThread(void *arg) {
     }
     THREAD_DEBUG(2, "calling callable %lu", pthread_self());
     callCallable(OBJ_VAL(closure), 0, false, NULL);
+    THREAD_DEBUG(2, "Exiting thread (returned) %lu", pthread_self());
     stopVM(0); // actually just exits the thread
 }
 
@@ -194,6 +193,7 @@ Value lxNewThread(int argCount, Value *args) {
     // instead of using stack space, which would get corrupted.
     NewThreadArgs *thArgs = ALLOCATE(NewThreadArgs, 1);
     thArgs->func = func;
+    hideFromGC((Obj*)func); // XXX: this is needed, because it's only pushed onto the stack when the new thread runs
     thArgs->th = th;
     releaseGVL();
     if (pthread_create(&tnew, NULL, runCallableInNewThread, thArgs) == 0) {

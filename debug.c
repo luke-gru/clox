@@ -31,6 +31,8 @@ NORETURN void diePrintCBacktrace(const char *fmt, ...) {
         } else {
             fprintf(stderr, "\n");
         }
+    } else {
+        fprintf(stderr, "VM initialized: NO\n");
     }
     if (vm.lastOp != -1) {
         fprintf(stderr, "Last VM operation: %s\n", opName(vm.lastOp));

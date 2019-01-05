@@ -131,7 +131,7 @@ void threadSleepNano(LxThread *th, int nsecs) {
     if (res == 0) {
         THREAD_DEBUG(1, "Woke up %lu\n", pthread_self());
     } else {
-        THREAD_DEBUG(1, "Woke up with error: (err=%d) %lu\n", res, pthread_self());
+        /*THREAD_DEBUG(1, "Woke up with error: (err=%d,errno=%s) %lu\n", res, strerror(res), pthread_self());*/
     }
     pthread_mutex_unlock(&th->sleepMutex);
 }
@@ -234,7 +234,8 @@ Value lxYield(int argCount, Value *args) {
         .blockIterFunc = NULL,
     };
     volatile int status = 0;
-    SETUP_BLOCK(block, status, THREAD()->errInfo, THREAD()->lastBlock)
+    volatile LxThread *th = THREAD();
+    SETUP_BLOCK(th, block, status, th->errInfo, th->lastBlock)
     if (status == TAG_NONE) {
     } else if (status == TAG_RAISE) {
         ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
@@ -246,7 +247,7 @@ Value lxYield(int argCount, Value *args) {
         } else if (errInst->klass == lxReturnBlockErrClass) {
             return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
         } else {
-            throwError(THREAD()->lastErrorThrown);
+            throwError(th->lastErrorThrown);
         }
     }
     callCallable(callable, argCount, false, &cinfo);

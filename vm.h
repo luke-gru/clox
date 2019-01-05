@@ -254,20 +254,20 @@ Value callFunctionValue(Value callable, int argCount, Value *args);
 Value callSuper(int argCount, Value *args, CallInfo *cinfo);
 // NOTE: must be called before lxYield to setup error handlers.
 // Similar code to vm_protect.
-#define SETUP_BLOCK(block, status, errInf, lastBlk) {\
+#define SETUP_BLOCK(th, block, status, errInf, lastBlk) {\
     ASSERT(block);\
     addErrInfo(lxErrClass);\
-    THREAD()->curBlock = block;\
+    th->curBlock = block;\
     int jmpres = 0;\
     if ((jmpres = setjmp(errInf->jmpBuf)) == JUMP_SET) {\
         status = TAG_NONE;\
     } else if (jmpres == JUMP_PERFORMED) {\
         unwindJumpRecover(errInf);\
-        ASSERT(THREAD()->errInfo == errInf);\
-        THREAD()->curBlock = block;\
-        THREAD()->lastBlock = lastBlk;\
+        ASSERT(th->errInfo == errInf);\
+        th->curBlock = block;\
+        th->lastBlock = lastBlk;\
         errInf->status = TAG_RAISE;\
-        errInf->caughtError = THREAD()->lastErrorThrown;\
+        errInf->caughtError = th->lastErrorThrown;\
         status = TAG_RAISE;\
         popErrInfo();\
     }\

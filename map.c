@@ -334,7 +334,7 @@ static Value lxMapEach(int argCount, Value *args) {
     volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
     volatile Value yieldArgs[2];
     while (true) {
-        SETUP_BLOCK(th->curBlock, status, th->errInfo, th->lastBlock)
+        SETUP_BLOCK(th, th->curBlock, status, th->errInfo, th->lastBlock)
         if (status == TAG_NONE) {
             break;
         } else if (status == TAG_RAISE) {

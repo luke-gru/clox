@@ -1948,6 +1948,7 @@ vmLoop:
       if (UNLIKELY(th->opsRemaining <= 0)) {
           th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
           if (!isOnlyThread()) {
+              THREAD_DEBUG(2, "Releasing GVL after ops up %lu", pthread_self());
               releaseGVL();
               threadSleepNano(th, 100);
               acquireGVL();
@@ -3108,6 +3109,10 @@ void acquireGVL(void) {
 void releaseGVL(void) {
     pthread_mutex_lock(&vm.GVLock);
     LxThread *th = vm.curThread;
+    if (GVLOwner != th->tid) {
+        pthread_mutex_unlock(&vm.GVLock);
+        return;
+    }
     if (th && th->mutexCounter > 0 && th->tid == GVLOwner && th->tid == pthread_self()) {
         THREAD_DEBUG(1, "Thread %lu skipping release of GVL due to held mutex\n", pthread_self());
         pthread_mutex_unlock(&vm.GVLock);
@@ -3153,6 +3158,7 @@ LxThread *THREAD() {
         vm.curThread = FIND_THREAD(pthread_self());
         DBG_ASSERT(vm.curThread);
         DBG_ASSERT(vm.curThread->tid == GVLOwner);
+        DBG_ASSERT(vm.curThread->status != THREAD_ZOMBIE);
         vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
         pthread_mutex_unlock(&vm.GVLock);
     }

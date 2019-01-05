@@ -49,11 +49,11 @@ static Value lxBlockYield(int argCount, Value *args) {
     }
     volatile int status = 0;
     ObjFunction *func = blk->closure->function;
-    THREAD()->curBlock = blk->closure->function;
-    SETUP_BLOCK(func, status, THREAD()->errInfo, THREAD()->lastBlock)
+    volatile LxThread *th = THREAD();
+    SETUP_BLOCK(th, func, status, THREAD()->errInfo, THREAD()->lastBlock)
     if (status == TAG_NONE) {
     } else if (status == TAG_RAISE) {
-        ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
+        ObjInstance *errInst = AS_INSTANCE(th->lastErrorThrown);
         ASSERT(errInst);
         if (errInst->klass == lxBreakBlockErrClass) {
             return NIL_VAL;
@@ -62,7 +62,7 @@ static Value lxBlockYield(int argCount, Value *args) {
         } else if (errInst->klass == lxReturnBlockErrClass) {
             return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
         } else {
-            throwError(THREAD()->lastErrorThrown);
+            throwError(th->lastErrorThrown);
         }
     }
     callCallable(callable, argCount-1, false, NULL);

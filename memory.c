@@ -756,10 +756,16 @@ void collectGarbage(void) {
     vec_init(&v_stackObjs);
     // Mark stack roots up the stack for every execution context in every thread
     Obj *thObj; int thIdx = 0;
+    vec_int_t v_zombies;
+    vec_init(&v_zombies);
     vec_foreach(&vm.threads, thObj, thIdx) {
+        LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
+        if (th->status == THREAD_ZOMBIE) {
+            vec_push(&v_zombies, thIdx);
+            continue;
+        }
         DBG_ASSERT(thObj);
         grayObject(thObj);
-        LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
         ASSERT(th);
         if (th->thisObj) {
             grayObject(th->thisObj);
@@ -777,6 +783,12 @@ void collectGarbage(void) {
         }
         vec_extend(&v_stackObjs, &th->stackObjects);
     }
+
+    int zombieIdx; int zidx = 0;
+    vec_foreach(&v_zombies, zombieIdx, zidx) {
+        vec_splice(&vm.threads, zombieIdx, 1);
+    }
+    vec_deinit(&v_zombies);
 
     GC_TRACE_DEBUG(2, "Marking per-thread VM C-call stack objects");
     int numStackObjects = 0;
