@@ -616,33 +616,6 @@ static inline Value falseValue() {
 #endif
 }
 
-static bool isTruthy(Value val) {
-#ifdef NAN_TAGGING
-    switch (val) {
-    case NIL_VAL: return false;
-    case TRUE_VAL: return true;
-    case FALSE_VAL: return false;
-    case UNDEF_VAL: UNREACHABLE("undefined value found?");
-    default:
-        // all other values are truthy
-        return true;
-
-    }
-#else
-    switch (val.type) {
-    case VAL_T_NIL: return false;
-    case VAL_T_TRUE:
-    case VAL_T_FALSE:
-        return AS_BOOL(val);
-    case VAL_T_UNDEF: UNREACHABLE("undefined value found?");
-    default:
-        // all other values are truthy
-        return true;
-
-    }
-#endif
-}
-
 static inline bool canCmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
     return (IS_NUMBER(lhs) && IS_NUMBER(rhs)) ||
         (IS_STRING(lhs) && IS_STRING(rhs));
@@ -1083,6 +1056,7 @@ void popFrame(void) {
     CallFrame *frame = getFrameI();
     VM_DEBUG("popping callframe (%s)", frame->isCCall ? "native" : "non-native");
     int stackAdjust = frame->stackAdjustOnPop;
+    VM_DEBUG("stack adjust: %d", stackAdjust);
     unwindErrInfo(frame);
     if (frame->isCCall) {
         if (th->inCCall > 0) {

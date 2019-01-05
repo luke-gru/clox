@@ -1,0 +1,7 @@
+print [1,2,3].select() -> { true; };
+print [1,2,3].select() -> (i) { i < 2; };
+
+__END__
+-- expect: --
+[1,2,3]
+[1]

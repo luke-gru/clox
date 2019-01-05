@@ -6,6 +6,7 @@
 #include "chunk.h"
 #include "nodes.h"
 #include "vec.h"
+#include "value.h"
 
 #define LX_MAX_LOCALS 256
 #define LX_MAX_UPVALUES 256
@@ -97,7 +98,13 @@ typedef enum {
 } CompileScopeType;
 
 typedef struct CallInfo CallInfo; // fwd decl
-typedef void (*NativeBlockFunction)(int argCount, Value *args, CallInfo *cinfo);
+typedef void (*NativeBlockFunction)(int blkArgCount, Value *blkArgs, Value blkRet, CallInfo *cinfo);
+
+#ifdef NAN_TAGGING
+typedef Value uint64_t;
+#else
+typedef struct Value Value;
+#endif
 
 typedef struct CallInfo {
     Token nameTok;
@@ -108,10 +115,11 @@ typedef struct CallInfo {
     // for blocks
     ObjFunction *block; // lox block
     ObjClosure *cachedBlock; // same as above, but cached closure
-    NativeBlockFunction *nativeBlock;
+    NativeBlockFunction nativeBlockFunction;
     Value *nativeBlockIter;
     bool isYield;
 } CallInfo;
+
 
 typedef struct CompilerOpts {
     bool noOptimize; // default: false (optimize)

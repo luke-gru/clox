@@ -5,6 +5,7 @@
 #include "runtime.h"
 #include "table.h"
 #include "memory.h"
+#include "compiler.h"
 
 ObjClass *lxMapClass;
 
@@ -254,7 +255,7 @@ static Value lxMapMerge(int argCount, Value *args) {
     Value other = args[1];
     Table *otherMap = MAP_GETHIDDEN(other);
     CHECK_ARG_IS_A(other, lxMapClass, 1);
-    Value ret = callMethod(AS_OBJ(self), internedString("dup", 3), 0, NULL);
+    Value ret = callMethod(AS_OBJ(self), internedString("dup", 3), 0, NULL, NULL);
     Table *retMap = MAP_GETHIDDEN(ret);
     Entry e; int idx = 0;
     TABLE_FOREACH(otherMap, e, idx, {
@@ -330,21 +331,29 @@ static Value lxMapEach(int argCount, Value *args) {
     volatile Table *map = MAP_GETHIDDEN(self);
     volatile int status = 0;
     volatile int startIdx = 0;
-    ASSERT(getFrame()->callInfo->nativeBlockIter);
-    SETUP_BLOCK(th->curBlock, status, th->errInfo, th->lastBlock)
+    volatile NativeBlockFunction fn = getFrame()->callInfo->nativeBlockFunction;
+    volatile Value yieldArgs[2];
     while (true) {
+        SETUP_BLOCK(th->curBlock, status, th->errInfo, th->lastBlock)
         if (status == TAG_NONE) {
             break;
         } else if (status == TAG_RAISE) {
             ObjInstance *errInst = AS_INSTANCE(th->lastErrorThrown);
             ASSERT(errInst);
             if (errInst->klass == lxBreakBlockErrClass) {
-                if (
                 return NIL_VAL;
             } else if (errInst->klass == lxContinueBlockErrClass) {
-                SETUP_BLOCK(th->curBlock, status, th->errInfo, THREAD()->lastBlock)
+                Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
+                if (fn) {
+                    fn(2, yieldArgs, retVal, getFrame()->callInfo);
+                }
             } else if (errInst->klass == lxReturnBlockErrClass) {
-                return getProp(th->lastErrorThrown, INTERN("ret"));
+                Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
+                if (fn) {
+                    fn(2, yieldArgs, retVal, getFrame()->callInfo);
+                } else {
+                    return retVal;
+                }
             } else {
                 throwError(th->lastErrorThrown);
             }
@@ -352,7 +361,6 @@ static Value lxMapEach(int argCount, Value *args) {
     }
 
     Entry e;
-    Value yieldArgs[2];
     TABLE_FOREACH_IDX(map, e, startIdx, {
         startIdx++;
         yieldArgs[0] = e.key;
@@ -363,10 +371,8 @@ static Value lxMapEach(int argCount, Value *args) {
     return self;
 }
 
-static void mapIterBlk(int argCount, Value *args, CallInfo *cinfo) {
-    ASSERT(argCount == 2);
-    arrayPush(*cinfo->nativeBlockIter, args[0]);
-    arrayPush(*cinfo->nativeBlockIter, args[1]);
+static void mapIterBlk(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+    arrayPush(*cinfo->nativeBlockIter, ret);
 }
 
 static Value lxMapMap(int argCount, Value *args) {
@@ -377,14 +383,18 @@ static Value lxMapMap(int argCount, Value *args) {
         throwErrorFmt(lxErrClass, "no block given");
     }
 
-    Value ret = newArray();
+    volatile Value ret = newArray();
     CallInfo cinfo;
     memset(&cinfo, 0, sizeof(cinfo));
     cinfo.nativeBlockFunction = mapIterBlk;
     cinfo.nativeBlockIter = &ret;
     cinfo.block = vm.curThread->curBlock;
-    callMethod(AS_OBJ(self), INTERN("each"), 0, cinfo);
-    return ret;
+    Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
+    if (IS_NIL(res)) {
+        return res;
+    } else {
+        return ret;
+    }
 }
 
 // ENV

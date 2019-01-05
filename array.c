@@ -3,6 +3,7 @@
 #include "runtime.h"
 #include "table.h"
 #include "memory.h"
+#include "compiler.h"
 
 ObjClass *lxAryClass;
 extern ObjNative *nativeArrayInit;
@@ -231,13 +232,15 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
 
 static Value lxArrayEach(int argCount, Value *args) {
     CHECK_ARITY("Array#each", 1, 1, argCount);
-    volatile ValueArray *ary = &AS_ARRAY(*args)->valAry;
+    ObjArray *self = AS_ARRAY(*args);
+    volatile ValueArray *ary = &self->valAry;
     volatile Value el; volatile int valIdx = 0;
     volatile int status = 0;
     volatile int iterStart = 0;
     volatile LxThread *th = vm.curThread;
-    SETUP_BLOCK(th->curBlock, status, th->errInfo, th->lastBlock)
+    volatile NativeBlockFunction fn = getFrame()->callInfo->nativeBlockFunction;
     while (true) {
+        SETUP_BLOCK(th->curBlock, status, th->errInfo, th->lastBlock)
         if (status == TAG_NONE) {
             break;
         } else if (status == TAG_RAISE) {
@@ -246,9 +249,17 @@ static Value lxArrayEach(int argCount, Value *args) {
             if (errInst->klass == lxBreakBlockErrClass) {
                 return NIL_VAL;
             } else if (errInst->klass == lxContinueBlockErrClass) {
-                SETUP_BLOCK(th->curBlock, status, th->errInfo, THREAD()->lastBlock)
+                Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
+                if (fn) {
+                    fn(1, &el, retVal, getFrame()->callInfo);
+                }
             } else if (errInst->klass == lxReturnBlockErrClass) {
-                return getProp(th->lastErrorThrown, INTERN("ret"));
+                Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
+                if (fn) {
+                    fn(1, &el, retVal, getFrame()->callInfo);
+                } else {
+                    return retVal;
+                }
             } else {
                 throwError(th->lastErrorThrown);
             }
@@ -262,39 +273,58 @@ static Value lxArrayEach(int argCount, Value *args) {
     return *args;
 }
 
+static void arrayIterBlk(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+    ASSERT(cinfo->nativeBlockIter);
+    arrayPush(*cinfo->nativeBlockIter, ret);
+}
+
 static Value lxArrayMap(int argCount, Value *args) {
     CHECK_ARITY("Array#map", 1, 1, argCount);
-    volatile ValueArray *ary = &AS_ARRAY(*args)->valAry;
-    volatile Value el; int valIdx = 0;
-    volatile int status = 0;
-    volatile int iterStart = 0;
+    Value self = *args;
+
+    if (!vm.curThread->curBlock) {
+        throwErrorFmt(lxErrClass, "no block given");
+    }
+
     volatile Value ret = newArray();
-    ObjFunction *blk = THREAD()->curBlock;
-    SETUP_BLOCK(blk, status, THREAD()->errInfo, THREAD()->lastBlock)
-    while (true) {
-            if (status == TAG_NONE) {
-                break;
-            } else if (status == TAG_RAISE) {
-                ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
-                ASSERT(errInst);
-                if (errInst->klass == lxBreakBlockErrClass) {
-                    return NIL_VAL;
-                } else if (errInst->klass == lxContinueBlockErrClass) { // continue
-                    Value newEl = getProp(THREAD()->lastErrorThrown, INTERN("ret"));
-                    arrayPush(ret, newEl);
-                    SETUP_BLOCK(THREAD()->curBlock, status, THREAD()->errInfo, THREAD()->lastBlock)
-                } else if (errInst->klass == lxReturnBlockErrClass) {
-                    return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
-                } else {
-                    throwError(THREAD()->lastErrorThrown);
-                }
-            }
+    CallInfo cinfo;
+    memset(&cinfo, 0, sizeof(CallInfo));
+    cinfo.nativeBlockFunction = arrayIterBlk;
+    cinfo.nativeBlockIter = &ret;
+    Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
+    if (IS_NIL(res)) {
+        return NIL_VAL;
+    } else {
+        return ret;
     }
-    VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
-        iterStart++;
-        yieldFromC(1, &el);
+}
+
+static void arraySelectBlk(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+    if (isTruthy(ret)) {
+        arrayPush(*cinfo->nativeBlockIter, *args);
     }
-    return ret;
+}
+
+static Value lxArraySelect(int argCount, Value *args) {
+    CHECK_ARITY("Array#select", 1, 1, argCount);
+    Value self = *args;
+
+    if (!vm.curThread->curBlock) {
+        throwErrorFmt(lxErrClass, "no block given");
+    }
+
+    volatile Value ret = newArray();
+    CallInfo cinfo;
+    memset(&cinfo, 0, sizeof(cinfo));
+    cinfo.nativeBlockFunction = arraySelectBlk;
+    cinfo.nativeBlockIter = &ret;
+    cinfo.block = vm.curThread->curBlock;
+    Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
+    if (IS_NIL(res)) {
+        return res;
+    } else {
+        return ret;
+    }
 }
 
 static Value lxArrayGetSize(int argCount, Value *args) {
@@ -341,6 +371,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "hashKey", lxArrayHashKey);
     addNativeMethod(arrayClass, "each", lxArrayEach);
     addNativeMethod(arrayClass, "map", lxArrayMap);
+    addNativeMethod(arrayClass, "select", lxArraySelect);
 
     // getters
     addNativeGetter(arrayClass, "size", lxArrayGetSize);

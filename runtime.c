@@ -183,7 +183,7 @@ static void fillClosureUpvalues(ObjClosure *block, ObjClosure *outer, CallFrame 
 }
 
 static ObjClosure *getCFrameBlockClosure() {
-    Obj *block = THREAD()->curBlock;
+    ObjFunction *block = THREAD()->curBlock;
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }

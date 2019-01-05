@@ -418,6 +418,33 @@ bool valEqual(Value a, Value b) {
 #endif
 }
 
+bool isTruthy(Value val) {
+#ifdef NAN_TAGGING
+    switch (val) {
+    case NIL_VAL: return false;
+    case TRUE_VAL: return true;
+    case FALSE_VAL: return false;
+    case UNDEF_VAL: UNREACHABLE("undefined value found?");
+    default:
+        // all other values are truthy
+        return true;
+
+    }
+#else
+    switch (val.type) {
+    case VAL_T_NIL: return false;
+    case VAL_T_TRUE:
+    case VAL_T_FALSE:
+        return AS_BOOL(val);
+    case VAL_T_UNDEF: UNREACHABLE("undefined value found?");
+    default:
+        // all other values are truthy
+        return true;
+
+    }
+#endif
+}
+
 void fillCallableName(Value callable, const char *buf, size_t buflen) {
     memset(buf, 0, buflen);
     ASSERT(isCallable(callable));

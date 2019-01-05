@@ -193,6 +193,7 @@ ObjString *valueToString(Value value, newStringFunc fn);
 const char *typeOfVal(Value val);
 uint32_t valHash(Value val);
 bool valEqual(Value a, Value b);
+bool isTruthy(Value a);
 void fillCallableName(Value callable, const char buf[], size_t buflen);
 
 #endif
