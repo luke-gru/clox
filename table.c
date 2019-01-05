@@ -10,9 +10,11 @@
 #define TABLE_MAX_LOAD 0.75
 
 /**
- * TODO: if two different values hash to the same number, the first is
+ * TODO: if two different values (not valEqual) hash to the same number, the first is
  * overridden. This is an implementation issue, `table->entries` should be a 2
  * dimensional array, backed by a dynamic array for each hash bucket.
+ *
+ * NOTE: iteration order isn't necessarily the insertion order.
  */
 
 // sentinel value for NULL key

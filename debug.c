@@ -118,6 +118,8 @@ const char *opName(OpCode code) {
         return "OP_STRING";
     case OP_ARRAY:
         return "OP_ARRAY";
+    case OP_DUPARRAY:
+        return "OP_DUPARRAY";
     case OP_MAP:
         return "OP_MAP";
     case OP_SPLAT_ARRAY:
@@ -326,7 +328,17 @@ static int printArrayInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
+static int printDupArrayInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
+    // TODO
+    return i+2;
+}
+
 static int arrayInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
+    // TODO
+    return i+2;
+}
+
+static int dupArrayInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     // TODO
     return i+2;
 }
@@ -590,6 +602,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
             return printStringInstruction(f, opName(byte), chunk, i);
         case OP_ARRAY:
             return printArrayInstruction(f, opName(byte), chunk, i);
+        case OP_DUPARRAY:
+            return printDupArrayInstruction(f, opName(byte), chunk, i);
         case OP_MAP:
             return printMapInstruction(f, opName(byte), chunk, i);
         case OP_GET_LOCAL:
@@ -688,6 +702,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             return stringInstruction(buf, opName(byte), chunk, i);
         case OP_ARRAY:
             return arrayInstruction(buf, opName(byte), chunk, i);
+        case OP_DUPARRAY:
+            return dupArrayInstruction(buf, opName(byte), chunk, i);
         case OP_MAP:
             return mapInstruction(buf, opName(byte), chunk, i);
         case OP_GET_LOCAL:

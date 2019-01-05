@@ -643,6 +643,26 @@ Value newArray(void) {
     return pop();
 }
 
+// NOTE: used in compiler, can't use VM stack
+Value newArrayConstant(void) {
+    ObjArray *ary = allocateArray(lxAryClass);
+    ValueArray *valAry = &ary->valAry;
+    initValueArray(valAry);
+    return OBJ_VAL(ary);
+}
+
+Value arrayDup(Value otherVal) {
+    ObjArray *other = AS_ARRAY(otherVal);
+    Value ret = newArray();
+    ObjArray *retAry = AS_ARRAY(ret);
+    ValueArray *ary = &retAry->valAry;
+    for (int i = 0; i < other->valAry.count; i++) {
+        writeValueArrayEnd(ary, other->valAry.values[i]);
+    }
+    DBG_ASSERT(ary->count == other->valAry.count);
+    return ret;
+}
+
 void clearString(Value string) {
     if (isFrozen(AS_OBJ(string))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");

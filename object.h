@@ -379,6 +379,8 @@ Value       arrayPopFront(Value aryVal);
 int         arrayDelete(Value aryVal, Value el);
 void        arrayClear(Value aryVal);
 bool        arrayEquals(Value self, Value other);
+Value       arrayDup(Value other);
+Value       newArrayConstant(void);
 
 // errors
 Value       newError(ObjClass *errClass, Value msg);

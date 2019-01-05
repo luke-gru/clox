@@ -57,6 +57,7 @@ typedef enum {
 typedef enum {
     CONST_T_NUMLIT = 1,
     CONST_T_STRLIT,
+    CONST_T_ARYLIT,
     CONST_T_CODE,
     CONST_T_CALLINFO
 } ConstType;
@@ -661,7 +662,7 @@ static uint8_t makeConstant(Value value, ConstType ctype) {
 // Add constant to constant pool from the token's lexeme, return index to it
 static uint8_t identifierConstant(Token* name) {
     DBG_ASSERT(vm.inited);
-    return makeConstant(OBJ_VAL(hiddenString(name->start, name->length)),
+    return makeConstant(OBJ_VAL(internedString(name->start, name->length)),
         CONST_T_STRLIT);
 }
 
@@ -862,7 +863,7 @@ static void initCompiler(
 
     switch (ftype) {
     case FUN_TYPE_NAMED:
-        current->function->name = hiddenString(
+        current->function->name = internedString(
             tokStr(fTok), strlen(tokStr(fTok))
         );
         break;
@@ -887,7 +888,7 @@ static void initCompiler(
         }
         strncat(methodNameBuf, sep, 1);
         strcat(methodNameBuf, funcName);
-        ObjString *methodName = hiddenString(methodNameBuf, strlen(methodNameBuf));
+        ObjString *methodName = internedString(methodNameBuf, strlen(methodNameBuf));
         current->function->name = methodName;
         xfree(methodNameBuf);
         break;
@@ -1252,6 +1253,80 @@ void emitBinaryOp(Token tok) {
     }
 }
 
+static bool isConstExprNodeCanEmbed(Node *n) {
+    switch (nodeKind(n)) {
+        case LITERAL_EXPR: {
+            switch (n->tok.type) {
+                case TOKEN_NUMBER:
+#ifdef NAN_TAGGING
+                case TOKEN_TRUE:
+                case TOKEN_FALSE:
+                case TOKEN_NIL:
+#endif
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        default:
+            return false;
+    }
+}
+
+static Value numberLiteral(Node *n, bool emit) {
+    const char *numStr = tokStr(&n->tok);
+    size_t numLen = strlen(numStr);
+    double d = 0.00;
+    // octal number
+    if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'c' || numStr[1] == 'C')) {
+        d = (double)strtol(numStr+2, NULL, 8);
+        // hex number
+    } else if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'x' || numStr[1] == 'X')) {
+        d = strtod(numStr, NULL);
+        // binary number
+    } else if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'b' || numStr[1] == 'B')) {
+        d = (double)strtol(numStr+2, NULL, 2);
+    } else { // decimal number
+        if (numStr[0] == '0' && numLen > 1) {
+            int line = curTok ? curTok->line : 0;
+            fprintf(stderr, "[Warning]: Decimal (base 10) number starting with '0' "
+                    "found on line %d. If you wanted an octal number, the prefix is '0c' (ex: 0c644).\n", line);
+        }
+        d = strtod(numStr, NULL);
+    }
+    Value numVal = NUMBER_VAL(d);
+    if (emit) {
+        emitConstant(numVal, CONST_T_NUMLIT);
+        return UNDEF_VAL;
+    } else {
+        return numVal;
+    }
+}
+
+static Value valueFromConstNode(Node *n) {
+    switch (nodeKind(n)) {
+        case LITERAL_EXPR: {
+            switch (n->tok.type) {
+                case TOKEN_NUMBER:
+                    return numberLiteral(n, false);
+#ifdef NAN_TAGGING
+                case TOKEN_TRUE:
+                    return TRUE_VAL;
+                case TOKEN_FALSE:
+                    return FALSE_VAL;
+                case TOKEN_NIL:
+                    return NIL_VAL;
+#endif
+                default:
+                    UNREACHABLE("bug");
+            }
+        }
+        default:
+            UNREACHABLE("bug");
+    }
+}
+
+
 static void emitNode(Node *n) {
     if (current->hadError) return;
     curTok = &n->tok;
@@ -1309,38 +1384,18 @@ static void emitNode(Node *n) {
     }
     case LITERAL_EXPR: {
         if (n->tok.type == TOKEN_NUMBER) {
+            numberLiteral(n, true);
             // TODO: handle strtod error condition
-            const char *numStr = tokStr(&n->tok);
-            size_t numLen = strlen(numStr);
-            double d = 0.00;
-            // octal number
-            if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'c' || numStr[1] == 'C')) {
-                d = (double)strtol(numStr+2, NULL, 8);
-            // hex number
-            } else if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'x' || numStr[1] == 'X')) {
-                d = strtod(numStr, NULL);
-            // binary number
-            } else if (numLen >= 2 && numStr[0] == '0' && (numStr[1] == 'b' || numStr[1] == 'B')) {
-                d = (double)strtol(numStr+2, NULL, 2);
-            } else { // decimal number
-                if (numStr[0] == '0' && numLen > 1) {
-                    int line = curTok ? curTok->line : 0;
-                    fprintf(stderr, "[Warning]: Decimal (base 10) number starting with '0' "
-                            "found on line %d. If you wanted an octal number, the prefix is '0c' (ex: 0c644).\n", line);
-                }
-                d = strtod(numStr, NULL);
-            }
-            emitConstant(NUMBER_VAL(d), CONST_T_NUMLIT);
         // non-static string
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
-            ObjString *str = hiddenString(name->start+1, name->length-2);
+            ObjString *str = internedString(name->start+1, name->length-2);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 0);
         // static string
         } else if (n->tok.type == TOKEN_STRING_STATIC) {
             Token *name = &n->tok;
-            ObjString *str = hiddenString(name->start+2, name->length-3);
+            ObjString *str = internedString(name->start+2, name->length-3);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 1);
         } else if (n->tok.type == TOKEN_TRUE) {
@@ -1360,9 +1415,28 @@ static void emitNode(Node *n) {
             error("Too many elements in array literal");
             return;
         }
-        vec_reverse(n->children);
-        emitChildren(n);
-        emitOp1(OP_ARRAY, (uint8_t)n->children->length);
+        Node *elNode = NULL; int elIdx = 0;
+        bool allConst = true;
+        vec_foreach(n->children, elNode, elIdx) {
+            if (!isConstExprNodeCanEmbed(elNode)) {
+                allConst = false;
+                break;
+            }
+        }
+        if (!allConst) {
+            vec_reverse(n->children);
+            emitChildren(n);
+            emitOp1(OP_ARRAY, (uint8_t)n->children->length);
+        } else {
+            elNode = NULL; elIdx = 0;
+            Value ary = newArrayConstant();
+            hideFromGC((Obj*)AS_OBJ(ary));
+            vec_foreach(n->children, elNode, elIdx) {
+                arrayPush(ary, valueFromConstNode(elNode));
+            }
+            uint8_t arySlot = makeConstant(ary, CONST_T_ARYLIT);
+            emitOp1(OP_DUPARRAY, arySlot);
+        }
         break;
     }
     case MAP_EXPR: {
@@ -1720,7 +1794,7 @@ static void emitNode(Node *n) {
                 if (i == 0) continue; // already emitted
                 int itarget = iseq->byteCount;
                 Token classTok = vec_first(catchStmt->children)->tok;
-                ObjString *className = hiddenString(tokStr(&classTok), strlen(tokStr(&classTok)));
+                ObjString *className = internedString(tokStr(&classTok), strlen(tokStr(&classTok)));
                 double catchTblIdx = (double)iseqAddCatchRow(
                     iseq, ifrom, ito,
                     itarget, OBJ_VAL(className)

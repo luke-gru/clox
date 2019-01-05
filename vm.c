@@ -2741,6 +2741,9 @@ vmLoop:
           uint8_t numEls = READ_BYTE();
           Value aryVal = newArray();
           ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
+          // TODO: this is inefficient, we should read the array as as constant
+          // in the bytecode and duplicate it. This way we can share the array
+          // until it gets modified as well.
           for (int i = 0; i < numEls; i++) {
               Value el = pop();
               writeValueArrayEnd(ary, el);
@@ -2748,11 +2751,20 @@ vmLoop:
           push(aryVal);
           DISPATCH_BOTTOM();
       }
+      CASE_OP(DUPARRAY): {
+          Value ary = READ_CONSTANT();
+          DBG_ASSERT(IS_AN_ARRAY(ary));
+          push(arrayDup(ary));
+          DISPATCH_BOTTOM();
+      }
       CASE_OP(MAP): {
           uint8_t numKeyVals = READ_BYTE();
           DBG_ASSERT(numKeyVals % 2 == 0);
           Value mapVal = newMap();
           Table *map = MAP_GETHIDDEN(mapVal);
+          // TODO: this is inefficient, we should read the map as as constant
+          // in the bytecode and duplicate it. This way we can share the map
+          // until it gets modified as well.
           for (int i = 0; i < numKeyVals; i+=2) {
               Value key = pop();
               Value val = pop();

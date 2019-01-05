@@ -26,7 +26,7 @@ static Value lxArrayInit(int argCount, Value *args) {
     for (int i = 1; i < argCount; i++) {
         writeValueArrayEnd(ary, args[i]);
     }
-    ASSERT(ary->count == argCount-1);
+    DBG_ASSERT(ary->count == argCount-1);
     return self;
 }
 

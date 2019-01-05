@@ -13,7 +13,7 @@ typedef enum eExprType {
     BINARY_EXPR = 1,
     LOGICAL_EXPR,
     GROUPING_EXPR,
-    LITERAL_EXPR,
+    LITERAL_EXPR, // numbers, strings
     ARRAY_EXPR, // []
     MAP_EXPR, // %{}
     INDEX_GET_EXPR,

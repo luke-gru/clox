@@ -4,7 +4,8 @@
 #include "common.h"
 #include "value.h"
 
-/* Value table, maps values to values */
+/* Value table, maps values to values. Doesn't preserve insertion order during
+ * iteration. */
 
 typedef struct Entry {
   Value key;
