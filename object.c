@@ -393,7 +393,7 @@ ObjInstance *newInstance(ObjClass *klass) {
     // instances when given constructor functions, this must return new
     // modules/classes when given Module() or Class() constructors
     if (LIKELY(vm.inited)) {
-        ASSERT(klass);
+        DBG_ASSERT(klass);
         if (IS_SUBCLASS(klass, lxAryClass)) {
             return (ObjInstance*)allocateArray(klass);
         } else if (IS_SUBCLASS(klass, lxStringClass)) {

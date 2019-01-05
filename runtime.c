@@ -650,7 +650,7 @@ Value lxErrInit(int argCount, Value *args) {
     Value msg;
     if (argCount == 2) {
         msg = args[1];
-        if (!IS_NIL(msg)) {
+        if (LIKELY(!IS_NIL(msg))) {
             CHECK_ARG_IS_A(msg, lxStringClass, 1);
         }
     } else {

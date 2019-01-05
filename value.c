@@ -382,8 +382,12 @@ bool valEqual(Value a, Value b) {
         default: {
             // internal string equality (ObjString)
             if (IS_STRING(a) && IS_STRING(b)) {
-                return strcmp(VAL_TO_STRING(a)->chars,
-                        VAL_TO_STRING(b)->chars) == 0;
+                ObjString *aStr = AS_STRING(a);
+                ObjString *bStr = AS_STRING(b);
+                if (aStr->hash && bStr->hash) {
+                    return aStr->hash == bStr->hash;
+                }
+                return strcmp(aStr->chars, bStr->chars) == 0;
             }
             if (IS_INSTANCE_LIKE(a)) {
                 return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b, NULL));

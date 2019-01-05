@@ -1,2 +1,5 @@
 *.o
 bin
+gmon.out
+profile.txt
+callgrind.out.*

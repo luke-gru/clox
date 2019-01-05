@@ -209,9 +209,12 @@ ObjString *tableFindString(Table *table, const char* chars, int length,
     for (;;) {
         Entry *entry = &table->entries[index];
 
-        if (IS_UNDEF(entry->key)) return NULL;
+        if (UNLIKELY(IS_UNDEF(entry->key))) return NULL;
         if (IS_STRING(entry->key)) {
             ObjString *stringKey = AS_STRING(entry->key);
+            if (stringKey->hash && stringKey->hash == hash) {
+                return stringKey;
+            }
             if (stringKey->length == length &&
                     memcmp(stringKey->chars, chars, length) == 0) {
                 // We found it.

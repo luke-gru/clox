@@ -583,8 +583,10 @@ Value peek(unsigned n) {
 }
 
 static inline void setThis(unsigned n) {
-    VMExecContext *ctx = EC;
-    ASSERT(LIKELY((ctx->stackTop-n) > ctx->stack));
+    register VMExecContext *ctx = EC;
+    if (UNLIKELY((ctx->stackTop-n) <= ctx->stack)) {
+        ASSERT(0);
+    }
     vm.curThread->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
 }
 
@@ -787,11 +789,18 @@ void showUncaughtError(Value err) {
     resetStack();
 }
 
+static inline bool isBlockControlFlow(Value err) {
+    return IS_A(err, lxBlockIterErrClass);
+}
+
 // every new error value, when thrown, gets its backtrace set first
 void setBacktrace(Value err) {
+    if (isBlockControlFlow(err)) {
+        return;
+    }
     VM_DEBUG("Setting backtrace");
-    LxThread *th = THREAD();
-    ASSERT(IS_AN_ERROR(err));
+    LxThread *th = vm.curThread;
+    DBG_ASSERT(IS_AN_ERROR(err));
     Value ret = newArray();
     setProp(err, internedString("backtrace", 9), ret);
     int numECs = th->v_ecs.length;
@@ -1059,11 +1068,10 @@ void popFrame(void) {
     VM_DEBUG("stack adjust: %d", stackAdjust);
     unwindErrInfo(frame);
     if (frame->isCCall) {
-        if (th->inCCall > 0) {
-            th->inCCall--;
-            if (th->inCCall == 0) {
-                vec_clear(&vm.curThread->stackObjects);
-            }
+        DBG_ASSERT(th->inCCall > 0);
+        th->inCCall--;
+        if (th->inCCall == 0) {
+            vec_clear(&vm.curThread->stackObjects);
         }
     }
     // FIXME: incorrect logic here, because frame->block is an ObjFunction,
@@ -1072,7 +1080,6 @@ void popFrame(void) {
     if (frame->block == th->outermostBlock) {
         th->outermostBlock = NULL;
     }
-    memset(frame, 0, sizeof(*frame));
     EC->frameCount--;
     frame = getFrameOrNull(); // new frame
     if (frame) {
@@ -1096,12 +1103,13 @@ void popFrame(void) {
 
 CallFrame *pushFrame(void) {
     DBG_ASSERT(vm.inited);
-    if (EC->frameCount >= FRAMES_MAX) {
+    register VMExecContext *ec = EC;
+    if (UNLIKELY(ec->frameCount >= FRAMES_MAX)) {
         throwErrorFmt(lxErrClass, "Stackoverflow, max number of call frames (%d)", FRAMES_MAX);
         UNREACHABLE_RETURN(NULL);
     }
     CallFrame *prev = getFrameOrNull();
-    CallFrame *frame = &EC->frames[EC->frameCount++];
+    CallFrame *frame = &ec->frames[ec->frameCount++];
     memset(frame, 0, sizeof(*frame));
     frame->callLine = curLine;
     frame->file = EC->filename;
@@ -1117,9 +1125,9 @@ const char *callFrameName(CallFrame *frame) {
 
 static void pushNativeFrame(ObjNative *native) {
     DBG_ASSERT(vm.inited);
-    ASSERT(native);
+    DBG_ASSERT(native);
     VM_DEBUG("Pushing native callframe for %s", native->name->chars);
-    if (EC->frameCount == FRAMES_MAX) {
+    if (UNLIKELY(EC->frameCount == FRAMES_MAX)) {
         errorPrintScriptBacktrace("Stack overflow.");
         return;
     }
@@ -1658,7 +1666,7 @@ NORETURN void throwError(Value self) {
     VM_DEBUG("throwing error");
     ASSERT(vm.inited);
     ASSERT(IS_INSTANCE(self));
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     th->lastErrorThrown = self;
     if (IS_NIL(getProp(self, internedString("backtrace", 9)))) {
         setBacktrace(self);
@@ -1966,7 +1974,7 @@ vmLoop:
       if (byteCount > 0) {
           lastLine = ch->lines[byteCount-1];
       }
-      if (UNLIKELY(shouldEnterDebugger(&vm.debugger, "", curLine, lastLine, ndepth, nwidth))) {
+      if (UNLIKELY(curLine != lastLine && shouldEnterDebugger(&vm.debugger, "", curLine, lastLine, ndepth, nwidth))) {
           enterDebugger(&vm.debugger, "", curLine, ndepth, nwidth);
       }
 
@@ -2948,18 +2956,20 @@ void unsetPrintBuf(void) {
 }
 
 void unwindJumpRecover(ErrTagInfo *info) {
-    ASSERT(info);
+    DBG_ASSERT(info);
     DBG_ASSERT(getFrame());
     LxThread *th = THREAD();
-    while (getFrame() != info->frame) {
+    CallFrame *f = getFrameI();
+    while (f != info->frame) {
         VM_DEBUG("popping callframe from unwind");
+        f = f->prev;
         popFrame();
     }
     while (th->errInfo != info) {
         VM_DEBUG("freeing Errinfo");
-        ASSERT(th->errInfo);
+        DBG_ASSERT(th->errInfo);
         ErrTagInfo *prev = th->errInfo->prev;
-        ASSERT(prev);
+        DBG_ASSERT(prev);
         FREE(ErrTagInfo, th->errInfo);
         th->errInfo = prev;
     }

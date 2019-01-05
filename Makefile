@@ -12,6 +12,7 @@ SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.
 TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c io.c file.c thread.c block.c rand.c debugger.c
 TEST_FILES = test/test_object.c test/test_nodes.c test/test_compiler.c test/test_vm.c test/test_gc.c test/test_examples.c test/test_regex.c
 DEBUG_FLAGS=-O2 -g -rdynamic
+GPROF_FLAGS=-O3 -pg -DNDEBUG
 TEST_FLAGS=-O2 -g -rdynamic -Itest/include -I. -DLOX_TEST
 RELEASE_FLAGS=-O3 -DNDEBUG
 BUILD_DIR=bin
@@ -22,6 +23,11 @@ BUILD_FILE_DEBUG=clox
 .PHONY: debug
 debug: build
 	${CC} ${CFLAGS} $(SRCS) ${DEBUG_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_DEBUG}
+
+# default
+.PHONY: profile
+gprof: build
+	${CC} ${CFLAGS} $(SRCS) ${GPROF_FLAGS} -o ${BUILD_DIR}/gprof
 
 .PHONY: release
 release: build
