@@ -327,8 +327,10 @@ ObjString *copyString(char *chars, int length); // copies provided memory. Objec
 ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
 #define INTERN(chars) (internedString(chars, strlen(chars)))
 ObjString *internedString(char *chars, int length);
-ObjString *dupString(ObjString *string);
 bool objStringEquals(ObjString *a, ObjString *b);
+static inline ObjString *dupString(ObjString *string) {
+    return copyString(string->chars, string->length);
+}
 
 // strings as values
 void clearString(Value self);
@@ -337,7 +339,7 @@ void stringInsertAt(Value self, Value insert, int at);
 Value stringSubstr(Value self, int startIdx, int len);
 Value stringIndexGet(Value self, int index);
 Value stringIndexSet(Value self, int index, char c);
-bool  stringEquals(Value a, Value b);
+bool stringEquals(Value a, Value b);
 
 // NOTE: don't call pushCString on a string value that's a key to a map! The
 // hash value changes and the map won't be able to index it anymore (see
@@ -369,16 +371,16 @@ static inline void *internalGetData(ObjInternal *obj) {
 void setObjectFinalizer(ObjInstance *obj, Obj *callable);
 
 // arrays
-Value       newArray(void);
-void        arrayPush(Value aryVal, Value el);
-Value       arrayPop(Value aryVal);
-void        arrayPushFront(Value aryVal, Value el);
-Value       arrayPopFront(Value aryVal);
-int         arrayDelete(Value aryVal, Value el);
-void        arrayClear(Value aryVal);
-bool        arrayEquals(Value self, Value other);
-Value       arrayDup(Value other);
-Value       newArrayConstant(void);
+Value  newArray(void);
+void   arrayPush(Value aryVal, Value el);
+Value  arrayPop(Value aryVal);
+void   arrayPushFront(Value aryVal, Value el);
+Value  arrayPopFront(Value aryVal);
+int    arrayDelete(Value aryVal, Value el);
+void   arrayClear(Value aryVal);
+bool   arrayEquals(Value self, Value other);
+Value  arrayDup(Value other);
+Value  newArrayConstant(void);
 /**
  * NOTE: assumes idx is appropriate and within given range. See
  * ARRAY_SIZE(value)
@@ -394,21 +396,48 @@ static inline int arraySize(Value aryVal) {
 }
 
 // errors
-Value       newError(ObjClass *errClass, Value msg);
+Value newError(ObjClass *errClass, Value msg);
 
 // maps
-Value       newMap(void);
-bool        mapGet(Value map, Value key, Value *val);
-void        mapSet(Value map, Value key, Value val);
-Value       mapSize(Value map);
-void        mapClear(Value map);
-bool        mapEquals(Value map, Value other);
-Table      *mapGetHidden(Value map);
+Value newMap(void);
+bool mapEquals(Value map, Value other);
+static inline Table *mapGetHidden(Value mapVal) {
+    ObjInstance *inst = AS_INSTANCE(mapVal);
+    return (Table*)inst->internal->data;
+}
+static inline bool mapGet(Value mapVal, Value key, Value *ret) {
+    Table *map = MAP_GETHIDDEN(mapVal);
+    if (tableGet(map, key, ret)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+// NOTE: doesn't check frozenness or type of `mapVal`
+static inline void mapSet(Value mapVal, Value key, Value val) {
+    Table *map = MAP_GETHIDDEN(mapVal);
+    tableSet(map, key, val);
+}
+
+// number of key-value pairs
+static inline Value mapSize(Value mapVal) {
+    Table *map = MAP_GETHIDDEN(mapVal);
+    return NUMBER_VAL(map->count);
+}
+
+// NOTE: doesn't check frozenness or type of `mapVal`
+static inline void mapClear(Value mapVal) {
+    Table *map = MAP_GETHIDDEN(mapVal);
+    freeTable(map);
+}
 
 // threads
 Value newThread(void);
 typedef struct LxThread LxThread; // fwd decl
-LxThread *threadGetHidden(Value thread);
+static inline LxThread *threadGetHidden(Value thread) {
+    ObjInternal *i = AS_INSTANCE(thread)->internal;
+    return (LxThread*)i->data;
+}
 
 // blocks
 Value newBlock(ObjClosure *closure);
@@ -462,11 +491,11 @@ static inline bool isCallable(Value val) {
         IS_BOUND_METHOD(val) || IS_CLOSURE(val);
 }
 
-bool is_value_class_p(Value);
-bool is_value_module_p(Value);
-bool is_value_instance_p(Value);
+bool is_value_class_p(Value val);
+bool is_value_module_p(Value val);
+bool is_value_instance_p(Value val);
 bool is_value_closure_p(Value val);
-bool is_value_instance_of_p(Value, ObjClass*);
-bool is_value_a_p(Value, ObjClass*);
+bool is_value_instance_of_p(Value val, ObjClass *klass);
+bool is_value_a_p(Value val, ObjClass *klass);
 
 #endif

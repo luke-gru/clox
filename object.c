@@ -113,7 +113,6 @@ ObjString *hiddenString(char *chars, int len) {
     return string;
 }
 
-
 ObjString *internedString(char *chars, int length) {
     DBG_ASSERT(strlen(chars) >= length);
     uint32_t hash = hashString(chars, length);
@@ -126,11 +125,6 @@ ObjString *internedString(char *chars, int length) {
         GCPromote((Obj*)interned, GC_GEN_MAX);
     }
     return interned;
-}
-
-ObjString *dupString(ObjString *string) {
-    ASSERT(string);
-    return copyString(string->chars, string->length);
 }
 
 void pushString(Value self, Value pushed) {
@@ -816,33 +810,6 @@ Value newMap(void) {
     return pop();
 }
 
-bool mapGet(Value mapVal, Value key, Value *ret) {
-    Table *map = MAP_GETHIDDEN(mapVal);
-    if (tableGet(map, key, ret)) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-// NOTE: doesn't check frozenness or type of `mapVal`
-void mapSet(Value mapVal, Value key, Value val) {
-    Table *map = MAP_GETHIDDEN(mapVal);
-    tableSet(map, key, val);
-}
-
-// number of key-value pairs
-Value mapSize(Value mapVal) {
-    Table *map = MAP_GETHIDDEN(mapVal);
-    return NUMBER_VAL(map->count);
-}
-
-// NOTE: doesn't check frozenness or type of `mapVal`
-void mapClear(Value mapVal) {
-    Table *map = MAP_GETHIDDEN(mapVal);
-    freeTable(map);
-}
-
 bool mapEquals(Value self, Value other) {
     if (!IS_A_MAP(other)) return false;
     Table *map1 = MAP_GETHIDDEN(self);
@@ -861,14 +828,8 @@ bool mapEquals(Value self, Value other) {
     return true;
 }
 
-Table *mapGetHidden(Value mapVal) {
-    ASSERT(IS_A_MAP(mapVal));
-    ObjInstance *inst = AS_INSTANCE(mapVal);
-    return (Table*)inst->internal->data;
-}
-
 Value getProp(Value self, ObjString *propName) {
-    ASSERT(IS_INSTANCE_LIKE(self));
+    DBG_ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
     Value ret;
     if (tableGet(inst->fields, OBJ_VAL(propName), &ret)) {
@@ -880,7 +841,7 @@ Value getProp(Value self, ObjString *propName) {
 
 // NOTE: doesn't check frozenness of `self`
 void setProp(Value self, ObjString *propName, Value val) {
-    ASSERT(IS_INSTANCE_LIKE(self));
+    DBG_ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
     tableSet(inst->fields, OBJ_VAL(propName), val);
 }
@@ -894,22 +855,22 @@ bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
 }
 
 Value newError(ObjClass *errClass, Value msg) {
-    ASSERT(IS_SUBCLASS(errClass, lxErrClass));
+    DBG_ASSERT(IS_SUBCLASS(errClass, lxErrClass));
     push(OBJ_VAL(errClass));
     push(msg); // argument
     callCallable(OBJ_VAL(errClass), 1, false, NULL);
     Value err = pop();
-    ASSERT(IS_AN_ERROR(err));
+    DBG_ASSERT(IS_AN_ERROR(err));
     return err;
 }
 
 bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
-    ASSERT(subklass);
-    ASSERT(superklass);
+    DBG_ASSERT(subklass);
+    DBG_ASSERT(superklass);
     if (subklass == superklass) { return true; }
     while (subklass != NULL && subklass != superklass) {
         ClassInfo *cinfo = CLASSINFO(subklass);
-        ASSERT(cinfo);
+        DBG_ASSERT(cinfo);
         subklass = cinfo->superclass;
     }
     return subklass != NULL;
@@ -918,7 +879,7 @@ bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
 static const char *anonClassName = "(anon)";
 
 const char *instanceClassName(ObjInstance *obj) {
-    ASSERT(obj);
+    DBG_ASSERT(obj);
     ObjClass *klass = obj->klass;
     if (!klass || !CLASSINFO(klass)->name) return anonClassName;
     return CLASSINFO(klass)->name->chars;
@@ -1002,11 +963,6 @@ Value newThread(void) {
         callVMMethod(instance, OBJ_VAL(nativeThreadInit), 0, NULL, NULL);
         return pop();
     }
-}
-
-LxThread *threadGetHidden(Value thread) {
-    ObjInternal *i = AS_INSTANCE(thread)->internal;
-    return (LxThread*)i->data;
 }
 
 Value newBlock(ObjClosure *closure) {
