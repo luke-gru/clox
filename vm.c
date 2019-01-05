@@ -2146,6 +2146,8 @@ vmLoop:
               printf("\n");
               fflush(stdout);
           }
+#ifndef NDEBUG
+          // used during testing
           if (vm.printBuf) {
               ObjString *out = valueToString(val, hiddenString);
               ASSERT(out);
@@ -2153,6 +2155,7 @@ vmLoop:
               pushCString(vm.printBuf, "\n", 1);
               unhideFromGC((Obj*)out);
           }
+#endif
           DISPATCH_BOTTOM();
       }
       CASE_OP(DEFINE_GLOBAL): {
@@ -2297,8 +2300,8 @@ vmLoop:
           Value cond = pop();
           uint8_t ipOffset = READ_BYTE();
           if (!isTruthy(cond)) {
-              ASSERT(ipOffset > 0);
-              getFrame()->ip += (ipOffset-1);
+              DBG_ASSERT(ipOffset > 0);
+              frame->ip += (ipOffset-1);
           }
           DISPATCH_BOTTOM();
       }
@@ -2306,8 +2309,8 @@ vmLoop:
           Value cond = pop();
           uint8_t ipOffset = READ_BYTE();
           if (isTruthy(cond)) {
-              ASSERT(ipOffset > 0);
-              getFrame()->ip += (ipOffset-1);
+              DBG_ASSERT(ipOffset > 0);
+              frame->ip += (ipOffset-1);
           }
           DISPATCH_BOTTOM();
       }
@@ -2315,8 +2318,8 @@ vmLoop:
           Value cond = peek(0);
           uint8_t ipOffset = READ_BYTE();
           if (!isTruthy(cond)) {
-              ASSERT(ipOffset > 0);
-              getFrame()->ip += (ipOffset-1);
+              DBG_ASSERT(ipOffset > 0);
+              frame->ip += (ipOffset-1);
           }
           DISPATCH_BOTTOM();
       }
@@ -2324,15 +2327,15 @@ vmLoop:
           Value cond = peek(0);
           uint8_t ipOffset = READ_BYTE();
           if (isTruthy(cond)) {
-              ASSERT(ipOffset > 0);
-              getFrame()->ip += (ipOffset-1);
+              DBG_ASSERT(ipOffset > 0);
+              frame->ip += (ipOffset-1);
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP): {
           uint8_t ipOffset = READ_BYTE();
           ASSERT(ipOffset > 0);
-          getFrame()->ip += (ipOffset-1);
+          frame->ip += (ipOffset-1);
           DISPATCH_BOTTOM();
       }
       CASE_OP(LOOP): {
@@ -2340,7 +2343,7 @@ vmLoop:
           ASSERT(ipOffset > 0);
           // add 1 for the instruction we just read, and 1 to go 1 before the
           // instruction we want to execute next.
-          getFrame()->ip -= (ipOffset+2);
+          frame->ip -= (ipOffset+2);
           DISPATCH_BOTTOM();
       }
       CASE_OP(BLOCK_BREAK): {
@@ -2544,7 +2547,7 @@ vmLoop:
               if (IS_CLASS(existingClass)) { // re-open class
                   push(existingClass);
                   DISPATCH_BOTTOM();
-              } else if (IS_MODULE(existingClass)) {
+              } else if (UNLIKELY(IS_MODULE(existingClass))) {
                   const char *classStr = AS_CSTRING(className);
                   throwErrorFmt(lxTypeErrClass, "Tried to define class %s, but it's a module",
                           classStr);
@@ -2564,7 +2567,7 @@ vmLoop:
               if (IS_MODULE(existingMod)) {
                 push(existingMod); // re-open the module
                 DISPATCH_BOTTOM();
-              } else if (IS_CLASS(existingMod)) {
+              } else if (UNLIKELY(IS_CLASS(existingMod))) {
                   const char *modStr = AS_CSTRING(modName);
                   throwErrorFmt(lxTypeErrClass, "Tried to define module %s, but it's a class",
                           modStr);
@@ -2587,11 +2590,11 @@ vmLoop:
           // FIXME: not perfect, if class is declared non-globally this won't detect it.
           Value existingClass;
           if (tableGet(&vm.globals, className, &existingClass)) {
-              if (IS_CLASS(existingClass)) {
+              if (UNLIKELY(IS_CLASS(existingClass))) {
                   throwErrorFmt(lxNameErrClass, "Class %s already exists (if "
                           "re-opening class, no superclass should be given)",
                           AS_CSTRING(className));
-              } else if (IS_MODULE(existingClass)) {
+              } else if (UNLIKELY(IS_MODULE(existingClass))) {
                   throwErrorFmt(lxTypeErrClass, "Tried to define class %s, but it's a module", AS_CSTRING(className));
               }
           }
@@ -2647,7 +2650,7 @@ vmLoop:
           ObjString *propStr = AS_STRING(propName);
           ASSERT(propStr && propStr->chars);
           Value instance = peek(0);
-          if (!IS_INSTANCE_LIKE(instance)) {
+          if (UNLIKELY(!IS_INSTANCE_LIKE(instance))) {
               pop();
               throwErrorFmt(lxTypeErrClass, "Tried to access property '%s' of non-instance (type: %s)", propStr->chars, typeOfVal(instance));
           }
@@ -2660,7 +2663,7 @@ vmLoop:
           ObjString *propStr = AS_STRING(propName);
           Value rval = peek(0);
           Value instance = peek(1);
-          if (!IS_INSTANCE_LIKE(instance)) {
+          if (UNLIKELY(!IS_INSTANCE_LIKE(instance))) {
               pop(); pop();
               throwErrorFmt(lxTypeErrClass, "Tried to set property '%s' of non-instance", propStr->chars);
           }
@@ -2672,7 +2675,7 @@ vmLoop:
       }
       CASE_OP(INDEX_GET): {
           Value lval = peek(1); // ex: Array/String/instance object
-          if (!IS_INSTANCE_LIKE(lval)) {
+          if (UNLIKELY(!IS_INSTANCE_LIKE(lval))) {
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
@@ -2682,7 +2685,7 @@ vmLoop:
       }
       CASE_OP(INDEX_SET): {
           Value lval = peek(2);
-          if (!IS_INSTANCE_LIKE(lval)) {
+          if (UNLIKELY(!IS_INSTANCE_LIKE(lval))) {
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexSet ('[]=') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
@@ -2696,7 +2699,7 @@ vmLoop:
               Value msg = throwable;
               throwable = newError(lxErrClass, msg);
           }
-          if (!isThrowable(throwable)) {
+          if (UNLIKELY(!isThrowable(throwable))) {
               throwErrorFmt(lxTypeErrClass, "Tried to throw unthrowable value, must be a subclass of Error. "
                   "Type found: %s", typeOfVal(throwable)
               );
@@ -2709,7 +2712,7 @@ vmLoop:
           ASSERT(IS_NUMBER(catchTblIdx));
           double idx = AS_NUMBER(catchTblIdx);
           CatchTable *tblRow = getCatchTableRow((int)idx);
-          if (!isThrowable(tblRow->lastThrownValue)) { // bug
+          if (UNLIKELY(!isThrowable(tblRow->lastThrownValue))) { // bug
               fprintf(stderr, "Non-throwable found (BUG): %s\n", typeOfVal(tblRow->lastThrownValue));
               ASSERT(0);
           }
@@ -2722,7 +2725,6 @@ vmLoop:
           uint8_t isStatic = READ_BYTE();
           push(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
-          buf->isInterned = true;
           if (UNLIKELY(isStatic)) {
               buf->isStatic = true;
               push(OBJ_VAL(buf));
@@ -2741,9 +2743,6 @@ vmLoop:
           uint8_t numEls = READ_BYTE();
           Value aryVal = newArray();
           ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
-          // TODO: this is inefficient, we should read the array as as constant
-          // in the bytecode and duplicate it. This way we can share the array
-          // until it gets modified as well.
           for (int i = 0; i < numEls; i++) {
               Value el = pop();
               writeValueArrayEnd(ary, el);
@@ -2762,9 +2761,6 @@ vmLoop:
           DBG_ASSERT(numKeyVals % 2 == 0);
           Value mapVal = newMap();
           Table *map = MAP_GETHIDDEN(mapVal);
-          // TODO: this is inefficient, we should read the map as as constant
-          // in the bytecode and duplicate it. This way we can share the map
-          // until it gets modified as well.
           for (int i = 0; i < numKeyVals; i+=2) {
               Value key = pop();
               Value val = pop();
