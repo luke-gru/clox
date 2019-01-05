@@ -558,29 +558,29 @@ Value lxClassGetSuperclass(int argCount, Value *args) {
     }
 }
 
+#define FLAG_ITER_ARRAY 1
+#define FLAG_ITER_MAP 2
+
 typedef struct Iterator {
     int index; // # of times iterator was called with 'next' - 1
     int lastRealIndex; // for iterating over maps, not yet used
     ObjInstance *instance; // the array/map/instance we're iterating over
+    int flags;
 } Iterator;
 
 static void markInternalIter(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
-    ASSERT(internal);
+    DBG_ASSERT(internal);
     ObjInstance *instance = ((Iterator*)internal->data)->instance;
-    ASSERT(instance);
+    DBG_ASSERT(instance);
     grayObject((Obj*)instance);
 }
 
 static void freeInternalIter(Obj *internalObj) {
     ASSERT(internalObj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)internalObj;
-    ASSERT(internal);
-    ObjInstance *instance = ((Iterator*)internal->data)->instance;
-    ASSERT(instance);
-    unhideFromGC((Obj*)instance);
-    freeObject((Obj*)instance); // release the actual memory
+    DBG_ASSERT(internal);
     FREE(Iterator, internal->data); // free the Iterator struct
 }
 
@@ -594,6 +594,14 @@ Value lxIteratorInit(int argCount, Value *args) {
     iter->index = -1;
     iter->lastRealIndex = -1;
     iter->instance = AS_INSTANCE(iterable);
+    iter->flags = 0;
+    if (IS_AN_ARRAY(iterable)) {
+        iter->flags |= FLAG_ITER_ARRAY;
+    } else if (IS_A_MAP(iterable)) {
+        iter->flags |= FLAG_ITER_MAP;
+    } else {
+        throwErrorFmt(lxTypeErrClass, "Expected Array/Map");
+    }
     ObjInternal *internalIter = newInternalObject(false,
         iter, sizeof(Iterator), markInternalIter, freeInternalIter
     );
@@ -607,10 +615,10 @@ Value lxIteratorNext(int argCount, Value *args) {
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = selfObj->internal;
     Iterator *iter = internalGetData(internalObj);
-    ASSERT(iter);
+    DBG_ASSERT(iter);
     ObjInstance *iterableObj = iter->instance;
     Value iterable = OBJ_VAL(iterableObj);
-    if (IS_AN_ARRAY(iterable)) {
+    if (iter->flags & FLAG_ITER_ARRAY) {
         int nextIdx = ++(iter->index);
         if (nextIdx >= ARRAY_SIZE(iterable)) {
             return NIL_VAL;
@@ -619,7 +627,7 @@ Value lxIteratorNext(int argCount, Value *args) {
             ASSERT(!IS_UNDEF(ret));
             return ret;
         }
-    } else if (IS_A_MAP(iterable)) {
+    } else if (iter->flags & FLAG_ITER_MAP) {
         Table *map = MAP_GETHIDDEN(iterable);
         int nextIdx = ++(iter->index);
         if (nextIdx >= map->count) {
@@ -637,7 +645,7 @@ Value lxIteratorNext(int argCount, Value *args) {
             }
         }
     } else {
-        UNREACHABLE("bug"); // TODO: support other iterable types
+        UNREACHABLE("bug, typeof val: %s", typeOfVal(iterable));
     }
     UNREACHABLE(__func__);
 }

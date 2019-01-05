@@ -463,6 +463,7 @@ ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCM
 
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     ObjClass *klass = obj->klass;
+    // interned strings that are created before lxStringClass exists have no class
     if (!klass && ((Obj*) obj)->type == OBJ_T_STRING) {
         klass = lxStringClass;
         obj->klass = klass;
@@ -619,20 +620,6 @@ const char *typeOfObj(Obj *obj) {
         UNREACHABLE("Unknown object type: (%d)\n", obj->type);
     }
     }
-}
-
-/**
- * NOTE: assumes idx is appropriate and within given range. See
- * ARRAY_SIZE(value)
- */
-Value arrayGet(Value aryVal, int idx) {
-    ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
-    return ary->values[idx];
-}
-
-int arraySize(Value aryVal) {
-    ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
-    return ary->count;
 }
 
 Value newArray(void) {

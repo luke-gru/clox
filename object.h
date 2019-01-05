@@ -370,8 +370,6 @@ void setObjectFinalizer(ObjInstance *obj, Obj *callable);
 
 // arrays
 Value       newArray(void);
-Value       arrayGet(Value aryVal, int idx);
-int         arraySize(Value aryVal);
 void        arrayPush(Value aryVal, Value el);
 Value       arrayPop(Value aryVal);
 void        arrayPushFront(Value aryVal, Value el);
@@ -381,6 +379,19 @@ void        arrayClear(Value aryVal);
 bool        arrayEquals(Value self, Value other);
 Value       arrayDup(Value other);
 Value       newArrayConstant(void);
+/**
+ * NOTE: assumes idx is appropriate and within given range. See
+ * ARRAY_SIZE(value)
+ */
+static inline Value arrayGet(Value aryVal, int idx) {
+    ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
+    return ary->values[idx];
+}
+
+static inline int arraySize(Value aryVal) {
+    ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
+    return ary->count;
+}
 
 // errors
 Value       newError(ObjClass *errClass, Value msg);

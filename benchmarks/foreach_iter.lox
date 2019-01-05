@@ -1,0 +1,5 @@
+var a = [1,2,3,4,5];
+for (var i = 0; i < 1000000; i+=1) {
+  foreach (el in a) {
+  }
+}
