@@ -325,10 +325,30 @@ const char *typeOfVal(Value val) {
     UNREACHABLE("Unknown value type! Pointer: %p\n", AS_OBJ(val));
 }
 
+// Taken from wren lang
+static inline uint32_t hashBits(DoubleBits bits) {
+    uint32_t result = bits.bits32[0] ^ bits.bits32[1];
+
+    // Slosh the bits around some. Due to the way doubles are represented, small
+    // integers will have most of low bits of the double respresentation set to
+    // zero. For example, the above result for 5 is 43d00600.
+    //
+    // We map that to an entry index by masking off the high bits which means
+    // most small integers would all end up in entry zero. That's bad. To avoid
+    // that, push a bunch of the high bits lower down so they affect the lower
+    // bits too.
+    //
+    // The specific mixing function here was pulled from Java's HashMap
+    // implementation.
+    result ^= (result >> 20) ^ (result >> 12);
+    result ^= (result >> 7) ^ (result >> 4);
+    return result;
+}
+
 uint32_t valHash(Value val) {
     if (IS_OBJ(val)) {
         if (IS_STRING(val)) {
-            ObjString *string = VAL_TO_STRING(val);
+            ObjString *string = AS_STRING(val);
             if (LIKELY(string->hash > 0)) {
                 return string->hash;
             } else {
@@ -348,22 +368,43 @@ uint32_t valHash(Value val) {
                 }
                 return (uint32_t)AS_NUMBER(hashKey);
             }
+// TODO: use the hashBits function, and change Map to use an ordered table.
+// Right now the table in table.c does not preserve insertion order, but it
+// turns out it works when we hash the pointer repr of the object (at least,
+// depending on the malloc() implementation and the OS).
+#if 0
+            // Hash the raw bits of the unboxed value.
+            DoubleBits bits;
+            bits.bits64 = val;
+            return hashBits(bits);
+#else
+            // XXX: hack
             char buf[20] = {'\0'};
             snprintf(buf, 20, "%p", AS_OBJ(val));
-            return hashString(buf, strlen(buf)); // hash the pointer string
+            return hashString(buf, strlen(buf)); // hash the pointer string, easiest way but brittle, because an object is not equal to its string pointer repr...
+#endif
         }
-    } else if (IS_NUMBER(val)) {
-        return ((uint32_t)AS_NUMBER(val))+3;
-    } else if (IS_BOOL(val)) { // TODO: return pointer address string hash of singletons
-        if (AS_BOOL(val)) {
-            return 1;
-        } else {
-            return 0;
-        }
-    } else if (IS_NIL(val)) { // TODO: return pointer address string hash of singleton
-        return 2;
     } else {
-        ASSERT(0);
+#if 0
+        // Hash the raw bits of the unboxed value.
+        DoubleBits bits;
+        bits.bits64 = val;
+        return hashBits(bits);
+#else
+        if (IS_NUMBER(val)) {
+            return ((uint32_t)AS_NUMBER(val))+3;
+        } else if (IS_BOOL(val)) {
+            if (AS_BOOL(val)) {
+                return 1;
+            } else {
+                return 0;
+            }
+        } else if (IS_NIL(val)) {
+            return 2;
+        } else {
+            ASSERT(0);
+        }
+#endif
     }
 }
 
