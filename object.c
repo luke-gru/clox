@@ -37,8 +37,16 @@ static Obj *allocateObject(size_t size, ObjType type) {
  * Allocate a new lox string object with given characters and length
  * NOTE: length here is strlen(chars).
  */
-static ObjString *allocateString(char *chars, int length) {
+static ObjString *allocateString(char *chars, int length, ObjClass *klass) {
     ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
+    // NOTE: lxStringClass might be null if VM not yet initialized. This is okay, as
+    // these strings are only interned strings.
+    string->klass = klass;
+    string->singletonKlass = NULL;
+    string->finalizerFunc = NULL;
+    void *tablesMem = (void*)ALLOCATE(Table, 1);
+    string->fields = (Table*)tablesMem;
+    initTable(string->fields);
     string->length = length;
     string->capacity = length;
     string->chars = chars;
@@ -55,13 +63,10 @@ void objFreeze(Obj *obj) {
 
 void objUnfreeze(Obj *obj) {
     ASSERT(obj);
-    if (obj->type == OBJ_T_INSTANCE) {
-        ObjInstance *instance = (ObjInstance*)obj;
-        if (instance->klass == lxStringClass) {
-            ObjString *buf = STRING_GETHIDDEN(OBJ_VAL(obj));
-            if (buf->isStatic) {
-                throwErrorFmt(lxErrClass, "Tried to unfreeze static String");
-            }
+    if (obj->type == OBJ_T_STRING) {
+        ObjString *buf = (ObjString*)obj;
+        if (buf->isStatic) {
+            throwErrorFmt(lxErrClass, "Tried to unfreeze static String");
         }
     }
     obj->isFrozen = false;
@@ -85,7 +90,7 @@ uint32_t hashString(char *key, int length) {
 // XXX: Do not pass a static string here, it'll break when GC tries to free it.
 ObjString *takeString(char *chars, int length) {
     DBG_ASSERT(strlen(chars) == length);
-    return allocateString(chars, length);
+    return allocateString(chars, length, lxStringClass);
 }
 
 // use copy of `*chars` as the underlying storage for the new string object
@@ -97,7 +102,7 @@ ObjString *copyString(char *chars, int length) {
     memcpy(heapChars, chars, length);
     heapChars[length] = '\0';
 
-    return allocateString(heapChars, length);
+    return allocateString(heapChars, length, lxStringClass);
 }
 
 ObjString *hiddenString(char *chars, int len) {
@@ -124,26 +129,16 @@ ObjString *internedString(char *chars, int length) {
 
 ObjString *dupString(ObjString *string) {
     ASSERT(string);
-    ObjString *dup = copyString(string->chars, string->length);
-    dup->hash = string->hash;
-    return dup;
+    return copyString(string->chars, string->length);
 }
 
 void pushString(Value self, Value pushed) {
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
-    ObjString *lhsBuf = STRING_GETHIDDEN(self);
-    ObjString *rhsBuf = STRING_GETHIDDEN(pushed);
+    ObjString *lhsBuf = AS_STRING(self);
+    ObjString *rhsBuf = AS_STRING(pushed);
     pushObjString(lhsBuf, rhsBuf);
-}
-
-void pushObjString(ObjString *a, ObjString *b) {
-    pushCString(a, b->chars, b->length);
-}
-
-void insertObjString(ObjString *a, ObjString *b, int at) {
-    insertCString(a, b->chars, b->length, at);
 }
 
 bool objStringEquals(ObjString *a, ObjString *b) {
@@ -161,7 +156,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     ASSERT(!((Obj*)string)->isFrozen);
 
-    if (lenToAdd == 0) return;
+    if (UNLIKELY(lenToAdd == 0)) return;
 
     size_t newLen = string->length + lenToAdd;
     if (newLen > string->capacity) {
@@ -248,7 +243,7 @@ void pushCStringVFmt(ObjString *string, const char *format, va_list ap) {
     string->hash = 0;
 }
 
-void clearObjString(ObjString *string) {
+static inline void clearObjString(ObjString *string) {
     ASSERT(!((Obj*)string)->isFrozen);
     string->chars = GROW_ARRAY(string->chars, char, string->capacity+1, 1);
     string->chars[0] = '\0';
@@ -343,11 +338,9 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     klass->singletonKlass = NULL;
     klass->finalizerFunc = NULL;
     klass->classInfo = newClassInfo(name);
-    void *tablesMem = (void*)ALLOCATE(Table, 2);
+    void *tablesMem = (void*)ALLOCATE(Table, 1);
     klass->fields = (Table*)tablesMem;
-    klass->hiddenFields = tablesMem + sizeof(Table);
     initTable(klass->fields);
-    initTable(klass->hiddenFields);
     klass->classInfo->superclass = superclass;
     // during initial class hierarchy setup this is NULL
     if (nativeClassInit && isClassHierarchyCreated) {
@@ -365,11 +358,9 @@ ObjModule *newModule(ObjString *name) {
     mod->klass = lxModuleClass;
     mod->singletonKlass = NULL;
     mod->finalizerFunc = NULL;
-    void *tablesMem = ALLOCATE(Table, 2);
+    void *tablesMem = ALLOCATE(Table, 1);
     mod->fields = (Table*)tablesMem;
-    mod->hiddenFields = tablesMem + sizeof(Table);
     initTable(mod->fields);
-    initTable(mod->hiddenFields);
     mod->classInfo = newClassInfo(name);
     // during initial class hierarchy setup this is NULL
     if (nativeModuleInit && isClassHierarchyCreated) {
@@ -379,11 +370,11 @@ ObjModule *newModule(ObjString *name) {
     return mod;
 }
 
-ObjArray *allocateArray(void) {
+ObjArray *allocateArray(ObjClass *klass) {
     ObjArray *ary = ALLOCATE_OBJ(
         ObjArray, OBJ_T_ARRAY
     );
-    ary->klass = lxAryClass;
+    ary->klass = klass;
     ary->singletonKlass = NULL;
     ary->finalizerFunc = NULL;
     void *tablesMem = ALLOCATE(Table, 1);
@@ -396,17 +387,19 @@ ObjArray *allocateArray(void) {
 
 // allocates a new instance object, doesn't call its constructor
 ObjInstance *newInstance(ObjClass *klass) {
-    if (vm.inited) ASSERT(klass);
     // NOTE: since this is called from vm.c's doCallCallable to initialize new
     // instances when given constructor functions, this must return new
     // modules/classes when given Module() or Class() constructors
-    if (vm.inited) {
-        if (klass == lxModuleClass) {
-            return (ObjInstance*)newModule(NULL);
-        } else if (klass == lxAryClass) {
-            return (ObjInstance*)allocateArray();
+    if (LIKELY(vm.inited)) {
+        ASSERT(klass);
+        if (IS_SUBCLASS(klass, lxAryClass)) {
+            return (ObjInstance*)allocateArray(klass);
+        } else if (IS_SUBCLASS(klass, lxStringClass)) {
+            return (ObjInstance*)allocateString(NULL, 0, klass);
         } else if (klass == lxClassClass) {
             return (ObjInstance*)newClass(NULL, lxObjClass);
+        } else if (klass == lxModuleClass) {
+            return (ObjInstance*)newModule(NULL);
         }
     }
     ObjInstance *obj = ALLOCATE_OBJ(
@@ -415,11 +408,9 @@ ObjInstance *newInstance(ObjClass *klass) {
     obj->klass = klass;
     obj->singletonKlass = NULL;
     obj->finalizerFunc = NULL;
-    void *tablesMem = ALLOCATE(Table, 2);
+    void *tablesMem = ALLOCATE(Table, 1);
     obj->fields = (Table*)tablesMem;
-    obj->hiddenFields = tablesMem + sizeof(Table);
     initTable(obj->fields);
-    initTable(obj->hiddenFields);
     obj->internal = NULL;
     return obj;
 }
@@ -470,6 +461,10 @@ ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCM
 
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     ObjClass *klass = obj->klass;
+    if (!klass && ((Obj*) obj)->type == OBJ_T_STRING) {
+        klass = lxStringClass;
+        obj->klass = klass;
+    }
     if (obj->singletonKlass) {
         klass = obj->singletonKlass;
     }
@@ -536,7 +531,7 @@ Obj *instanceFindSetter(ObjInstance *obj, ObjString *name) {
 
 Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name) {
     Obj *method = instanceFindMethod(obj, name);
-    if (!method) {
+    if (UNLIKELY(!method)) {
         throwErrorFmt(lxNameErrClass,
             "Undefined instance method '%s' for class %s",
             name->chars, instanceClassName(obj)
@@ -598,11 +593,12 @@ void setObjectFinalizer(ObjInstance *obj, Obj *callable) {
 const char *typeOfObj(Obj *obj) {
     DBG_ASSERT(obj);
     switch (obj->type) {
-    case OBJ_T_INSTANCE:
-    case OBJ_T_ARRAY:
-        return "instance";
     case OBJ_T_STRING:
         return "string";
+    case OBJ_T_ARRAY:
+        return "array";
+    case OBJ_T_INSTANCE:
+        return "instance";
     case OBJ_T_CLASS:
         return "class";
     case OBJ_T_MODULE:
@@ -639,25 +635,9 @@ int arraySize(Value aryVal) {
 
 Value newArray(void) {
     DBG_ASSERT(nativeArrayInit);
-    ObjArray *ary = allocateArray();
+    ObjArray *ary = allocateArray(lxAryClass);
     callVMMethod((ObjInstance*)ary, OBJ_VAL(nativeArrayInit), 0, NULL);
     DBG_ASSERT(IS_AN_ARRAY(peek(0)));
-    return pop();
-}
-
-// duplicates a string instance
-Value dupStringInstance(Value instance) {
-    ObjString *buf = STRING_GETHIDDEN(instance);
-    return newStringInstance(dupString(buf));
-}
-
-// creates a new string instance, using `buf` as underlying storage
-Value newStringInstance(ObjString *buf) {
-    ASSERT(buf);
-    DBG_ASSERT(nativeStringInit);
-    ObjInstance *instance = newInstance(lxStringClass);
-    Value bufVal = OBJ_VAL(buf);
-    callVMMethod(instance, OBJ_VAL(nativeStringInit), 1, &bufVal);
     return pop();
 }
 
@@ -665,7 +645,7 @@ void clearString(Value string) {
     if (isFrozen(AS_OBJ(string))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
-    ObjString *buf = STRING_GETHIDDEN(string);
+    ObjString *buf = AS_STRING(string);
     clearObjString(buf);
 }
 
@@ -673,8 +653,8 @@ void stringInsertAt(Value self, Value insert, int at) {
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
-    ObjString *selfBuf = STRING_GETHIDDEN(self);
-    ObjString *insertBuf = STRING_GETHIDDEN(insert);
+    ObjString *selfBuf = AS_STRING(self);
+    ObjString *insertBuf = AS_STRING(insert);
     insertObjString(selfBuf, insertBuf, at);
 }
 
@@ -682,7 +662,7 @@ Value stringSubstr(Value self, int startIdx, int len) {
     if (startIdx < 0) {
         throwArgErrorFmt("%s", "start index must be positive, is: %d", startIdx);
     }
-    ObjString *buf = STRING_GETHIDDEN(self);
+    ObjString *buf = AS_STRING(self);
     ObjString *substr = NULL;
     if (startIdx >= buf->length) {
         substr = copyString("", 0);
@@ -696,22 +676,22 @@ Value stringSubstr(Value self, int startIdx, int len) {
         substr = copyString(buf->chars+startIdx, len);
     }
 
-    return newStringInstance(substr);
+    return OBJ_VAL(substr);
 }
 
 Value stringIndexGet(Value self, int index) {
-    ObjString *buf = STRING_GETHIDDEN(self);
+    ObjString *buf = AS_STRING(self);
     if (index >= buf->length) {
-        return newStringInstance(copyString("", 0));
+        return OBJ_VAL(copyString("", 0));
     } else if (index < 0) { // TODO: make it works from end of str?
         throwArgErrorFmt("%s", "index cannot be negative");
     } else {
-        return newStringInstance(copyString(buf->chars+index, 1));
+        return OBJ_VAL(copyString(buf->chars+index, 1));
     }
 }
 
 Value stringIndexSet(Value self, int index, char c) {
-    ObjString *buf = STRING_GETHIDDEN(self);
+    ObjString *buf = AS_STRING(self);
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
@@ -730,8 +710,8 @@ Value stringIndexSet(Value self, int index, char c) {
 }
 
 bool stringEquals(Value a, Value b) {
-    if (!IS_A_STRING(b)) return false;
-    return objStringEquals(STRING_GETHIDDEN(a), STRING_GETHIDDEN(b));
+    if (!IS_STRING(b)) return false;
+    return objStringEquals(AS_STRING(a), AS_STRING(b));
 }
 
 void arrayPush(Value self, Value el) {
@@ -878,33 +858,11 @@ Table *mapGetHidden(Value mapVal) {
     return (Table*)inst->internal->data;
 }
 
-ObjString *stringGetHidden(Value instance) {
-    ASSERT(IS_A_STRING(instance));
-    ObjInstance *inst = AS_INSTANCE(instance);
-    Value stringVal;
-    if (tableGet(inst->hiddenFields, OBJ_VAL(internedString("buf", 3)), &stringVal)) {
-        return (ObjString*)AS_OBJ(stringVal);
-    } else {
-        return NULL;
-    }
-}
-
 Value getProp(Value self, ObjString *propName) {
     ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
     Value ret;
     if (tableGet(inst->fields, OBJ_VAL(propName), &ret)) {
-        return ret;
-    } else {
-        return NIL_VAL;
-    }
-}
-
-Value getHiddenProp(Value self, ObjString *propName) {
-    ASSERT(IS_INSTANCE_LIKE(self));
-    ObjInstance *inst = AS_INSTANCE(self);
-    Value ret;
-    if (tableGet(inst->hiddenFields, OBJ_VAL(propName), &ret)) {
         return ret;
     } else {
         return NIL_VAL;
@@ -1054,6 +1012,7 @@ bool isInstanceLikeObj(Obj *obj) {
     switch (obj->type) {
         case OBJ_T_INSTANCE:
         case OBJ_T_ARRAY:
+        case OBJ_T_STRING:
         case OBJ_T_CLASS:
         case OBJ_T_MODULE:
             return true;

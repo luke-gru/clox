@@ -128,6 +128,7 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             if (callable && vm.inited && canCallMethods) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL);
                 if (!IS_A_STRING(stringVal)) {
+                    pop();
                     throwErrorFmt(lxTypeErrClass, "TypeError, toString() returned non-string, is a: %s", typeOfVal(stringVal));
                     UNREACHABLE_RETURN(-1);
                 }
@@ -137,7 +138,7 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
                 ASSERT(AS_OBJ(popped) == AS_OBJ(stringVal));
                 return ret;
             } else {
-                if (IS_A_STRING(value)) { // when canCallMethods == false
+                if (IS_STRING(value)) { // when canCallMethods == false
                     ObjString *str = VAL_TO_STRING(value);
                     if (str) {
                         return fprintf(file, "\"%.*s\"", PRINTNUM(2, maxLen), str->chars);
@@ -239,12 +240,13 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor) {
                 ret = stringConstructor(buf, strlen(buf));
                 xfree(buf);
             }
-        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE || OBJ_TYPE(value) == OBJ_T_ARRAY) {
+        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE || OBJ_TYPE(value) == OBJ_T_ARRAY || OBJ_TYPE(value) == OBJ_T_STRING) {
             ObjInstance *inst = AS_INSTANCE(value);
-            Obj *toString = instanceFindMethod(inst, internedString("toString", 8));
+            Obj *toString = instanceFindMethod(inst, INTERN("toString"));
             if (toString && vm.inited) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL);
                 if (!IS_A_STRING(stringVal)) {
+                    pop();
                     throwErrorFmt(lxTypeErrClass, "TypeError, toString() returned non-string, is a: %s", typeOfVal(stringVal));
                     UNREACHABLE_RETURN(NULL);
                 }
@@ -325,7 +327,7 @@ const char *typeOfVal(Value val) {
 
 uint32_t valHash(Value val) {
     if (IS_OBJ(val)) {
-        if (IS_STRING(val) || IS_A_STRING(val)) {
+        if (IS_STRING(val)) {
             ObjString *string = VAL_TO_STRING(val);
             if (LIKELY(string->hash > 0)) {
                 return string->hash;
@@ -335,7 +337,7 @@ uint32_t valHash(Value val) {
                 return hash;
             }
         } else {
-            if (IS_INSTANCE(val) || IS_ARRAY(val)) {
+            if (IS_INSTANCE(val) || IS_ARRAY(val) || IS_STRING(val)) {
                 if (UNLIKELY(!vm.inited)) {
                     fprintf(stderr, "val type: %s\n", typeOfVal(val));
                     ASSERT(0);
@@ -383,7 +385,7 @@ bool valEqual(Value a, Value b) {
                 return strcmp(VAL_TO_STRING(a)->chars,
                         VAL_TO_STRING(b)->chars) == 0;
             }
-            if (IS_INSTANCE_LIKE(a)) { // including lox strings
+            if (IS_INSTANCE_LIKE(a)) {
                 return AS_BOOL(callMethod(AS_OBJ(a), internedString("opEquals", 8), 1, &b));
             }
             return a == b;

@@ -31,14 +31,9 @@ static void freeInternalFile(Obj *obj) {
 
 LxFile *fileGetHidden(Value io) {
     ObjInstance *inst = AS_INSTANCE(io);
-    Value internalVal;
-    if (tableGet(inst->hiddenFields, OBJ_VAL(INTERN("f")), &internalVal)) {
-        DBG_ASSERT(IS_INTERNAL(internalVal));
-        LxFile *f = (LxFile*)internalGetData(AS_INTERNAL(internalVal));
-        return f;
-    } else {
-        return NULL;
-    }
+    ObjInternal *internalObj = inst->internal;
+    LxFile *f = (LxFile*)internalGetData(internalObj);
+    return f;
 }
 
 LxFile *initIOAfterOpen(Value ioVal, ObjString *fname, int fd, int mode, int oflags) {
@@ -52,7 +47,6 @@ LxFile *initIOAfterOpen(Value ioVal, ObjString *fname, int fd, int mode, int ofl
     file->isOpen = true;
     internalObj->data = file;
     ioObj->internal = internalObj;
-    tableSet(ioObj->hiddenFields, OBJ_VAL(INTERN("f")), OBJ_VAL(internalObj));
     return file;
 }
 
@@ -196,7 +190,7 @@ Value lxIORead(int argCount, Value *args) {
     }
     ObjString *buf = IORead(self, numBytes, untilEOF);
     ASSERT(buf);
-    return newStringInstance(buf);
+    return OBJ_VAL(buf);
 }
 
 Value lxIOGetline(int argCount, Value *args) {
@@ -211,7 +205,7 @@ Value lxIOGetline(int argCount, Value *args) {
         }
     }
     ObjString *buf = IOReadline(self, maxBytes);
-    return newStringInstance(buf);
+    return OBJ_VAL(buf);
 }
 
 /**
@@ -353,7 +347,7 @@ Value lxIOReadStatic(int argCount, Value *args) {
         untilEOF = true;
     }
     ObjString *buf = IORead(ioVal, bytes, untilEOF);
-    return newStringInstance(buf);
+    return OBJ_VAL(buf);
 }
 
 Value lxIOCloseStatic(int argCount, Value *args) {

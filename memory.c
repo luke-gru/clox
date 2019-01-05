@@ -380,7 +380,6 @@ void blackenObject(Obj *obj) {
                 grayObject((Obj*)klass->classInfo->superclass);
             }
             grayTable(klass->fields);
-            grayTable(klass->hiddenFields);
             grayTable(klass->classInfo->methods);
             grayTable(klass->classInfo->getters);
             grayTable(klass->classInfo->setters);
@@ -407,7 +406,6 @@ void blackenObject(Obj *obj) {
             }
 
             grayTable(mod->fields);
-            grayTable(mod->hiddenFields);
             grayTable(mod->classInfo->methods);
             grayTable(mod->classInfo->getters);
             grayTable(mod->classInfo->setters);
@@ -447,7 +445,6 @@ void blackenObject(Obj *obj) {
                 grayObject(instance->finalizerFunc);
             }
             grayTable(instance->fields);
-            grayTable(instance->hiddenFields);
             if (instance->internal && instance->internal->markFunc) {
                 instance->internal->markFunc((Obj*)instance->internal);
             }
@@ -542,8 +539,7 @@ void freeObject(Obj *obj) {
             ObjClass *klass = (ObjClass*)obj;
             GC_TRACE_DEBUG(5, "Freeing class methods/getters/setters tables");
             freeTable(klass->fields);
-            freeTable(klass->hiddenFields);
-            FREE_ARRAY(Table, klass->fields, 2);
+            FREE_ARRAY(Table, klass->fields, 1);
             freeClassInfo(klass->classInfo);
             FREE(ClassInfo, klass->classInfo);
             GC_TRACE_DEBUG(5, "Freeing class: p=%p", obj);
@@ -554,8 +550,7 @@ void freeObject(Obj *obj) {
             ObjModule *mod = (ObjModule*)obj;
             GC_TRACE_DEBUG(5, "Freeing module methods/getters/setters tables");
             freeTable(mod->fields);
-            freeTable(mod->hiddenFields);
-            FREE_ARRAY(Table, mod->fields, 2);
+            FREE_ARRAY(Table, mod->fields, 1);
             freeClassInfo(mod->classInfo);
             FREE(ClassInfo, mod->classInfo);
             GC_TRACE_DEBUG(5, "Freeing module: p=%p", obj);
@@ -596,9 +591,7 @@ void freeObject(Obj *obj) {
             }
             GC_TRACE_DEBUG(5, "Freeing instance fields table: p=%p", &instance->fields);
             freeTable(instance->fields);
-            GC_TRACE_DEBUG(5, "Freeing instance hidden fields table: p=%p", &instance->hiddenFields);
-            freeTable(instance->hiddenFields);
-            FREE_ARRAY(Table, instance->fields, 2);
+            FREE_ARRAY(Table, instance->fields, 1);
             GC_TRACE_DEBUG(5, "Freeing ObjInstance: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;
@@ -1023,6 +1016,10 @@ bool isThreadObj(Obj *obj) {
 void freeObjects(void) {
     if (OPTION_T(disableGC)) {
         GC_TRACE_DEBUG(1, "freeObjects: skipping due to disableGC");
+        if (GET_OPTION(traceGCLvl > 0)) {
+            printGCStats();
+            printGenerationInfo();
+        }
         return;
     }
     GC_TRACE_DEBUG(2, "freeObjects -> begin FREEing all objects");

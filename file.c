@@ -93,7 +93,7 @@ static Value lxFileReadStatic(int argCount, Value *args) {
     FILE *f = checkFopen(fnameStr->chars, "r");
     ObjString *buf = IOReadFd(fileno(f), 0, true);
     checkFclose(f);
-    return newStringInstance(buf);
+    return OBJ_VAL(buf);
 }
 
 static Value lxFileReadLinesStatic(int argCount, Value *args) {
@@ -122,10 +122,10 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
             if (*bufp == '\n') bufp++;
             size_t len = bufp - bufpStart;
             if (leftoverLine) {
-                pushCString(STRING_GETHIDDEN(line), bufpStart, len);
+                pushCString(AS_STRING(line), bufpStart, len);
                 leftoverLine = false;
             } else {
-                line = newStringInstance(copyString(bufpStart, len));
+                line = OBJ_VAL(copyString(bufpStart, len));
                 arrayPush(ary, line);
             }
             nleft -= len;
@@ -235,7 +235,7 @@ static Value lxFilePath(int argCount, Value *args) {
     CHECK_ARITY("File#path", 1, 1, argCount);
     Value self = args[0];
     LxFile *f = FILE_GETHIDDEN(self);
-    return newStringInstance(dupString(f->name));
+    return OBJ_VAL(dupString(f->name));
 }
 
 static Value lxFileUnlink(int argCount, Value *args) {

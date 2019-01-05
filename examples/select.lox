@@ -20,4 +20,4 @@ if (res != nil) { // nil = timed out
 __END__
 -- expect: --
 HI
-instance
+array

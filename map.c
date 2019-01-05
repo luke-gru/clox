@@ -101,8 +101,8 @@ static Value lxMapToString(int argCount, Value *args) {
     CHECK_ARITY("Map#toString", 1, 1, argCount);
     Value self = args[0];
     Obj *selfObj = AS_OBJ(self);
-    Value ret = newStringInstance(copyString("{", 1));
-    ObjString *bufRet = STRING_GETHIDDEN(ret);
+    Value ret = OBJ_VAL(copyString("{", 1));
+    ObjString *bufRet = AS_STRING(ret);
     Table *map = MAP_GETHIDDEN(self);
     Entry e; int idx = 0;
     int sz = map->count; int i = 0;
@@ -334,7 +334,7 @@ static Value lxEnvGet(int argCount, Value *args) {
     if (val == NULL) {
         return NIL_VAL;
     } else {
-        return newStringInstance(copyString(val, strlen(val)));
+        return OBJ_VAL(copyString(val, strlen(val)));
     }
 }
 
@@ -369,9 +369,7 @@ static Value createEnvMap(void) {
         size_t varLen = strlen(*envp);
         ObjString *nameStr = copyString(*envp, (int)(eq-*envp));
         ObjString *valStr = copyString(eq+1, (*envp+varLen)-eq-1);
-        Value name = newStringInstance(nameStr);
-        Value val = newStringInstance(valStr);
-        tableSet(map, name, val);
+        tableSet(map, OBJ_VAL(nameStr), OBJ_VAL(valStr));
         envp++;
     }
     return mapVal;

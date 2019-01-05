@@ -1,6 +1,7 @@
 print typeof(123.0);
 print typeof(123);
 print typeof("mystring");
+print typeof([]);
 print typeof(nil);
 print typeof(Object());
 print typeof(Object);
@@ -12,7 +13,8 @@ __END__
 -- expect: --
 number
 number
-instance
+string
+array
 nil
 instance
 class

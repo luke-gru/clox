@@ -8,33 +8,34 @@ ObjClass *lxStringClass;
 
 extern ObjNative *nativeStringInit;
 
-static ObjString *bufStr;
-
 // ex: var s = "string";
 // ex: var s2 = String("string");
 Value lxStringInit(int argCount, Value *args) {
     CHECK_ARITY("String#init", 1, 2, argCount);
+    if (vm.inited) callSuper(0, NULL, NULL);
     Value self = *args;
-    callSuper(0, NULL, NULL);
-    ObjInstance *selfObj = AS_INSTANCE(self);
-    if (argCount == 2) {
-        Value internalStrVal = args[1];
-        if (IS_T_STRING(internalStrVal)) { // string instance given, copy the buffer
-            ObjString *orig = STRING_GETHIDDEN(internalStrVal);
-            ObjString *new = dupString(orig);
-            internalStrVal = OBJ_VAL(new);
+    ObjString *selfStr = AS_STRING(self);
+    ObjString *otherStr = NULL;
+    if (argCount == 1) {
+        otherStr = INTERN("");
+    } else {
+        if (!IS_STRING(args[1])) {
+            otherStr = valueToString(args[1], copyString);
+        } else {
+            otherStr = AS_STRING(args[1]);
         }
-        if (!IS_STRING(internalStrVal)) { // other type given, convert to string
-            ObjString *str = valueToString(internalStrVal, copyString);
-            internalStrVal = OBJ_VAL(str);
-        }
-        ASSERT(IS_STRING(internalStrVal));
-        tableSet(selfObj->hiddenFields, OBJ_VAL(bufStr), internalStrVal);
-    } else { // empty string
-        Value internalStrVal = OBJ_VAL(copyString("", 0));
-        tableSet(selfObj->hiddenFields, OBJ_VAL(bufStr), internalStrVal);
     }
-    return self;
+    selfStr->capacity = otherStr->capacity;
+    selfStr->hash = otherStr->hash;
+    selfStr->length = otherStr->length;
+    ((Obj*)selfStr)->isFrozen = false;
+    if (otherStr->chars) {
+        selfStr->chars = ALLOCATE(char, otherStr->capacity+1);
+        memcpy(selfStr->chars, otherStr->chars, selfStr->length+1);
+    } else {
+        selfStr->chars = NULL;
+    }
+    return *args;
 }
 
 static Value lxStringToString(int argCount, Value *args) {
@@ -47,15 +48,14 @@ static Value lxStringOpAdd(int argCount, Value *args) {
     CHECK_ARITY("String#opAdd", 2, 2, argCount);
     Value self = *args;
     Value rhs = args[1];
-    if (!IS_A_STRING(rhs)) {
+    if (UNLIKELY(!IS_STRING(rhs))) {
         throwErrorFmt(lxTypeErrClass, "String#+ (opAdd) called with non-string argument. Type: %s",
                 typeOfVal(rhs));
     }
-    Value ret = dupStringInstance(self);
-    ObjString *lhsBuf = STRING_GETHIDDEN(ret);
-    ObjString *rhsBuf = STRING_GETHIDDEN(rhs);
+    ObjString *lhsBuf = dupString(AS_STRING(self));
+    ObjString *rhsBuf = AS_STRING(rhs);
     pushObjString(lhsBuf, rhsBuf);
-    return ret;
+    return OBJ_VAL(lhsBuf);
 }
 
 // var s = "hey"; s.push(" there!"); => "hey there!"
@@ -73,11 +73,19 @@ static Value lxStringPush(int argCount, Value *args) {
 //     print s2; => "hey again"
 static Value lxStringDup(int argCount, Value *args) {
     CHECK_ARITY("String#dup", 1, 1, argCount);
-    Value ret = lxObjectDup(argCount, args);
-    ObjInstance *retInst = AS_INSTANCE(ret);
-    ObjString *buf = STRING_GETHIDDEN(ret);
-    tableSet(retInst->hiddenFields, OBJ_VAL(bufStr), OBJ_VAL(dupString(buf)));
-    return ret;
+    Value self = *args;
+    Value dup = callSuper(0, NULL, NULL);
+    ObjString *selfStr = AS_STRING(self);
+    ObjString *dupStr = AS_STRING(dup);
+    dupStr->isStatic = selfStr->isStatic;
+    dupStr->isInterned = false;
+    ((Obj*)dupStr)->isFrozen = false;
+    dupStr->capacity = selfStr->capacity;
+    dupStr->hash = selfStr->hash;
+    dupStr->length = selfStr->length;
+    dupStr->chars = ALLOCATE(char, dupStr->capacity+1);
+    memcpy(dupStr->chars, selfStr->chars, dupStr->length+1);
+    return dup;
 }
 
 // ex: var s = "going";
@@ -137,7 +145,7 @@ static Value lxStringOpEquals(int argCount, Value *args) {
 }
 
 static Value lxStringGetSize(int argCount, Value *args) {
-    ObjString *str = STRING_GETHIDDEN(*args);
+    ObjString *str = AS_STRING(*args);
     return NUMBER_VAL(str->length);
 }
 
@@ -160,6 +168,4 @@ void Init_StringClass() {
     // getters
     addNativeGetter(stringClass, "size", lxStringGetSize);
     lxStringClass = stringClass;
-
-    bufStr = internedString("buf", 3);
 }

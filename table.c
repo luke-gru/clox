@@ -9,7 +9,6 @@
 
 #define TABLE_MAX_LOAD 0.75
 
-
 /**
  * TODO: if two different values hash to the same number, the first is
  * overridden. This is an implementation issue, `table->entries` should be a 2
@@ -211,8 +210,8 @@ ObjString *tableFindString(Table *table, const char* chars, int length,
         Entry *entry = &table->entries[index];
 
         if (IS_UNDEF(entry->key)) return NULL;
-        if (IS_STRING(entry->key) || IS_A_STRING(entry->key)) {
-            ObjString *stringKey = VAL_TO_STRING(entry->key);
+        if (IS_STRING(entry->key)) {
+            ObjString *stringKey = AS_STRING(entry->key);
             if (stringKey->length == length &&
                     memcmp(stringKey->chars, chars, length) == 0) {
                 // We found it.

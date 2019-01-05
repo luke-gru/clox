@@ -170,7 +170,7 @@ static int test_global_vars1(void) {
     interp(src, true);
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
-    T_ASSERT(IS_T_STRING(*val));
+    T_ASSERT(IS_A_STRING(*val));
     T_ASSERT_STREQ("howdy", INSTANCE_AS_CSTRING(*val));
 cleanup:
     freeVM();
@@ -206,7 +206,7 @@ static int test_simple_if(void) {
     interp(src, true);
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
-    T_ASSERT(IS_T_STRING(*val));
+    T_ASSERT(IS_A_STRING(*val));
     T_ASSERT_STREQ("jumped", INSTANCE_AS_CSTRING(*val));
 cleanup:
     freeVM();
@@ -218,7 +218,7 @@ static int test_vardecls_in_block_not_global(void) {
     interp(src, true);
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
-    T_ASSERT(IS_T_STRING(*val));
+    T_ASSERT(IS_A_STRING(*val));
     T_ASSERT_STREQ("in block", INSTANCE_AS_CSTRING(*val));
 cleanup:
     freeVM();
@@ -243,7 +243,7 @@ static int test_simple_function(void) {
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
     /*fprintf(stderr, "typeof: %s", typeOfVal(*val));*/
-    T_ASSERT(IS_T_STRING(*val));
+    T_ASSERT(IS_A_STRING(*val));
     T_ASSERT_STREQ("FUN", INSTANCE_AS_CSTRING(*val));
 cleanup:
     freeVM();
@@ -277,7 +277,7 @@ static int test_simple_class_initializer(void) {
     interp(src, true);
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
-    T_ASSERT(IS_T_STRING(*val));
+    T_ASSERT(IS_A_STRING(*val));
     /*T_ASSERT_VALPRINTEQ("Red", *val);*/
 cleanup:
     freeVM();
@@ -462,7 +462,7 @@ static int test_get_set_arbitrary_property() {
     interp(src, true);
     Value *val = getLastValue();
     printValue(stderr, *val, false, -1);
-    T_ASSERT(IS_T_STRING(*val));
+    T_ASSERT(IS_A_STRING(*val));
     T_ASSERT_STREQ("Gracie", INSTANCE_AS_CSTRING(*val));
 cleanup:
     freeVM();
@@ -543,7 +543,7 @@ static int test_native_typeof() {
                      "bool\n"
                      "number\n"
                      "number\n"
-                     "instance\n"
+                     "string\n"
                      "class\n";
     T_ASSERT_STREQ(expected, output);
 cleanup:

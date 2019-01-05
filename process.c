@@ -7,7 +7,6 @@
 #include "runtime.h"
 #include "table.h"
 
-// TODO: find right header
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
@@ -169,7 +168,7 @@ static Value lxProcessPwdStatic(int argCount, Value *args) {
         errno = last;
         throwErrorFmt(lxErrClass, "Cannot retrieve current directory: %s", strerror(err));
     }
-    return newStringInstance(copyString(buf, strlen(buf)));
+    return OBJ_VAL(copyString(buf, strlen(buf)));
 }
 
 void Init_ProcessModule(void) {

@@ -10,11 +10,11 @@
 typedef enum ObjType {
   OBJ_T_NONE = 0, // when object is unitialized or freed
   OBJ_T_STRING,   // internal string value only, Strings in lox are instances
-  OBJ_T_FUNCTION,
-  OBJ_T_INSTANCE, // includes Strings, Arrays, Maps
   OBJ_T_ARRAY,
+  OBJ_T_INSTANCE, // includes Strings, Arrays, Maps
   OBJ_T_CLASS,
   OBJ_T_MODULE,
+  OBJ_T_FUNCTION,
   OBJ_T_NATIVE_FUNCTION,
   OBJ_T_BOUND_METHOD,
   OBJ_T_UPVALUE,
@@ -27,27 +27,16 @@ typedef struct ObjAny ObjAny;
 
 // basic object structure that all objects (values of VAL_T_OBJ type)
 typedef struct Obj {
-  ObjType type; // redundant, but we need for now
-  ObjAny *nextFree;
-  size_t objectId;
-  // GC fields
-  unsigned short GCGen;
-  bool isDark; // is this object marked?
-  bool noGC; // don't collect this object
-  // Other fields
-  bool isFrozen;
+    ObjType type; // redundant, but we need for now
+    ObjAny *nextFree;
+    size_t objectId;
+    // GC fields
+    unsigned short GCGen;
+    bool isDark; // is this object marked?
+    bool noGC; // don't collect this object
+    // Other fields
+    bool isFrozen;
 } Obj;
-
-typedef struct ObjString {
-  Obj object;
-  int length; // doesn't include NULL byte
-  char *chars;
-  uint32_t hash;
-  int capacity;
-  bool isStatic;
-  bool isInterned;
-} ObjString;
-
 
 typedef void (*GCMarkFunc)(Obj *obj);
 typedef void (*GCFreeFunc)(Obj *obj);
@@ -139,7 +128,6 @@ typedef struct ObjClass {
   ObjClass *singletonKlass;
   Obj *finalizerFunc;
   Table *fields;
-  Table *hiddenFields;
 
   ClassInfo *classInfo;
 } ObjClass;
@@ -153,7 +141,6 @@ typedef struct ObjModule {
   ObjClass *singletonKlass;
   Obj *finalizerFunc;
   Table *fields;
-  Table *hiddenFields;
 
   ClassInfo *classInfo;
 } ObjModule;
@@ -190,9 +177,22 @@ typedef struct ObjInstance {
   ObjClass *singletonKlass;
   Obj *finalizerFunc; // ObjClosure* or ObjNative*
   Table *fields;
-  Table *hiddenFields;
   ObjInternal *internal;
 } ObjInstance;
+
+typedef struct ObjString {
+    Obj object;
+    ObjClass *klass; // always lxAryClass
+    ObjClass *singletonKlass;
+    Obj *finalizerFunc; // ObjClosure* or ObjNative*
+    Table *fields;
+    int length; // doesn't include NULL byte
+    char *chars;
+    uint32_t hash;
+    int capacity;
+    bool isStatic;
+    bool isInterned;
+} ObjString;
 
 typedef struct ObjArray {
     Obj obj;
@@ -220,12 +220,13 @@ typedef struct ObjAny {
     union {
         Obj basic;
         ObjString string;
+        ObjArray array;
+        ObjInstance instance;
         ObjClass klass;
         ObjModule module;
         ObjFunction function;
         ObjClosure closure;
         ObjNative native;
-        ObjInstance instance;
         ObjBoundMethod bound;
         ObjUpvalue upvalue;
         ObjInternal internal;
@@ -242,14 +243,14 @@ typedef struct LxFile {
 } LxFile;
 
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))
-#define IS_ARRAY(value)        (isObjType(value, OBJ_T_ARRAY))
+#define IS_ARRAY(value)         (isObjType(value, OBJ_T_ARRAY))
 #define IS_FUNCTION(value)      (isObjType(value, OBJ_T_FUNCTION))
 #define IS_CLOSURE(value)       (isObjType(value, OBJ_T_CLOSURE))
 #define IS_NATIVE_FUNCTION(value) (isObjType(value, OBJ_T_NATIVE_FUNCTION))
 #define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
 #define IS_MODULE(value)        (isObjType(value, OBJ_T_MODULE))
 #define IS_INSTANCE(value)      (isObjType(value, OBJ_T_INSTANCE))
-#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_ARRAY(value) || IS_CLASS(value) || IS_MODULE(value))
+#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_STRING(value) || IS_ARRAY(value) || IS_CLASS(value) || IS_MODULE(value))
 #define IS_UPVALUE(value)       (isObjType(value, OBJ_T_UPVALUE))
 #define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
 #define IS_INTERNAL(value)      (isObjType(value, OBJ_T_INTERNAL))
@@ -261,24 +262,23 @@ typedef struct LxFile {
 #define IS_INSTANCE_OF_FUNC (is_value_instance_of_p)
 #define IS_A_FUNC (is_value_a_p)
 
-#define IS_A(value,klass)       ((IS_INSTANCE(value) || IS_ARRAY(value)) && instanceIsA(AS_INSTANCE(value), klass))
+#define IS_A(value,klass)       ((IS_INSTANCE(value) || IS_ARRAY(value) || IS_STRING(value)) && instanceIsA(AS_INSTANCE(value), klass))
 
 #define IS_A_MODULE(value)      (IS_A(value, lxModuleClass))
 #define IS_AN_ARRAY(value)      (IS_A(value, lxAryClass))
-#define IS_T_ARRAY(value)       (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxAryClass)
+#define IS_T_ARRAY(value)       (AS_INSTANCE(value)->klass == lxAryClass)
 #define IS_A_MAP(value)         (IS_A(value, lxMapClass))
 #define IS_T_MAP(value)         (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxMapClass)
-#define IS_A_STRING(value)      (IS_A(value, lxStringClass))
-#define IS_T_STRING(value)      (IS_INSTANCE(value) && AS_INSTANCE(value)->klass == lxStringClass)
 #define IS_AN_ERROR(value)      (IS_A(value, lxErrClass))
 #define IS_A_THREAD(value)      (IS_A(value, lxThreadClass))
+#define IS_A_STRING(value)      (IS_STRING(value) || IS_A(value, lxStringClass))
 
 #define IS_SUBCLASS(subklass,superklass) (isSubclass(subklass,superklass))
 
 #define AS_STRING(value)        ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
-#define INSTANCE_AS_CSTRING(value) (STRING_GETHIDDEN(value)->chars)
-#define VAL_TO_STRING(value)    (IS_A_STRING(value) ? STRING_GETHIDDEN(value) : AS_STRING(value))
+#define INSTANCE_AS_CSTRING(value) (AS_STRING(value)->chars)
+#define VAL_TO_STRING(value)    (AS_STRING(value))
 #define AS_FUNCTION(value)      ((ObjFunction*)AS_OBJ(value))
 #define AS_CLOSURE(value)       ((ObjClosure*)AS_OBJ(value))
 #define AS_NATIVE_FUNCTION(value) ((ObjNative*)AS_OBJ(value))
@@ -314,27 +314,21 @@ typedef struct LxFile {
 #define MAP_SIZE(mapVal)          (mapSize(mapVal))
 #define MAP_GETHIDDEN(mapVal)     (mapGetHidden(mapVal))
 
-#define STRING_GETHIDDEN(stringVal) (stringGetHidden(stringVal))
 #define FILE_GETHIDDEN(fileVal) (fileGetHidden(fileVal))
 #define THREAD_GETHIDDEN(thVal) (threadGetHidden(thVal))
 
 // strings (internal)
 typedef ObjString *(*newStringFunc)(char *chars, int length);
-// String creation functions
+// Strings as ObjString
 ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
 ObjString *copyString(char *chars, int length); // copies provided memory. Object lives on lox heap.
 ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
 #define INTERN(chars) (internedString(chars, strlen(chars)))
-ObjString *internedString(char *chars, int length); // Provided string must be interned by VM or will give error.
+ObjString *internedString(char *chars, int length);
 ObjString *dupString(ObjString *string);
-void pushObjString(ObjString *a, ObjString *b);
-void clearObjString(ObjString *str);
-void insertObjString(ObjString *a, ObjString *b, int at);
 bool objStringEquals(ObjString *a, ObjString *b);
 
-// string instances
-Value dupStringInstance(Value instance);
-Value newStringInstance(ObjString *buf);
+// strings as values
 void clearString(Value self);
 void pushString(Value self, Value pushed);
 void stringInsertAt(Value self, Value insert, int at);
@@ -342,15 +336,22 @@ Value stringSubstr(Value self, int startIdx, int len);
 Value stringIndexGet(Value self, int index);
 Value stringIndexSet(Value self, int index, char c);
 bool  stringEquals(Value a, Value b);
-ObjString *stringGetHidden(Value instance);
 
 // NOTE: don't call pushCString on a string value that's a key to a map! The
-// hash value changes and the map won't be able to index it anymore.
+// hash value changes and the map won't be able to index it anymore (see
+// Map#rehash())
 void pushCString(ObjString *string, char *chars, int lenToAdd);
 void insertCString(ObjString *a, char *chars, int lenToAdd, int at);
 void pushCStringFmt(ObjString *string, const char *format, ...);
 void pushCStringVFmt(ObjString *string, const char *format, va_list ap);
 uint32_t hashString(char *key, int length);
+
+static inline void pushObjString(ObjString *a, ObjString *b) {
+    pushCString(a, b->chars, b->length);
+}
+static inline void insertObjString(ObjString *a, ObjString *b, int at) {
+    insertCString(a, b->chars, b->length, at);
+}
 
 // misc
 void objFreeze(Obj*);
@@ -360,7 +361,6 @@ static inline bool isFrozen(Obj *obj) {
 }
 void  setProp(Value self, ObjString *propName, Value val);
 Value getProp(Value self, ObjString *propName);
-Value getHiddenProp(Value self, ObjString *propName);
 static inline void *internalGetData(ObjInternal *obj) {
     return obj->data;
 }
@@ -403,7 +403,7 @@ ObjFunction *newFunction(Chunk *chunk, Node *funcNode);
 ObjClass *newClass(ObjString *name, ObjClass *superclass);
 ObjModule *newModule(ObjString *name);
 ObjInstance *newInstance(ObjClass *klass);
-ObjArray *allocateArray(void);
+ObjArray *allocateArray(ObjClass *klass);
 ObjNative *newNative(ObjString *name, NativeFn function);
 ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
 ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCMarkFunc markFn, GCFreeFunc freeFn);

@@ -86,7 +86,7 @@ Value lxClock(int argCount, Value *args) {
 Value lxTypeof(int argCount, Value *args) {
     CHECK_ARITY("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
-    return newStringInstance(copyString(strType, strlen(strType)));
+    return OBJ_VAL(copyString(strType, strlen(strType)));
 }
 
 Value lxDebugger(int argCount, Value *args) {
@@ -302,7 +302,7 @@ static Value loadScriptHelper(Value fname, bool checkLoaded) {
     } else {
         Value el; int i = 0;
         LXARRAY_FOREACH(OBJ_VAL(lxLoadPath), el, i) {
-            if (!IS_A_STRING(el)) {
+            if (!IS_STRING(el)) {
                 fprintf(stderr, "Warning: non-string found in loadPath: type=%s\n", typeOfVal(el));
                 continue;
             }
@@ -356,7 +356,7 @@ readableCheck:
     }
     ObjString *fpath = copyString(pathbuf, strlen(pathbuf));
     if (checkLoaded) {
-        vec_push(&vm.loadedScripts, newStringInstance(fpath));
+        vec_push(&vm.loadedScripts, OBJ_VAL(fpath));
     }
     InterpretResult ires = loadScript(chunk, pathbuf);
     return BOOL_VAL(ires == INTERPRET_OK);
@@ -429,7 +429,7 @@ Value lxObjectGetObjectId(int argCount, Value *args) {
 Value lxObjectDup(int argCount, Value *args) {
     CHECK_ARITY("Object#dup", 1, 1, argCount);
     Value self = *args;
-    if (!IS_INSTANCE(self)) {
+    if (UNLIKELY(!IS_INSTANCE(self) && !IS_ARRAY(self) && !IS_STRING(self))) {
         // Must be a module or class
         throwErrorFmt(lxTypeErrClass, "Cannot call dup() on a %s", typeOfVal(self));
     }
@@ -438,10 +438,6 @@ Value lxObjectDup(int argCount, Value *args) {
     Entry e; int idx = 0;
     TABLE_FOREACH(selfObj->fields, e, idx, {
         tableSet(newObj->fields, e.key, e.value);
-    })
-    idx = 0;
-    TABLE_FOREACH(selfObj->hiddenFields, e, idx, {
-        tableSet(newObj->hiddenFields, e.key, e.value);
     })
     return OBJ_VAL(newObj);
 }
@@ -480,7 +476,7 @@ Value lxModuleInit(int argCount, Value *args) {
     if (argCount == 1) { return self; } // anonymous (unnamed) module
     Value name = args[1];
     CHECK_ARG_IS_A(name, lxStringClass, 1);
-    ObjString *nameStr = STRING_GETHIDDEN(name);
+    ObjString *nameStr = AS_STRING(name);
     ObjModule *mod = AS_MODULE(self);
     ASSERT(CLASSINFO(mod)->name == NULL);
     ObjString *nameCpy = dupString(nameStr);
@@ -501,7 +497,7 @@ Value lxClassInit(int argCount, Value *args) {
     Value arg1 = args[1]; // name or superclass
     ObjString *name = NULL;
     ObjClass *superClass = NULL;
-    if (IS_A_STRING(arg1)) {
+    if (IS_STRING(arg1)) {
         name = dupString(VAL_TO_STRING(arg1));
     } else if (IS_CLASS(arg1)) {
         superClass = AS_CLASS(arg1);
@@ -541,9 +537,9 @@ Value lxClassGetName(int argCount, Value *args) {
     ObjClass *klass = AS_CLASS(self);
     ObjString *origName = CLASSINFO(klass)->name;
     if (origName == NULL) {
-        return newStringInstance(copyString("(anon)", 6));
+        return OBJ_VAL(copyString("(anon)", 6));
     } else {
-        return newStringInstance(dupString(origName));
+        return OBJ_VAL(dupString(origName));
     }
 }
 
@@ -597,9 +593,6 @@ Value lxIteratorInit(int argCount, Value *args) {
     ObjInternal *internalIter = newInternalObject(false,
         iter, sizeof(Iterator), markInternalIter, freeInternalIter
     );
-    tableSet(selfObj->hiddenFields,
-            OBJ_VAL(internedString("iter", 4)),
-            OBJ_VAL(internalIter));
     selfObj->internal = internalIter;
     return self;
 }
@@ -608,11 +601,7 @@ Value lxIteratorNext(int argCount, Value *args) {
     CHECK_ARITY("Iterator#next", 1, 1, argCount);
     Value self = args[0];
     ObjInstance *selfObj = AS_INSTANCE(self);
-    Value internalIter;
-    ASSERT(tableGet(selfObj->hiddenFields,
-            OBJ_VAL(internedString("iter", 4)),
-            &internalIter));
-    ObjInternal *internalObj = AS_INTERNAL(internalIter);
+    ObjInternal *internalObj = selfObj->internal;
     Iterator *iter = internalGetData(internalObj);
     ASSERT(iter);
     ObjInstance *iterableObj = iter->instance;
@@ -670,13 +659,13 @@ Value lxErrInit(int argCount, Value *args) {
 Value lxGCStats(int argCount, Value *args) {
     CHECK_ARITY("GC.stats", 1, 1, argCount);
     Value map = newMap();
-    Value totalKey = newStringInstance(copyString("totalAllocated", 14));
+    Value totalKey = OBJ_VAL(copyString("totalAllocated", 14));
     mapSet(map, totalKey, NUMBER_VAL(GCStats.totalAllocated));
-    Value heapSizeKey = newStringInstance(copyString("heapSize", 8));
+    Value heapSizeKey = OBJ_VAL(copyString("heapSize", 8));
     mapSet(map, heapSizeKey, NUMBER_VAL(GCStats.heapSize));
-    Value heapUsedKey = newStringInstance(copyString("heapUsed", 8));
+    Value heapUsedKey = OBJ_VAL(copyString("heapUsed", 8));
     mapSet(map, heapUsedKey, NUMBER_VAL(GCStats.heapUsed));
-    Value heapWasteKey = newStringInstance(copyString("heapUsedWaste", 13));
+    Value heapWasteKey = OBJ_VAL(copyString("heapUsedWaste", 13));
     mapSet(map, heapWasteKey, NUMBER_VAL(GCStats.heapUsedWaste));
     return map;
 }

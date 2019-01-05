@@ -111,8 +111,8 @@ static Value lxArrayToString(int argCount, Value *args) {
     CHECK_ARITY("Array#toString", 1, 1, argCount);
     Value self = *args;
     Obj *selfObj = AS_OBJ(self);
-    Value ret = newStringInstance(copyString("[", 1));
-    ObjString *bufRet = STRING_GETHIDDEN(ret);
+    Value ret = OBJ_VAL(copyString("[", 1));
+    ObjString *bufRet = AS_STRING(ret);
     ObjArray *aryObj = AS_ARRAY(self);
     ValueArray *ary = &aryObj->valAry;
     for (int i = 0; i < ary->count; i++) {

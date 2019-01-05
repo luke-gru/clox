@@ -34,7 +34,6 @@ static Value lxBlockInit(int argCount, Value *args) {
     blk->closure = closure;
     internalObj->data = blk;
     internalObj->dataSz = sizeof(LxBlock);
-    tableSet(selfObj->hiddenFields, OBJ_VAL(INTERN("blk")), OBJ_VAL(internalObj));
     selfObj->internal = internalObj;
     return self;
 }

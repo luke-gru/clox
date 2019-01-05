@@ -1,0 +1,15 @@
+class MyArray < Array {
+  init(*args) {
+    super.init(*args);
+    this.buf = [];
+  }
+}
+
+var a = MyArray(2);
+print a;
+print a.buf;
+
+__END__
+-- expect: --
+[2]
+[]

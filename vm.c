@@ -263,7 +263,7 @@ static void defineGlobalVariables(void) {
     // FIXME: this won't work if user moves their clox binary after building
     pushCString(libPath, QUOTE(LX_BUILT_DIR), strlen(QUOTE(LX_BUILT_DIR)));
     pushCString(libPath, "/lib", strlen("/lib"));
-    arrayPush(loadPathVal, newStringInstance(libPath));
+    arrayPush(loadPathVal, OBJ_VAL(libPath));
     unhideFromGC((Obj*)libPath);
     // populate load path from -L option given to commandline
     char *lpath = GET_OPTION(initialLoadPath);
@@ -272,7 +272,7 @@ static void defineGlobalVariables(void) {
         char *end = NULL;
         while ((end = strchr(beg, ':'))) {
             ObjString *str = copyString(beg, end - beg);
-            arrayPush(loadPathVal, newStringInstance(str));
+            arrayPush(loadPathVal, OBJ_VAL(str));
             beg = end+1;
         }
     }
@@ -286,7 +286,7 @@ static void defineGlobalVariables(void) {
     ASSERT(origArgc >= 1);
     for (int i = 0; i < origArgc; i++) {
         ObjString *argStr = copyString(origArgv[i], strlen(origArgv[i]));
-        Value arg = newStringInstance(argStr);
+        Value arg = OBJ_VAL(argStr);
         arrayPush(OBJ_VAL(lxArgv), arg);
     }
     hideFromGC((Obj*)lxArgv);
@@ -645,7 +645,7 @@ static bool isTruthy(Value val) {
 
 static inline bool canCmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
     return (IS_NUMBER(lhs) && IS_NUMBER(rhs)) ||
-        (IS_A_STRING(lhs) && IS_A_STRING(rhs));
+        (IS_STRING(lhs) && IS_STRING(rhs));
 }
 
 // returns -1, 0, 1, or -2 on error
@@ -660,9 +660,9 @@ static int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
         } else {
             return 1;
         }
-    } else if (IS_A_STRING(lhs) && IS_A_STRING(rhs)) {
-        ObjString *lhsStr = VAL_TO_STRING(lhs);
-        ObjString *rhsStr = VAL_TO_STRING(rhs);
+    } else if (IS_STRING(lhs) && IS_STRING(rhs)) {
+        ObjString *lhsStr = AS_STRING(lhs);
+        ObjString *rhsStr = AS_STRING(rhs);
         if (lhsStr->hash > 0 && rhsStr->hash > 0) {
             return lhsStr->hash == rhsStr->hash;
         } else {
@@ -832,7 +832,7 @@ void setBacktrace(Value err) {
             ObjString *file = frame->file;
             ASSERT(file);
             ObjString *outBuf = hiddenString("", 0);
-            Value out = newStringInstance(outBuf);
+            Value out = OBJ_VAL(outBuf);
             if (frame->isCCall) {
                 ObjNative *nativeFunc = frame->nativeFunc;
                 pushCStringFmt(outBuf, "%s:%d in ", file->chars, line);
@@ -1013,7 +1013,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
 }
 
 Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args) {
-    if (obj->type == OBJ_T_INSTANCE || obj->type == OBJ_T_ARRAY) {
+    if (obj->type == OBJ_T_INSTANCE || obj->type == OBJ_T_ARRAY || obj->type == OBJ_T_STRING) {
         ObjInstance *instance = (ObjInstance*)obj;
         Obj *callable = instanceFindMethod(instance, methodName);
         if (!callable && argCount == 0) {
@@ -1746,7 +1746,7 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     cbuf[len] = '\0';
     ObjString *buf = takeString(cbuf, len);
     hideFromGC((Obj*)buf);
-    Value msg = newStringInstance(buf);
+    Value msg = OBJ_VAL(buf);
     Value err = newError(klass, msg);
     vm.curThread->lastErrorThrown = err;
     unhideFromGC((Obj*)buf);
@@ -2426,7 +2426,7 @@ vmLoop:
               if (!oldBlock) th->outermostBlock = th->curBlock;
           }
           Value instanceVal = peek(numArgs);
-          if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal)) {
+          if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal)) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
               Obj *callable = instanceFindMethod(inst, mname);
               if (!callable && numArgs == 0) {
@@ -2500,8 +2500,8 @@ vmLoop:
           Value methodName = READ_CONSTANT();
           ASSERT(th->thisObj);
           Value instanceVal = OBJ_VAL(th->thisObj);
-          ASSERT(IS_INSTANCE(instanceVal)); // FIXME: get working for classes (singleton methods)
-          ObjClass *klass = (ObjClass*)getFrame()->closure->function->klass;
+          ASSERT(IS_INSTANCE_LIKE(instanceVal)); // FIXME: get working for classes (singleton methods)
+          ObjClass *klass = (ObjClass*)frame->closure->function->klass;
           ASSERT(klass); // TODO: get working for module functions that call super
           ASSERT(((Obj*) klass)->type == OBJ_T_CLASS);
           Value method;
@@ -2509,7 +2509,7 @@ vmLoop:
               AS_INSTANCE(instanceVal), klass,
               AS_STRING(methodName), &method, false);
           if (UNLIKELY(!found)) {
-              throwErrorFmt(lxErrClass, "Could not find method for 'super': %s",
+              throwErrorFmt(lxErrClass, "Could not find method %s for 'super': %s",
                       AS_CSTRING(methodName));
           }
           ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method));
@@ -2706,7 +2706,7 @@ vmLoop:
       }
       CASE_OP(THROW): {
           Value throwable = pop();
-          if (IS_A_STRING(throwable)) {
+          if (IS_STRING(throwable)) {
               Value msg = throwable;
               throwable = newError(lxErrClass, msg);
           }
@@ -2736,16 +2736,17 @@ vmLoop:
           uint8_t isStatic = READ_BYTE();
           push(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
-          if (isStatic) {
-            buf->isStatic = true;
-            push(OBJ_VAL(buf));
+          if (UNLIKELY(isStatic)) {
+              buf->isStatic = true;
+              push(OBJ_VAL(buf));
           } else {
-            push(OBJ_VAL(dupString(buf)));
+              push(OBJ_VAL(buf));
           }
           bool ret = callCallable(peek(1), 1, false, NULL);
           ASSERT(ret); // the string instance is pushed to top of stack
-          if (isStatic == 1) {
+          if (UNLIKELY(isStatic == 1)) {
               objFreeze(AS_OBJ(peek(0)));
+              AS_STRING(peek(0))->isStatic = true;
           }
           DISPATCH_BOTTOM();
       }
@@ -2798,7 +2799,7 @@ vmLoop:
 
 static void setupPerScriptROGlobals(char *filename) {
     ObjString *file = copyString(filename, strlen(filename));
-    Value fileString = newStringInstance(file);
+    Value fileString = OBJ_VAL(file);
     hideFromGC(AS_OBJ(fileString));
     // NOTE: this can trigger GC, so we hide the value first
     tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), fileString);
@@ -2808,7 +2809,7 @@ static void setupPerScriptROGlobals(char *filename) {
         char *lastSep = rindex(filename, pathSeparator);
         int len = lastSep - filename;
         ObjString *dir = copyString(filename, len);
-        Value dirVal = newStringInstance(dir);
+        Value dirVal = OBJ_VAL(dir);
         hideFromGC(AS_OBJ(dirVal));
         // NOTE: this can trigger GC, so we hide the value first
         tableSet(&EC->roGlobals, OBJ_VAL(vm.dirString), dirVal);
