@@ -1,9 +1,9 @@
 var a = Array.fill(100, nil);
-for (var i = 0 ; i < 300; i += 1) {
+for (var i = 0 ; i < 1000; i += 1) {
   a.each() -> (num) { break; };
 }
 
-for (var i = 0 ; i < 100; i += 1) {
+for (var i = 0 ; i < 1000; i += 1) {
   a.each() -> (num) { num; };
 }
 

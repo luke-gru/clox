@@ -1796,6 +1796,11 @@ static void emitNode(Node *n) {
         cinfo->blockFunction = block;
         break;
     }
+    case TO_BLOCK_EXPR: {
+        emitChildren(n);
+        emitOp0(OP_TO_BLOCK);
+        break;
+    }
     case SPLAT_EXPR: {
         emitChildren(n);
         emitOp0(OP_SPLAT_ARRAY);

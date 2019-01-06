@@ -231,7 +231,7 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
 }
 
 static Value lxArrayEach(int argCount, Value *args) {
-    CHECK_ARITY("Array#each", 1, 1, argCount);
+    CHECK_ARITY("Array#each", 1, 1, argCount); // 2nd could be block arg (&arg)
     ObjArray *self = AS_ARRAY(*args);
     volatile ValueArray *ary = &self->valAry;
     volatile Value el; volatile int valIdx = 0;
@@ -239,7 +239,15 @@ static Value lxArrayEach(int argCount, Value *args) {
     volatile int iterStart = 0;
     volatile LxThread *th = vm.curThread;
     volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
-    volatile ObjFunction *block = getFrame()->callInfo->blockFunction;
+    volatile ObjFunction *block = NULL;
+    volatile ObjInstance *blockInstance = NULL;
+    blockInstance = getBlockArg(getFrame());
+    if (blockInstance) {
+        block = blockClosure(OBJ_VAL(blockInstance))->function;
+    }
+    if (!block && getFrame()->callInfo) {
+        block = getFrame()->callInfo->blockFunction;
+    }
     if (!block) {
         throwErrorFmt(lxErrClass, "no block given");
     }
@@ -276,7 +284,7 @@ static Value lxArrayEach(int argCount, Value *args) {
 
     VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
         iterStart++;
-        yieldFromC(1, &el);
+        yieldFromC(1, &el, blockInstance);
     }
     return *args;
 }
@@ -290,17 +298,13 @@ static Value lxArrayMap(int argCount, Value *args) {
     CHECK_ARITY("Array#map", 1, 1, argCount);
     Value self = *args;
 
-    ObjFunction *block = getFrame()->callInfo->blockFunction;
-    if (!block) {
-        throwErrorFmt(lxErrClass, "no block given");
-    }
-
     volatile Value ret = newArray();
     CallInfo cinfo;
     memset(&cinfo, 0, sizeof(CallInfo));
-    cinfo.blockFunction = block;
+    cinfo.blockFunction = getFrame()->callInfo->blockFunction;
     cinfo.blockIterFunc = mapIter;
     cinfo.blockIterRet = &ret;
+    cinfo.blockInstance = getBlockArg(getFrame());
     Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
     if (IS_NIL(res)) {
         return NIL_VAL;

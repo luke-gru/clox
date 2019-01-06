@@ -41,7 +41,7 @@ Value lxEval(int argCount, Value *args);
 Value lxSleep(int argCount, Value *args);
 void threadSleepNano(LxThread *th, int secs);
 Value lxYield(int argCount, Value *args);
-NORETURN void yieldFromC(int argCount, Value *args);
+NORETURN void yieldFromC(int argCount, Value *args, ObjInstance *blkObj);
 Value lxExit(int argCount, Value *args);
 Value lxNewThread(int argCount, Value *args);
 Value lxJoinThread(int argCount, Value *args);

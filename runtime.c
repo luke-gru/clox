@@ -250,8 +250,13 @@ Value lxYield(int argCount, Value *args) {
     UNREACHABLE("block didn't longjmp?"); // blocks should always longjmp out
 }
 
-NORETURN void yieldFromC(int argCount, Value *args) {
-    ObjClosure *blkClosure = getCFrameBlockClosure();
+NORETURN void yieldFromC(int argCount, Value *args, ObjInstance *blockObj) {
+    ObjClosure *blkClosure;
+    if (blockObj) {
+        blkClosure = blockClosure(OBJ_VAL(blockObj));
+    } else {
+        blkClosure = getCFrameBlockClosure();
+    }
     Value callable = OBJ_VAL(blkClosure);
     push(callable);
     for (int i = 0; i < argCount; i++) {
@@ -262,6 +267,7 @@ NORETURN void yieldFromC(int argCount, Value *args) {
         .blockFunction = NULL,
         .isYield = true, // tell callCallable to adjust frame stack in popFrame()
         .blockIterFunc = NULL,
+        .blockInstance = blockObj,
     };
     callCallable(callable, argCount, false, &cinfo);
     UNREACHABLE("block didn't longjmp?"); // blocks should always longjmp out

@@ -19,8 +19,20 @@ static void markInternalBlock(Obj *internalObj) {
     grayObject((Obj*)blk->closure);
 }
 
-static LxBlock *blockGetHidden(Value block) {
+static inline LxBlock *blockGetHidden(Value block) {
     return (LxBlock*) AS_INSTANCE(block)->internal->data;
+}
+
+ObjClosure *blockClosure(Value block) {
+    return blockGetHidden(block)->closure;
+}
+
+ObjInstance *getBlockArg(CallFrame *frame) {
+    if (frame->callInfo) {
+        return frame->callInfo->blockInstance;
+    } else {
+        return NULL;
+    }
 }
 
 static Value lxBlockInit(int argCount, Value *args) {

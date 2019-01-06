@@ -290,6 +290,7 @@ typedef struct LxFile {
 #define IS_AN_ERROR(value)      (IS_A(value, lxErrClass))
 #define IS_A_THREAD(value)      (IS_A(value, lxThreadClass))
 #define IS_A_STRING(value)      (IS_STRING(value) || IS_A(value, lxStringClass))
+#define IS_A_BLOCK(value)       (IS_INSTANCE(value) && IS_A(value, lxBlockClass))
 
 #define IS_SUBCLASS(subklass,superklass) (isSubclass(subklass,superklass))
 
@@ -460,6 +461,9 @@ Value mapDup(Value other);
 
 // blocks
 Value newBlock(ObjClosure *closure);
+ObjClosure *blockClosure(Value blk);
+typedef struct CallFrame CallFrame; // fwd decl
+ObjInstance *getBlockArg(CallFrame *frame);
 
 // Object creation functions
 ObjFunction *newFunction(Chunk *chunk, Node *funcNode);

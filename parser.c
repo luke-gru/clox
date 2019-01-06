@@ -673,6 +673,7 @@ static Node *varDeclaration(void) {
 static Node *expression(void) {
     TRACE_START("expression");
     Node *splatCall = NULL;
+    Node *toBlockCall = NULL;
     if (current->inCallExpr && match(TOKEN_STAR)) {
         node_type_t splatType = {
             .type = NODE_EXPR,
@@ -680,10 +681,20 @@ static Node *expression(void) {
         };
         splatCall = createNode(splatType, current->previous, NULL);
     }
+    if (match(TOKEN_AMP)) {
+        node_type_t toBlockT = {
+            .type = NODE_EXPR,
+            .kind = TO_BLOCK_EXPR
+        };
+        toBlockCall = createNode(toBlockT, current->previous, NULL);
+    }
     Node *expr = assignment();
     if (splatCall != NULL) {
         nodeAddChild(splatCall, expr);
         expr = splatCall;
+    } else if (toBlockCall != NULL) {
+        nodeAddChild(toBlockCall, expr);
+        expr = toBlockCall;
     }
     TRACE_END("expression");
     return expr;

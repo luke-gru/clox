@@ -793,6 +793,8 @@ static inline bool isBlockControlFlow(Value err) {
 
 // every new error value, when thrown, gets its backtrace set first
 void setBacktrace(Value err) {
+    // waste of time to set backtrace on an error which is just part of
+    // internal control flow (break/continue/return in blocks)
     if (isBlockControlFlow(err)) {
         return;
     }
@@ -1191,6 +1193,13 @@ static inline bool checkFunctionArity(ObjFunction *func, int argCount) {
 // is pushed to the stack.
 static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo *callInfo) {
     LxThread *th = vm.curThread;
+    if (argCount > 0 && callInfo) {
+        if (IS_A_BLOCK(peek(0))) {
+            Value blkObj = pop();
+            callInfo->blockInstance = AS_INSTANCE(blkObj);
+            argCount--;
+        }
+    }
     ObjClosure *closure = NULL;
     Value instanceVal;
     volatile ObjInstance *instance = NULL;
@@ -1339,7 +1348,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // non-native function/method (defined in lox code)
     ASSERT(closure);
     ObjFunction *func = closure->function;
-    if (!closure->isBlock) {
+    if (closure->isBlock || (callInfo && callInfo->blockInstance)) {
+        // no arity check
+    } else {
         checkFunctionArity(func, argCount);
     }
 
@@ -2359,6 +2370,14 @@ vmLoop:
           throwError(err); // blocks catch this, not propagated
           DISPATCH_BOTTOM();
       }
+      CASE_OP(TO_BLOCK): {
+          Value func = pop();
+          if (UNLIKELY(!IS_CLOSURE(func))) {
+              throwErrorFmt(lxTypeErrClass, "Cannot use '&' operator on a non-function");
+          }
+          push(newBlock(AS_CLOSURE(func)));
+          DISPATCH_BOTTOM();
+      }
       CASE_OP(CALL): {
           uint8_t numArgs = READ_BYTE();
           if (th->lastSplatNumArgs > 0) {
@@ -2492,6 +2511,17 @@ vmLoop:
       }
       // return from function/method, and close all upvalues in the callframe frame
       CASE_OP(RETURN): {
+          // this is if we're in a block given by (&block), and we returned
+          // (explicitly or implicitly)
+          if (UNLIKELY(th->v_blockStack.length > 0)) {
+              pop();
+              Value ret = *THREAD()->lastValue;
+              Value err = newError(lxContinueBlockErrClass, NIL_VAL);
+              setProp(err, INTERN("ret"), ret);
+              throwError(err); // blocks catch this, not propagated
+              (th->vmRunLvl)--;
+              DISPATCH_BOTTOM();
+          }
           Value result = pop(); // pop from caller's frame
           ASSERT(!getFrame()->isCCall);
           Value *newTop = getFrame()->slots;
