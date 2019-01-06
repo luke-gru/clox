@@ -652,6 +652,7 @@ Value newArrayConstant(void) {
     return OBJ_VAL(ary);
 }
 
+// NOTE: doesn't call 'dup' function, just duplicates entries
 Value arrayDup(Value otherVal) {
     ObjArray *other = AS_ARRAY(otherVal);
     Value ret = newArray();
@@ -828,6 +829,23 @@ Value newMap(void) {
     ObjInstance *instance = newInstance(lxMapClass);
     callVMMethod(instance, OBJ_VAL(nativeMapInit), 0, NULL, NULL);
     return pop();
+}
+
+Value mapDup(Value other) {
+    Value ret = newMap();
+    ObjMap *retMap = AS_MAP(ret);
+    Table *map = retMap->table;
+    Entry e; int eidx = 0;
+    TABLE_FOREACH(map, e, eidx, {
+        mapSet(ret, e.key, e.value);
+    })
+    return ret;
+}
+
+// NOTE: used in compiler, can't use VM stack
+Value newMapConstant(void) {
+    ObjMap *map = allocateMap(lxMapClass);
+    return OBJ_VAL(map);
 }
 
 bool mapEquals(Value self, Value other) {

@@ -2769,6 +2769,12 @@ vmLoop:
           push(mapVal);
           DISPATCH_BOTTOM();
       }
+      CASE_OP(DUPMAP): {
+          Value map = READ_CONSTANT();
+          DBG_ASSERT(IS_A_MAP(map));
+          push(mapDup(map));
+          DISPATCH_BOTTOM();
+      }
       // exit interpreter, or evaluation context if in eval() or
       // loadScript/requireScript
       CASE_OP(LEAVE): {

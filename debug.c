@@ -124,6 +124,8 @@ const char *opName(OpCode code) {
         return "OP_DUPARRAY";
     case OP_MAP:
         return "OP_MAP";
+    case OP_DUPMAP:
+        return "OP_DUPMAP";
     case OP_SPLAT_ARRAY:
         return "OP_SPLAT_ARRAY";
     case OP_GET_THIS:

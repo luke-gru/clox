@@ -58,6 +58,7 @@ typedef enum {
     CONST_T_NUMLIT = 1,
     CONST_T_STRLIT,
     CONST_T_ARYLIT,
+    CONST_T_MAPLIT,
     CONST_T_CODE,
     CONST_T_CALLINFO
 } ConstType;
@@ -1446,9 +1447,34 @@ static void emitNode(Node *n) {
             error("Too many key-value pairs in map literal");
             return;
         }
-        vec_reverse(n->children);
-        emitChildren(n);
-        emitOp1(OP_MAP, (uint8_t)n->children->length);
+        Node *elNode = NULL; int elIdx = 0;
+        bool allConst = true;
+        vec_foreach(n->children, elNode, elIdx) {
+            if (!isConstExprNodeCanEmbed(elNode)) {
+                allConst = false;
+                break;
+            }
+        }
+
+        if (!allConst) {
+            vec_reverse(n->children);
+            emitChildren(n);
+            emitOp1(OP_MAP, (uint8_t)n->children->length);
+        } else {
+            elNode = NULL; elIdx = 0;
+            Value map = newMapConstant();
+            hideFromGC((Obj*)AS_OBJ(map));
+            Node *lastNode = NULL;
+            vec_foreach(n->children, elNode, elIdx) {
+                if (elIdx % 2 == 0 && elIdx > 0) {
+                    mapSet(map, valueFromConstNode(lastNode), valueFromConstNode(elNode));
+                }
+                lastNode = elNode;
+            }
+            uint8_t mapSlot = makeConstant(map, CONST_T_MAPLIT);
+            emitOp1(OP_DUPMAP, mapSlot);
+        }
+
         break;
     }
     case IF_STMT: {

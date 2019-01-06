@@ -416,6 +416,7 @@ Value newError(ObjClass *errClass, Value msg);
 
 // maps
 Value newMap(void);
+Value  newMapConstant(void);
 bool mapEquals(Value map, Value other);
 static inline Table *mapGetHidden(Value mapVal) {
     ObjInstance *inst = AS_INSTANCE(mapVal);
@@ -454,6 +455,8 @@ static inline LxThread *threadGetHidden(Value thread) {
     ObjInternal *i = AS_INSTANCE(thread)->internal;
     return (LxThread*)i->data;
 }
+
+Value mapDup(Value other);
 
 // blocks
 Value newBlock(ObjClosure *closure);
