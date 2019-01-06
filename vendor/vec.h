@@ -76,8 +76,16 @@
   (v)->data[0]
 
 
+#define vec_first_or(v, orval)\
+  ((v)->length > 0 ? (v)->data[(v)->length - 1] : orval)
+
+
 #define vec_last(v)\
   (v)->data[(v)->length - 1]
+
+
+#define vec_last_or(v, orval)\
+  ((v)->length > 0 ? (v)->data[(v)->length - 1] : orval)
 
 
 #define vec_reserve(v, n)\

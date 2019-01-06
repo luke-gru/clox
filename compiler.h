@@ -113,8 +113,7 @@ typedef struct CallInfo {
     bool usesSplat;
     Token kwargNames[LX_MAX_KWARGS];
     // for blocks
-    ObjFunction *block; // lox block
-    ObjClosure *cachedBlock; // same as above, but cached closure
+    ObjFunction *blockFunction; // lox block
     BlockIterFunc blockIterFunc;
     Value *blockIterRet;
     bool isYield;

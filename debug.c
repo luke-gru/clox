@@ -462,8 +462,8 @@ static int printCallInstruction(FILE *f, const char *op, Chunk *chunk, int i, ve
     ObjInternal *obj = AS_INTERNAL(callInfoVal);
     CallInfo *callInfo = internalGetData(obj);
     ASSERT(callInfo);
-    if (callInfo->block) {
-        addFunc(funcs, callInfo->block);
+    if (callInfo->blockFunction) {
+        addFunc(funcs, callInfo->blockFunction);
     }
     char *callName = tokStr(&callInfo->nameTok);
     if (strcmp(callName, "}") == 0) { // when `fun() { ... }(args)`
@@ -488,8 +488,8 @@ static int callInstruction(ObjString *buf, const char *op, Chunk *chunk, int i, 
     ObjInternal *obj = AS_INTERNAL(callInfoVal);
     CallInfo *callInfo = internalGetData(obj);
     ASSERT(callInfo);
-    if (callInfo->block) {
-        addFunc(funcs, callInfo->block);
+    if (callInfo->blockFunction) {
+        addFunc(funcs, callInfo->blockFunction);
     }
     sprintf(cbuf, "%s\t(argc=%02d)\n", op, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
@@ -507,8 +507,8 @@ static int printInvokeInstruction(FILE *f, const char *op, Chunk *chunk, int i, 
     ObjInternal *obj = AS_INTERNAL(callInfoVal);
     CallInfo *callInfo = internalGetData(obj);
     ASSERT(callInfo);
-    if (callInfo->block) {
-        addFunc(funcs, callInfo->block);
+    if (callInfo->blockFunction) {
+        addFunc(funcs, callInfo->blockFunction);
     }
     Value methodName = getConstant(chunk, methodNameArg);
     char *methodNameStr = AS_CSTRING(methodName);
@@ -527,8 +527,8 @@ static int invokeInstruction(ObjString *buf, const char *op, Chunk *chunk, int i
     ObjInternal *obj = AS_INTERNAL(callInfoVal);
     CallInfo *callInfo = internalGetData(obj);
     ASSERT(callInfo);
-    if (callInfo->block) {
-        addFunc(funcs, callInfo->block);
+    if (callInfo->blockFunction) {
+        addFunc(funcs, callInfo->blockFunction);
     }
     Value methodName = getConstant(chunk, methodNameArg);
     char *methodNameStr = AS_CSTRING(methodName);

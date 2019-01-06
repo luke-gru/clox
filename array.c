@@ -239,8 +239,16 @@ static Value lxArrayEach(int argCount, Value *args) {
     volatile int iterStart = 0;
     volatile LxThread *th = vm.curThread;
     volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
+    volatile ObjFunction *block = getFrame()->callInfo->blockFunction;
+    if (!block) {
+        throwErrorFmt(lxErrClass, "no block given");
+    }
+    volatile BlockStackEntry *bentry = NULL;
     while (true) {
-        SETUP_BLOCK(th, th->curBlock, status, th->errInfo, th->lastBlock)
+        if (iterStart == ary->count) {
+            return *args;
+        }
+        SETUP_BLOCK(block, bentry, status, th->errInfo)
         if (status == TAG_NONE) {
             break;
         } else if (status == TAG_RAISE) {
@@ -282,13 +290,15 @@ static Value lxArrayMap(int argCount, Value *args) {
     CHECK_ARITY("Array#map", 1, 1, argCount);
     Value self = *args;
 
-    if (!vm.curThread->curBlock) {
+    ObjFunction *block = getFrame()->callInfo->blockFunction;
+    if (!block) {
         throwErrorFmt(lxErrClass, "no block given");
     }
 
     volatile Value ret = newArray();
     CallInfo cinfo;
     memset(&cinfo, 0, sizeof(CallInfo));
+    cinfo.blockFunction = block;
     cinfo.blockIterFunc = mapIter;
     cinfo.blockIterRet = &ret;
     Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
@@ -309,7 +319,8 @@ static Value lxArraySelect(int argCount, Value *args) {
     CHECK_ARITY("Array#select", 1, 1, argCount);
     Value self = *args;
 
-    if (!vm.curThread->curBlock) {
+    ObjFunction *block = getFrame()->callInfo->blockFunction;
+    if (!block) {
         throwErrorFmt(lxErrClass, "no block given");
     }
 
@@ -318,7 +329,7 @@ static Value lxArraySelect(int argCount, Value *args) {
     memset(&cinfo, 0, sizeof(cinfo));
     cinfo.blockIterFunc = selectIter;
     cinfo.blockIterRet = &ret;
-    cinfo.block = vm.curThread->curBlock;
+    cinfo.blockFunction = block;
     Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
     if (IS_NIL(res)) {
         return res;

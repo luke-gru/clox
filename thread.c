@@ -59,9 +59,7 @@ static void LxThreadSetup(LxThread *th) {
     vec_init(&th->v_ecs);
     th->openUpvalues = NULL;
     th->thisObj = NULL;
-    th->curBlock = NULL;
-    th->lastBlock = NULL; // this field for convenience, not necessary if we track it somewhere else
-    th->outermostBlock = NULL;
+    vec_init(&th->v_blockStack);
     th->lastValue = NULL;
     th->hadError = false;
     th->errInfo = NULL;
@@ -86,6 +84,7 @@ static void LxThreadSetup(LxThread *th) {
 
 static void LxThreadCleanup(LxThread *th) {
     vec_deinit(&th->stackObjects);
+    vec_deinit(&th->v_blockStack);
     pthread_mutex_destroy(&th->sleepMutex);
     pthread_cond_destroy(&th->sleepCond);
 }

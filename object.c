@@ -833,10 +833,9 @@ Value newMap(void) {
 
 Value mapDup(Value other) {
     Value ret = newMap();
-    ObjMap *retMap = AS_MAP(ret);
-    Table *map = retMap->table;
+    Table *otherMap = AS_MAP(other)->table;
     Entry e; int eidx = 0;
-    TABLE_FOREACH(map, e, eidx, {
+    TABLE_FOREACH(otherMap, e, eidx, {
         mapSet(ret, e.key, e.value);
     })
     return ret;

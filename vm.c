@@ -469,8 +469,6 @@ void freeVM(void) {
     }
     VM_DEBUG("freeVM() start");
 
-    vm.mainThread->curBlock = NULL;
-    vm.mainThread->lastBlock = NULL;
     freeObjects();
 
     freeDebugger(&vm.debugger);
@@ -557,7 +555,7 @@ void push(Value value) {
     ASSERT_VALID_STACK();
     register VMExecContext *ctx = EC;
     if (UNLIKELY(ctx->stackTop == ctx->stack + STACK_MAX)) {
-        fprintf(stderr, "Stack overflow!\n");
+        errorPrintScriptBacktrace("Stack overflow.");
         exit(1);
     }
     if (IS_OBJ(value)) {
@@ -1049,6 +1047,10 @@ Value callFunctionValue(Value callable, int argCount, Value *args) {
 static void unwindErrInfo(CallFrame *frame) {
     ErrTagInfo *info = vm.curThread->errInfo;
     while (info && info->frame == frame) {
+        if (info->bentry) {
+            /*fprintf(stderr, "Popping block entry (unwindErrInfo)\n");*/
+            popBlockEntry(info->bentry);
+        }
         ErrTagInfo *prev = info->prev;
         FREE(ErrTagInfo, info);
         info = prev;
@@ -1064,7 +1066,7 @@ void popFrame(void) {
     CallFrame *frame = getFrameI();
     VM_DEBUG("popping callframe (%s)", frame->isCCall ? "native" : "non-native");
     int stackAdjust = frame->stackAdjustOnPop;
-    VM_DEBUG("stack adjust: %d", stackAdjust);
+    /*VM_DEBUG("stack adjust: %d", stackAdjust);*/
     unwindErrInfo(frame);
     if (frame->isCCall) {
         DBG_ASSERT(th->inCCall > 0);
@@ -1072,12 +1074,6 @@ void popFrame(void) {
         if (th->inCCall == 0) {
             vec_clear(&vm.curThread->stackObjects);
         }
-    }
-    // FIXME: incorrect logic here, because frame->block is an ObjFunction,
-    // and nested calls of the same function will set outermost to NULL before
-    // it's supposed to.
-    if (frame->block == th->outermostBlock) {
-        th->outermostBlock = NULL;
     }
     EC->frameCount--;
     frame = getFrameOrNull(); // new frame
@@ -1092,10 +1088,6 @@ void popFrame(void) {
         } else {
             th->thisObj = NULL;
         }
-    } else {
-        th->curBlock = NULL;
-        th->lastBlock = NULL;
-        th->outermostBlock = NULL;
     }
     ASSERT_VALID_STACK();
 }
@@ -1113,6 +1105,10 @@ CallFrame *pushFrame(void) {
     frame->callLine = curLine;
     frame->file = EC->filename;
     frame->prev = prev;
+    BlockStackEntry *bentry = vec_last_or(&THREAD()->v_blockStack, NULL);
+    if (bentry && bentry->frame == NULL) {
+        bentry->frame = frame;
+    }
     return frame;
 }
 
@@ -1139,6 +1135,10 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->isCCall = true;
     newFrame->nativeFunc = native;
     newFrame->file = EC->filename;
+    BlockStackEntry *bentry = vec_last_or(&THREAD()->v_blockStack, NULL);
+    if (bentry && bentry->frame == NULL) {
+        bentry->frame = newFrame;
+    }
     vm.curThread->inCCall++;
 }
 
@@ -1237,8 +1237,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 ASSERT(nativeInit->function);
                 pushNativeFrame(nativeInit);
                 volatile CallFrame *newFrame = getFrame();
-                newFrame->block = th->curBlock;
-                newFrame->lastBlock = th->lastBlock;
                 DBG_ASSERT(instance);
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
@@ -1307,8 +1305,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         volatile VMExecContext *ec = EC;
         newFrame->instance = instance;
         newFrame->klass = frameClass;
-        newFrame->block = th->curBlock;
-        newFrame->lastBlock = th->lastBlock;
         newFrame->callInfo = callInfo;
         volatile Value val = captureNativeError(native, argci, EC->stackTop-argci);
         newFrame->slots = ec->stackTop - argcActuali;
@@ -1460,9 +1456,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         }
     }
 
-    if (func->hasBlockArg && callInfo->block) {
+    if (func->hasBlockArg && callInfo->blockFunction) {
         // TODO: get closure created here with upvals!
-        Value blockClosure = OBJ_VAL(newClosure(callInfo->block));
+        Value blockClosure = OBJ_VAL(newClosure(callInfo->blockFunction));
         ObjClosure *blkClosure = AS_CLOSURE(blockClosure);
         push(newBlock(blkClosure));
         argCountWithRestAry++;
@@ -1474,8 +1470,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // add frame
     VM_DEBUG("%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
-    frame->block = th->curBlock;
-    frame->lastBlock = th->lastBlock;
     frame->instance = instance;
     frame->callInfo = callInfo;
     if (instance && !frameClass) frameClass = instance->klass;
@@ -2403,16 +2397,10 @@ vmLoop:
           uint8_t numArgs = READ_BYTE();
           Value callInfoVal = READ_CONSTANT();
           Obj *oldThis = th->thisObj;
-          ObjFunction *oldBlock = th->curBlock;
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           if (th->lastSplatNumArgs > 0) {
               numArgs += (th->lastSplatNumArgs-1);
               th->lastSplatNumArgs = -1;
-          }
-          if (callInfo->block) {
-              th->lastBlock = oldBlock;
-              th->curBlock = callInfo->block;
-              if (!oldBlock) th->outermostBlock = th->curBlock;
           }
           Value instanceVal = peek(numArgs);
           if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal) || IS_MAP(instanceVal)) {
@@ -2429,7 +2417,6 @@ vmLoop:
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
               th->thisObj = oldThis;
-              th->curBlock = oldBlock;
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);
@@ -2445,7 +2432,6 @@ vmLoop:
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
               th->thisObj = oldThis;
-              th->curBlock = oldBlock;
           } else if (IS_MODULE(instanceVal)) {
               ObjModule *mod = AS_MODULE(instanceVal);
               Obj *callable = moduleFindStaticMethod(mod, mname);
@@ -2461,7 +2447,6 @@ vmLoop:
               setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
               th->thisObj = oldThis;
-              th->curBlock = oldBlock;
           } else {
               throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfVal(instanceVal));
           }
@@ -2971,9 +2956,9 @@ void unsetPrintBuf(void) {
 
 void unwindJumpRecover(ErrTagInfo *info) {
     DBG_ASSERT(info);
-    DBG_ASSERT(getFrame());
     LxThread *th = THREAD();
     CallFrame *f = getFrameI();
+    DBG_ASSERT(f);
     while (f != info->frame) {
         VM_DEBUG("popping callframe from unwind");
         f = f->prev;
@@ -2983,9 +2968,55 @@ void unwindJumpRecover(ErrTagInfo *info) {
         VM_DEBUG("freeing Errinfo");
         DBG_ASSERT(th->errInfo);
         ErrTagInfo *prev = th->errInfo->prev;
+        /*if (th->errInfo->bentry) {*/
+            /*fprintf(stderr, "Popping block entry (unwind)\n");*/
+            /*popBlockEntry(th->errInfo->bentry);*/
+        /*}*/
         DBG_ASSERT(prev);
         FREE(ErrTagInfo, th->errInfo);
         th->errInfo = prev;
+    }
+}
+
+BlockStackEntry *addBlockEntry(ObjFunction *blockFunction) {
+    /*fprintf(stderr, "Pushing block entry\n");*/
+    DBG_ASSERT(blockFunction);
+    BlockStackEntry *entry = ALLOCATE(BlockStackEntry, 1);
+    entry->blockFunction = blockFunction;
+    entry->cachedBlockClosure = NULL;
+    entry->blockInstance = NULL;
+    entry->frame = NULL;
+    vec_push(&THREAD()->v_blockStack, entry);
+    return entry;
+}
+
+void popBlockEntryUntil(BlockStackEntry *bentry) {
+    DBG_ASSERT(bentry);
+    LxThread *th = vm.curThread;
+    BlockStackEntry *last = NULL;
+    if (th->v_blockStack.length == 0) {
+        /*fprintf(stderr, "Empty block stack (pop until)\n");*/
+    }
+    while ((last = vec_last_or(&th->v_blockStack, NULL)) != NULL && last != bentry) {
+        /*fprintf(stderr, "Popping block entry (until)\n");*/
+        FREE(BlockStackEntry, last);
+        (void)vec_pop(&th->v_blockStack);
+    }
+    if (last == bentry) {
+        /*fprintf(stderr, "Popping block entry (until last)\n");*/
+        FREE(BlockStackEntry, last);
+        (void)vec_pop(&th->v_blockStack);
+    }
+}
+
+void popBlockEntry(BlockStackEntry *bentry) {
+    DBG_ASSERT(bentry);
+    LxThread *th = vm.curThread;
+    BlockStackEntry *last = NULL;
+    if ((last = vec_last_or(&th->v_blockStack, NULL)) != NULL && last == bentry) {
+        /*fprintf(stderr, "Popping block entry (pop)\n");*/
+        FREE(BlockStackEntry, last);
+        (void)vec_pop(&th->v_blockStack);
     }
 }
 
@@ -3020,9 +3051,10 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
 
 ErrTagInfo *addErrInfo(ObjClass *errClass) {
     LxThread *th = THREAD();
-    struct ErrTagInfo *info = ALLOCATE(ErrTagInfo, 1);
+    ErrTagInfo *info = ALLOCATE(ErrTagInfo, 1);
     info->status = TAG_NONE;
     info->errClass = errClass;
+    info->bentry = NULL;
     info->frame = getFrameI();
     info->prev = th->errInfo;
     th->errInfo = info;

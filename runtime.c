@@ -183,14 +183,14 @@ static void fillClosureUpvalues(ObjClosure *block, ObjClosure *outer, CallFrame 
 }
 
 static ObjClosure *getCFrameBlockClosure() {
-    ObjFunction *block = THREAD()->curBlock;
+    BlockStackEntry *bentry = vec_last_or(&THREAD()->v_blockStack, NULL);
+    ObjFunction *block = NULL;
+    if (bentry) block = bentry->blockFunction;
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
-    CallFrame *cFrame = getFrame();
-    ASSERT(cFrame->callInfo);
-    if (cFrame->callInfo->cachedBlock) {
-        return cFrame->callInfo->cachedBlock;
+    if (bentry->cachedBlockClosure) {
+        return bentry->cachedBlockClosure;
     }
     ObjClosure *blockClosure = closureFromFn(block);
     blockClosure->isBlock = true;
@@ -199,29 +199,24 @@ static ObjClosure *getCFrameBlockClosure() {
     ObjClosure *lastClosure = frame->closure;
     ASSERT(lastClosure);
     fillClosureUpvalues(blockClosure, lastClosure, frame);
-    cFrame->callInfo->cachedBlock = blockClosure;
+    bentry->cachedBlockClosure = blockClosure;
     return blockClosure;
 }
 
 Value lxYield(int argCount, Value *args) {
     CallFrame *frame = getFrame()->prev;
     ASSERT(frame->callInfo);
-    ObjFunction *block = frame->callInfo->block;
+    ObjFunction *block = frame->callInfo->blockFunction;
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
-    ObjClosure *blockClosure;
-    if (frame->callInfo->cachedBlock) {
-        blockClosure = frame->callInfo->cachedBlock;
-    } else {
-        blockClosure = closureFromFn(block);
-        blockClosure->isBlock = true;
-        CallFrame *outerFrame = getOuterClosureFrame();
-        ObjClosure *outerClosure = outerFrame->closure;
-        ASSERT(outerClosure);
-        fillClosureUpvalues(blockClosure, outerClosure, outerFrame);
-        frame->callInfo->cachedBlock = blockClosure;
-    }
+    ObjClosure *blockClosure = NULL;
+    blockClosure = closureFromFn(block);
+    blockClosure->isBlock = true;
+    CallFrame *outerFrame = getOuterClosureFrame();
+    ObjClosure *outerClosure = outerFrame->closure;
+    ASSERT(outerClosure);
+    fillClosureUpvalues(blockClosure, outerClosure, outerFrame);
     Value callable = OBJ_VAL(blockClosure);
     push(callable);
     for (int i = 0; i < argCount; i++) {
@@ -229,13 +224,14 @@ Value lxYield(int argCount, Value *args) {
     }
     CallInfo cinfo = {
         .argc = argCount,
-        .block = block,
+        .blockFunction = block,
         .isYield = true, // tell callCallable to adjust frame stack in popFrame()
         .blockIterFunc = NULL,
     };
     volatile int status = 0;
     volatile LxThread *th = THREAD();
-    SETUP_BLOCK(th, block, status, th->errInfo, th->lastBlock)
+    volatile BlockStackEntry *bentry = NULL;
+    SETUP_BLOCK(block, bentry, status, th->errInfo)
     if (status == TAG_NONE) {
     } else if (status == TAG_RAISE) {
         ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
@@ -263,7 +259,7 @@ NORETURN void yieldFromC(int argCount, Value *args) {
     }
     CallInfo cinfo = {
         .argc = argCount,
-        .block = THREAD()->curBlock,
+        .blockFunction = NULL,
         .isYield = true, // tell callCallable to adjust frame stack in popFrame()
         .blockIterFunc = NULL,
     };

@@ -1466,7 +1466,7 @@ static void emitNode(Node *n) {
             hideFromGC((Obj*)AS_OBJ(map));
             Node *lastNode = NULL;
             vec_foreach(n->children, elNode, elIdx) {
-                if (elIdx % 2 == 0 && elIdx > 0) {
+                if (elIdx % 2 != 0 && elIdx > 0) {
                     mapSet(map, valueFromConstNode(lastNode), valueFromConstNode(elNode));
                 }
                 lastNode = elNode;
@@ -1793,7 +1793,7 @@ static void emitNode(Node *n) {
     case CALL_BLOCK_EXPR: {
         CallInfo *cinfo = emitCall(n->children->data[0]);
         ObjFunction *block = emitFunction(n->children->data[1], FUN_TYPE_BLOCK);
-        cinfo->block = block;
+        cinfo->blockFunction = block;
         break;
     }
     case SPLAT_EXPR: {

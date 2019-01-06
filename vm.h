@@ -20,6 +20,7 @@
 #endif
 
 typedef struct CallInfo CallInfo;
+typedef struct BlockStackEntry BlockStackEntry;
 
 typedef struct CallFrame {
     // Non-native function fields
@@ -39,9 +40,8 @@ typedef struct CallFrame {
     jmp_buf jmpBuf; // only used if chunk associated with closure has a catch table
     bool jmpBufSet;
     struct CallFrame *prev;
-    ObjFunction *block; // if block, this is the block function
-    ObjFunction *lastBlock;
-    int stackAdjustOnPop; // used for blocks
+    BlockStackEntry *blockEntry; // if block, this is the block info
+    int stackAdjustOnPop;
     CallInfo *callInfo;
 } CallFrame; // represents a local scope (block, function, etc)
 
@@ -56,6 +56,7 @@ typedef struct ErrTagInfo {
     jmp_buf jmpBuf;
     CallFrame *frame;
     struct ErrTagInfo *prev;
+    BlockStackEntry *bentry;
     Value caughtError;
 } ErrTagInfo;
 
@@ -90,21 +91,26 @@ typedef enum ThreadStatus {
 
 #define THREAD_OPS_UNTIL_SWITCH 10000
 
+typedef struct BlockStackEntry {
+    ObjFunction *blockFunction;
+    ObjClosure *cachedBlockClosure;
+    ObjInstance *blockInstance;
+    CallFrame *frame;
+} BlockStackEntry;
+
 typedef struct LxThread {
     pthread_t tid;
     ThreadStatus status;
-    volatile VMExecContext *ec; // current execution context of vm
+    VMExecContext *ec; // current execution context of vm
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
-    volatile ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
+    ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
     Obj *thisObj;
-    volatile ObjFunction *curBlock;
-    volatile ObjFunction *lastBlock;
-    volatile ObjFunction *outermostBlock;
+    vec_void_t v_blockStack; // pointers to BlockStackEntry
     Value *lastValue;
     bool hadError;
-    volatile ErrTagInfo *errInfo;
-    volatile Value lastErrorThrown; // TODO: change to Obj pointer
-    Value errorToThrow; // error raised by other thread
+    ErrTagInfo *errInfo;
+    Value lastErrorThrown; // TODO: change to Obj pointer
+    volatile Value errorToThrow; // error raised by other thread
     int inCCall;
     bool cCallThrew;
     bool returnedFromNativeErr;
@@ -231,6 +237,12 @@ void unsetErrInfo(void);
 void popErrInfo(void);
 void errorPrintScriptBacktrace(const char *format, ...);
 
+// blocks
+BlockStackEntry *addBlockEntry(ObjFunction *blockFunction);
+void popBlockEntryUntil(BlockStackEntry *bentry);
+void popBlockEntry(BlockStackEntry *bentry);
+
+
 // calling functions/methods
 // low-level call function, arguments must be pushed to stack, including
 // callable if it's not a method, or the instance if it is. Argcount does not
@@ -254,18 +266,18 @@ Value callFunctionValue(Value callable, int argCount, Value *args);
 Value callSuper(int argCount, Value *args, CallInfo *cinfo);
 // NOTE: must be called before lxYield to setup error handlers.
 // Similar code to vm_protect.
-#define SETUP_BLOCK(th, block, status, errInf, lastBlk) {\
+#define SETUP_BLOCK(block, bentry, status, errInf) {\
     ASSERT(block);\
-    addErrInfo(lxErrClass);\
-    th->curBlock = block;\
+    ErrTagInfo *einfo = addErrInfo(lxErrClass);\
+    bentry = addBlockEntry(block);\
+    einfo->bentry = bentry;\
     int jmpres = 0;\
     if ((jmpres = setjmp(errInf->jmpBuf)) == JUMP_SET) {\
         status = TAG_NONE;\
     } else if (jmpres == JUMP_PERFORMED) {\
+        popBlockEntryUntil(bentry);\
         unwindJumpRecover(errInf);\
         ASSERT(th->errInfo == errInf);\
-        th->curBlock = block;\
-        th->lastBlock = lastBlk;\
         errInf->status = TAG_RAISE;\
         errInf->caughtError = th->lastErrorThrown;\
         status = TAG_RAISE;\

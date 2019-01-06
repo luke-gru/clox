@@ -302,8 +302,17 @@ static Value lxMapEach(int argCount, Value *args) {
     volatile int startIdx = 0;
     volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
     volatile Value yieldArgs[2];
+    volatile ObjFunction *block = getFrame()->callInfo->blockFunction;
+    if (!block) {
+        throwErrorFmt(lxErrClass, "no block given");
+    }
+    DBG_ASSERT(block);
+    volatile BlockStackEntry *bentry = NULL;
     while (true) {
-        SETUP_BLOCK(th, th->curBlock, status, th->errInfo, th->lastBlock)
+        if (startIdx == map->count) {
+            return *args;
+        }
+        SETUP_BLOCK(block, bentry, status, th->errInfo)
         if (status == TAG_NONE) {
             break;
         } else if (status == TAG_RAISE) {
@@ -336,7 +345,6 @@ static Value lxMapEach(int argCount, Value *args) {
         yieldArgs[1] = e.value;
         yieldFromC(2, yieldArgs);
     })
-
     return self;
 }
 
@@ -348,7 +356,8 @@ static Value lxMapMap(int argCount, Value *args) {
     CHECK_ARITY("Map#map", 1, 1, argCount);
     Value self = *args;
 
-    if (!vm.curThread->curBlock) {
+    volatile ObjFunction *block = getFrame()->callInfo->blockFunction;
+    if (!block) {
         throwErrorFmt(lxErrClass, "no block given");
     }
 
@@ -357,7 +366,7 @@ static Value lxMapMap(int argCount, Value *args) {
     memset(&cinfo, 0, sizeof(cinfo));
     cinfo.blockIterFunc = mapIter;
     cinfo.blockIterRet = &ret;
-    cinfo.block = vm.curThread->curBlock;
+    cinfo.blockFunction = block;
     Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
     if (IS_NIL(res)) {
         return res;
