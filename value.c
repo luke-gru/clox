@@ -146,6 +146,16 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
                         // Shouldn't happen, but happens sometimes when debugging the GC
                         return fprintf(file, "??unknown string??");
                     }
+                } else if (IS_ARRAY(value)) {
+                    fprintf(file, "[");
+                    ValueArray *ary = &AS_ARRAY(value)->valAry;
+                    Value el; int elIdx = 0;
+                    // XXX: this can overflow stack if array contains itself...
+                    VALARRAY_FOREACH(ary, el, elIdx) {
+                        printValue(file, el, canCallMethods, maxLen);
+                        fprintf(file, ",");
+                    }
+                    return fprintf(file, "]");
                 } else {
                     ObjClass *klass = inst->klass;
                     char *klassName = CLASSINFO(klass)->name->chars;

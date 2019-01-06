@@ -331,7 +331,11 @@ static int printArrayInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
 }
 
 static int printDupArrayInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
-    // TODO
+    uint8_t constantIdx = chunk->code[i + 1];
+    fprintf(f, "%-16s    ", op);
+    Value constant = getConstant(chunk, constantIdx);
+    printValue(f, constant,  false, -1);
+    fprintf(f, "\n");
     return i+2;
 }
 
