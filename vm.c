@@ -1145,8 +1145,12 @@ static void pushNativeFrame(ObjNative *native) {
 }
 
 // sets up VM/C call jumpbuf if not set
-static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args) {
+static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args, CallInfo *cinfo) {
     LxThread *th = vm.curThread;
+    if (cinfo && cinfo->blockInstance) {
+        DBG_ASSERT(argCount > 0); // at least the block argument
+        argCount--; // block arg is implicit
+    }
     if (th->inCCall == 0) {
         VM_DEBUG("%s", "Setting VM/C error jump buffer");
         VM_DEBUG("setting VM/C error jump buf");
@@ -1170,7 +1174,7 @@ static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args
     }
 }
 
-static inline bool checkFunctionArity(ObjFunction *func, int argCount) {
+static inline bool checkFunctionArity(ObjFunction *func, int argCount, CallInfo *cinfo) {
     int arityMin = func->arity;
     int arityMax = arityMin + func->numDefaultArgs + func->numKwargs + (func->hasBlockArg ? 1 : 0);
     if (func->hasRestArg) arityMax = 20; // TODO: make a #define
@@ -1195,10 +1199,13 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     LxThread *th = vm.curThread;
     if (argCount > 0 && callInfo) {
         if (IS_A_BLOCK(peek(0))) {
-            Value blkObj = pop();
+            Value blkObj = peek(0);
             callInfo->blockInstance = AS_INSTANCE(blkObj);
-            argCount--;
         }
+    }
+    if (callInfo && callInfo->blockInstance && !IS_A_BLOCK(peek(0))) {
+        push(OBJ_VAL(callInfo->blockInstance));
+        argCount++;
     }
     ObjClosure *closure = NULL;
     Value instanceVal;
@@ -1251,7 +1258,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 newFrame->klass = frameClass;
                 newFrame->callInfo = callInfo;
                 VM_DEBUG("calling native initializer for class %s with %d args", klassName, argCount);
-                Value val = captureNativeError(nativeInit, argCount+1, EC->stackTop-argCount-1);
+                Value val = captureNativeError(nativeInit, argCount+1, EC->stackTop-argCount-1, callInfo);
                 th = THREAD();
                 th->thisObj = oldThis;
                 newFrame->slots = EC->stackTop-argCount-1;
@@ -1315,7 +1322,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         newFrame->instance = instance;
         newFrame->klass = frameClass;
         newFrame->callInfo = callInfo;
-        volatile Value val = captureNativeError(native, argci, EC->stackTop-argci);
+        volatile Value val = captureNativeError(native, argci, EC->stackTop-argci, callInfo);
         newFrame->slots = ec->stackTop - argcActuali;
         if (THREAD()->returnedFromNativeErr) {
             VM_DEBUG("Returned from native function with error");
@@ -1351,7 +1358,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     if (closure->isBlock || (callInfo && callInfo->blockInstance)) {
         // no arity check
     } else {
-        checkFunctionArity(func, argCount);
+        checkFunctionArity(func, argCount, callInfo);
     }
 
     vec_nodep_t *params = (vec_nodep_t*)nodeGetData(func->funcNode);

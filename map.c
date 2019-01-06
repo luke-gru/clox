@@ -304,11 +304,9 @@ static Value lxMapEach(int argCount, Value *args) {
     volatile Value yieldArgs[2];
     volatile ObjFunction *block = NULL;
     volatile ObjInstance *blockInstance = NULL;
-    if (argCount == 2) {
-        blockInstance = getBlockArg(getFrame());
-        if (blockInstance) {
-            block = blockClosure(OBJ_VAL(blockInstance))->function;
-        }
+    blockInstance = getBlockArg(getFrame());
+    if (blockInstance) {
+        block = blockClosure(OBJ_VAL(blockInstance))->function;
     }
     if (!block && getFrame()->callInfo) {
         block = getFrame()->callInfo->blockFunction;
@@ -316,7 +314,6 @@ static Value lxMapEach(int argCount, Value *args) {
     if (!block) {
         throwErrorFmt(lxErrClass, "no block given");
     }
-    DBG_ASSERT(block);
     volatile BlockStackEntry *bentry = NULL;
     while (true) {
         if (startIdx == map->count) {
@@ -366,17 +363,13 @@ static Value lxMapMap(int argCount, Value *args) {
     CHECK_ARITY("Map#map", 1, 1, argCount);
     Value self = *args;
 
-    volatile ObjFunction *block = getFrame()->callInfo->blockFunction;
-    if (!block) {
-        throwErrorFmt(lxErrClass, "no block given");
-    }
-
     volatile Value ret = newArray();
     CallInfo cinfo;
     memset(&cinfo, 0, sizeof(cinfo));
     cinfo.blockIterFunc = mapIter;
     cinfo.blockIterRet = &ret;
-    cinfo.blockFunction = block;
+    cinfo.blockFunction = getFrame()->callInfo->blockFunction;
+    cinfo.blockInstance = getBlockArg(getFrame());
     Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
     if (IS_NIL(res)) {
         return res;

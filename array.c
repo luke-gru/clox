@@ -324,16 +324,13 @@ static Value lxArraySelect(int argCount, Value *args) {
     Value self = *args;
 
     ObjFunction *block = getFrame()->callInfo->blockFunction;
-    if (!block) {
-        throwErrorFmt(lxErrClass, "no block given");
-    }
-
     volatile Value ret = newArray();
     CallInfo cinfo;
     memset(&cinfo, 0, sizeof(cinfo));
     cinfo.blockIterFunc = selectIter;
     cinfo.blockIterRet = &ret;
     cinfo.blockFunction = block;
+    cinfo.blockInstance = getBlockArg(getFrame());
     Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
     if (IS_NIL(res)) {
         return res;

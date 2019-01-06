@@ -12,6 +12,8 @@ for (var i = 0; i < 2; i+=1) {
   print a.map(&identity);
 }
 
+(&myfunc).yield(100);
+
 __END__
 -- expect: --
 1
@@ -22,3 +24,4 @@ Hi
 Hi
 [1,2,3]
 [1,2,3]
+100
