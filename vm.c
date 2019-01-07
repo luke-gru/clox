@@ -77,6 +77,8 @@ char *unredefinableGlobals[] = {
     "loadScript",
     "requireScript",
     "eval",
+    "yield",
+    "sleep",
     "__FILE__",
     "__DIR__",
     "__LINE__",
@@ -247,6 +249,7 @@ static void defineNativeClasses(void) {
     Init_IOClass();
     Init_FileClass();
     Init_ThreadClass();
+    Init_TimeClass();
     Init_BlockClass();
     isClassHierarchyCreated = true;
 }

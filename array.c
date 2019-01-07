@@ -356,7 +356,6 @@ static Value lxArrayWrapStatic(int argCount, Value *args) {
 }
 
 void Init_ArrayClass() {
-    // class Array
     ObjClass *arrayClass = addGlobalClass("Array", lxObjClass);
     ObjClass *arrayStatic = classSingletonClass(arrayClass);
     lxAryClass = arrayClass;

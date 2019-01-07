@@ -136,6 +136,8 @@ void Init_rand(void);
 void Init_ThreadClass(void);
 // class Block
 void Init_BlockClass(void);
+// Time
+void Init_TimeClass(void);
 
 // API for adding classes/modules/methods
 void addGlobalFunction(const char *name, NativeFn func);
