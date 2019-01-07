@@ -39,8 +39,10 @@
 #define xfree free
 
 struct sGCProfile {
-    struct timeval totalGCTime;
-    unsigned long totalRuns;
+    struct timeval totalGCYoungTime;
+    struct timeval totalGCFullTime;
+    unsigned long runsYoung;
+    unsigned long runsFull;
 };
 
 extern struct sGCProfile GCProf;
@@ -80,7 +82,6 @@ void pushRememberSet(Obj *obj);
 #define IS_YOUNG_OBJ(obj) ((obj)->GCGen == GC_GEN_MIN)
 static inline void objWrite(Value owner, Value pointed) {
     if ((IS_OBJ(pointed) && IS_YOUNG_VAL(pointed)) && IS_OLD_VAL(owner)) {
-        AS_OBJ(pointed)->GCFlags |= GC_FLAG_POINTED_TO;
         pushRememberSet(AS_OBJ(pointed));
     }
 }

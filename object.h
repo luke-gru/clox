@@ -34,7 +34,6 @@ typedef struct Obj {
     size_t objectId;
     // GC fields
     unsigned short GCGen;
-    unsigned short GCFlags;
     bool isDark; // is this object marked?
     bool noGC; // don't collect this object
     // Other fields

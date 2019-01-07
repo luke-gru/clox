@@ -37,24 +37,29 @@ static bool GCOn = true;
 static bool dontGC = false;
 
 struct sGCProfile GCProf = {
-    .totalGCTime = {
+    .totalGCYoungTime = {
         .tv_sec = 0,
         .tv_usec = 0,
     },
-    .totalRuns = 0
+    .totalGCFullTime = {
+        .tv_sec = 0,
+        .tv_usec = 0,
+    },
+    .runsYoung = 0,
+    .runsFull = 0,
 };
 
 static void startGCRunProfileTimer(struct timeval *timeStart) {
     gettimeofday(timeStart, NULL);
 }
-static void stopGCRunProfileTimer(struct timeval *timeStart) {
+static void stopGCRunProfileTimer(struct timeval *timeStart, struct timeval *tout) {
     struct timeval timeEnd;
     gettimeofday(&timeEnd, NULL);
     struct timeval tdiff = { .tv_sec = 0, .tv_usec = 0 };
     timersub(&timeEnd, timeStart, &tdiff);
     struct timeval tres;
-    timeradd(&GCProf.totalGCTime, &tdiff, &tres);
-    GCProf.totalGCTime = tres; // copy
+    timeradd(tout, &tdiff, &tres);
+    *tout = tres; // copy
 }
 
 struct sGCStats GCStats;
@@ -100,15 +105,26 @@ static void printGCStats() {
 }
 
 void printGCProfile() {
-    fprintf(stderr, "Total runs: %lu\n", GCProf.totalRuns);
-    time_t secs = GCProf.totalGCTime.tv_sec;
-    suseconds_t msecs = GCProf.totalGCTime.tv_usec;
+    fprintf(stderr, "Runs Young: %lu\n", GCProf.runsYoung);
+    fprintf(stderr, "Runs Full:  %lu\n", GCProf.runsFull);
+    fprintf(stderr, "Total runs: %lu\n", GCProf.runsYoung+GCProf.runsFull);
+    time_t secs = GCProf.totalGCYoungTime.tv_sec;
+    suseconds_t msecs = GCProf.totalGCYoungTime.tv_usec;
     suseconds_t millis = (msecs / 1000);
     while (millis > 1000) {
         secs += 1;
         millis = millis / 1000;
     }
-    fprintf(stderr, "Total GC time: %ld secs, %ld ms\n",
+    fprintf(stderr, "Young GC time: %ld secs, %ld ms\n",
+            secs, (long)millis);
+    secs = GCProf.totalGCFullTime.tv_sec;
+    msecs = GCProf.totalGCFullTime.tv_usec;
+    millis = (msecs / 1000);
+    while (millis > 1000) {
+        secs += 1;
+        millis = millis / 1000;
+    }
+    fprintf(stderr, "Full GC time: %ld secs, %ld ms\n",
             secs, (long)millis);
 }
 
@@ -262,7 +278,7 @@ void freeHeap(ObjAny *heap) {
 }
 
 static inline void pushYoungObject(Obj *obj) {
-    ASSERT(youngStackSz < YOUNG_MARK_STACK_MAX);
+    DBG_ASSERT(youngStackSz < YOUNG_MARK_STACK_MAX);
     youngStack[youngStackSz++] = obj;
 }
 
@@ -287,6 +303,9 @@ static void collectYoung(void) {
         GC_TRACE_DEBUG(1, "Skipping garbage (young, stack size: %d)", youngStackSz);
         return;
     }
+
+    struct timeval tRunStart;
+    startGCRunProfileTimer(&tRunStart);
 
     GC_TRACE_DEBUG(1, "Collecting garbage (young, stack size: %d)", youngStackSz);
     inGC = true;
@@ -415,8 +434,9 @@ static void collectYoung(void) {
     GC_TRACE_DEBUG(2, "Num promoted (manual): %d", numPromotedOther);
     GC_TRACE_DEBUG(2, "Num collected: %d", numCollected);
     vec_clear(&rememberSet);
-    GCProf.totalRuns++;
     vec_deinit(&v_stackObjs);
+    stopGCRunProfileTimer(&tRunStart, &GCProf.totalGCYoungTime);
+    GCProf.runsYoung++;
     vm.grayCount = 0;
     inGC = false;
     youngStackSz = 0;
@@ -427,13 +447,13 @@ Obj *getNewObject(ObjType type, size_t sz) {
     bool triedYoungCollect = false;
 
 retry:
-    if (freeList && (triedYoungCollect || (youngStackSz < YOUNG_MARK_STACK_MAX))) {
+    if (freeList && ((youngStackSz < YOUNG_MARK_STACK_MAX) || triedYoungCollect)) {
         obj = (Obj*)freeList;
         freeList = obj->nextFree;
         GCStats.heapUsed += sizeof(ObjAny);
         GCStats.heapUsedWaste += (sizeof(ObjAny)-sz);
         GCStats.demographics[type]++;
-        if (!triedYoungCollect) {
+        if (LIKELY(!triedYoungCollect)) {
             pushYoungObject(obj);
         }
         return obj;
@@ -1244,8 +1264,8 @@ freeLoop:
     GC_TRACE_DEBUG(3, "Stats: roots found: %d, hidden roots found: %d",
         numRootsLastGC, numHiddenRoots);
     GC_TRACE_DEBUG(1, "Done collecting garbage");
-    stopGCRunProfileTimer(&tRunStart);
-    GCProf.totalRuns++;
+    stopGCRunProfileTimer(&tRunStart, &GCProf.totalGCFullTime);
+    GCProf.runsFull++;
     vec_deinit(&v_stackObjs);
     youngStackSz = 0;
     inGC = false;
@@ -1356,8 +1376,8 @@ freeLoop:
     }
     GC_TRACE_DEBUG(2, "/freeObjects");
     numRootsLastGC = 0;
-    stopGCRunProfileTimer(&tRunStart);
-    GCProf.totalRuns++;
+    stopGCRunProfileTimer(&tRunStart, &GCProf.totalGCFullTime);
+    GCProf.runsFull++;
 
     /*ASSERT(GCStats.heapSize == 0);*/
     /*ASSERT(GCStats.heapUsed == 0);*/
