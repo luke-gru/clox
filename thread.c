@@ -122,6 +122,9 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
     }
     th->ec = vec_last(&th->v_ecs);
     th->thisObj = parentThread->thisObj;
+    if (th->thisObj) {
+        OBJ_WRITE(OBJ_VAL(thInstance), OBJ_VAL(th->thisObj));
+    }
     th->lastValue = NULL;
     th->errInfo = NULL; // TODO: copy
     th->inCCall = 0;

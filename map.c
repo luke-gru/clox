@@ -45,6 +45,8 @@ static Value lxMapInit(int argCount, Value *args) {
             Value mapKey = ARRAY_GET(el, 0);
             Value mapVal = ARRAY_GET(el, 1);
             tableSet(map, mapKey, mapVal);
+            OBJ_WRITE(self, mapKey);
+            OBJ_WRITE(self, mapVal);
         }
     } else {
         throwArgErrorFmt("Expected 1 argument, got %d", argCount-1);
@@ -63,6 +65,8 @@ static Value lxMapDup(int argCount, Value *args) {
     Entry e; int idx = 0;
     TABLE_FOREACH(mapOrig, e, idx, {
         tableSet(mapDup, e.key, e.value);
+        OBJ_WRITE(dup, e.key);
+        OBJ_WRITE(dup, e.value);
     })
 
     return dup;
@@ -127,6 +131,8 @@ static Value lxMapSet(int argCount, Value *args) {
     Value key = args[1];
     Value val = args[2];
     tableSet(map, key, val);
+    OBJ_WRITE(self, key);
+    OBJ_WRITE(self, val);
     return val;
 }
 
@@ -212,6 +218,8 @@ static Value lxMapSlice(int argCount, Value *args) {
         Value val;
         if (tableGet(map, args[i], &val)) {
             tableSet(mapRet, args[i], val);
+            OBJ_WRITE(ret, args[i]);
+            OBJ_WRITE(ret, val);
         }
     }
     return ret;
@@ -230,6 +238,8 @@ static Value lxMapMerge(int argCount, Value *args) {
     Entry e; int idx = 0;
     TABLE_FOREACH(otherMap, e, idx, {
         tableSet(retMap, e.key, e.value);
+        OBJ_WRITE(other, e.key);
+        OBJ_WRITE(other, e.value);
     });
     return ret;
 }
@@ -248,6 +258,8 @@ static Value lxMapMergeWith(int argCount, Value *args) {
     Entry e; int idx = 0;
     TABLE_FOREACH(otherMap, e, idx, {
         tableSet(myMap, e.key, e.value);
+        OBJ_WRITE(self, e.key);
+        OBJ_WRITE(self, e.value);
     })
     return self;
 }
@@ -425,6 +437,8 @@ static Value createEnvMap(void) {
         ObjString *nameStr = copyString(*envp, (int)(eq-*envp));
         ObjString *valStr = copyString(eq+1, (*envp+varLen)-eq-1);
         tableSet(map, OBJ_VAL(nameStr), OBJ_VAL(valStr));
+        OBJ_WRITE(mapVal, OBJ_VAL(nameStr));
+        OBJ_WRITE(mapVal, OBJ_VAL(valStr));
         envp++;
     }
     return mapVal;

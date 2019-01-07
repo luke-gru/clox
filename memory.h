@@ -6,7 +6,10 @@
 #include "object.h"
 #include "value.h"
 
+#define GC_GEN_MIN 1
 #define GC_GEN_YOUNG_MAX 2
+#define GC_GEN_OLD_MIN 3
+#define GC_GEN_OLD 4
 #define GC_GEN_MAX 5
 
 // NOTE: zeroes the memory
@@ -64,7 +67,10 @@ void freeObject(Obj *obj);
 void blackenObject(Obj *obj); // recursively mark object's references
 void freeObjects(void); // free all vm.objects. Used at end of VM lifecycle
 
+#define GC_PROMOTE(obj, gen) GCPromote((Obj*)obj, gen)
+#define GC_OLD(obj) GCPromote((Obj*)obj, GC_GEN_MAX)
 void GCPromote(Obj *obj, unsigned short gen);
+void GCPromoteOld(Obj *obj);
 
 bool turnGCOff(void);
 bool turnGCOn(void);

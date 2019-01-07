@@ -122,7 +122,7 @@ ObjString *internedString(char *chars, int length) {
         ASSERT(tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL));
         interned->isInterned = true;
         objFreeze((Obj*)interned);
-        GCPromote((Obj*)interned, GC_GEN_MAX);
+        GC_OLD((Obj*)interned);
     }
     return interned;
 }
@@ -268,6 +268,7 @@ ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {
         initChunk(chunk);
     }
     function->chunk = chunk;
+    GC_PROMOTE(function, GC_GEN_YOUNG_MAX);
     return function;
 }
 
@@ -287,16 +288,18 @@ ObjClosure *newClosure(ObjFunction *func) {
         ObjClosure, OBJ_T_CLOSURE
     );
     closure->function = func;
+    OBJ_WRITE(OBJ_VAL(closure), OBJ_VAL(func));
     closure->upvalues = upvalues;
     closure->upvalueCount = func->upvalueCount;
     closure->isBlock = false;
+    GC_PROMOTE(closure, GC_GEN_YOUNG_MAX);
     return closure;
 }
 
 ObjUpvalue *newUpvalue(Value *slot) {
     ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_T_UPVALUE);
     upvalue->closed = NIL_VAL;
-    upvalue->value = slot;
+    upvalue->value = slot; // stack slot
     upvalue->next = NULL; // it's the caller's responsibility to link it
     return upvalue;
 }
@@ -343,6 +346,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
         callVMMethod((ObjInstance*)klass, OBJ_VAL(nativeClassInit), 0, NULL, NULL);
         pop();
     }
+    GC_OLD(klass);
     return klass;
 }
 
@@ -363,6 +367,7 @@ ObjModule *newModule(ObjString *name) {
         callVMMethod((ObjInstance*)mod, OBJ_VAL(nativeModuleInit), 0, NULL, NULL);
         pop();
     }
+    GC_OLD(mod);
     return mod;
 }
 
@@ -435,9 +440,10 @@ ObjNative *newNative(ObjString *name, NativeFn function) {
         ObjNative, OBJ_T_NATIVE_FUNCTION
     );
     native->function = function;
-    native->name = name;
+    native->name = name; // should be interned
     native->klass = NULL;
     native->isStatic = false;
+    GC_OLD(native);
     return native;
 }
 
@@ -449,6 +455,8 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
     );
     bmethod->receiver = OBJ_VAL(receiver);
     bmethod->callable = callable;
+    OBJ_WRITE(OBJ_VAL(bmethod), OBJ_VAL(receiver));
+    OBJ_WRITE(OBJ_VAL(bmethod), OBJ_VAL(callable));
     return bmethod;
 }
 
@@ -602,6 +610,7 @@ void setObjectFinalizer(ObjInstance *obj, Obj *callable) {
     if (obj->finalizerFunc == NULL) {
         activeFinalizers++;
     }
+    OBJ_WRITE(OBJ_VAL(obj), OBJ_VAL(callable));
     obj->finalizerFunc = callable;
 }
 
@@ -649,6 +658,7 @@ Value newArrayConstant(void) {
     ObjArray *ary = allocateArray(lxAryClass);
     ValueArray *valAry = &ary->valAry;
     initValueArray(valAry);
+    GC_OLD(ary);
     return OBJ_VAL(ary);
 }
 
@@ -745,6 +755,7 @@ void arrayPush(Value self, Value el) {
     }
     ValueArray *ary = &selfObj->valAry;
     writeValueArrayEnd(ary, el);
+    OBJ_WRITE(OBJ_VAL(selfObj), el);
 }
 
 // Deletes the given element from the array, returning its old index if
@@ -800,6 +811,7 @@ void arrayPushFront(Value self, Value el) {
     }
     ValueArray *ary = &selfObj->valAry;
     writeValueArrayBeg(ary, el);
+    OBJ_WRITE(self, el);
 }
 
 // NOTE: doesn't check frozenness or type of `self`
@@ -837,6 +849,8 @@ Value mapDup(Value other) {
     Entry e; int eidx = 0;
     TABLE_FOREACH(otherMap, e, eidx, {
         mapSet(ret, e.key, e.value);
+        OBJ_WRITE(ret, e.key);
+        OBJ_WRITE(ret, e.value);
     })
     return ret;
 }
@@ -881,6 +895,7 @@ void setProp(Value self, ObjString *propName, Value val) {
     DBG_ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
     tableSet(inst->fields, OBJ_VAL(propName), val);
+    OBJ_WRITE(self, val);
 }
 
 bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
@@ -945,6 +960,7 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     ObjClass *meta = newClass(name, inst->klass);
     CLASSINFO(meta)->singletonOf = (Obj*)inst;
     inst->singletonKlass = meta;
+    OBJ_WRITE(OBJ_VAL(inst), OBJ_VAL(meta));
     unhideFromGC((Obj*)name);
     return meta;
 }
@@ -964,6 +980,7 @@ ObjClass *classSingletonClass(ObjClass *klass) {
     ObjClass *meta = newClass(name, CLASSINFO(klass)->superclass);
     CLASSINFO(meta)->singletonOf = (Obj*)klass;
     klass->singletonKlass = meta;
+    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(meta));
     /*klass->superclass = meta;*/
     return meta;
 }
@@ -983,6 +1000,7 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, lxClassClass);
     mod->singletonKlass = meta;
+    OBJ_WRITE(OBJ_VAL(mod), OBJ_VAL(meta));
     CLASSINFO(meta)->singletonOf = (Obj*)mod;
     unhideFromGC((Obj*)name);
     return meta;
@@ -995,9 +1013,11 @@ Value newThread(void) {
         // no stack frame, just use function
         Value threadVal = OBJ_VAL(instance);
         lxThreadInit(1, &threadVal);
+        GC_OLD(instance);
         return threadVal;
     } else {
         ObjInstance *instance = newInstance(lxThreadClass);
+        GC_PROMOTE(instance, GC_GEN_OLD_MIN);
         callVMMethod(instance, OBJ_VAL(nativeThreadInit), 0, NULL, NULL);
         return pop();
     }

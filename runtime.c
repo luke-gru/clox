@@ -53,6 +53,7 @@ ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
         natFn->isStatic = CLASSINFO(klass)->singletonOf != NULL;
     }
     tableSet(CLASSINFO(klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
+    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
     return natFn;
 }
 
@@ -61,6 +62,7 @@ ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
     tableSet(CLASSINFO(klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
+    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
     return natFn;
 }
 
@@ -69,6 +71,7 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
     ObjNative *natFn = newNative(mname, func);
     natFn->klass = (Obj*)klass; // class or module
     tableSet(CLASSINFO(klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
+    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
     return natFn;
 }
 
@@ -445,6 +448,8 @@ Value lxObjectDup(int argCount, Value *args) {
     Entry e; int idx = 0;
     TABLE_FOREACH(selfObj->fields, e, idx, {
         tableSet(newObj->fields, e.key, e.value);
+        OBJ_WRITE(OBJ_VAL(newObj), e.key);
+        OBJ_WRITE(OBJ_VAL(newObj), e.value);
     })
     return OBJ_VAL(newObj);
 }
@@ -517,6 +522,9 @@ Value lxClassInit(int argCount, Value *args) {
     }
     CLASSINFO(klass)->name = name;
     CLASSINFO(klass)->superclass = superClass;
+    if (superClass) {
+        OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(superClass));
+    }
     return self;
 }
 
@@ -530,6 +538,7 @@ Value lxClassInclude(int argCount, Value *args) {
     ObjModule *mod = AS_MODULE(modVal);
     int alreadyIncluded = -1;
     vec_find(&CLASSINFO(klass)->v_includedMods, mod, alreadyIncluded);
+    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(mod));
     if (alreadyIncluded == -1) {
         vec_push(&CLASSINFO(klass)->v_includedMods, mod);
     }
@@ -597,6 +606,7 @@ Value lxIteratorInit(int argCount, Value *args) {
     iter->index = -1;
     iter->lastRealIndex = -1;
     iter->instance = AS_INSTANCE(iterable);
+    OBJ_WRITE(self, iterable);
     iter->flags = 0;
     if (IS_AN_ARRAY(iterable)) {
         iter->flags |= FLAG_ITER_ARRAY;

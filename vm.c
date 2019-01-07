@@ -905,6 +905,7 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
         pop();
     } else {
         tableSet(obj->fields, OBJ_VAL(propName), rval);
+        OBJ_WRITE(OBJ_VAL(obj), rval);
     }
 }
 
@@ -921,12 +922,16 @@ static void defineMethod(ObjString *name) {
         (void)klassName;
         VM_DEBUG("defining method '%s' in class '%s'", name->chars, klassName);
         tableSet(CLASSINFO(klass)->methods, OBJ_VAL(name), method);
+        OBJ_WRITE(OBJ_VAL(klass), method);
+        GC_OLD(AS_OBJ(method));
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         const char *modName = CLASSINFO(mod)->name ? CLASSINFO(mod)->name->chars : "(anon)";
         (void)modName;
         VM_DEBUG("defining method '%s' in module '%s'", name->chars, modName);
         tableSet(CLASSINFO(mod)->methods, OBJ_VAL(name), method);
+        OBJ_WRITE(OBJ_VAL(mod), method);
+        GC_OLD(AS_OBJ(method));
     }
     pop(); // function
 }
@@ -942,6 +947,8 @@ static void defineStaticMethod(ObjString *name) {
     ObjClass *metaClass = singletonClass(AS_OBJ(classOrMod));
     VM_DEBUG("defining static method '%s#%s'", CLASSINFO(metaClass)->name->chars, name->chars);
     tableSet(CLASSINFO(metaClass)->methods, OBJ_VAL(name), method);
+    OBJ_WRITE(OBJ_VAL(metaClass), method);
+    GC_OLD(AS_OBJ(method));
     pop(); // function
 }
 
@@ -954,10 +961,14 @@ static void defineGetter(ObjString *name) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG("defining getter '%s'", name->chars);
         tableSet(CLASSINFO(klass)->getters, OBJ_VAL(name), method);
+        OBJ_WRITE(OBJ_VAL(klass), method);
+        GC_OLD(AS_OBJ(method));
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         VM_DEBUG("defining getter '%s'", name->chars);
         tableSet(CLASSINFO(mod)->getters, OBJ_VAL(name), method);
+        OBJ_WRITE(OBJ_VAL(mod), method);
+        GC_OLD(AS_OBJ(method));
     }
     pop(); // function
 }
@@ -970,10 +981,14 @@ static void defineSetter(ObjString *name) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG("defining setter '%s'", name->chars);
         tableSet(CLASSINFO(klass)->setters, OBJ_VAL(name), method);
+        OBJ_WRITE(OBJ_VAL(klass), method);
+        GC_OLD(AS_OBJ(method));
     } else {
         ObjModule *mod = AS_MODULE(classOrMod);
         VM_DEBUG("defining setter '%s'", name->chars);
         tableSet(CLASSINFO(mod)->setters, OBJ_VAL(name), method);
+        OBJ_WRITE(OBJ_VAL(mod), method);
+        GC_OLD(AS_OBJ(method));
     }
     pop(); // function
 }
@@ -2798,6 +2813,8 @@ vmLoop:
               Value key = pop();
               Value val = pop();
               tableSet(map, key, val);
+              OBJ_WRITE(mapVal, key);
+              OBJ_WRITE(mapVal, val);
           }
           push(mapVal);
           DISPATCH_BOTTOM();

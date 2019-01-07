@@ -26,6 +26,7 @@ typedef enum ObjType {
 
 typedef struct ObjAny ObjAny;
 
+#define GC_FLAG_POINTED_TO 1
 // basic object structure that all objects (values of VAL_T_OBJ type)
 typedef struct Obj {
     ObjType type; // redundant, but we need for now
@@ -33,6 +34,7 @@ typedef struct Obj {
     size_t objectId;
     // GC fields
     unsigned short GCGen;
+    unsigned short GCFlags;
     bool isDark; // is this object marked?
     bool noGC; // don't collect this object
     // Other fields
@@ -147,31 +149,6 @@ typedef struct ObjModule {
   ClassInfo *classInfo;
 } ObjModule;
 
-extern ObjClass *lxObjClass;
-extern ObjClass *lxStringClass;
-extern ObjClass *lxClassClass;
-extern ObjClass *lxModuleClass;
-extern ObjClass *lxAryClass;
-extern ObjClass *lxMapClass;
-extern ObjClass *lxIteratorClass;
-extern ObjClass *lxFileClass;
-extern ObjClass *lxThreadClass;
-extern ObjClass *lxBlockClass;
-extern ObjClass *lxMutexClass;
-extern ObjModule *lxGCModule;
-extern ObjModule *lxProcessMod;
-extern ObjClass *lxIOClass;
-extern ObjClass *lxErrClass;
-extern ObjClass *lxArgErrClass;
-extern ObjClass *lxTypeErrClass;
-extern ObjClass *lxNameErrClass;
-extern ObjClass *lxSyntaxErrClass;
-extern ObjClass *lxLoadErrClass;
-
-extern ObjClass *lxBlockIterErrClass;
-extern ObjClass *lxBreakBlockErrClass;
-extern ObjClass *lxContinueBlockErrClass;
-extern ObjClass *lxReturnBlockErrClass;
 
 typedef struct ObjInstance {
   Obj object;
@@ -258,6 +235,7 @@ typedef struct LxFile {
     ObjString *name; // copied (owned value)
 } LxFile;
 
+
 // is the value an instance of this type, no subtype check
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))
 #define IS_ARRAY(value)         (isObjType(value, OBJ_T_ARRAY))
@@ -335,6 +313,14 @@ typedef struct LxFile {
 
 #define FILE_GETHIDDEN(fileVal) (fileGetHidden(fileVal))
 #define THREAD_GETHIDDEN(thVal) (threadGetHidden(thVal))
+
+static inline void objWrite(Value owner, Value pointed) {
+    (void)owner;
+    if (IS_OBJ(pointed)) {
+        AS_OBJ(pointed)->GCFlags |= GC_FLAG_POINTED_TO;
+    }
+}
+#define OBJ_WRITE(owner, pointed) objWrite(owner, pointed)
 
 // strings (internal)
 typedef ObjString *(*newStringFunc)(char *chars, int length);
@@ -521,5 +507,31 @@ bool is_value_instance_p(Value val);
 bool is_value_closure_p(Value val);
 bool is_value_instance_of_p(Value val, ObjClass *klass);
 bool is_value_a_p(Value val, ObjClass *klass);
+
+extern ObjClass *lxObjClass;
+extern ObjClass *lxStringClass;
+extern ObjClass *lxClassClass;
+extern ObjClass *lxModuleClass;
+extern ObjClass *lxAryClass;
+extern ObjClass *lxMapClass;
+extern ObjClass *lxIteratorClass;
+extern ObjClass *lxFileClass;
+extern ObjClass *lxThreadClass;
+extern ObjClass *lxBlockClass;
+extern ObjClass *lxMutexClass;
+extern ObjModule *lxGCModule;
+extern ObjModule *lxProcessMod;
+extern ObjClass *lxIOClass;
+extern ObjClass *lxErrClass;
+extern ObjClass *lxArgErrClass;
+extern ObjClass *lxTypeErrClass;
+extern ObjClass *lxNameErrClass;
+extern ObjClass *lxSyntaxErrClass;
+extern ObjClass *lxLoadErrClass;
+
+extern ObjClass *lxBlockIterErrClass;
+extern ObjClass *lxBreakBlockErrClass;
+extern ObjClass *lxContinueBlockErrClass;
+extern ObjClass *lxReturnBlockErrClass;
 
 #endif

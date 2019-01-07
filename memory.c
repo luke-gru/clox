@@ -777,7 +777,7 @@ void collectGarbage(void) {
     GC_TRACE_DEBUG(2, "Marking VM stack roots");
     if (GET_OPTION(traceGCLvl) >= 2) {
         printGCStats();
-        if (GET_OPTION(traceGCLvl >= 4)) {
+        if (GET_OPTION(traceGCLvl > 1)) {
             printGenerationInfo();
         }
         printVMStack(stderr, THREAD());

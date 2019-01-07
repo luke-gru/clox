@@ -31,7 +31,7 @@ Value lxStringInit(int argCount, Value *args) {
     ((Obj*)selfStr)->isFrozen = false;
     if (otherStr->isInterned && otherStr->chars) {
         selfStr->chars = otherStr->chars;
-        selfStr->isShared = true;
+        selfStr->isShared = true; // no need for OBJ_WRITE here, it's interned
     } else {
         if (otherStr->chars) {
             selfStr->chars = ALLOCATE(char, otherStr->capacity+1);

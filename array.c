@@ -25,6 +25,7 @@ static Value lxArrayInit(int argCount, Value *args) {
     }
     for (int i = 1; i < argCount; i++) {
         writeValueArrayEnd(ary, args[i]);
+        OBJ_WRITE(self, args[i]);
     }
     DBG_ASSERT(ary->count == argCount-1);
     return self;
@@ -42,6 +43,7 @@ static Value lxArrayDup(int argCount, Value *args) {
     Value el; int idx = 0;
     VALARRAY_FOREACH(selfAry, el, idx) {
         writeValueArrayEnd(dupAry, el);
+        OBJ_WRITE(dup, el);
     }
     return dup;
 }
@@ -174,6 +176,7 @@ static Value lxArrayOpIndexSet(int argCount, Value *args) {
 
     if (idx < ary->count) {
         ary->values[idx] = rval;
+        OBJ_WRITE(self, rval);
     } else {
         // TODO: throw error or grow array?
         return NIL_VAL;
@@ -227,6 +230,7 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
         initValueArray(ary);
         writeValueArrayEnd(ary, fill);
     }
+    OBJ_WRITE(ret, fill);
     return ret;
 }
 
