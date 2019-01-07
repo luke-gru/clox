@@ -1135,6 +1135,8 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             defineVariable(localSlot, true);
             emitOp2(OP_CHECK_KEYWORD,
                 localSlot /* slot of keyword argument */,
+                // NOTE: if a function is called with a block argument, the VM
+                // must adjust its OP_CHECK_KEYWORD stack check by 1
                 numParams+1 /* slot of keyword map */
             );
             func->numKwargs++;
@@ -1142,7 +1144,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             emitChildren(param);
             emitOp2(OP_SET_LOCAL, localSlot, identifierConstant(&param->tok));
             patchJump(ifJumpStart, -1, NULL);
-        } else if (param->type.kind == PARAM_NODE_BLOCK) {
+        } else if (param->type.kind == PARAM_NODE_BLOCK) { // &arg
             uint8_t localSlot = declareVariable(&param->tok);
             defineVariable(localSlot, true);
             func->hasBlockArg = true;

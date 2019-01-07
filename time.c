@@ -167,7 +167,6 @@ static Value lxTimerOpDiff(int argCount, Value *args) {
     LxTimer *tnew = timerGethidden(ret);
     // old timer is `self` (t2 - t1) is t2.opDiff(t1)
     struct timespec newTp = timeDiff(older->tp, newer->tp);
-    fprintf(stderr, "Time diff: %g\n", timeSeconds(newTp));
     tnew->tp = newTp;
     tnew->clock = newer->clock;
     return ret;

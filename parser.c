@@ -1182,6 +1182,7 @@ static Node *call() {
             Node *callNode = createNode(callT, lhsTok, NULL);
             nodeAddChild(callNode, expr);
             expr = callNode;
+            bool seenBlockArg = false;
             if (match(TOKEN_RIGHT_PAREN)) {
                 // no args
             } else {
@@ -1202,7 +1203,11 @@ static Node *call() {
                         nodeAddChild(callNode, kwargNode);
                     } else {
                         if (inKwargs) {
-                            errorAtCurrent("Cannot have a regular argument after a keyword argument");
+                            if (check(TOKEN_AMP)) { // block arg
+                                seenBlockArg = true;
+                            } else {
+                                errorAtCurrent("Cannot have a regular argument after a keyword argument");
+                            }
                         }
                         Node *argExpr = expression();
                         nodeAddChild(callNode, argExpr);
@@ -1211,7 +1216,9 @@ static Node *call() {
                         break;
                     }
                 }
-                consume(TOKEN_RIGHT_PAREN, "Expected ')' to end call expression");
+                if (!seenBlockArg) {
+                    consume(TOKEN_RIGHT_PAREN, "Expected ')' to end call expression");
+                }
             }
             // block
             if (match(TOKEN_ARROW)) {

@@ -12,7 +12,9 @@ fun myBench() {
   }
 }
 
-Benchmark.start(block: myBench, name: "myBench", iterations: 1);
+Benchmark.start(name: "myBench", iterations: 10) -> () {
+  myBench();
+};
 
 __END__
 -- noexpect: --

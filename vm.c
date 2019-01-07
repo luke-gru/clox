@@ -1440,7 +1440,15 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 }
             }
         }
+        // NOTE: &block argument after keyword arguments doesn't work right now
+        /*Value poppedBlock = NIL_VAL;*/
+        /*if ((callInfo->blockFunction || callInfo->blockInstance) && (IS_A_BLOCK(peek(0)) || IS_CLOSURE(peek(0)))) {*/
+            /*poppedBlock = pop();*/
+        /*}*/
         push(kwargsMap);
+        /*if (!IS_NIL(poppedBlock)) {*/
+            /*push(poppedBlock);*/
+        /*}*/
     }
 
     CallFrame *f = getFrameI();

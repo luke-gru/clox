@@ -1,10 +1,10 @@
 class Benchmark {
-  class start(block: nil, name: "Benchmark", iterations: 10) {
+  class start(name: "Benchmark", iterations: 10) {
     /*assertArg(iterations > 0, "iterations must be positive");*/
     var times = [];
     for (var i = 0; i < iterations; i+=1) {
       var t1 = Timer();
-      block();
+      yield();
       var t2 = Timer();
       times << (t2 - t1);
     }
@@ -15,6 +15,7 @@ class Benchmark {
     print "============";
     print name;
     print "============";
+    print "Iterations: ${iters}";
     var sum = 0;
     for (var i = 0; i < times.size(); i+=1) {
       sum += times[i].seconds();
