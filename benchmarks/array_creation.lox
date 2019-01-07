@@ -1,3 +1,11 @@
-for (var i = 0; i < 1000000; i+=1) {
-  [1,2,3,4,5] << 1;
+requireScript("benchmark");
+
+fun bench() {
+  for (var i = 0; i < 50000; i+=1) {
+    [1,2,3,4,5] << 1;
+  }
 }
+
+Benchmark.start(name: "array", iterations: 1) -> {
+  bench();
+};

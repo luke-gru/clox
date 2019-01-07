@@ -189,7 +189,6 @@ void addHeap() {
             fprintf(stderr, "can't alloc new heap list\n");
             _exit(1);
         }
-        memset(heapList, 0, newHeapListSz);
         GCStats.totalAllocated += newHeapListSz;
     }
 

@@ -64,6 +64,7 @@ file lookup, not pwd when calling loadScript/requireScript
 * Debugger bugs, not evaluating variables in context of function
 * +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] +=1, or other lvalues
 * &blk args after keyword args don't work properly
+* yielding runs things a lot slower, see Benchmark() example when yielding
 
 Optimizations
 -------------

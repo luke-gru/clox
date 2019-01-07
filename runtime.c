@@ -224,7 +224,7 @@ Value lxYield(int argCount, Value *args) {
     }
     CallInfo cinfo = {
         .argc = argCount,
-        .blockFunction = block,
+        .blockFunction = NULL,
         .isYield = true, // tell callCallable to adjust frame stack in popFrame()
         .blockIterFunc = NULL,
     };
