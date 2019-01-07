@@ -1,0 +1,18 @@
+t1 = Timer(Timer.CLOCK_MONOTONIC);
+sleep(1);
+t2 = Timer(Timer.CLOCK_MONOTONIC);
+print t2-t1;
+
+requireScript("benchmark");
+
+fun myBench() {
+  var sum = 0;
+  for (var i = 0; i < 1000; i+=1) {
+    sum += 1;
+  }
+}
+
+Benchmark.start(block: myBench, name: "myBench", iterations: 1);
+
+__END__
+-- noexpect: --
