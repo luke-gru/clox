@@ -38,7 +38,8 @@ LxFile *fileGetHidden(Value io) {
 
 LxFile *initIOAfterOpen(Value ioVal, ObjString *fname, int fd, int mode, int oflags) {
     ObjInstance *ioObj = AS_INSTANCE(ioVal);
-    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxFile), markInternalFile, freeInternalFile);
+    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxFile), markInternalFile, freeInternalFile,
+            NEWOBJ_FLAG_NONE);
     LxFile *file = ALLOCATE(LxFile, 1);
     file->name = dupString(fname);
     file->fd = fd;
@@ -71,7 +72,7 @@ static void NORETURN throwIOSyserr(int err, int last, const char *desc) {
 }
 
 ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
-    ObjString *retBuf = copyString("", 0);
+    ObjString *retBuf = copyString("", 0, NEWOBJ_FLAG_NONE);
     size_t nread = 0;
     size_t justRead = 0;
     char fileReadBuf[READBUF_SZ];
@@ -109,9 +110,9 @@ ObjString *IOReadlineFd(int fd, size_t maxLen) {
     acquireGVL();
     if (line == NULL) {
         errno = last;
-        return copyString("", 0);
+        return copyString("", 0, NEWOBJ_FLAG_NONE);
     }
-    retBuf = copyString(line, strlen(line));
+    retBuf = copyString(line, strlen(line), NEWOBJ_FLAG_NONE);
     return retBuf;
 }
 
@@ -225,9 +226,9 @@ Value lxIOPipeStatic(int argCount, Value *args) {
         throwErrorFmt(lxErrClass, "Error creating pipes: %s", strerror(err));
     }
     Value ret = newArray();
-    ObjInstance *reader = newInstance(lxIOClass);
+    ObjInstance *reader = newInstance(lxIOClass, NEWOBJ_FLAG_NONE);
     Value readerVal = OBJ_VAL(reader);
-    ObjInstance *writer = newInstance(lxIOClass);
+    ObjInstance *writer = newInstance(lxIOClass, NEWOBJ_FLAG_NONE);
     // TODO: call init on IO both? Doesn't matter right now, not defined, but
     // should, it might get defined/redefined
     Value writerVal = OBJ_VAL(writer);
@@ -416,15 +417,15 @@ void Init_IOClass(void) {
     addNativeMethod(ioClass, "fcntl", lxIOFcntl);
 
     // stdin/stdout/stderr
-    ObjInstance *istdin = newInstance(ioClass);
+    ObjInstance *istdin = newInstance(ioClass, NEWOBJ_FLAG_OLD);
     Value stdinVal = OBJ_VAL(istdin);
     initIOAfterOpen(stdinVal, INTERN("stdin"), fileno(stdin), 0, O_RDONLY);
 
-    ObjInstance *istdout = newInstance(ioClass);
+    ObjInstance *istdout = newInstance(ioClass, NEWOBJ_FLAG_OLD);
     Value stdoutVal = OBJ_VAL(istdout);
     initIOAfterOpen(stdoutVal, INTERN("stdout"), fileno(stdout), 0, O_WRONLY);
 
-    ObjInstance *istderr = newInstance(ioClass);
+    ObjInstance *istderr = newInstance(ioClass, NEWOBJ_FLAG_OLD);
     Value stderrVal = OBJ_VAL(istderr);
     initIOAfterOpen(stderrVal, INTERN("stderr"), fileno(stderr), 0, O_WRONLY);
 

@@ -96,6 +96,6 @@ void unhideFromGC(Obj *obj);
 void printGCProfile(void);
 
 void addHeap(void);
-Obj *getNewObject(ObjType type, size_t sz);
+Obj *getNewObject(ObjType type, size_t sz, int flags);
 
 #endif

@@ -221,10 +221,10 @@ static void defineNativeClasses(void) {
     lxLoadErrClass = loadErrClass;
 
     // internal errors for block flow control
-    ObjClass *blockIterErr = newClass(INTERN("BlockIterError"), errClass);
-    ObjClass *breakBlockErr = newClass(INTERN("BlockBreakError"), blockIterErr);
-    ObjClass *continueBlockErr = newClass(INTERN("BlockContinueError"), blockIterErr);
-    ObjClass *returnBlockErr = newClass(INTERN("BlockReturnError"), blockIterErr);
+    ObjClass *blockIterErr = newClass(INTERN("BlockIterError"), errClass, NEWOBJ_FLAG_OLD);
+    ObjClass *breakBlockErr = newClass(INTERN("BlockBreakError"), blockIterErr, NEWOBJ_FLAG_OLD);
+    ObjClass *continueBlockErr = newClass(INTERN("BlockContinueError"), blockIterErr, NEWOBJ_FLAG_OLD);
+    ObjClass *returnBlockErr = newClass(INTERN("BlockReturnError"), blockIterErr, NEWOBJ_FLAG_OLD);
     lxBlockIterErrClass = blockIterErr;
     lxBreakBlockErrClass = breakBlockErr;
     lxContinueBlockErrClass = continueBlockErr;
@@ -262,7 +262,7 @@ static void defineGlobalVariables(void) {
     ObjString *loadPathStr = INTERN("loadPath");
     ASSERT(tableSet(&vm.globals, OBJ_VAL(loadPathStr), loadPathVal));
     // add 'lib' path as default load path
-    ObjString *libPath = hiddenString("", 0);
+    ObjString *libPath = hiddenString("", 0, NEWOBJ_FLAG_OLD);
     // FIXME: this won't work if user moves their clox binary after building
     pushCString(libPath, QUOTE(LX_BUILT_DIR), strlen(QUOTE(LX_BUILT_DIR)));
     pushCString(libPath, "/lib", strlen("/lib"));
@@ -274,7 +274,7 @@ static void defineGlobalVariables(void) {
         char *beg = lpath;
         char *end = NULL;
         while ((end = strchr(beg, ':'))) {
-            ObjString *str = copyString(beg, end - beg);
+            ObjString *str = copyString(beg, end - beg, NEWOBJ_FLAG_OLD);
             arrayPush(loadPathVal, OBJ_VAL(str));
             beg = end+1;
         }
@@ -288,7 +288,7 @@ static void defineGlobalVariables(void) {
     ASSERT(origArgv);
     ASSERT(origArgc >= 1);
     for (int i = 0; i < origArgc; i++) {
-        ObjString *argStr = copyString(origArgv[i], strlen(origArgv[i]));
+        ObjString *argStr = copyString(origArgv[i], strlen(origArgv[i]), NEWOBJ_FLAG_OLD);
         Value arg = OBJ_VAL(argStr);
         arrayPush(OBJ_VAL(lxArgv), arg);
     }
@@ -315,11 +315,11 @@ static Value iteratorNext(Value iterator) {
 Value createIterator(Value iterable) {
     ASSERT(isIterableType(iterable));
     if (IS_AN_ARRAY(iterable) || IS_A_MAP(iterable)) {
-        ObjInstance *iterObj = newInstance(lxIteratorClass);
+        ObjInstance *iterObj = newInstance(lxIteratorClass, NEWOBJ_FLAG_NONE);
         callVMMethod(iterObj, OBJ_VAL(nativeIteratorInit), 1, &iterable, NULL);
         return pop();
     } else if (IS_INSTANCE(iterable)) {
-        ObjString *iterId = internedString("iter", 4);
+        ObjString *iterId = INTERNED("iter", 4);
         ObjInstance *instance = AS_INSTANCE(iterable);
         Obj *method = instanceFindMethodOrRaise(instance, iterId);
         callVMMethod(instance, OBJ_VAL(method), 0, NULL, NULL);
@@ -444,9 +444,9 @@ void initVM() {
 
     vm.inited = true; // NOTE: VM has to be inited before creation of strings
     vm.exited = false;
-    vm.initString = internedString("init", 4);
-    vm.fileString = internedString("__FILE__", 8);
-    vm.dirString = internedString("__DIR__", 7);
+    vm.initString = INTERNED("init", 4);
+    vm.fileString = INTERNED("__FILE__", 8);
+    vm.dirString = INTERNED("__DIR__", 7);
 
     pushFrame();
 
@@ -658,7 +658,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
 #endif
     if (IS_OBJ(lhs)) {
         if (IS_INSTANCE_LIKE(lhs)) {
-            ObjString *opEquals = internedString("opEquals", 8);
+            ObjString *opEquals = INTERNED("opEquals", 8);
             ObjInstance *self = AS_INSTANCE(lhs);
             Obj *methodOpEq = instanceFindMethod(self, opEquals);
             if (methodOpEq) {
@@ -767,12 +767,12 @@ void showUncaughtError(Value err) {
     } else {
         className = "(anon)";
     }
-    Value msg = getProp(err, internedString("message", 7));
+    Value msg = getProp(err, INTERNED("message", 7));
     char *msgStr = NULL;
     if (!IS_NIL(msg)) {
         msgStr = VAL_TO_STRING(msg)->chars;
     }
-    Value bt = getProp(err, internedString("backtrace", 9));
+    Value bt = getProp(err, INTERNED("backtrace", 9));
     ASSERT(!IS_NIL(bt));
     int btSz = ARRAY_SIZE(bt);
     fprintf(stderr, "Uncaught error, class: %s\n", className);
@@ -805,7 +805,7 @@ void setBacktrace(Value err) {
     LxThread *th = vm.curThread;
     DBG_ASSERT(IS_AN_ERROR(err));
     Value ret = newArray();
-    setProp(err, internedString("backtrace", 9), ret);
+    setProp(err, INTERNED("backtrace", 9), ret);
     int numECs = th->v_ecs.length;
     VMExecContext *ctx;
     for (int i = numECs-1; i >= 0; i--) {
@@ -816,7 +816,7 @@ void setBacktrace(Value err) {
             int line = frame->callLine;
             ObjString *file = frame->file;
             ASSERT(file);
-            ObjString *outBuf = hiddenString("", 0);
+            ObjString *outBuf = hiddenString("", 0, NEWOBJ_FLAG_NONE);
             Value out = OBJ_VAL(outBuf);
             if (frame->isCCall) {
                 ObjNative *nativeFunc = frame->nativeFunc;
@@ -887,7 +887,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
             return pop();
         }
     } else if ((method = instanceFindMethod(obj, propName))) {
-        ObjBoundMethod *bmethod = newBoundMethod(obj, method);
+        ObjBoundMethod *bmethod = newBoundMethod(obj, method, NEWOBJ_FLAG_NONE);
         return OBJ_VAL(bmethod);
     } else {
         return NIL_VAL;
@@ -1252,7 +1252,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
 #endif
         (void)klassName;
         VM_DEBUG("calling callable class %s", klassName);
-        instance = newInstance(klass); // setup the new instance object
+        instance = newInstance(klass, NEWOBJ_FLAG_NONE); // setup the new instance object
         frameClass = klass;
         instanceVal = OBJ_VAL(instance);
         volatile Obj *oldThis = th->thisObj;
@@ -1502,7 +1502,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
 
     if (func->hasBlockArg && callInfo->blockFunction) {
         // TODO: get closure created here with upvals!
-        Value blockClosure = OBJ_VAL(newClosure(callInfo->blockFunction));
+        Value blockClosure = OBJ_VAL(newClosure(callInfo->blockFunction, NEWOBJ_FLAG_NONE));
         ObjClosure *blkClosure = AS_CLOSURE(blockClosure);
         push(newBlock(blkClosure));
         argCountWithRestAry++;
@@ -1705,7 +1705,7 @@ NORETURN void throwError(Value self) {
     ASSERT(IS_INSTANCE(self));
     LxThread *th = vm.curThread;
     th->lastErrorThrown = self;
-    if (IS_NIL(getProp(self, internedString("backtrace", 9)))) {
+    if (IS_NIL(getProp(self, INTERNED("backtrace", 9)))) {
         setBacktrace(self);
     }
     // error from VM
@@ -1767,7 +1767,7 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     char *cbuf = ALLOCATE(char, len+1); // uses takeString below
     strncpy(cbuf, sbuf, len);
     cbuf[len] = '\0';
-    ObjString *buf = takeString(cbuf, len);
+    ObjString *buf = takeString(cbuf, len, NEWOBJ_FLAG_NONE);
     hideFromGC((Obj*)buf);
     Value msg = OBJ_VAL(buf);
     Value err = newError(klass, msg);
@@ -1825,7 +1825,7 @@ void printVMStack(FILE *f, LxThread *th) {
 ObjUpvalue *captureUpvalue(Value *local) {
     LxThread *th = vm.curThread;
     if (th->openUpvalues == NULL) {
-        th->openUpvalues = newUpvalue(local);
+        th->openUpvalues = newUpvalue(local, NEWOBJ_FLAG_NONE);
         return th->openUpvalues;
     }
 
@@ -1851,7 +1851,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
     // We walked past the local on the stack, so there must not be an upvalue for
     // it already. Make a new one and link it in in the right place to keep the
     // list sorted.
-    ObjUpvalue* createdUpvalue = newUpvalue(local);
+    ObjUpvalue* createdUpvalue = newUpvalue(local, NEWOBJ_FLAG_NONE);
     createdUpvalue->next = upvalue;
 
     if (prevUpvalue == NULL) {
@@ -1893,17 +1893,17 @@ static Value unpackValue(Value val, uint8_t idx) {
 static ObjString *methodNameForBinop(OpCode code) {
     switch (code) {
     case OP_ADD:
-        return internedString("opAdd", 5);
+        return INTERNED("opAdd", 5);
     case OP_SUBTRACT:
-        return internedString("opDiff", 6);
+        return INTERNED("opDiff", 6);
     case OP_MULTIPLY:
-        return internedString("opMul", 5);
+        return INTERNED("opMul", 5);
     case OP_DIVIDE:
-        return internedString("opDiv", 5);
+        return INTERNED("opDiv", 5);
     case OP_SHOVEL_L:
-        return internedString("opShovelLeft", 12);
+        return INTERNED("opShovelLeft", 12);
     case OP_SHOVEL_R:
-        return internedString("opShovelRight", 13);
+        return INTERNED("opShovelRight", 13);
     default:
         return NULL;
     }
@@ -2187,7 +2187,7 @@ vmLoop:
 #ifndef NDEBUG
           // used during testing
           if (vm.printBuf) {
-              ObjString *out = valueToString(val, hiddenString);
+              ObjString *out = valueToString(val, hiddenString, NEWOBJ_FLAG_NONE);
               ASSERT(out);
               pushCString(vm.printBuf, out->chars, strlen(out->chars));
               pushCString(vm.printBuf, "\n", 1);
@@ -2323,7 +2323,7 @@ vmLoop:
           Value funcVal = READ_CONSTANT();
           ASSERT(IS_FUNCTION(funcVal));
           ObjFunction *func = AS_FUNCTION(funcVal);
-          ObjClosure *closure = newClosure(func);
+          ObjClosure *closure = newClosure(func, NEWOBJ_FLAG_NONE);
           push(OBJ_VAL(closure));
 
           // capture upvalues
@@ -2544,7 +2544,7 @@ vmLoop:
               throwErrorFmt(lxErrClass, "Could not find method %s for 'super': %s",
                       AS_CSTRING(methodName));
           }
-          ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method));
+          ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method), NEWOBJ_FLAG_NONE);
           push(OBJ_VAL(bmethod));
           DISPATCH_BOTTOM();
       }
@@ -2607,7 +2607,7 @@ vmLoop:
                           classStr);
               } // otherwise we override the global var with the new class
           }
-          ObjClass *klass = newClass(AS_STRING(className), lxObjClass);
+          ObjClass *klass = newClass(AS_STRING(className), lxObjClass, NEWOBJ_FLAG_OLD);
           push(OBJ_VAL(klass));
           setThis(0);
           DISPATCH_BOTTOM();
@@ -2627,7 +2627,7 @@ vmLoop:
                           modStr);
               } // otherwise, we override the global var with the new module
           }
-          ObjModule *mod = newModule(AS_STRING(modName));
+          ObjModule *mod = newModule(AS_STRING(modName), NEWOBJ_FLAG_OLD);
           push(OBJ_VAL(mod));
           setThis(0);
           DISPATCH_BOTTOM();
@@ -2654,7 +2654,8 @@ vmLoop:
           }
           ObjClass *klass = newClass(
               AS_STRING(className),
-              AS_CLASS(superclass)
+              AS_CLASS(superclass),
+              NEWOBJ_FLAG_OLD
           );
           push(OBJ_VAL(klass));
           setThis(0);
@@ -2733,7 +2734,7 @@ vmLoop:
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexGet", 10));
+          Obj *method = instanceFindMethodOrRaise(instance, INTERNED("opIndexGet", 10));
           callCallable(OBJ_VAL(method), 1, true, NULL);
           DISPATCH_BOTTOM();
       }
@@ -2743,7 +2744,7 @@ vmLoop:
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexSet ('[]=') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, internedString("opIndexSet", 10));
+          Obj *method = instanceFindMethodOrRaise(instance, INTERNED("opIndexSet", 10));
           callCallable(OBJ_VAL(method), 2, true, NULL);
           DISPATCH_BOTTOM();
       }
@@ -2855,7 +2856,7 @@ vmLoop:
 }
 
 static void setupPerScriptROGlobals(char *filename) {
-    ObjString *file = copyString(filename, strlen(filename));
+    ObjString *file = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
     Value fileString = OBJ_VAL(file);
     hideFromGC(AS_OBJ(fileString));
     // NOTE: this can trigger GC, so we hide the value first
@@ -2865,7 +2866,7 @@ static void setupPerScriptROGlobals(char *filename) {
     if (filename[0] == pathSeparator) {
         char *lastSep = rindex(filename, pathSeparator);
         int len = lastSep - filename;
-        ObjString *dir = copyString(filename, len);
+        ObjString *dir = copyString(filename, len, NEWOBJ_FLAG_OLD);
         Value dirVal = OBJ_VAL(dir);
         hideFromGC(AS_OBJ(dirVal));
         // NOTE: this can trigger GC, so we hide the value first
@@ -2881,16 +2882,16 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     if (!EC) {
         return INTERPRET_UNINITIALIZED; // call initVM() first!
     }
-    EC->filename = copyString(filename, strlen(filename));
+    EC->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
     EC->frameCount = 0;
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(chunk, NULL);
+    ObjFunction *func = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
     hideFromGC((Obj*)func);
-    frame->closure = newClosure(func);
+    frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
     setupPerScriptROGlobals(filename);
@@ -2913,15 +2914,15 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     resetStack();
     VMExecContext *ectx = EC;
     EC->loadContext = true;
-    EC->filename = copyString(filename, strlen(filename));
+    EC->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
     VM_DEBUG("%s", "Pushing initial callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(chunk, NULL);
+    ObjFunction *func = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
     hideFromGC((Obj*)func);
-    frame->closure = newClosure(func);
+    frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
 
@@ -2964,15 +2965,15 @@ static Value doVMEval(const char *src, const char *filename, int lineno, bool th
             return UNDEF_VAL;
         }
     }
-    EC->filename = copyString(filename, strlen(filename));
+    EC->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
     VM_DEBUG("%s", "Pushing initial eval callframe");
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(chunk, NULL);
+    ObjFunction *func = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
     hideFromGC((Obj*)func);
-    frame->closure = newClosure(func);
+    frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     unhideFromGC((Obj*)func);
     frame->isCCall = false;
     frame->nativeFunc = NULL;

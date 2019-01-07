@@ -41,7 +41,7 @@ static Value lxBlockInit(int argCount, Value *args) {
     Value closureVal = args[1];
     ObjClosure *closure = AS_CLOSURE(closureVal);
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalBlock, NULL);
+    ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalBlock, NULL, NEWOBJ_FLAG_NONE);
     LxBlock *blk = ALLOCATE(LxBlock, 1);
     blk->closure = closure;
     internalObj->data = blk;

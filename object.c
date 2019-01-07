@@ -9,14 +9,15 @@
 #include "vec.h"
 
 // allocate object and link it to the VM object heap
-#define ALLOCATE_OBJ(type, objectType) \
-    (type*)allocateObject(sizeof(type), objectType)
+#define ALLOCATE_OBJ(type, objectType, flags) \
+    (type*)allocateObject(sizeof(type), objectType, flags)
 
 extern VM vm;
 
-static Obj *allocateObject(size_t size, ObjType type) {
-    ASSERT(type > OBJ_T_NONE);
-    Obj *object = getNewObject(type, size);
+#define GC_GEN_FROM_NEWOBJ_FLAGS(flags) (flags & NEWOBJ_FLAG_OLD ? GC_GEN_MAX : GC_GEN_MIN)
+static Obj *allocateObject(size_t size, ObjType type, int flags) {
+    DBG_ASSERT(type > OBJ_T_NONE);
+    Obj *object = getNewObject(type, size, flags);
     object->isDark = false;
     object->type = type;
     object->isFrozen = false;
@@ -27,7 +28,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
 
     object->objectId = (size_t)object;
     object->noGC = false;
-    object->GCGen = GC_GEN_MIN;
+    object->GCGen = GC_GEN_FROM_NEWOBJ_FLAGS(flags);
     GCStats.generations[object->GCGen]++;
 
     return object;
@@ -37,8 +38,8 @@ static Obj *allocateObject(size_t size, ObjType type) {
  * Allocate a new lox string object with given characters and length
  * NOTE: length here is strlen(chars).
  */
-static ObjString *allocateString(char *chars, int length, ObjClass *klass) {
-    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING);
+static ObjString *allocateString(char *chars, int length, ObjClass *klass, int flags) {
+    ObjString *string = ALLOCATE_OBJ(ObjString, OBJ_T_STRING, flags);
     // NOTE: lxStringClass might be null if VM not yet initialized. This is okay, as
     // these strings are only interned strings.
     string->klass = klass;
@@ -89,36 +90,36 @@ uint32_t hashString(char *key, int length) {
 // use `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
 // XXX: Do not pass a static string here, it'll break when GC tries to free it.
-ObjString *takeString(char *chars, int length) {
+ObjString *takeString(char *chars, int length, int flags) {
     DBG_ASSERT(strlen(chars) == length);
-    return allocateString(chars, length, lxStringClass);
+    return allocateString(chars, length, lxStringClass, flags);
 }
 
 // use copy of `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
-ObjString *copyString(char *chars, int length) {
+ObjString *copyString(char *chars, int length, int flags) {
     DBG_ASSERT(strlen(chars) >= length);
 
     char *heapChars = ALLOCATE(char, length + 1);
     memcpy(heapChars, chars, length);
     heapChars[length] = '\0';
 
-    return allocateString(heapChars, length, lxStringClass);
+    return allocateString(heapChars, length, lxStringClass, flags);
 }
 
-ObjString *hiddenString(char *chars, int len) {
+ObjString *hiddenString(char *chars, int len, int flags) {
     DBG_ASSERT(strlen(chars) >= len);
-    ObjString *string = copyString(chars, len);
+    ObjString *string = copyString(chars, len, flags|NEWOBJ_FLAG_HIDDEN);
     hideFromGC((Obj*)string);
     return string;
 }
 
-ObjString *internedString(char *chars, int length) {
+ObjString *internedString(char *chars, int length, int flags) {
     DBG_ASSERT(strlen(chars) >= length);
     uint32_t hash = hashString(chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (!interned) {
-        interned = hiddenString(chars, length);
+        interned = hiddenString(chars, length, flags|NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_FROZEN);
         ASSERT(tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL));
         interned->isInterned = true;
         objFreeze((Obj*)interned);
@@ -247,9 +248,9 @@ static inline void clearObjString(ObjString *string) {
     string->hash = 0;
 }
 
-ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {
+ObjFunction *newFunction(Chunk *chunk, Node *funcNode, int flags) {
     ObjFunction *function = ALLOCATE_OBJ(
-        ObjFunction, OBJ_T_FUNCTION
+        ObjFunction, OBJ_T_FUNCTION, flags|NEWOBJ_FLAG_OLD
     );
 
     function->arity = 0;
@@ -272,7 +273,7 @@ ObjFunction *newFunction(Chunk *chunk, Node *funcNode) {
     return function;
 }
 
-ObjClosure *newClosure(ObjFunction *func) {
+ObjClosure *newClosure(ObjFunction *func, int flags) {
     ASSERT(func);
     // Allocate the upvalue array first so it doesn't cause the closure to get
     // collected.
@@ -285,7 +286,7 @@ ObjClosure *newClosure(ObjFunction *func) {
     }
 
     ObjClosure *closure = ALLOCATE_OBJ(
-        ObjClosure, OBJ_T_CLOSURE
+        ObjClosure, OBJ_T_CLOSURE, flags
     );
     closure->function = func;
     OBJ_WRITE(OBJ_VAL(closure), OBJ_VAL(func));
@@ -296,8 +297,8 @@ ObjClosure *newClosure(ObjFunction *func) {
     return closure;
 }
 
-ObjUpvalue *newUpvalue(Value *slot) {
-    ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_T_UPVALUE);
+ObjUpvalue *newUpvalue(Value *slot, int flags) {
+    ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_T_UPVALUE, flags);
     upvalue->closed = NIL_VAL;
     upvalue->value = slot; // stack slot
     upvalue->next = NULL; // it's the caller's responsibility to link it
@@ -329,9 +330,9 @@ void freeClassInfo(ClassInfo *classInfo) {
     vec_deinit(&classInfo->v_includedMods);
 }
 
-ObjClass *newClass(ObjString *name, ObjClass *superclass) {
+ObjClass *newClass(ObjString *name, ObjClass *superclass, int flags) {
     ObjClass *klass = ALLOCATE_OBJ(
-        ObjClass, OBJ_T_CLASS
+        ObjClass, OBJ_T_CLASS, flags|NEWOBJ_FLAG_OLD
     );
     klass->klass = lxClassClass; // this is NULL when creating object hierarchy in initVM
     klass->singletonKlass = NULL;
@@ -350,9 +351,9 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass) {
     return klass;
 }
 
-ObjModule *newModule(ObjString *name) {
+ObjModule *newModule(ObjString *name, int flags) {
     ObjModule *mod = ALLOCATE_OBJ(
-        ObjModule, OBJ_T_MODULE
+        ObjModule, OBJ_T_MODULE, flags|NEWOBJ_FLAG_OLD
     );
     ASSERT(lxModuleClass);
     mod->klass = lxModuleClass;
@@ -371,9 +372,9 @@ ObjModule *newModule(ObjString *name) {
     return mod;
 }
 
-ObjArray *allocateArray(ObjClass *klass) {
+ObjArray *allocateArray(ObjClass *klass, int flags) {
     ObjArray *ary = ALLOCATE_OBJ(
-        ObjArray, OBJ_T_ARRAY
+        ObjArray, OBJ_T_ARRAY, flags
     );
     ary->klass = klass;
     ary->singletonKlass = NULL;
@@ -386,9 +387,9 @@ ObjArray *allocateArray(ObjClass *klass) {
     return ary;
 }
 
-ObjMap *allocateMap(ObjClass *klass) {
+ObjMap *allocateMap(ObjClass *klass, int flags) {
     ObjMap *map = ALLOCATE_OBJ(
-        ObjMap, OBJ_T_MAP
+        ObjMap, OBJ_T_MAP, flags
     );
     map->klass = klass;
     map->singletonKlass = NULL;
@@ -403,26 +404,26 @@ ObjMap *allocateMap(ObjClass *klass) {
 }
 
 // allocates a new instance object, doesn't call its constructor
-ObjInstance *newInstance(ObjClass *klass) {
+ObjInstance *newInstance(ObjClass *klass, int flags) {
     // NOTE: since this is called from vm.c's doCallCallable to initialize new
     // instances when given constructor functions, this must return new
     // modules/classes when given Module() or Class() constructors
     if (LIKELY(vm.inited)) {
         DBG_ASSERT(klass);
         if (IS_SUBCLASS(klass, lxAryClass)) {
-            return (ObjInstance*)allocateArray(klass);
+            return (ObjInstance*)allocateArray(klass, flags);
         } else if (IS_SUBCLASS(klass, lxStringClass)) {
-            return (ObjInstance*)allocateString(NULL, 0, klass);
+            return (ObjInstance*)allocateString(NULL, 0, klass, flags);
         } else if (IS_SUBCLASS(klass, lxMapClass)) {
-            return (ObjInstance*)allocateMap(klass);
+            return (ObjInstance*)allocateMap(klass, flags);
         } else if (klass == lxClassClass) {
-            return (ObjInstance*)newClass(NULL, lxObjClass);
+            return (ObjInstance*)newClass(NULL, lxObjClass, flags);
         } else if (klass == lxModuleClass) {
-            return (ObjInstance*)newModule(NULL);
+            return (ObjInstance*)newModule(NULL, flags);
         }
     }
     ObjInstance *obj = ALLOCATE_OBJ(
-        ObjInstance, OBJ_T_INSTANCE
+        ObjInstance, OBJ_T_INSTANCE, flags
     );
     obj->klass = klass;
     obj->singletonKlass = NULL;
@@ -434,10 +435,10 @@ ObjInstance *newInstance(ObjClass *klass) {
     return obj;
 }
 
-ObjNative *newNative(ObjString *name, NativeFn function) {
+ObjNative *newNative(ObjString *name, NativeFn function, int flags) {
     ASSERT(function);
     ObjNative *native = ALLOCATE_OBJ(
-        ObjNative, OBJ_T_NATIVE_FUNCTION
+        ObjNative, OBJ_T_NATIVE_FUNCTION, flags|NEWOBJ_FLAG_OLD
     );
     native->function = function;
     native->name = name; // should be interned
@@ -447,11 +448,11 @@ ObjNative *newNative(ObjString *name, NativeFn function) {
     return native;
 }
 
-ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
+ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable, int flags) {
     ASSERT(receiver);
     ASSERT(callable);
     ObjBoundMethod *bmethod = ALLOCATE_OBJ(
-        ObjBoundMethod, OBJ_T_BOUND_METHOD
+        ObjBoundMethod, OBJ_T_BOUND_METHOD, flags
     );
     bmethod->receiver = OBJ_VAL(receiver);
     bmethod->callable = callable;
@@ -460,11 +461,11 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable) {
     return bmethod;
 }
 
-ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCMarkFunc markFunc, GCFreeFunc freeFunc) {
+ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCMarkFunc markFunc, GCFreeFunc freeFunc, int flags) {
     ObjInternal *obj;
     if (isRealObject) {
         obj = ALLOCATE_OBJ(
-            ObjInternal, OBJ_T_INTERNAL
+            ObjInternal, OBJ_T_INTERNAL, flags|NEWOBJ_FLAG_OLD
         );
     } else {
         obj = ALLOCATE(ObjInternal, 1);
@@ -647,7 +648,7 @@ const char *typeOfObj(Obj *obj) {
 
 Value newArray(void) {
     DBG_ASSERT(nativeArrayInit);
-    ObjArray *ary = allocateArray(lxAryClass);
+    ObjArray *ary = allocateArray(lxAryClass, NEWOBJ_FLAG_NONE);
     callVMMethod((ObjInstance*)ary, OBJ_VAL(nativeArrayInit), 0, NULL, NULL);
     DBG_ASSERT(IS_AN_ARRAY(peek(0)));
     return pop();
@@ -655,7 +656,7 @@ Value newArray(void) {
 
 // NOTE: used in compiler, can't use VM stack
 Value newArrayConstant(void) {
-    ObjArray *ary = allocateArray(lxAryClass);
+    ObjArray *ary = allocateArray(lxAryClass, NEWOBJ_FLAG_OLD);
     ValueArray *valAry = &ary->valAry;
     initValueArray(valAry);
     GC_OLD(ary);
@@ -699,7 +700,7 @@ Value stringSubstr(Value self, int startIdx, int len) {
     ObjString *buf = AS_STRING(self);
     ObjString *substr = NULL;
     if (startIdx >= buf->length) {
-        substr = copyString("", 0);
+        substr = copyString("", 0, NEWOBJ_FLAG_NONE);
     } else {
         int maxlen = buf->length-startIdx; // "abc"
         // TODO: support negative len, like `-2` also,
@@ -707,7 +708,7 @@ Value stringSubstr(Value self, int startIdx, int len) {
         if (len > maxlen || len < 0) {
             len = maxlen;
         }
-        substr = copyString(buf->chars+startIdx, len);
+        substr = copyString(buf->chars+startIdx, len, NEWOBJ_FLAG_NONE);
     }
 
     return OBJ_VAL(substr);
@@ -716,11 +717,11 @@ Value stringSubstr(Value self, int startIdx, int len) {
 Value stringIndexGet(Value self, int index) {
     ObjString *buf = AS_STRING(self);
     if (index >= buf->length) {
-        return OBJ_VAL(copyString("", 0));
+        return OBJ_VAL(copyString("", 0, NEWOBJ_FLAG_NONE));
     } else if (index < 0) { // TODO: make it works from end of str?
         throwArgErrorFmt("%s", "index cannot be negative");
     } else {
-        return OBJ_VAL(copyString(buf->chars+index, 1));
+        return OBJ_VAL(copyString(buf->chars+index, 1, NEWOBJ_FLAG_NONE));
     }
 }
 
@@ -838,7 +839,7 @@ bool arrayEquals(Value self, Value other) {
 
 Value newMap(void) {
     DBG_ASSERT(nativeMapInit);
-    ObjInstance *instance = newInstance(lxMapClass);
+    ObjInstance *instance = newInstance(lxMapClass, NEWOBJ_FLAG_NONE);
     callVMMethod(instance, OBJ_VAL(nativeMapInit), 0, NULL, NULL);
     return pop();
 }
@@ -857,7 +858,7 @@ Value mapDup(Value other) {
 
 // NOTE: used in compiler, can't use VM stack
 Value newMapConstant(void) {
-    ObjMap *map = allocateMap(lxMapClass);
+    ObjMap *map = allocateMap(lxMapClass, NEWOBJ_FLAG_OLD);
     return OBJ_VAL(map);
 }
 
@@ -955,9 +956,9 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     if (inst->singletonKlass) {
         return inst->singletonKlass;
     }
-    ObjString *name = valueToString(OBJ_VAL(inst), hiddenString);
+    ObjString *name = valueToString(OBJ_VAL(inst), hiddenString, NEWOBJ_FLAG_OLD);
     pushCString(name, " (meta)", 7);
-    ObjClass *meta = newClass(name, inst->klass);
+    ObjClass *meta = newClass(name, inst->klass, NEWOBJ_FLAG_OLD);
     CLASSINFO(meta)->singletonOf = (Obj*)inst;
     inst->singletonKlass = meta;
     OBJ_WRITE(OBJ_VAL(inst), OBJ_VAL(meta));
@@ -971,13 +972,13 @@ ObjClass *classSingletonClass(ObjClass *klass) {
     }
     ObjString *name = NULL;
     if (CLASSINFO(klass)->name) {
-        name = dupString(CLASSINFO(klass)->name);
+        name = dupString(CLASSINFO(klass)->name); // TODO: create as old
     } else {
-        name = copyString("(anon)", 6);
+        name = copyString("(anon)", 6, NEWOBJ_FLAG_OLD);
         CLASSINFO(klass)->name = name;
     }
     pushCString(name, " (meta)", 7);
-    ObjClass *meta = newClass(name, CLASSINFO(klass)->superclass);
+    ObjClass *meta = newClass(name, CLASSINFO(klass)->superclass, NEWOBJ_FLAG_OLD);
     CLASSINFO(meta)->singletonOf = (Obj*)klass;
     klass->singletonKlass = meta;
     OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(meta));
@@ -991,14 +992,14 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
     }
     ObjString *name = NULL;
     if (CLASSINFO(mod)->name) {
-        name = dupString(CLASSINFO(mod)->name);
+        name = dupString(CLASSINFO(mod)->name); // TODO: make old
         hideFromGC((Obj*)name);
     } else {
-        name = hiddenString("(anon)", 6);
+        name = hiddenString("(anon)", 6, NEWOBJ_FLAG_OLD);
         CLASSINFO(mod)->name = name;
     }
     pushCString(name, " (meta)", 7);
-    ObjClass *meta = newClass(name, lxClassClass);
+    ObjClass *meta = newClass(name, lxClassClass, NEWOBJ_FLAG_OLD);
     mod->singletonKlass = meta;
     OBJ_WRITE(OBJ_VAL(mod), OBJ_VAL(meta));
     CLASSINFO(meta)->singletonOf = (Obj*)mod;
@@ -1009,14 +1010,14 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
 Value newThread(void) {
     if (!vm.inited) { // creating main thread in initVM
         ASSERT(vm.mainThread == NULL);
-        ObjInstance *instance = newInstance(NULL);
+        ObjInstance *instance = newInstance(NULL, NEWOBJ_FLAG_OLD);
         // no stack frame, just use function
         Value threadVal = OBJ_VAL(instance);
         lxThreadInit(1, &threadVal);
         GC_OLD(instance);
         return threadVal;
     } else {
-        ObjInstance *instance = newInstance(lxThreadClass);
+        ObjInstance *instance = newInstance(lxThreadClass, NEWOBJ_FLAG_OLD);
         GC_PROMOTE(instance, GC_GEN_OLD_MIN);
         callVMMethod(instance, OBJ_VAL(nativeThreadInit), 0, NULL, NULL);
         return pop();
@@ -1025,7 +1026,7 @@ Value newThread(void) {
 
 Value newBlock(ObjClosure *closure) {
     DBG_ASSERT(nativeBlockInit);
-    ObjInstance *instance = newInstance(lxBlockClass);
+    ObjInstance *instance = newInstance(lxBlockClass, NEWOBJ_FLAG_NONE);
     Value closureArg = OBJ_VAL(closure);
     callVMMethod(instance, OBJ_VAL(nativeBlockInit), 1, &closureArg, NULL);
     return pop();

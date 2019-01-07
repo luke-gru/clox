@@ -74,7 +74,7 @@ static Value lxTimeInit(int argCount, Value *args) {
     callSuper(0, NULL, NULL);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(false, NULL, 0, NULL, NULL);
+    ObjInternal *internalObj = newInternalObject(false, NULL, 0, NULL, NULL, NEWOBJ_FLAG_NONE);
     LxTime *t = ALLOCATE(LxTime, 1);
     time(&t->sinceEpoch);
     t->tmGot = false;
@@ -90,15 +90,15 @@ static Value lxTimeToString(int argCount, Value *args) {
     memset(buf, 0, 100);
     char *res = ctime_r(&time->sinceEpoch, buf);
     if (!res) {
-        return OBJ_VAL(copyString("", 0));
+        return OBJ_VAL(copyString("", 0, NEWOBJ_FLAG_NONE));
     }
-    return OBJ_VAL(copyString(buf, strlen(buf)));
+    return OBJ_VAL(copyString(buf, strlen(buf), NEWOBJ_FLAG_NONE));
 }
 
 static Value lxTimerInitEmpty(int argCount, Value *args) {
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(false, NULL, 0, NULL, NULL);
+    ObjInternal *internalObj = newInternalObject(false, NULL, 0, NULL, NULL, NEWOBJ_FLAG_NONE);
     LxTimer *t = ALLOCATE(LxTimer, 1);
     internalObj->data = t;
     internalObj->dataSz = sizeof(LxTime);
@@ -107,7 +107,7 @@ static Value lxTimerInitEmpty(int argCount, Value *args) {
 }
 
 static Value emptyTimer(void) {
-    ObjInstance *inst = newInstance(lxTimerClass);
+    ObjInstance *inst = newInstance(lxTimerClass, NEWOBJ_FLAG_NONE);
     Value ret = OBJ_VAL(inst);
     lxTimerInitEmpty(1, &ret);
     return ret;
@@ -124,7 +124,7 @@ static Value lxTimerInit(int argCount, Value *args) {
     }
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(false, NULL, 0, NULL, NULL);
+    ObjInternal *internalObj = newInternalObject(false, NULL, 0, NULL, NULL, NEWOBJ_FLAG_NONE);
     LxTimer *t = ALLOCATE(LxTimer, 1);
     t->clock = clock;
     int res = clock_gettime(t->clock, &t->tp);
@@ -176,7 +176,7 @@ static Value lxTimerToString(int argCount, Value *args) {
     CHECK_ARITY("Timer#toString", 1, 1, argCount);
     Value self = *args;
     LxTimer *t = timerGethidden(self);
-    return OBJ_VAL(valueToString(NUMBER_VAL(timeSeconds(t->tp)), copyString));
+    return OBJ_VAL(valueToString(NUMBER_VAL(timeSeconds(t->tp)), copyString, NEWOBJ_FLAG_NONE));
 }
 
 static Value lxTimerSeconds(int argCount, Value *args) {

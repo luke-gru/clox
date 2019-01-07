@@ -26,7 +26,6 @@ typedef enum ObjType {
 
 typedef struct ObjAny ObjAny;
 
-#define GC_FLAG_POINTED_TO 1
 // basic object structure that all objects (values of VAL_T_OBJ type)
 typedef struct Obj {
     ObjType type; // redundant, but we need for now
@@ -313,17 +312,24 @@ typedef struct LxFile {
 #define FILE_GETHIDDEN(fileVal) (fileGetHidden(fileVal))
 #define THREAD_GETHIDDEN(thVal) (threadGetHidden(thVal))
 
+// object creation flags
+#define NEWOBJ_FLAG_NONE 0
+#define NEWOBJ_FLAG_OLD 1
+#define NEWOBJ_FLAG_FROZEN 2
+#define NEWOBJ_FLAG_HIDDEN 4
+
 // strings (internal)
-typedef ObjString *(*newStringFunc)(char *chars, int length);
+typedef ObjString *(*newStringFunc)(char *chars, int length, int flags);
 // Strings as ObjString
-ObjString *takeString(char *chars, int length); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
-ObjString *copyString(char *chars, int length); // copies provided memory. Object lives on lox heap.
-ObjString *hiddenString(char *chars, int length); // hidden from GC, used in tests mainly.
-#define INTERN(chars) (internedString(chars, strlen(chars)))
-ObjString *internedString(char *chars, int length);
+ObjString *takeString(char *chars, int length, int flags); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
+ObjString *copyString(char *chars, int length, int flags); // copies provided memory. Object lives on lox heap.
+ObjString *hiddenString(char *chars, int length, int flags); // hidden from GC, used in tests mainly.
+#define INTERN(chars) (internedString(chars, strlen(chars), NEWOBJ_FLAG_NONE))
+#define INTERNED(chars, len) (internedString(chars, len, NEWOBJ_FLAG_NONE))
+ObjString *internedString(char *chars, int length, int flags);
 bool objStringEquals(ObjString *a, ObjString *b);
 static inline ObjString *dupString(ObjString *string) {
-    return copyString(string->chars, string->length);
+    return copyString(string->chars, string->length, NEWOBJ_FLAG_NONE);
 }
 
 // strings as values
@@ -443,16 +449,16 @@ typedef struct CallFrame CallFrame; // fwd decl
 ObjInstance *getBlockArg(CallFrame *frame);
 
 // Object creation functions
-ObjFunction *newFunction(Chunk *chunk, Node *funcNode);
-ObjClass *newClass(ObjString *name, ObjClass *superclass);
-ObjModule *newModule(ObjString *name);
-ObjInstance *newInstance(ObjClass *klass);
-ObjArray *allocateArray(ObjClass *klass);
-ObjNative *newNative(ObjString *name, NativeFn function);
-ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable);
-ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCMarkFunc markFn, GCFreeFunc freeFn);
-ObjClosure *newClosure(ObjFunction *function);
-ObjUpvalue *newUpvalue(Value *slot);
+ObjFunction *newFunction(Chunk *chunk, Node *funcNode, int flags);
+ObjClass *newClass(ObjString *name, ObjClass *superclass, int flags);
+ObjModule *newModule(ObjString *name, int flags);
+ObjInstance *newInstance(ObjClass *klass, int flags);
+ObjArray *allocateArray(ObjClass *klass, int flags);
+ObjNative *newNative(ObjString *name, NativeFn function, int flags);
+ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable, int flags);
+ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCMarkFunc markFn, GCFreeFunc freeFn, int flags);
+ObjClosure *newClosure(ObjFunction *function, int flags);
+ObjUpvalue *newUpvalue(Value *slot, int flags);
 
 // Object destruction functions
 void freeClassInfo(ClassInfo *cinfo);

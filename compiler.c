@@ -80,7 +80,7 @@ static void error(const char *format, ...) {
     int line = curTok ? curTok->line : 0;
     va_list args;
     va_start(args, format);
-    ObjString *str = hiddenString("", 0);
+    ObjString *str = hiddenString("", 0, NEWOBJ_FLAG_NONE);
     pushCStringFmt(str, "[Compile Error]: ");
     if (line > 0) {
         pushCStringFmt(str, "(line: %d) ", line);
@@ -663,7 +663,7 @@ static uint8_t makeConstant(Value value, ConstType ctype) {
 // Add constant to constant pool from the token's lexeme, return index to it
 static uint8_t identifierConstant(Token* name) {
     DBG_ASSERT(vm.inited);
-    return makeConstant(OBJ_VAL(internedString(name->start, name->length)),
+    return makeConstant(OBJ_VAL(INTERNED(name->start, name->length)),
         CONST_T_STRLIT);
 }
 
@@ -852,7 +852,7 @@ static void initCompiler(
     compiler->enclosing = current;
     compiler->localCount = 0; // NOTE: below, this is increased to 1
     compiler->scopeDepth = scopeDepth;
-    compiler->function = newFunction(chunk, NULL);
+    compiler->function = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
     initIseq(&compiler->iseq);
     compiler->iseq.constants = compiler->function->chunk->constants;
     hideFromGC((Obj*)compiler->function); // TODO: figure out way to unhide these functions on freeVM()
@@ -864,7 +864,7 @@ static void initCompiler(
 
     switch (ftype) {
     case FUN_TYPE_NAMED:
-        current->function->name = internedString(
+        current->function->name = INTERNED(
             tokStr(fTok), strlen(tokStr(fTok))
         );
         break;
@@ -889,7 +889,7 @@ static void initCompiler(
         }
         strncat(methodNameBuf, sep, 1);
         strcat(methodNameBuf, funcName);
-        ObjString *methodName = internedString(methodNameBuf, strlen(methodNameBuf));
+        ObjString *methodName = INTERNED(methodNameBuf, strlen(methodNameBuf));
         current->function->name = methodName;
         xfree(methodNameBuf);
         break;
@@ -1051,7 +1051,7 @@ static CallInfo *emitCall(Node *n) {
                 idx++;
             }
         }
-        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL);
+        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_NONE);
         hideFromGC((Obj*)callInfoObj);
         uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
         emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
@@ -1079,7 +1079,7 @@ static CallInfo *emitCall(Node *n) {
                 idx++;
             }
         }
-        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL);
+        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_NONE);
         hideFromGC((Obj*)callInfoObj);
         uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
         emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);
@@ -1392,13 +1392,13 @@ static void emitNode(Node *n) {
         // non-static string
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
-            ObjString *str = internedString(name->start+1, name->length-2);
+            ObjString *str = INTERNED(name->start+1, name->length-2);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 0);
         // static string
         } else if (n->tok.type == TOKEN_STRING_STATIC) {
             Token *name = &n->tok;
-            ObjString *str = internedString(name->start+2, name->length-3);
+            ObjString *str = INTERNED(name->start+2, name->length-3);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 1);
         } else if (n->tok.type == TOKEN_TRUE) {
@@ -1827,7 +1827,7 @@ static void emitNode(Node *n) {
                 if (i == 0) continue; // already emitted
                 int itarget = iseq->byteCount;
                 Token classTok = vec_first(catchStmt->children)->tok;
-                ObjString *className = internedString(tokStr(&classTok), strlen(tokStr(&classTok)));
+                ObjString *className = INTERNED(tokStr(&classTok), strlen(tokStr(&classTok)));
                 double catchTblIdx = (double)iseqAddCatchRow(
                     iseq, ifrom, ito,
                     itarget, OBJ_VAL(className)

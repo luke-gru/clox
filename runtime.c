@@ -25,28 +25,28 @@ const char pathSeparator =
 #endif
 
 void addGlobalFunction(const char *name, NativeFn func) {
-    ObjString *funcName = internedString(name, strlen(name));
-    ObjNative *natFn = newNative(funcName, func);
+    ObjString *funcName = INTERNED(name, strlen(name));
+    ObjNative *natFn = newNative(funcName, func, NEWOBJ_FLAG_OLD);
     tableSet(&vm.globals, OBJ_VAL(funcName), OBJ_VAL(natFn));
 }
 
 ObjClass *addGlobalClass(const char *name, ObjClass *super) {
-    ObjString *className = internedString(name, strlen(name));
-    ObjClass *objClass = newClass(className, super);
+    ObjString *className = INTERNED(name, strlen(name));
+    ObjClass *objClass = newClass(className, super, NEWOBJ_FLAG_OLD);
     tableSet(&vm.globals, OBJ_VAL(className), OBJ_VAL(objClass));
     return objClass;
 }
 
 ObjModule *addGlobalModule(const char *name) {
-    ObjString *modName = internedString(name, strlen(name));
-    ObjModule *mod = newModule(modName);
+    ObjString *modName = INTERNED(name, strlen(name));
+    ObjModule *mod = newModule(modName, NEWOBJ_FLAG_OLD);
     tableSet(&vm.globals, OBJ_VAL(modName), OBJ_VAL(mod));
     return mod;
 }
 
 ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
-    ObjString *mname = internedString(name, strlen(name));
-    ObjNative *natFn = newNative(mname, func);
+    ObjString *mname = INTERNED(name, strlen(name));
+    ObjNative *natFn = newNative(mname, func, NEWOBJ_FLAG_OLD);
     natFn->klass = (Obj*)klass; // class or module
     natFn->isStatic = false;
     if (klass && natFn->klass->type == OBJ_T_CLASS) {
@@ -58,8 +58,8 @@ ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
 }
 
 ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
-    ObjString *mname = internedString(name, strlen(name));
-    ObjNative *natFn = newNative(mname, func);
+    ObjString *mname = INTERNED(name, strlen(name));
+    ObjNative *natFn = newNative(mname, func, NEWOBJ_FLAG_OLD);
     natFn->klass = (Obj*)klass; // class or module
     tableSet(CLASSINFO(klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
     OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
@@ -67,8 +67,8 @@ ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
 }
 
 ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
-    ObjString *mname = internedString(name, strlen(name));
-    ObjNative *natFn = newNative(mname, func);
+    ObjString *mname = INTERNED(name, strlen(name));
+    ObjNative *natFn = newNative(mname, func, NEWOBJ_FLAG_OLD);
     natFn->klass = (Obj*)klass; // class or module
     tableSet(CLASSINFO(klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
     OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
@@ -89,7 +89,7 @@ Value lxClock(int argCount, Value *args) {
 Value lxTypeof(int argCount, Value *args) {
     CHECK_ARITY("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
-    return OBJ_VAL(copyString(strType, strlen(strType)));
+    return OBJ_VAL(copyString(strType, strlen(strType), NEWOBJ_FLAG_NONE));
 }
 
 Value lxDebugger(int argCount, Value *args) {
@@ -154,7 +154,7 @@ Value lxSleep(int argCount, Value *args) {
 }
 
 static inline ObjClosure *closureFromFn(ObjFunction *func) {
-    return newClosure(func);
+    return newClosure(func, NEWOBJ_FLAG_NONE);
 }
 
 static inline CallFrame *getOuterClosureFrame() {
@@ -364,7 +364,7 @@ readableCheck:
         // TODO: throw syntax error
         return BOOL_VAL(false);
     }
-    ObjString *fpath = copyString(pathbuf, strlen(pathbuf));
+    ObjString *fpath = copyString(pathbuf, strlen(pathbuf), NEWOBJ_FLAG_OLD);
     if (checkLoaded) {
         vec_push(&vm.loadedScripts, OBJ_VAL(fpath));
     }
@@ -444,7 +444,7 @@ Value lxObjectDup(int argCount, Value *args) {
         throwErrorFmt(lxTypeErrClass, "Cannot call dup() on a %s", typeOfVal(self));
     }
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInstance *newObj = newInstance(selfObj->klass); // XXX: Call initialize on new instance?
+    ObjInstance *newObj = newInstance(selfObj->klass, NEWOBJ_FLAG_NONE); // XXX: Call initialize on new instance?
     Entry e; int idx = 0;
     TABLE_FOREACH(selfObj->fields, e, idx, {
         tableSet(newObj->fields, e.key, e.value);
@@ -553,7 +553,7 @@ Value lxClassGetName(int argCount, Value *args) {
     ObjClass *klass = AS_CLASS(self);
     ObjString *origName = CLASSINFO(klass)->name;
     if (origName == NULL) {
-        return OBJ_VAL(copyString("(anon)", 6));
+        return OBJ_VAL(copyString("(anon)", 6, NEWOBJ_FLAG_NONE));
     } else {
         return OBJ_VAL(dupString(origName));
     }
@@ -616,7 +616,8 @@ Value lxIteratorInit(int argCount, Value *args) {
         throwErrorFmt(lxTypeErrClass, "Expected Array/Map");
     }
     ObjInternal *internalIter = newInternalObject(false,
-        iter, sizeof(Iterator), markInternalIter, freeInternalIter
+        iter, sizeof(Iterator), markInternalIter, freeInternalIter,
+        NEWOBJ_FLAG_NONE
     );
     selfObj->internal = internalIter;
     return self;
@@ -677,20 +678,20 @@ Value lxErrInit(int argCount, Value *args) {
     } else {
         msg = NIL_VAL;
     }
-    setProp(self, internedString("message", 7), msg);
+    setProp(self, INTERNED("message", 7), msg);
     return self;
 }
 
 Value lxGCStats(int argCount, Value *args) {
     CHECK_ARITY("GC.stats", 1, 1, argCount);
     Value map = newMap();
-    Value totalKey = OBJ_VAL(copyString("totalAllocated", 14));
+    Value totalKey = OBJ_VAL(copyString("totalAllocated", 14, NEWOBJ_FLAG_NONE));
     mapSet(map, totalKey, NUMBER_VAL(GCStats.totalAllocated));
-    Value heapSizeKey = OBJ_VAL(copyString("heapSize", 8));
+    Value heapSizeKey = OBJ_VAL(copyString("heapSize", 8, NEWOBJ_FLAG_NONE));
     mapSet(map, heapSizeKey, NUMBER_VAL(GCStats.heapSize));
-    Value heapUsedKey = OBJ_VAL(copyString("heapUsed", 8));
+    Value heapUsedKey = OBJ_VAL(copyString("heapUsed", 8, NEWOBJ_FLAG_NONE));
     mapSet(map, heapUsedKey, NUMBER_VAL(GCStats.heapUsed));
-    Value heapWasteKey = OBJ_VAL(copyString("heapUsedWaste", 13));
+    Value heapWasteKey = OBJ_VAL(copyString("heapUsedWaste", 13, NEWOBJ_FLAG_NONE));
     mapSet(map, heapWasteKey, NUMBER_VAL(GCStats.heapUsedWaste));
     return map;
 }

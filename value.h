@@ -187,8 +187,8 @@ bool is_nil_p(Value);
 bool is_number_p(Value);
 bool is_obj_p(Value);
 
-typedef ObjString *(*newStringFunc)(char *chars, int length);
-ObjString *valueToString(Value value, newStringFunc fn);
+typedef ObjString *(*newStringFunc)(char *chars, int length, int flags);
+ObjString *valueToString(Value value, newStringFunc fn, int flags);
 
 const char *typeOfVal(Value val);
 uint32_t valHash(Value val);

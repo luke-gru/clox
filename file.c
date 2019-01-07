@@ -125,7 +125,7 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
                 pushCString(AS_STRING(line), bufpStart, len);
                 leftoverLine = false;
             } else {
-                line = OBJ_VAL(copyString(bufpStart, len));
+                line = OBJ_VAL(copyString(bufpStart, len, NEWOBJ_FLAG_NONE));
                 arrayPush(ary, line);
             }
             nleft -= len;
@@ -166,7 +166,7 @@ static Value lxFileCreateStatic(int argCount, Value *args) {
     int flags = O_CREAT|O_EXCL|O_RDWR|O_CLOEXEC;
     ObjString *fnameStr = VAL_TO_STRING(fname);
     int fd = checkOpen(fnameStr->chars, flags, mode);
-    Value file = OBJ_VAL(newInstance(lxFileClass));
+    Value file = OBJ_VAL(newInstance(lxFileClass, NEWOBJ_FLAG_NONE));
     initIOAfterOpen(file, fnameStr, fd, mode, flags);
     return file;
 }
@@ -190,7 +190,7 @@ static Value lxFileOpenStatic(int argCount, Value *args) {
         mode = (mode_t)AS_NUMBER(modeVal);
     }
     int fd = checkOpen(fnameStr->chars, flags, mode);
-    Value file = OBJ_VAL(newInstance(lxFileClass));
+    Value file = OBJ_VAL(newInstance(lxFileClass, NEWOBJ_FLAG_NONE));
     initIOAfterOpen(file, fnameStr, fd, mode, flags);
     return file;
 }

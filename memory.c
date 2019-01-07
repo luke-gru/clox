@@ -442,30 +442,36 @@ static void collectYoung(void) {
     youngStackSz = 0;
 }
 
-Obj *getNewObject(ObjType type, size_t sz) {
+Obj *getNewObject(ObjType type, size_t sz, int flags) {
     Obj *obj = NULL;
     bool triedYoungCollect = false;
+    bool isOld = (flags & NEWOBJ_FLAG_OLD) != 0;
+    bool noGC = dontGC || OPTION_T(disableGC) || !GCOn;
+    if (noGC) triedYoungCollect = true;
+    int tries = 0;
 
 retry:
-    if (freeList && ((youngStackSz < YOUNG_MARK_STACK_MAX) || triedYoungCollect)) {
+    DBG_ASSERT(tries < 3);
+    if (freeList && (isOld || ((youngStackSz < YOUNG_MARK_STACK_MAX) || triedYoungCollect))) {
         obj = (Obj*)freeList;
         freeList = obj->nextFree;
         GCStats.heapUsed += sizeof(ObjAny);
         GCStats.heapUsedWaste += (sizeof(ObjAny)-sz);
         GCStats.demographics[type]++;
-        if (LIKELY(!triedYoungCollect)) {
+        if (!isOld && !triedYoungCollect) {
             pushYoungObject(obj);
         }
         return obj;
     }
-    if (!triedYoungCollect && !(dontGC || OPTION_T(disableGC))) {
+    if (!isOld && !triedYoungCollect && !noGC) {
         collectYoung();
         triedYoungCollect = true;
-    } else if (!GCOn || dontGC || OPTION_T(disableGC)) {
+    } else if (noGC) {
         addHeap();
     } else {
         collectGarbage(); // adds heap if needed at end of collection, full mark/sweep
     }
+    tries++;
     goto retry;
 }
 

@@ -101,8 +101,8 @@ typedef struct NewThreadArgs {
 static ObjInstance *newThreadSetup(LxThread *parentThread) {
     ASSERT(parentThread);
     THREAD_DEBUG(3, "New thread setup");
-    ObjInstance *thInstance = newInstance(lxThreadClass);
-    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxThread), NULL, NULL);
+    ObjInstance *thInstance = newInstance(lxThreadClass, NEWOBJ_FLAG_OLD);
+    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxThread), NULL, NULL, NEWOBJ_FLAG_NONE);
     thInstance->internal = internalObj;
     LxThread *th = ALLOCATE(LxThread, 1);
     LxThreadSetup(th);
@@ -260,7 +260,7 @@ Value lxThreadInit(int argCount, Value *args) {
     callSuper(0, NULL, NULL);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxThread), NULL, NULL);
+    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxThread), NULL, NULL, NEWOBJ_FLAG_NONE);
     LxThread *th = ALLOCATE(LxThread, 1);
     LxThreadSetup(th);
     internalObj->data = th;
@@ -385,7 +385,7 @@ static Value lxMutexInit(int argCount, Value *args) {
     callSuper(0, NULL, NULL);
     Value self = *args;
     ObjInstance *selfObj = AS_INSTANCE(self);
-    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxMutex), NULL, NULL);
+    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxMutex), NULL, NULL, NEWOBJ_FLAG_NONE);
     LxMutex *mutex = ALLOCATE(LxMutex, 1);
     setupMutex(mutex);
     internalObj->data = mutex;

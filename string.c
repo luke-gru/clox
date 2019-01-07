@@ -20,7 +20,7 @@ Value lxStringInit(int argCount, Value *args) {
         otherStr = INTERN("");
     } else {
         if (!IS_STRING(args[1])) {
-            otherStr = valueToString(args[1], copyString);
+            otherStr = valueToString(args[1], copyString, NEWOBJ_FLAG_NONE);
         } else {
             otherStr = AS_STRING(args[1]);
         }

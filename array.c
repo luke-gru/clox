@@ -114,7 +114,7 @@ static Value lxArrayToString(int argCount, Value *args) {
     CHECK_ARITY("Array#toString", 1, 1, argCount);
     Value self = *args;
     Obj *selfObj = AS_OBJ(self);
-    Value ret = OBJ_VAL(copyString("[", 1));
+    Value ret = OBJ_VAL(copyString("[", 1, NEWOBJ_FLAG_NONE));
     ObjString *bufRet = AS_STRING(ret);
     ObjArray *aryObj = AS_ARRAY(self);
     ValueArray *ary = &aryObj->valAry;
@@ -127,7 +127,7 @@ static Value lxArrayToString(int argCount, Value *args) {
         if (IS_OBJ(elVal)) {
             DBG_ASSERT(AS_OBJ(elVal)->type > OBJ_T_NONE);
         }
-        ObjString *buf = valueToString(elVal, copyString);
+        ObjString *buf = valueToString(elVal, copyString, NEWOBJ_FLAG_NONE);
         pushCString(bufRet, buf->chars, strlen(buf->chars));
         if (i < (ary->count-1)) {
             pushCString(bufRet, ",", 1);
@@ -220,7 +220,7 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
         fill = args[2];
     }
     int capaNum = (int)AS_NUMBER(capa);
-    Value ret = OBJ_VAL(newInstance(lxAryClass));
+    Value ret = OBJ_VAL(newInstance(lxAryClass, NEWOBJ_FLAG_NONE));
     ObjArray *selfObj = AS_ARRAY(ret);
     ValueArray *ary = &selfObj->valAry;
     if (capaNum > 1) {
