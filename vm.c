@@ -2205,6 +2205,9 @@ vmLoop:
           }
           Value val = peek(0);
           tableSet(&vm.globals, varName, val);
+          if (IS_OBJ(val) && IS_YOUNG_VAL(val)) {
+              GC_PROMOTE_ONCE(AS_OBJ(val));
+          }
           pop();
           DISPATCH_BOTTOM();
       }
@@ -2228,6 +2231,9 @@ vmLoop:
               throwErrorFmt(lxNameErrClass, "Can't redefine global variable '%s'", name);
           }
           tableSet(&vm.globals, varName, val);
+          if (IS_OBJ(val) && IS_YOUNG_VAL(val)) {
+              GC_PROMOTE_ONCE(AS_OBJ(val));
+          }
           DISPATCH_BOTTOM();
       }
       CASE_OP(NIL): {

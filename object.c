@@ -17,7 +17,7 @@ extern VM vm;
 static Obj *allocateObject(size_t size, ObjType type) {
     ASSERT(type > OBJ_T_NONE);
     Obj *object = getNewObject(type, size);
-    object->isDark = true; // don't collect right away, wait at least 1 round of GC
+    object->isDark = false;
     object->type = type;
     object->isFrozen = false;
 
@@ -27,7 +27,7 @@ static Obj *allocateObject(size_t size, ObjType type) {
 
     object->objectId = (size_t)object;
     object->noGC = false;
-    object->GCGen = 0;
+    object->GCGen = GC_GEN_MIN;
     GCStats.generations[object->GCGen]++;
 
     return object;

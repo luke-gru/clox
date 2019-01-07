@@ -6,11 +6,11 @@
 #include "object.h"
 #include "value.h"
 
-#define GC_GEN_MIN 1
-#define GC_GEN_YOUNG_MAX 2
-#define GC_GEN_OLD_MIN 3
-#define GC_GEN_OLD 4
-#define GC_GEN_MAX 5
+#define GC_GEN_MIN 0
+#define GC_GEN_YOUNG_MAX 1
+#define GC_GEN_OLD_MIN 2
+#define GC_GEN_OLD 3
+#define GC_GEN_MAX 4
 
 // NOTE: zeroes the memory
 #define ALLOCATE(type, count)\
@@ -68,9 +68,23 @@ void blackenObject(Obj *obj); // recursively mark object's references
 void freeObjects(void); // free all vm.objects. Used at end of VM lifecycle
 
 #define GC_PROMOTE(obj, gen) GCPromote((Obj*)obj, gen)
+#define GC_PROMOTE_ONCE(obj) GCPromoteOnce((Obj*)obj)
 #define GC_OLD(obj) GCPromote((Obj*)obj, GC_GEN_MAX)
 void GCPromote(Obj *obj, unsigned short gen);
-void GCPromoteOld(Obj *obj);
+void GCPromoteOnce(Obj *obj);
+void pushRememberSet(Obj *obj);
+
+#define IS_OLD_VAL(value) (AS_OBJ(value)->GCGen > GC_GEN_MIN)
+#define IS_YOUNG_VAL(value) (AS_OBJ(value)->GCGen == GC_GEN_MIN)
+#define IS_OLD_OBJ(obj) ((obj)->GCGen > GC_GEN_MIN)
+#define IS_YOUNG_OBJ(obj) ((obj)->GCGen == GC_GEN_MIN)
+static inline void objWrite(Value owner, Value pointed) {
+    if ((IS_OBJ(pointed) && IS_YOUNG_VAL(pointed)) && IS_OLD_VAL(owner)) {
+        AS_OBJ(pointed)->GCFlags |= GC_FLAG_POINTED_TO;
+        pushRememberSet(AS_OBJ(pointed));
+    }
+}
+#define OBJ_WRITE(owner, pointed) objWrite(owner, pointed)
 
 bool turnGCOff(void);
 bool turnGCOn(void);

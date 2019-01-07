@@ -121,6 +121,18 @@ void GCPromote(Obj *obj, unsigned short gen) {
     obj->GCGen = gen;
 }
 
+void GCPromoteOnce(Obj *obj) {
+    if (obj->GCGen == GC_GEN_MAX) {
+        return;
+    }
+    unsigned short oldGen = obj->GCGen;
+    unsigned short newGen = oldGen+1;
+    if (GCStats.generations[oldGen])
+        GCStats.generations[oldGen]--;
+    GCStats.generations[newGen]++;
+    obj->GCGen = newGen;
+}
+
 static void gc_trace_mark(int lvl, Obj *obj) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
     fprintf(stderr, "[GC]: marking %s object at %p", typeOfObj(obj), obj);
@@ -173,6 +185,23 @@ static inline void trace_gc_func_start(int lvl, const char *funcName) {
 static inline void trace_gc_func_end(int lvl, const char *funcName) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
     fprintf(stderr, "[GC]: </%s>\n", funcName);
+}
+
+// Generational GC details
+#define YOUNG_MARK_STACK_MAX 5000
+static Obj *youngStack[YOUNG_MARK_STACK_MAX];
+static int youngStackSz = 0;
+// remembering young objects that should not be collected until next major GC
+// (they are pointed to by old objects)
+static vec_void_t rememberSet;
+
+void pushRememberSet(Obj *obj) {
+    static bool rememberSetInited = false;
+    if (UNLIKELY(!rememberSetInited)) {
+        vec_init(&rememberSet);
+        rememberSetInited = true;
+    }
+    vec_push(&rememberSet, obj);
 }
 
 void addHeap() {
@@ -232,22 +261,190 @@ void freeHeap(ObjAny *heap) {
     GCStats.heapSize -= (sizeof(ObjAny)*HEAP_SLOTS);
 }
 
+static inline void pushYoungObject(Obj *obj) {
+    ASSERT(youngStackSz < YOUNG_MARK_STACK_MAX);
+    youngStack[youngStackSz++] = obj;
+}
+
+static inline bool inRememberSet(Obj *obj) {
+    int found = -1;
+    vec_find(&rememberSet, obj, found);
+    return found != -1;
+}
+
+// collect all young objects that aren't in the remember set, aren't
+// on the stack (VM and "C" obj stack)
+static void collectYoung(void) {
+    if (!GCOn || OPTION_T(disableGC)) {
+        GC_TRACE_DEBUG(1, "GC run (young) skipped (GC OFF)");
+        return;
+    }
+    if (UNLIKELY(inGC)) {
+        fprintf(stderr, "[BUG]: GC (young) tried to start during a GC run?\n");
+        ASSERT(0);
+    }
+    if (UNLIKELY(youngStackSz == 0)) {
+        GC_TRACE_DEBUG(1, "Skipping garbage (young, stack size: %d)", youngStackSz);
+        return;
+    }
+
+    GC_TRACE_DEBUG(1, "Collecting garbage (young, stack size: %d)", youngStackSz);
+    inGC = true;
+    inGC = false;
+    vec_void_t v_stackObjs;
+    vec_init(&v_stackObjs);
+
+    GC_TRACE_DEBUG(2, "Marking VM stack roots");
+    // Mark stack roots up the stack for every execution context in every thread
+    Obj *thObj; int thIdx = 0;
+    vec_foreach(&vm.threads, thObj, thIdx) {
+        LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
+        if (th->status == THREAD_ZOMBIE) {
+            continue;
+        }
+        DBG_ASSERT(thObj);
+        grayObject(thObj);
+        ASSERT(th);
+        if (th->thisObj) {
+            grayObject(th->thisObj);
+        }
+        if (th->lastValue) {
+            grayValue(*th->lastValue);
+        }
+        grayValue(th->lastErrorThrown);
+        VMExecContext *ctx = NULL; int k = 0;
+        vec_foreach(&th->v_ecs, ctx, k) {
+            grayTable(&ctx->roGlobals);
+            // Thread stack
+            for (Value *slot = ctx->stack; slot < ctx->stackTop; slot++) {
+                grayValue(*slot);
+            }
+        }
+        vec_extend(&v_stackObjs, &th->stackObjects);
+    }
+
+    GC_TRACE_DEBUG(2, "Marking per-thread VM C-call stack objects");
+    int numStackObjects = 0;
+    ObjInstance *threadInst = NULL; int tIdx = 0;
+    vec_foreach(&vm.threads, threadInst, tIdx) {
+        LxThread *curThread = THREAD_GETHIDDEN(OBJ_VAL(threadInst));
+        if (curThread->status == THREAD_ZOMBIE) { continue; }
+        Obj *stackObjPtr = NULL; int stIdx = 0;
+        vec_foreach(&curThread->stackObjects, stackObjPtr, stIdx) {
+            numStackObjects++;
+            grayObject(stackObjPtr);
+        }
+    }
+    GC_TRACE_DEBUG(2, "# C-call stack objects found: %d", numStackObjects);
+
+    Value *scriptName; int i = 0;
+    vec_foreach_ptr(&vm.loadedScripts, scriptName, i) {
+        grayValue(*scriptName);
+    }
+
+    GC_TRACE_DEBUG(2, "Marking VM frame functions");
+    // gray active function closure objects
+    VMExecContext *ctx = NULL; int ctxIdx = 0;
+    int numFramesFound = 0;
+    int numOpenUpsFound = 0;
+    thObj = NULL; thIdx = 0;
+    vec_foreach(&vm.threads, thObj, thIdx) {
+        LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
+        if (th->status == THREAD_ZOMBIE) return;
+        vec_foreach(&th->v_ecs, ctx, ctxIdx) {
+            grayObject((Obj*)ctx->filename);
+            if (ctx->lastValue) {
+                grayValue(*ctx->lastValue);
+            }
+            for (int i = 0; i < ctx->frameCount; i++) {
+                // TODO: gray native function if exists
+                // XXX: is this necessary, they must be on the stack??
+                grayObject((Obj*)ctx->frames[i].closure);
+                grayObject((Obj*)ctx->frames[i].instance);
+                numFramesFound++;
+            }
+        }
+        if (th->openUpvalues) {
+            ObjUpvalue *up = th->openUpvalues;
+            while (up) {
+                ASSERT(up->value);
+                grayValue(*up->value);
+                up = up->next;
+                numOpenUpsFound++;
+            }
+        }
+    }
+    if (vm.printBuf) {
+        GC_TRACE_DEBUG(3, "Marking VM print buf");
+        grayObject((Obj*)vm.printBuf);
+    }
+    int numPromotedDark = 0;
+    int numPromotedOther = 0;
+    int numPromotedRemembered = 0;
+    int numCollected = 0;
+    ObjAny *newFreeList = freeList;
+    for (int i = 0; i < youngStackSz; i++) {
+        Obj *youngObj = youngStack[i];
+        DBG_ASSERT(youngObj);
+        if (youngObj->GCGen > GC_GEN_MIN) {
+            numPromotedOther++;
+            youngObj->isDark = false;
+            continue;
+        }
+        if (youngObj->isDark) {
+            numPromotedDark++;
+            GC_PROMOTE_ONCE(youngObj);
+            youngObj->isDark = false;
+        } else if (inRememberSet(youngObj)) {
+            numPromotedRemembered++;
+            GC_PROMOTE_ONCE(youngObj);
+            youngObj->isDark = false;
+        } else {
+            ASSERT(IS_YOUNG_OBJ(youngObj));
+            ASSERT(!youngObj->noGC);
+            youngObj->nextFree = newFreeList;
+            freeObject(youngObj);
+            newFreeList = (ObjAny*)youngObj;
+            numCollected++;
+        }
+    }
+    freeList = newFreeList;
+    GC_TRACE_DEBUG(2, "done FREE (young) process");
+    GC_TRACE_DEBUG(2, "Num promoted (dark): %d", numPromotedDark);
+    GC_TRACE_DEBUG(2, "Num promoted (remembered): %d", numPromotedRemembered);
+    GC_TRACE_DEBUG(2, "Num promoted (manual): %d", numPromotedOther);
+    GC_TRACE_DEBUG(2, "Num collected: %d", numCollected);
+    vec_clear(&rememberSet);
+    GCProf.totalRuns++;
+    vec_deinit(&v_stackObjs);
+    vm.grayCount = 0;
+    inGC = false;
+    youngStackSz = 0;
+}
+
 Obj *getNewObject(ObjType type, size_t sz) {
     Obj *obj = NULL;
+    bool triedYoungCollect = false;
 
 retry:
-    if (freeList) {
+    if (freeList && (triedYoungCollect || (youngStackSz < YOUNG_MARK_STACK_MAX))) {
         obj = (Obj*)freeList;
         freeList = obj->nextFree;
         GCStats.heapUsed += sizeof(ObjAny);
         GCStats.heapUsedWaste += (sizeof(ObjAny)-sz);
         GCStats.demographics[type]++;
+        if (!triedYoungCollect) {
+            pushYoungObject(obj);
+        }
         return obj;
     }
-    if (!GCOn || dontGC || OPTION_T(disableGC)) {
+    if (!triedYoungCollect && !(dontGC || OPTION_T(disableGC))) {
+        collectYoung();
+        triedYoungCollect = true;
+    } else if (!GCOn || dontGC || OPTION_T(disableGC)) {
         addHeap();
     } else {
-        collectGarbage(); // adds heap if needed at end of collection
+        collectGarbage(); // adds heap if needed at end of collection, full mark/sweep
     }
     goto retry;
 }
@@ -302,9 +499,6 @@ static inline void INC_GEN(Obj *obj) {
     GCStats.generations[obj->GCGen]++;
 }
 
-static inline bool IS_YOUNG(Obj *obj) {
-    return obj->GCGen <= GC_GEN_YOUNG_MAX;
-}
 
 void grayObject(Obj *obj) {
     TRACE_GC_FUNC_START(4, "grayObject");
@@ -709,6 +903,9 @@ void hideFromGC(Obj *obj) {
     DBG_ASSERT(obj);
     DBG_ASSERT(vm.inited);
     if (!obj->noGC) {
+        if (IS_YOUNG_OBJ(obj)) {
+            GC_PROMOTE_ONCE(obj);
+        }
         vec_push(&vm.hiddenObjs, obj);
         obj->noGC = true;
     }
@@ -753,7 +950,7 @@ static void callFinalizer(Obj *obj) {
     activeFinalizers--;
 }
 
-// single-phase mark and sweep
+// Full collection single-phase mark and sweep
 // TODO: divide work up into mark and sweep phases to limit GC pauses
 void collectGarbage(void) {
     if (!GCOn || OPTION_T(disableGC)) {
@@ -767,13 +964,11 @@ void collectGarbage(void) {
     struct timeval tRunStart;
     startGCRunProfileTimer(&tRunStart);
 
-    GC_TRACE_DEBUG(1, "Collecting garbage");
+    GC_TRACE_DEBUG(1, "Collecting garbage (full)");
     inGC = true;
     size_t before = GCStats.totalAllocated; (void)before;
-    GC_TRACE_DEBUG(2, "GC begin");
 
     GC_TRACE_DEBUG(2, "Marking finalizers");
-
     GC_TRACE_DEBUG(2, "Marking VM stack roots");
     if (GET_OPTION(traceGCLvl) >= 2) {
         printGCStats();
@@ -853,6 +1048,7 @@ void collectGarbage(void) {
             }
             for (int i = 0; i < ctx->frameCount; i++) {
                 // TODO: gray native function if exists
+                // XXX: is this necessary, they must be on the stack??
                 grayObject((Obj*)ctx->frames[i].closure);
                 grayObject((Obj*)ctx->frames[i].instance);
                 numFramesFound++;
@@ -1000,6 +1196,7 @@ freeLoop:
                 }
             } else { // unmark for next run
                 if (phase == 2) {
+                    GCPromoteOnce(obj);
                     obj->isDark = false;
                     numObjectsKept++;
                 }
@@ -1050,6 +1247,7 @@ freeLoop:
     stopGCRunProfileTimer(&tRunStart);
     GCProf.totalRuns++;
     vec_deinit(&v_stackObjs);
+    youngStackSz = 0;
     inGC = false;
 }
 
@@ -1164,5 +1362,6 @@ freeLoop:
     /*ASSERT(GCStats.heapSize == 0);*/
     /*ASSERT(GCStats.heapUsed == 0);*/
     /*ASSERT(GCStats.heapUsedWaste == 0);*/
+    youngStackSz = 0;
     inGC = false;
 }

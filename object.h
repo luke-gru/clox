@@ -314,14 +314,6 @@ typedef struct LxFile {
 #define FILE_GETHIDDEN(fileVal) (fileGetHidden(fileVal))
 #define THREAD_GETHIDDEN(thVal) (threadGetHidden(thVal))
 
-static inline void objWrite(Value owner, Value pointed) {
-    (void)owner;
-    if (IS_OBJ(pointed)) {
-        AS_OBJ(pointed)->GCFlags |= GC_FLAG_POINTED_TO;
-    }
-}
-#define OBJ_WRITE(owner, pointed) objWrite(owner, pointed)
-
 // strings (internal)
 typedef ObjString *(*newStringFunc)(char *chars, int length);
 // Strings as ObjString
