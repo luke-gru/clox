@@ -307,13 +307,13 @@ void collectYoungGarbage() {
         GC_TRACE_DEBUG(1, "Skipping garbage collect (young, stack size: %d)", youngStackSz);
         return;
     }
+    inGC = true;
     inYoungGC = true;
 
     struct timeval tRunStart;
     startGCRunProfileTimer(&tRunStart);
 
     GC_TRACE_DEBUG(1, "Collecting garbage (young, stack size: %d)", youngStackSz);
-    inGC = true;
 
     GC_TRACE_DEBUG(2, "Marking VM stack roots");
     // Mark stack roots up the stack for every execution context in every thread
@@ -521,14 +521,14 @@ retry:
 
 
 // Main memory management function used by both ALLOCATE/FREE (see memory.h)
-// NOTE: memory is NOT initialized (see man 3 realloc)
+// NOTE: memory is NOT initialized to 0 (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START(10, "reallocate");
     if (vm.inited && vm.curThread) {
         ASSERT(GVLOwner == vm.curThread->tid);
     }
     if (newSize > 0 && UNLIKELY(inGC)) {
-        ASSERT(0); // if we're in GC phase we shouldn't allocate memory
+        ASSERT(0); // if we're in GC phase we shouldn't allocate memory (other than adding heaps, if necessary)
     }
 
     if (newSize > oldSize) {
@@ -1056,11 +1056,11 @@ void collectGarbage(void) {
         ASSERT(0);
     }
     inFullGC = true;
+    inGC = true;
     struct timeval tRunStart;
     startGCRunProfileTimer(&tRunStart);
 
     GC_TRACE_DEBUG(1, "Collecting garbage (full)");
-    inGC = true;
     size_t before = GCStats.totalAllocated; (void)before;
 
     GC_TRACE_DEBUG(2, "Marking finalizers");

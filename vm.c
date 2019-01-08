@@ -878,9 +878,10 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Obj *method = NULL;
     Obj *getter = NULL;
     if (tableGet(obj->fields, OBJ_VAL(propName), &ret)) {
+        VM_DEBUG("field found (propertyGet)");
         return ret;
     } else if ((getter = instanceFindGetter(obj, propName))) {
-        VM_DEBUG("getter found");
+        VM_DEBUG("getter found (propertyGet)");
         callVMMethod(obj, OBJ_VAL(getter), 0, NULL, NULL);
         if (THREAD()->hadError) {
             return NIL_VAL;
@@ -888,6 +889,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
             return pop();
         }
     } else if ((method = instanceFindMethod(obj, propName))) {
+        VM_DEBUG("method found [bound] (propertyGet)");
         ObjBoundMethod *bmethod = newBoundMethod(obj, method, NEWOBJ_FLAG_NONE);
         return OBJ_VAL(bmethod);
     } else {
@@ -906,7 +908,9 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
         pop();
     } else {
         tableSet(obj->fields, OBJ_VAL(propName), rval);
-        OBJ_WRITE(OBJ_VAL(obj), rval);
+        if (IS_OBJ(rval)) {
+            OBJ_WRITE(OBJ_VAL(obj), rval);
+        }
     }
 }
 
@@ -2318,10 +2322,10 @@ vmLoop:
           Value funcVal = READ_CONSTANT();
           ASSERT(IS_FUNCTION(funcVal));
           ObjFunction *func = AS_FUNCTION(funcVal);
+          bool prevGc = turnGCOff();
           ObjClosure *closure = newClosure(func, NEWOBJ_FLAG_NONE);
           push(OBJ_VAL(closure));
 
-          // capture upvalues
           for (int i = 0; i < closure->upvalueCount; i++) {
               uint8_t isLocal = READ_BYTE();
               uint8_t index = READ_BYTE();
@@ -2333,6 +2337,7 @@ vmLoop:
                   closure->upvalues[i] = getFrame()->closure->upvalues[index];
               }
           }
+          setGCOnOff(prevGc);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_FALSE): {
@@ -2704,8 +2709,9 @@ vmLoop:
               pop();
               throwErrorFmt(lxTypeErrClass, "Tried to access property '%s' of non-instance (type: %s)", propStr->chars, typeOfVal(instance));
           }
+          Value val = propertyGet(AS_INSTANCE(instance), propStr);
           pop();
-          push(propertyGet(AS_INSTANCE(instance), propStr));
+          push(val);
           DISPATCH_BOTTOM();
       }
       CASE_OP(PROP_SET): {

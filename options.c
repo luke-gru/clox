@@ -227,6 +227,9 @@ int parseOption(char **argv, int i) {
         SET_OPTION(stressGCBoth, true);
         return 1;
     }
+    if (strcmp(argv[i], "--stress-GC=none") == 0) {
+        return 1;
+    }
 
     if (strcmp(argv[i], "--compile-only") == 0) {
         SET_OPTION(compileOnly, true);

@@ -101,7 +101,7 @@ typedef struct NewThreadArgs {
 static ObjInstance *newThreadSetup(LxThread *parentThread) {
     ASSERT(parentThread);
     THREAD_DEBUG(3, "New thread setup");
-    ObjInstance *thInstance = newInstance(lxThreadClass, NEWOBJ_FLAG_OLD);
+    ObjInstance *thInstance = newInstance(lxThreadClass, NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_HIDDEN);
     hideFromGC((Obj*)thInstance);
     ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxThread), NULL, NULL, NEWOBJ_FLAG_NONE);
     thInstance->internal = internalObj;

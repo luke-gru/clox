@@ -266,7 +266,7 @@ typedef struct LxFile {
 #define IS_T_MAP(value)         (IS_MAP(value))
 #define IS_AN_ERROR(value)      (IS_A(value, lxErrClass))
 #define IS_A_THREAD(value)      (IS_A(value, lxThreadClass))
-#define IS_A_STRING(value)      (IS_STRING(value) || IS_A(value, lxStringClass))
+#define IS_A_STRING(value)      (IS_STRING(value))
 #define IS_A_BLOCK(value)       (IS_INSTANCE(value) && IS_A(value, lxBlockClass))
 
 #define IS_SUBCLASS(subklass,superklass) (isSubclass(subklass,superklass))
