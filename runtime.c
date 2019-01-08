@@ -24,13 +24,11 @@ const char pathSeparator =
                             '/';
 #endif
 
-// FIXME: we shouldn't need to hide these from GC, but there's a bug in GC
-// right now that's exposed when --stress-GC=both is on.
 void addGlobalFunction(const char *name, NativeFn func) {
     ObjString *funcName = INTERNED(name, strlen(name));
     ObjNative *natFn = newNative(funcName, func, NEWOBJ_FLAG_OLD);
     hideFromGC((Obj*)natFn);
-    tableSet(&vm.globals, OBJ_VAL(funcName), OBJ_VAL(natFn));
+    ASSERT(tableSet(&vm.globals, OBJ_VAL(funcName), OBJ_VAL(natFn)));
     unhideFromGC((Obj*)natFn);
 }
 
@@ -38,7 +36,7 @@ ObjClass *addGlobalClass(const char *name, ObjClass *super) {
     ObjString *className = INTERNED(name, strlen(name));
     ObjClass *objClass = newClass(className, super, NEWOBJ_FLAG_OLD);
     hideFromGC((Obj*)objClass);
-    tableSet(&vm.globals, OBJ_VAL(className), OBJ_VAL(objClass));
+    ASSERT(tableSet(&vm.globals, OBJ_VAL(className), OBJ_VAL(objClass)));
     unhideFromGC((Obj*)objClass);
     return objClass;
 }
@@ -47,7 +45,7 @@ ObjModule *addGlobalModule(const char *name) {
     ObjString *modName = INTERNED(name, strlen(name));
     ObjModule *mod = newModule(modName, NEWOBJ_FLAG_OLD);
     hideFromGC((Obj*)mod);
-    tableSet(&vm.globals, OBJ_VAL(modName), OBJ_VAL(mod));
+    ASSERT(tableSet(&vm.globals, OBJ_VAL(modName), OBJ_VAL(mod)));
     unhideFromGC((Obj*)mod);
     return mod;
 }
@@ -63,8 +61,8 @@ ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
         natFn->isStatic = CLASSINFO(klass)->singletonOf != NULL;
     }
     hideFromGC((Obj*)natFn);
-    tableSet(CLASSINFO(klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
-    /*unhideFromGC((Obj*)natFn); // XXX: here*/
+    ASSERT(tableSet(CLASSINFO(klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn)));
+    unhideFromGC((Obj*)natFn);
     return natFn;
 }
 
@@ -75,8 +73,8 @@ ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
     OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
     natFn->klass = (Obj*)klass; // class or module
     hideFromGC((Obj*)natFn);
-    tableSet(CLASSINFO(klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
-    /*unhideFromGC((Obj*)natFn);*/
+    ASSERT(tableSet(CLASSINFO(klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn)));
+    unhideFromGC((Obj*)natFn);
     return natFn;
 }
 
@@ -87,8 +85,8 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
     OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
     natFn->klass = (Obj*)klass; // class or module
     hideFromGC((Obj*)natFn);
-    tableSet(CLASSINFO(klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
-    /*unhideFromGC((Obj*)natFn);*/
+    ASSERT(tableSet(CLASSINFO(klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn)));
+    unhideFromGC((Obj*)natFn);
     return natFn;
 }
 

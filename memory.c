@@ -364,26 +364,12 @@ void collectYoungGarbage() {
 
     GC_TRACE_DEBUG(2, "Marking VM frame functions");
     // gray active function closure objects
-    VMExecContext *ctx = NULL; int ctxIdx = 0;
-    int numFramesFound = 0;
     int numOpenUpsFound = 0;
     thObj = NULL; thIdx = 0;
     vec_foreach(&vm.threads, thObj, thIdx) {
         LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
         if (th->status == THREAD_ZOMBIE) return;
-        vec_foreach(&th->v_ecs, ctx, ctxIdx) {
-            grayObject((Obj*)ctx->filename);
-            if (ctx->lastValue) {
-                grayValue(*ctx->lastValue);
-            }
-            for (int i = 0; i < ctx->frameCount; i++) {
-                // TODO: gray native function if exists
-                // XXX: is this necessary, they must be on the stack??
-                grayObject((Obj*)ctx->frames[i].closure);
-                grayObject((Obj*)ctx->frames[i].instance);
-                numFramesFound++;
-            }
-        }
+        // NOTE: stack frames not grayed, they should be on the VM stack, which is already grayed
         if (th->openUpvalues) {
             ObjUpvalue *up = th->openUpvalues;
             while (up) {
@@ -430,6 +416,17 @@ void collectYoungGarbage() {
         }
     }
     freeList = newFreeList;
+
+    GC_TRACE_DEBUG(2, "Ungraying grayed objects: %d", vm.grayCount);
+    // We whiten the objects again in case full GC runs next, which expects
+    // all objects to be white.
+    while (vm.grayCount > 0) {
+        // Pop an item from the gray stack.
+        Obj *marked = vm.grayStack[--vm.grayCount];
+        DBG_ASSERT(marked);
+        marked->isDark = false;
+    }
+
     GC_TRACE_DEBUG(2, "done FREE (young) process");
     GC_TRACE_DEBUG(2, "Num promoted (dark): %d", numPromotedDark);
     GC_TRACE_DEBUG(2, "Num promoted (remembered): %d", numPromotedRemembered);
@@ -438,7 +435,6 @@ void collectYoungGarbage() {
     vec_clear(&rememberSet);
     stopGCRunProfileTimer(&tRunStart, &GCProf.totalGCYoungTime);
     GCProf.runsYoung++;
-    vm.grayCount = 0;
     inYoungGC = false;
     inGC = false;
     youngStackSz = 0;
@@ -524,11 +520,12 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
 }
 
 static inline void INC_GEN(Obj *obj) {
-    if (obj->GCGen == GC_GEN_MAX) { return; }
-    obj->GCGen++;
-    if (GCStats.generations[obj->GCGen-1])
-        GCStats.generations[obj->GCGen-1]--;
-    GCStats.generations[obj->GCGen]++;
+    if (obj->GCGen < GC_GEN_MAX) {
+        obj->GCGen++;
+        if (GCStats.generations[obj->GCGen-1])
+            GCStats.generations[obj->GCGen-1]--;
+        GCStats.generations[obj->GCGen]++;
+    }
 }
 
 
@@ -586,7 +583,7 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_CLASS: {
-            GC_TRACE_DEBUG(5, "Blackening class %p", obj);
+            GC_TRACE_DEBUG(5, "Blackening class %p (%s)", obj, className((ObjClass*)obj));
             ObjClass *klass = (ObjClass*)obj;
             if (klass->klass) {
                 grayObject((Obj*)klass->klass);
@@ -654,8 +651,8 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_NATIVE_FUNCTION: {
-            GC_TRACE_DEBUG(5, "Blackening native function %p", obj);
             ObjNative *native = (ObjNative*)obj;
+            GC_TRACE_DEBUG(1, "Blackening native function %p", obj);
             grayObject((Obj*)native->name);
             grayObject((Obj*)native->klass);
             break;
@@ -818,8 +815,12 @@ void freeObject(Obj *obj) {
             break;
         }
         case OBJ_T_NATIVE_FUNCTION: {
-            DBG_ASSERT(inFinalFree);
             GC_TRACE_DEBUG(5, "Freeing ObjNative: p=%p", obj);
+            if (!inFinalFree) {
+                ObjNative *native = (ObjNative*)obj; (void)native;
+                GC_TRACE_DEBUG(5, "Freeing ObjNative: p=%p, klass = %s", obj, className((ObjClass*)native->klass));
+                ASSERT(0);
+            }
             obj->type = OBJ_T_NONE;
             break;
         }

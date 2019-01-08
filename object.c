@@ -309,7 +309,7 @@ static ClassInfo* newClassInfo(ObjString *name) {
     ClassInfo *cinfo = ALLOCATE(ClassInfo, 1);
     void *tablesMem = (void*)ALLOCATE(Table, 3);
     cinfo->methods = tablesMem;
-    cinfo->getters = tablesMem + sizeof(Table)*1;
+    cinfo->getters = tablesMem + sizeof(Table);
     cinfo->setters = tablesMem + sizeof(Table)*2;
     initTable(cinfo->methods);
     initTable(cinfo->getters);
