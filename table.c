@@ -253,7 +253,7 @@ void tableRemoveWhite(Table *table) {
         if (IS_UNDEF(entry->key)) {
             continue;
         }
-        if (IS_OBJ(entry->key) && !AS_OBJ(entry->key)->isDark) {
+        if (IS_OBJ(entry->key) && !OBJ_IS_DARK(AS_OBJ(entry->key))) {
             tableDelete(table, entry->key);
         }
     }

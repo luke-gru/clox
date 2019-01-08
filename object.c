@@ -18,18 +18,15 @@ extern VM vm;
 static Obj *allocateObject(size_t size, ObjType type, int flags) {
     DBG_ASSERT(type > OBJ_T_NONE);
     Obj *object = getNewObject(type, size, flags);
-    object->isDark = false;
     object->type = type;
-    object->isFrozen = false;
 
     if (vm.inited && vm.curThread && vm.curThread->inCCall > 0) {
         vec_push(&vm.curThread->stackObjects, object);
     }
 
     object->objectId = (size_t)object;
-    object->noGC = false;
+    object->flags = OBJ_FLAG_NONE;
     object->GCGen = GC_GEN_FROM_NEWOBJ_FLAGS(flags);
-    object->hasFinalizer = false;
     GCStats.generations[object->GCGen]++;
 
     return object;
@@ -61,7 +58,7 @@ static ObjString *allocateString(char *chars, int length, ObjClass *klass, int f
 
 void objFreeze(Obj *obj) {
     ASSERT(obj);
-    obj->isFrozen = true;
+    OBJ_SET_FROZEN(obj);
 }
 
 void objUnfreeze(Obj *obj) {
@@ -72,7 +69,7 @@ void objUnfreeze(Obj *obj) {
             throwErrorFmt(lxErrClass, "Tried to unfreeze static String");
         }
     }
-    obj->isFrozen = false;
+    OBJ_UNSET_FROZEN(obj);
 }
 
 uint32_t hashString(char *key, int length) {
@@ -151,7 +148,7 @@ bool objStringEquals(ObjString *a, ObjString *b) {
 // it's rehashed.
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
-    ASSERT(!((Obj*)string)->isFrozen);
+    ASSERT(!isFrozen((Obj*)string));
 
     if (UNLIKELY(lenToAdd == 0)) return;
 
@@ -175,7 +172,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
 
 void insertCString(ObjString *string, char *chars, int lenToAdd, int at) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
-    ASSERT(!((Obj*)string)->isFrozen);
+    ASSERT(!isFrozen((Obj*)string));
 
     ASSERT(at <= string->length); // TODO: allow `at` that's larger than length, and add space in between
 
@@ -212,7 +209,7 @@ void pushCStringFmt(ObjString *string, const char *format, ...) {
 }
 
 void pushCStringVFmt(ObjString *string, const char *format, va_list ap) {
-    ASSERT(!((Obj*)string)->isFrozen);
+    ASSERT(!isFrozen((Obj*)string));
 
     char sbuf[201] = {'\0'};
     vsnprintf(sbuf, 200, format, ap);
@@ -241,7 +238,7 @@ void pushCStringVFmt(ObjString *string, const char *format, va_list ap) {
 }
 
 static inline void clearObjString(ObjString *string) {
-    ASSERT(!((Obj*)string)->isFrozen);
+    ASSERT(!isFrozen((Obj*)string));
     string->chars = GROW_ARRAY(string->chars, char, string->capacity+1, 1);
     string->chars[0] = '\0';
     string->length = 0;
@@ -485,7 +482,7 @@ ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCM
         memset(obj, 0, sizeof(ObjInternal));
         obj->object.type = OBJ_T_INTERNAL;
         obj->object.GCGen = 0;
-        obj->object.isDark = false;
+        obj->object.flags = OBJ_FLAG_NONE;
     }
     obj->data = data;
     obj->dataSz = dataSz;
@@ -624,7 +621,7 @@ void setObjectFinalizer(ObjInstance *obj, Obj *callable) {
     if (obj->finalizerFunc == NULL) {
         activeFinalizers++;
         GC_PROMOTE_ONCE(obj);
-        ((Obj*) obj)->hasFinalizer = true;
+        OBJ_SET_HAS_FINALIZER(obj);
     }
     OBJ_WRITE(OBJ_VAL(obj), OBJ_VAL(callable));
     obj->finalizerFunc = callable;

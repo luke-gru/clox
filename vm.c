@@ -1818,7 +1818,7 @@ void printVMStack(FILE *f, LxThread *th) {
             fprintf(f, " ]");
             if (IS_OBJ(*slot)) {
                 Obj *objPtr = AS_OBJ(*slot);
-                if (objPtr->noGC) {
+                if (OBJ_IS_HIDDEN(objPtr)) {
                     fprintf(f, " (hidden!)");
                 }
             }

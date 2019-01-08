@@ -18,7 +18,6 @@ interpreter
 * Add tracing/coverage information
 * Add Class#ancestors
 * Add signal trap handlers (`trap(signame, fun() { })`)
-* Add Time class
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Integrate regexes from regex.c
 * Add Process module, with static methods 'waitall'

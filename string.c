@@ -28,7 +28,7 @@ Value lxStringInit(int argCount, Value *args) {
     selfStr->capacity = otherStr->capacity;
     selfStr->hash = otherStr->hash;
     selfStr->length = otherStr->length;
-    ((Obj*)selfStr)->isFrozen = false;
+    OBJ_UNSET_FROZEN(selfStr);
     if (otherStr->isInterned && otherStr->chars) {
         selfStr->chars = otherStr->chars;
         selfStr->isShared = true; // no need for OBJ_WRITE here, it's interned
@@ -94,7 +94,7 @@ static Value lxStringDup(int argCount, Value *args) {
     ObjString *dupStr = AS_STRING(dup);
     dupStr->isStatic = selfStr->isStatic;
     dupStr->isInterned = false;
-    ((Obj*)dupStr)->isFrozen = false;
+    OBJ_UNSET_FROZEN(dupStr);
     dupStr->capacity = selfStr->capacity;
     dupStr->hash = selfStr->hash;
     dupStr->length = selfStr->length;

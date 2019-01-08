@@ -3,7 +3,7 @@ TIMEOUT = 30
 examples_dir = File.join(File.expand_path("../../", __FILE__), "examples");
 fails =  Hash.new { |h,k| h[k] = [] }
 timeouts =  Hash.new { |h,k| h[k] = [] }
-skip_pats = [/mutex_blocking/, /thread/, /mutex/]
+skip_pats = [/thread/, /mutex/]
 skips = []
 run_young = false
 run_full = true
