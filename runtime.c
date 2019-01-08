@@ -708,6 +708,10 @@ Value lxGCStats(int argCount, Value *args) {
     mapSet(map, heapUsedKey, NUMBER_VAL(GCStats.heapUsed));
     Value heapWasteKey = OBJ_VAL(copyString("heapUsedWaste", 13, NEWOBJ_FLAG_NONE));
     mapSet(map, heapWasteKey, NUMBER_VAL(GCStats.heapUsedWaste));
+    Value runsYoungKey = OBJ_VAL(copyString("runsYoung", 9, NEWOBJ_FLAG_NONE));
+    mapSet(map, runsYoungKey, NUMBER_VAL(GCProf.runsYoung));
+    Value runsFullKey = OBJ_VAL(copyString("runsFull", 8, NEWOBJ_FLAG_NONE));
+    mapSet(map, runsFullKey, NUMBER_VAL(GCProf.runsFull));
     return map;
 }
 

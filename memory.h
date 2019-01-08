@@ -92,6 +92,10 @@ static inline void objWrite(Value owner, Value pointed) {
 }
 #define OBJ_WRITE(owner, pointed) objWrite(owner, pointed)
 
+extern bool inYoungGC;
+extern bool inFullGC;
+extern bool inFinalFree;
+
 bool turnGCOff(void);
 bool turnGCOn(void);
 void setGCOnOff(bool turnOn);

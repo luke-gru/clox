@@ -1,0 +1,22 @@
+class MyClass { }
+MyClass.objects = [];
+print "creating long-lived objects";
+var t1 = Timer();
+for (var i = 0; i < 1000000; i+=1) {
+  MyClass.objects << Object();
+}
+GC.collect();
+print GC.stats();
+var t2 = Timer();
+print "took: ${t2-t1}s";
+print "creating short-lived objects";
+
+var o = nil;
+t1 = Timer();
+for (var i = 0; i < 1000000; i+=1) {
+  o = Object();
+}
+print GC.stats();
+t2 = Timer();
+print "took: ${t2-t1}s";
+print "done";

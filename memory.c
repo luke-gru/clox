@@ -35,9 +35,9 @@ static int heapsUsed = 0;
 static bool inGC = false;
 static bool GCOn = true;
 static bool dontGC = false;
-static bool inYoungGC = false;
-static bool inFullGC = false;
-static bool inFinalFree = false;
+bool inYoungGC = false;
+bool inFullGC = false;
+bool inFinalFree = false;
 
 struct sGCProfile GCProf = {
     .totalGCYoungTime = {
@@ -357,6 +357,8 @@ void collectYoungGarbage() {
     }
     GC_TRACE_DEBUG(2, "# C-call stack objects found: %d", numStackObjects);
 
+    grayTable(&vm.globals);
+
     Value *scriptName; int i = 0;
     vec_foreach_ptr(&vm.loadedScripts, scriptName, i) {
         grayValue(*scriptName);
@@ -364,34 +366,34 @@ void collectYoungGarbage() {
 
     GC_TRACE_DEBUG(2, "Marking VM frame functions");
     // gray active function closure objects
-    int numOpenUpsFound = 0;
-    VMExecContext *ctx = NULL; int ctxIdx = 0;
-    thObj = NULL; thIdx = 0;
+    /*int numOpenUpsFound = 0;*/
+    /*VMExecContext *ctx = NULL; int ctxIdx = 0;*/
+    /*thObj = NULL; thIdx = 0;*/
     vec_foreach(&vm.threads, thObj, thIdx) {
         LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
         if (th->status == THREAD_ZOMBIE) return;
-        vec_foreach(&th->v_ecs, ctx, ctxIdx) {
-            grayObject((Obj*)ctx->filename);
-            if (ctx->lastValue) {
-                grayValue(*ctx->lastValue);
-            }
-            for (int i = 0; i < ctx->frameCount; i++) {
-                // TODO: gray native function if exists
-                // XXX: is this necessary, they must be on the stack??
-                grayObject((Obj*)ctx->frames[i].closure);
-                grayObject((Obj*)ctx->frames[i].instance);
-            }
-        }
+        /*vec_foreach(&th->v_ecs, ctx, ctxIdx) {*/
+            /*grayObject((Obj*)ctx->filename);*/
+            /*if (ctx->lastValue) {*/
+                /*grayValue(*ctx->lastValue);*/
+            /*}*/
+            /*for (int i = 0; i < ctx->frameCount; i++) {*/
+                /*// TODO: gray native function if exists*/
+                /*// XXX: is this necessary, they must be on the stack??*/
+                /*grayObject((Obj*)ctx->frames[i].closure);*/
+                /*grayObject((Obj*)ctx->frames[i].instance);*/
+            /*}*/
+        /*}*/
         // NOTE: stack frames not grayed, they should be on the VM stack, which is already grayed
-        if (th->openUpvalues) {
-            ObjUpvalue *up = th->openUpvalues;
-            while (up) {
-                ASSERT(up->value);
-                grayValue(*up->value);
-                up = up->next;
-                numOpenUpsFound++;
-            }
-        }
+        /*if (th->openUpvalues) {*/
+            /*ObjUpvalue *up = th->openUpvalues;*/
+            /*while (up) {*/
+                /*ASSERT(up->value);*/
+                /*grayValue(*up->value);*/
+                /*up = up->next;*/
+                /*numOpenUpsFound++;*/
+            /*}*/
+        /*}*/
     }
     if (vm.printBuf) {
         GC_TRACE_DEBUG(3, "Marking VM print buf");
@@ -402,6 +404,21 @@ void collectYoungGarbage() {
     int numPromotedRemembered = 0;
     int numCollected = 0;
     ObjAny *newFreeList = freeList;
+
+    int grayCount = vm.grayCount;
+    while (grayCount > 0) {
+        // Pop an item from the gray stack.
+        grayCount--;
+        Obj *marked = vm.grayStack[grayCount];
+        DBG_ASSERT(marked);
+        int oldCount = vm.grayCount;
+        if (IS_YOUNG_OBJ(marked)) {
+            blackenObject(marked); // NOTE: only grays young references
+        }
+        int newCount = vm.grayCount;
+        grayCount += (newCount-oldCount);
+    }
+
     for (int i = 0; i < youngStackSz; i++) {
         Obj *youngObj = youngStack[i];
         DBG_ASSERT(youngObj);
@@ -457,6 +474,7 @@ void collectYoungGarbage() {
     GCProf.runsYoung++;
     inYoungGC = false;
     inGC = false;
+    vm.grayCount = 0;
     youngStackSz = 0;
 }
 
@@ -465,6 +483,9 @@ Obj *getNewObject(ObjType type, size_t sz, int flags) {
     bool triedYoungCollect = false;
     bool isOld = (flags & NEWOBJ_FLAG_OLD) != 0;
     bool noGC = dontGC || OPTION_T(disableGC) || !GCOn;
+    if (vm.inited) {
+        ASSERT(!dontGC);
+    }
     if (noGC) triedYoungCollect = true;
     int tries = 0;
 #ifndef NDEBUG
@@ -480,18 +501,19 @@ retry:
         GCStats.heapUsed += sizeof(ObjAny);
         GCStats.heapUsedWaste += (sizeof(ObjAny)-sz);
         GCStats.demographics[type]++;
-        if (!isOld && !triedYoungCollect) {
+        if (!isOld && youngStackSz < YOUNG_MARK_STACK_MAX) {
             pushYoungObject(obj);
         }
         return obj;
     }
-    if (!isOld && !triedYoungCollect && !noGC) {
+    if (!triedYoungCollect && !noGC) {
         collectYoungGarbage();
         triedYoungCollect = true;
     } else if (noGC) {
         addHeap();
     } else {
         collectGarbage(); // adds heap if needed at end of collection, full mark/sweep
+        noGC = true;
     }
     tries++;
     goto retry;
@@ -502,6 +524,9 @@ retry:
 // NOTE: memory is NOT initialized (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START(10, "reallocate");
+    if (vm.inited && vm.curThread) {
+        ASSERT(GVLOwner == vm.curThread->tid);
+    }
     if (newSize > 0 && UNLIKELY(inGC)) {
         ASSERT(0); // if we're in GC phase we shouldn't allocate memory
     }
@@ -559,9 +584,15 @@ void grayObject(Obj *obj) {
         TRACE_GC_FUNC_END(4, "grayObject (already dark)");
         return;
     }
+    if (inYoungGC && IS_OLD_OBJ(obj)) {
+        TRACE_GC_FUNC_END(4, "grayObject (young gen, is old)");
+        return;
+    }
     GC_TRACE_MARK(4, obj);
     obj->isDark = true;
-    INC_GEN(obj);
+    if (!inYoungGC) {
+        INC_GEN(obj);
+    }
     // add object to gray stack
     if (vm.grayCapacity < vm.grayCount+1) {
         GC_TRACE_DEBUG(5, "Allocating more space for grayStack");
@@ -672,7 +703,7 @@ void blackenObject(Obj *obj) {
         }
         case OBJ_T_NATIVE_FUNCTION: {
             ObjNative *native = (ObjNative*)obj;
-            GC_TRACE_DEBUG(1, "Blackening native function %p", obj);
+            GC_TRACE_DEBUG(5, "Blackening native function %p", obj);
             grayObject((Obj*)native->name);
             grayObject((Obj*)native->klass);
             break;
@@ -1009,7 +1040,13 @@ static void callFinalizer(Obj *obj) {
 // Full collection single-phase mark and sweep
 // TODO: divide work up into mark and sweep phases to limit GC pauses
 void collectGarbage(void) {
-    ASSERT(vm.grayCount == 0);
+    if (vm.inited && vm.curThread) {
+        ASSERT(GVLOwner == vm.curThread->tid);
+    }
+    if (vm.grayCount != 0) {
+        fprintf(stderr, "Non-zero graycount? %d\n", vm.grayCount);
+        ASSERT(vm.grayCount == 0);
+    }
     if (!GCOn || OPTION_T(disableGC)) {
         GC_TRACE_DEBUG(1, "GC run skipped (GC OFF)");
         return;
@@ -1305,9 +1342,11 @@ freeLoop:
     stopGCRunProfileTimer(&tRunStart, &GCProf.totalGCFullTime);
     GCProf.runsFull++;
     vec_deinit(&v_stackObjs);
+    vec_clear(&rememberSet);
     youngStackSz = 0;
     inGC = false;
     inFullGC = false;
+    vm.grayCount = 0;
 }
 
 bool isInternedStringObj(Obj *obj) {

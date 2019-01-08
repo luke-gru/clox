@@ -102,6 +102,7 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
     ASSERT(parentThread);
     THREAD_DEBUG(3, "New thread setup");
     ObjInstance *thInstance = newInstance(lxThreadClass, NEWOBJ_FLAG_OLD);
+    hideFromGC((Obj*)thInstance);
     ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxThread), NULL, NULL, NEWOBJ_FLAG_NONE);
     thInstance->internal = internalObj;
     LxThread *th = ALLOCATE(LxThread, 1);
@@ -138,6 +139,7 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
     th->status = THREAD_READY;
     th->tid = -1; // unknown, not yet created
     vec_push(&vm.threads, thInstance);
+    unhideFromGC((Obj*)thInstance);
     THREAD_DEBUG(3, "New thread setup done");
     return thInstance;
 }
@@ -377,6 +379,7 @@ void unlockMutex(LxMutex *mutex) {
 static LxMutex *mutexGetHidden(Value mutex) {
     ObjInternal *internal = AS_INSTANCE(mutex)->internal;
     LxMutex *m = (LxMutex*)internal->data;
+    ASSERT(m);
     return m;
 }
 
