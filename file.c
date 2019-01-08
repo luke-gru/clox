@@ -235,7 +235,8 @@ static Value lxFilePath(int argCount, Value *args) {
     CHECK_ARITY("File#path", 1, 1, argCount);
     Value self = args[0];
     LxFile *f = FILE_GETHIDDEN(self);
-    return OBJ_VAL(dupString(f->name));
+    Value ret = OBJ_VAL(dupString(f->name));
+    return ret;
 }
 
 static Value lxFileUnlink(int argCount, Value *args) {

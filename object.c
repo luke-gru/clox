@@ -29,6 +29,7 @@ static Obj *allocateObject(size_t size, ObjType type, int flags) {
     object->objectId = (size_t)object;
     object->noGC = false;
     object->GCGen = GC_GEN_FROM_NEWOBJ_FLAGS(flags);
+    object->hasFinalizer = false;
     GCStats.generations[object->GCGen]++;
 
     return object;
@@ -622,6 +623,8 @@ void setObjectFinalizer(ObjInstance *obj, Obj *callable) {
     ASSERT(isCallable(OBJ_VAL(callable)));
     if (obj->finalizerFunc == NULL) {
         activeFinalizers++;
+        GC_PROMOTE_ONCE(obj);
+        ((Obj*) obj)->hasFinalizer = true;
     }
     OBJ_WRITE(OBJ_VAL(obj), OBJ_VAL(callable));
     obj->finalizerFunc = callable;

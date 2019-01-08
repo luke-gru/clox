@@ -365,10 +365,23 @@ void collectYoungGarbage() {
     GC_TRACE_DEBUG(2, "Marking VM frame functions");
     // gray active function closure objects
     int numOpenUpsFound = 0;
+    VMExecContext *ctx = NULL; int ctxIdx = 0;
     thObj = NULL; thIdx = 0;
     vec_foreach(&vm.threads, thObj, thIdx) {
         LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
         if (th->status == THREAD_ZOMBIE) return;
+        vec_foreach(&th->v_ecs, ctx, ctxIdx) {
+            grayObject((Obj*)ctx->filename);
+            if (ctx->lastValue) {
+                grayValue(*ctx->lastValue);
+            }
+            for (int i = 0; i < ctx->frameCount; i++) {
+                // TODO: gray native function if exists
+                // XXX: is this necessary, they must be on the stack??
+                grayObject((Obj*)ctx->frames[i].closure);
+                grayObject((Obj*)ctx->frames[i].instance);
+            }
+        }
         // NOTE: stack frames not grayed, they should be on the VM stack, which is already grayed
         if (th->openUpvalues) {
             ObjUpvalue *up = th->openUpvalues;
@@ -392,9 +405,16 @@ void collectYoungGarbage() {
     for (int i = 0; i < youngStackSz; i++) {
         Obj *youngObj = youngStack[i];
         DBG_ASSERT(youngObj);
-        // TODO: don't free object if has finalizer, use full GC for that
         if (youngObj->GCGen > GC_GEN_MIN || youngObj->noGC) {
             numPromotedOther++;
+            youngObj->isDark = false;
+            continue;
+        }
+        // Let full GC deal with finalizer object destruction
+        if (activeFinalizers > 0 && youngObj->type == OBJ_T_INSTANCE &&
+                ((ObjInstance*)youngObj)->finalizerFunc != NULL) {
+            numPromotedOther++;
+            GC_PROMOTE_ONCE(youngObj);
             youngObj->isDark = false;
             continue;
         }

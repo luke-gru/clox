@@ -35,6 +35,7 @@ typedef struct Obj {
     unsigned short GCGen;
     bool isDark; // is this object marked?
     bool noGC; // don't collect this object
+    bool hasFinalizer;
     // Other fields
     bool isFrozen;
 } Obj;

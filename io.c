@@ -18,7 +18,8 @@ static void markInternalFile(Obj *obj) {
     ASSERT(obj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)obj;
     LxFile *f = (LxFile*)internal->data;
-    ASSERT(f && f->name);
+    ASSERT(f);
+    ASSERT(f->name);
     grayObject((Obj*)f->name);
 }
 
@@ -26,6 +27,7 @@ static void freeInternalFile(Obj *obj) {
     ASSERT(obj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)obj;
     LxFile *f = (LxFile*)internal->data;
+    ASSERT(f);
     FREE(LxFile, f);
 }
 
@@ -40,14 +42,18 @@ LxFile *initIOAfterOpen(Value ioVal, ObjString *fname, int fd, int mode, int ofl
     ObjInstance *ioObj = AS_INSTANCE(ioVal);
     ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxFile), markInternalFile, freeInternalFile,
             NEWOBJ_FLAG_NONE);
+    hideFromGC((Obj*)ioObj);
     LxFile *file = ALLOCATE(LxFile, 1);
     file->name = dupString(fname);
+    hideFromGC((Obj*)file->name);
     file->fd = fd;
     file->mode = mode;
     file->oflags = oflags;
     file->isOpen = true;
     internalObj->data = file;
     ioObj->internal = internalObj;
+    unhideFromGC((Obj*)file->name);
+    unhideFromGC((Obj*)ioObj);
     return file;
 }
 
