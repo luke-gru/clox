@@ -1,0 +1,11 @@
+class MyClass {}
+{
+  var o = Object();
+  MyClass.prop = o;
+}
+GC.collectYoung();
+print MyClass.prop; // without write barrier, generational GC would destroy this object
+
+__END__
+-- expect: --
+<instance Object>

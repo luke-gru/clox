@@ -100,6 +100,7 @@ ObjNative *nativeBlockInit;
 // module GC
 Value lxGCStats(int argCount, Value *args);
 Value lxGCCollect(int argCount, Value *args);
+Value lxGCCollectYoung(int argCount, Value *args);
 Value lxGCSetFinalizer(int argCount, Value *args);
 Value lxGCOff(int argCount, Value *args);
 Value lxGCOn(int argCount, Value *args);

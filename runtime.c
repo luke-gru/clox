@@ -712,6 +712,14 @@ Value lxGCCollect(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+Value lxGCCollectYoung(int argCount, Value *args) {
+    CHECK_ARITY("GC.collectYoung", 1, 1, argCount);
+    bool prevOn = turnGCOn();
+    collectYoungGarbage();
+    setGCOnOff(prevOn);
+    return NIL_VAL;
+}
+
 Value lxGCOff(int argCount, Value *args) {
     bool prevOn = turnGCOff();
     return BOOL_VAL(prevOn);

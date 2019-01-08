@@ -65,6 +65,7 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize);
 void grayObject(Obj *obj); // non-recursively mark object as live
 void grayValue(Value val); // non-recursively mark object in value as live
 void collectGarbage(void); // do 1 mark+sweep
+void collectYoungGarbage(void); // collect young objects
 void freeObject(Obj *obj);
 void blackenObject(Obj *obj); // recursively mark object's references
 void freeObjects(void); // free all vm.objects. Used at end of VM lifecycle

@@ -239,6 +239,7 @@ static void defineNativeClasses(void) {
     ObjClass *GCClassStatic = moduleSingletonClass(GCModule);
     addNativeMethod(GCClassStatic, "stats", lxGCStats);
     addNativeMethod(GCClassStatic, "collect", lxGCCollect);
+    addNativeMethod(GCClassStatic, "collectYoung", lxGCCollectYoung);
     addNativeMethod(GCClassStatic, "on", lxGCOn);
     addNativeMethod(GCClassStatic, "off", lxGCOff);
     addNativeMethod(GCClassStatic, "setFinalizer", lxGCSetFinalizer);

@@ -291,7 +291,7 @@ static inline bool inRememberSet(Obj *obj) {
 
 // collect all young objects that aren't in the remember set, aren't
 // on the stack (VM and "C" obj stack)
-static void collectYoung(void) {
+void collectYoungGarbage() {
     if (!GCOn || OPTION_T(disableGC)) {
         GC_TRACE_DEBUG(1, "GC run (young) skipped (GC OFF)");
         return;
@@ -447,7 +447,7 @@ Obj *getNewObject(ObjType type, size_t sz, int flags) {
     if (noGC) triedYoungCollect = true;
     int tries = 0;
 #ifndef NDEBUG
-    if (OPTION_T(stressGCYoung) || OPTION_T(stressGCBoth)) collectYoung();
+    if (OPTION_T(stressGCYoung) || OPTION_T(stressGCBoth)) collectYoungGarbage();
     if (OPTION_T(stressGCFull)  || OPTION_T(stressGCBoth)) collectGarbage();
 #endif
 
@@ -465,7 +465,7 @@ retry:
         return obj;
     }
     if (!isOld && !triedYoungCollect && !noGC) {
-        collectYoung();
+        collectYoungGarbage();
         triedYoungCollect = true;
     } else if (noGC) {
         addHeap();
