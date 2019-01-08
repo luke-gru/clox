@@ -21,7 +21,9 @@ char *boolOptNames[] = { // order doesn't matter
     "disableBcodeOptimizer",
     "disableGC",
     "profileGC",
-    "stressGC",
+    "stressGCYoung",
+    "stressGCFull",
+    "stressGCBoth",
     "parseOnly",
     "compileOnly",
     NULL
@@ -61,7 +63,9 @@ void initOptions(int argc, char **argv) {
 
     options.disableGC = false;
     options.profileGC = false;
-    options.stressGC = false;
+    options.stressGCYoung = false;
+    options.stressGCFull = false;
+    options.stressGCBoth = false;
 
     options.initialLoadPath = "";
     options.initialScript = "";
@@ -211,8 +215,16 @@ int parseOption(char **argv, int i) {
         SET_OPTION(profileGC, true);
         return 1;
     }
-    if (strcmp(argv[i], "--stress-GC") == 0) {
-        SET_OPTION(stressGC, true);
+    if (strcmp(argv[i], "--stress-GC=young") == 0) {
+        SET_OPTION(stressGCYoung, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--stress-GC=full") == 0) {
+        SET_OPTION(stressGCFull, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--stress-GC=both") == 0) {
+        SET_OPTION(stressGCBoth, true);
         return 1;
     }
 

@@ -24,9 +24,12 @@ const char pathSeparator =
                             '/';
 #endif
 
+// FIXME: we shouldn't need to hide these from GC, but there's a bug in GC
+// right now that's exposed when --stress-GC=both is on.
 void addGlobalFunction(const char *name, NativeFn func) {
     ObjString *funcName = INTERNED(name, strlen(name));
     ObjNative *natFn = newNative(funcName, func, NEWOBJ_FLAG_OLD);
+    hideFromGC((Obj*)natFn); // XXX: here
     tableSet(&vm.globals, OBJ_VAL(funcName), OBJ_VAL(natFn));
 }
 
@@ -34,6 +37,7 @@ ObjClass *addGlobalClass(const char *name, ObjClass *super) {
     ObjString *className = INTERNED(name, strlen(name));
     ObjClass *objClass = newClass(className, super, NEWOBJ_FLAG_OLD);
     tableSet(&vm.globals, OBJ_VAL(className), OBJ_VAL(objClass));
+    hideFromGC((Obj*)objClass); // XXX: here
     return objClass;
 }
 
@@ -41,37 +45,41 @@ ObjModule *addGlobalModule(const char *name) {
     ObjString *modName = INTERNED(name, strlen(name));
     ObjModule *mod = newModule(modName, NEWOBJ_FLAG_OLD);
     tableSet(&vm.globals, OBJ_VAL(modName), OBJ_VAL(mod));
+    hideFromGC((Obj*)mod); // XXX: here
     return mod;
 }
 
 ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
     ObjString *mname = INTERNED(name, strlen(name));
     ObjNative *natFn = newNative(mname, func, NEWOBJ_FLAG_OLD);
+    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
     natFn->klass = (Obj*)klass; // class or module
     natFn->isStatic = false;
     if (klass && natFn->klass->type == OBJ_T_CLASS) {
         natFn->isStatic = CLASSINFO(klass)->singletonOf != NULL;
     }
+    hideFromGC((Obj*)natFn); // XXX: here
     tableSet(CLASSINFO(klass)->methods, OBJ_VAL(mname), OBJ_VAL(natFn));
-    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
     return natFn;
 }
 
 ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func) {
     ObjString *mname = INTERNED(name, strlen(name));
     ObjNative *natFn = newNative(mname, func, NEWOBJ_FLAG_OLD);
+    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
     natFn->klass = (Obj*)klass; // class or module
     tableSet(CLASSINFO(klass)->getters, OBJ_VAL(mname), OBJ_VAL(natFn));
-    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
+    hideFromGC((Obj*)natFn); // XXX: here
     return natFn;
 }
 
 ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
     ObjString *mname = INTERNED(name, strlen(name));
     ObjNative *natFn = newNative(mname, func, NEWOBJ_FLAG_OLD);
+    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
     natFn->klass = (Obj*)klass; // class or module
     tableSet(CLASSINFO(klass)->setters, OBJ_VAL(mname), OBJ_VAL(natFn));
-    OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(natFn));
+    hideFromGC((Obj*)natFn); // XXX: here
     return natFn;
 }
 

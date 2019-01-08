@@ -359,7 +359,17 @@ static int printMapInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
+static int printDupMapInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
+    // TODO
+    return i+2;
+}
+
 static int mapInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
+    // TODO
+    return i+2;
+}
+
+static int dupMapInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     // TODO
     return i+2;
 }
@@ -616,6 +626,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
             return printDupArrayInstruction(f, opName(byte), chunk, i);
         case OP_MAP:
             return printMapInstruction(f, opName(byte), chunk, i);
+        case OP_DUPMAP:
+            return printDupMapInstruction(f, opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
         case OP_SET_UPVALUE:
@@ -717,6 +729,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             return dupArrayInstruction(buf, opName(byte), chunk, i);
         case OP_MAP:
             return mapInstruction(buf, opName(byte), chunk, i);
+        case OP_DUPMAP:
+            return dupMapInstruction(buf, opName(byte), chunk, i);
         case OP_GET_LOCAL:
         case OP_SET_LOCAL:
         case OP_SET_UPVALUE:

@@ -1051,7 +1051,7 @@ static CallInfo *emitCall(Node *n) {
                 idx++;
             }
         }
-        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_NONE);
+        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_OLD);
         hideFromGC((Obj*)callInfoObj);
         uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
         emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
@@ -1079,7 +1079,7 @@ static CallInfo *emitCall(Node *n) {
                 idx++;
             }
         }
-        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_NONE);
+        ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_OLD);
         hideFromGC((Obj*)callInfoObj);
         uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
         emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);

@@ -35,6 +35,7 @@ static int heapsUsed = 0;
 static bool inGC = false;
 static bool GCOn = true;
 static bool dontGC = false;
+static bool inFinalFree = false;
 
 struct sGCProfile GCProf = {
     .totalGCYoungTime = {
@@ -151,7 +152,7 @@ void GCPromoteOnce(Obj *obj) {
 
 static void gc_trace_mark(int lvl, Obj *obj) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
-    fprintf(stderr, "[GC]: marking %s object at %p", typeOfObj(obj), obj);
+    fprintf(stderr, "[GC]: marking %s object at %p (gen %d)", typeOfObj(obj), obj, obj->GCGen);
     if (obj->type != OBJ_T_UPVALUE && obj->type != OBJ_T_INTERNAL) {
         fprintf(stderr, ", value => ");
         bool oldGC = inGC;
@@ -164,7 +165,7 @@ static void gc_trace_mark(int lvl, Obj *obj) {
 
 static void gc_trace_free(int lvl, Obj *obj) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
-    fprintf(stderr, "[GC]: freeing object at %p, ", obj);
+    fprintf(stderr, "[GC]: freeing object at %p (gen %d), ", obj, obj->GCGen);
     if (obj->type == OBJ_T_UPVALUE) {
         fprintf(stderr, "type => upvalue");
     } else {
@@ -300,7 +301,7 @@ static void collectYoung(void) {
         ASSERT(0);
     }
     if (UNLIKELY(youngStackSz == 0)) {
-        GC_TRACE_DEBUG(1, "Skipping garbage (young, stack size: %d)", youngStackSz);
+        GC_TRACE_DEBUG(1, "Skipping garbage collect (young, stack size: %d)", youngStackSz);
         return;
     }
 
@@ -309,21 +310,18 @@ static void collectYoung(void) {
 
     GC_TRACE_DEBUG(1, "Collecting garbage (young, stack size: %d)", youngStackSz);
     inGC = true;
-    inGC = false;
-    vec_void_t v_stackObjs;
-    vec_init(&v_stackObjs);
 
     GC_TRACE_DEBUG(2, "Marking VM stack roots");
     // Mark stack roots up the stack for every execution context in every thread
     Obj *thObj; int thIdx = 0;
     vec_foreach(&vm.threads, thObj, thIdx) {
+        DBG_ASSERT(thObj);
+        grayObject(thObj);
         LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
+        ASSERT(th);
         if (th->status == THREAD_ZOMBIE) {
             continue;
         }
-        DBG_ASSERT(thObj);
-        grayObject(thObj);
-        ASSERT(th);
         if (th->thisObj) {
             grayObject(th->thisObj);
         }
@@ -339,7 +337,6 @@ static void collectYoung(void) {
                 grayValue(*slot);
             }
         }
-        vec_extend(&v_stackObjs, &th->stackObjects);
     }
 
     GC_TRACE_DEBUG(2, "Marking per-thread VM C-call stack objects");
@@ -405,7 +402,8 @@ static void collectYoung(void) {
     for (int i = 0; i < youngStackSz; i++) {
         Obj *youngObj = youngStack[i];
         DBG_ASSERT(youngObj);
-        if (youngObj->GCGen > GC_GEN_MIN) {
+        // TODO: don't free object if has finalizer, use full GC for that
+        if (youngObj->GCGen > GC_GEN_MIN || youngObj->noGC) {
             numPromotedOther++;
             youngObj->isDark = false;
             continue;
@@ -434,7 +432,6 @@ static void collectYoung(void) {
     GC_TRACE_DEBUG(2, "Num promoted (manual): %d", numPromotedOther);
     GC_TRACE_DEBUG(2, "Num collected: %d", numCollected);
     vec_clear(&rememberSet);
-    vec_deinit(&v_stackObjs);
     stopGCRunProfileTimer(&tRunStart, &GCProf.totalGCYoungTime);
     GCProf.runsYoung++;
     vm.grayCount = 0;
@@ -449,6 +446,10 @@ Obj *getNewObject(ObjType type, size_t sz, int flags) {
     bool noGC = dontGC || OPTION_T(disableGC) || !GCOn;
     if (noGC) triedYoungCollect = true;
     int tries = 0;
+#ifndef NDEBUG
+    if (OPTION_T(stressGCYoung) || OPTION_T(stressGCBoth)) collectYoung();
+    if (OPTION_T(stressGCFull)  || OPTION_T(stressGCBoth)) collectGarbage();
+#endif
 
 retry:
     DBG_ASSERT(tries < 3);
@@ -518,7 +519,7 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
 }
 
 static inline void INC_GEN(Obj *obj) {
-    if (obj->GCGen == GC_GEN_MAX) return;
+    if (obj->GCGen == GC_GEN_MAX) { return; }
     obj->GCGen++;
     if (GCStats.generations[obj->GCGen-1])
         GCStats.generations[obj->GCGen-1]--;
@@ -810,6 +811,7 @@ void freeObject(Obj *obj) {
             break;
         }
         case OBJ_T_NATIVE_FUNCTION: {
+            DBG_ASSERT(inFinalFree);
             GC_TRACE_DEBUG(5, "Freeing ObjNative: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;
@@ -1299,7 +1301,8 @@ void freeObjects(void) {
         }
         return;
     }
-    GC_TRACE_DEBUG(2, "freeObjects -> begin FREEing all objects");
+    inFinalFree = true;
+    GC_TRACE_DEBUG(1, "freeObjects -> begin FREEing all objects");
     if (GET_OPTION(traceGCLvl) >= 2) {
         printGCStats();
         printGenerationInfo();
@@ -1390,4 +1393,5 @@ freeLoop:
     /*ASSERT(GCStats.heapUsedWaste == 0);*/
     youngStackSz = 0;
     inGC = false;
+    inFinalFree = false;
 }
