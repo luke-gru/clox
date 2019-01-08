@@ -13,6 +13,11 @@
 #define xstr(a) #a
 #define QUOTE(x) xstr(x)
 
+// generational GC, on by default
+#ifndef GEN_GC
+#define GEN_GC 1
+#endif
+
 #ifdef __GNUC__
 #define LIKELY(x)       __builtin_expect((x),1)
 #define UNLIKELY(x)     __builtin_expect((x),0)

@@ -108,18 +108,27 @@ static void printGCStats() {
 }
 
 void printGCProfile() {
+#if GEN_GC
     fprintf(stderr, "Runs Young: %lu\n", GCProf.runsYoung);
+#endif
     fprintf(stderr, "Runs Full:  %lu\n", GCProf.runsFull);
+#if GEN_GC
     fprintf(stderr, "Total runs: %lu\n", GCProf.runsYoung+GCProf.runsFull);
-    time_t secs = GCProf.totalGCYoungTime.tv_sec;
-    suseconds_t msecs = GCProf.totalGCYoungTime.tv_usec;
-    suseconds_t millis = (msecs / 1000);
+#endif
+    time_t secs = 0;
+    suseconds_t msecs = 0;
+    suseconds_t millis = 0;
+#if GEN_GC
+    secs = GCProf.totalGCYoungTime.tv_sec;
+    msecs = GCProf.totalGCYoungTime.tv_usec;
+    millis = (msecs / 1000);
     while (millis > 1000) {
         secs += 1;
         millis = millis / 1000;
     }
     fprintf(stderr, "Young GC time: %ld secs, %ld ms\n",
             secs, (long)millis);
+#endif
     secs = GCProf.totalGCFullTime.tv_sec;
     msecs = GCProf.totalGCFullTime.tv_usec;
     millis = (msecs / 1000);
@@ -480,8 +489,13 @@ void collectYoungGarbage() {
 
 Obj *getNewObject(ObjType type, size_t sz, int flags) {
     Obj *obj = NULL;
-    bool triedYoungCollect = false;
     bool isOld = (flags & NEWOBJ_FLAG_OLD) != 0;
+#if GEN_GC
+    bool triedYoungCollect = false;
+#else
+    bool triedYoungCollect = true;
+    (void)isOld;
+#endif
     bool noGC = dontGC || OPTION_T(disableGC) || !GCOn;
     if (vm.inited) {
         ASSERT(!dontGC);
@@ -489,21 +503,29 @@ Obj *getNewObject(ObjType type, size_t sz, int flags) {
     if (noGC) triedYoungCollect = true;
     int tries = 0;
 #ifndef NDEBUG
+#if GEN_GC
     if (OPTION_T(stressGCYoung) || OPTION_T(stressGCBoth)) collectYoungGarbage();
+#endif
     if (OPTION_T(stressGCFull)  || OPTION_T(stressGCBoth)) collectGarbage();
 #endif
 
 retry:
     DBG_ASSERT(tries < 3);
+#if GEN_GC
     if (freeList && (isOld || ((youngStackSz < YOUNG_MARK_STACK_MAX) || triedYoungCollect))) {
+#else
+    if (freeList) {
+#endif
         obj = (Obj*)freeList;
         freeList = obj->nextFree;
         GCStats.heapUsed += sizeof(ObjAny);
         GCStats.heapUsedWaste += (sizeof(ObjAny)-sz);
         GCStats.demographics[type]++;
+#if GEN_GC
         if (!isOld && youngStackSz < YOUNG_MARK_STACK_MAX) {
             pushYoungObject(obj);
         }
+#endif
         return obj;
     }
     if (!triedYoungCollect && !noGC) {

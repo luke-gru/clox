@@ -29,8 +29,7 @@ Some internal differences:
 * bytecode optimization passes (including constant folding)
 * Easy way to create objects in C functions without having to hide
 them from GC, even if they're not pushed to operand stack (aka rooted).
-* Faster garbage collector with managed heaps (but also wastes more memory
-right now)
+* Faster generational M&S garbage collector with managed heaps
 
 Future features:
 * Support for regex
@@ -38,7 +37,6 @@ Future features:
 * Support non-ascii strings
 * Add constants (no redefinitions, will given compiler or runtime error)
 * Improve managed heaps memory waste
-* Add generational GC
 * See TODO for more info
 
 OS/compiler support:
