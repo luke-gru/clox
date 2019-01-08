@@ -338,10 +338,16 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass, int flags) {
     klass->singletonKlass = NULL;
     klass->finalizerFunc = NULL;
     klass->classInfo = newClassInfo(name);
+    if (name) {
+        OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(name));
+    }
     void *tablesMem = (void*)ALLOCATE(Table, 1);
     klass->fields = (Table*)tablesMem;
     initTable(klass->fields);
     klass->classInfo->superclass = superclass;
+    if (superclass) {
+        OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(superclass));
+    }
     // during initial class hierarchy setup this is NULL
     if (nativeClassInit && isClassHierarchyCreated) {
         callVMMethod((ObjInstance*)klass, OBJ_VAL(nativeClassInit), 0, NULL, NULL);
@@ -363,6 +369,9 @@ ObjModule *newModule(ObjString *name, int flags) {
     mod->fields = (Table*)tablesMem;
     initTable(mod->fields);
     mod->classInfo = newClassInfo(name);
+    if (name) {
+        OBJ_WRITE(OBJ_VAL(mod), OBJ_VAL(name));
+    }
     // during initial class hierarchy setup this is NULL
     if (nativeModuleInit && isClassHierarchyCreated) {
         callVMMethod((ObjInstance*)mod, OBJ_VAL(nativeModuleInit), 0, NULL, NULL);
@@ -442,6 +451,9 @@ ObjNative *newNative(ObjString *name, NativeFn function, int flags) {
     );
     native->function = function;
     native->name = name; // should be interned
+    if (name) {
+        OBJ_WRITE(OBJ_VAL(native), OBJ_VAL(name));
+    }
     native->klass = NULL;
     native->isStatic = false;
     GC_OLD(native);

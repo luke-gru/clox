@@ -35,6 +35,8 @@ static int heapsUsed = 0;
 static bool inGC = false;
 static bool GCOn = true;
 static bool dontGC = false;
+static bool inYoungGC = false;
+static bool inFullGC = false;
 static bool inFinalFree = false;
 
 struct sGCProfile GCProf = {
@@ -292,6 +294,7 @@ static inline bool inRememberSet(Obj *obj) {
 // collect all young objects that aren't in the remember set, aren't
 // on the stack (VM and "C" obj stack)
 void collectYoungGarbage() {
+    ASSERT(vm.grayCount == 0);
     if (!GCOn || OPTION_T(disableGC)) {
         GC_TRACE_DEBUG(1, "GC run (young) skipped (GC OFF)");
         return;
@@ -304,6 +307,7 @@ void collectYoungGarbage() {
         GC_TRACE_DEBUG(1, "Skipping garbage collect (young, stack size: %d)", youngStackSz);
         return;
     }
+    inYoungGC = true;
 
     struct timeval tRunStart;
     startGCRunProfileTimer(&tRunStart);
@@ -435,6 +439,7 @@ void collectYoungGarbage() {
     stopGCRunProfileTimer(&tRunStart, &GCProf.totalGCYoungTime);
     GCProf.runsYoung++;
     vm.grayCount = 0;
+    inYoungGC = false;
     inGC = false;
     youngStackSz = 0;
 }
@@ -598,6 +603,7 @@ void blackenObject(Obj *obj) {
             if (klass->classInfo->superclass) {
                 grayObject((Obj*)klass->classInfo->superclass);
             }
+            // TODO: blacken included modules
             grayTable(klass->fields);
             grayTable(klass->classInfo->methods);
             grayTable(klass->classInfo->getters);
@@ -651,6 +657,7 @@ void blackenObject(Obj *obj) {
             GC_TRACE_DEBUG(5, "Blackening native function %p", obj);
             ObjNative *native = (ObjNative*)obj;
             grayObject((Obj*)native->name);
+            grayObject((Obj*)native->klass);
             break;
         }
         case OBJ_T_INSTANCE: {
@@ -981,6 +988,7 @@ static void callFinalizer(Obj *obj) {
 // Full collection single-phase mark and sweep
 // TODO: divide work up into mark and sweep phases to limit GC pauses
 void collectGarbage(void) {
+    ASSERT(vm.grayCount == 0);
     if (!GCOn || OPTION_T(disableGC)) {
         GC_TRACE_DEBUG(1, "GC run skipped (GC OFF)");
         return;
@@ -989,6 +997,7 @@ void collectGarbage(void) {
         fprintf(stderr, "[BUG]: GC tried to start during a GC run?\n");
         ASSERT(0);
     }
+    inFullGC = true;
     struct timeval tRunStart;
     startGCRunProfileTimer(&tRunStart);
 
@@ -1277,6 +1286,7 @@ freeLoop:
     vec_deinit(&v_stackObjs);
     youngStackSz = 0;
     inGC = false;
+    inFullGC = false;
 }
 
 bool isInternedStringObj(Obj *obj) {

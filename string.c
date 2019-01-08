@@ -170,6 +170,7 @@ static Value lxStringGetSize(int argCount, Value *args) {
 
 void Init_StringClass() {
     ObjClass *stringClass = addGlobalClass("String", lxObjClass);
+    lxStringClass = stringClass;
     nativeStringInit = addNativeMethod(stringClass, "init", lxStringInit);
     // methods
     addNativeMethod(stringClass, "toString", lxStringToString);
@@ -186,5 +187,4 @@ void Init_StringClass() {
 
     // getters
     addNativeGetter(stringClass, "size", lxStringGetSize);
-    lxStringClass = stringClass;
 }

@@ -20,7 +20,7 @@ DIR *getDir(const char *name) {
 static ObjString *fileExpectStr(FILE *f) {
     bool inEnd = false;
     bool inExpect = false;
-    ObjString *str = hiddenString("", 0);
+    ObjString *str = hiddenString("", 0, NEWOBJ_FLAG_OLD);
     while (fgets(lineBuf, sizeof(lineBuf), f) != NULL) {
         if (inEnd) {
             if (inExpect) {
@@ -95,7 +95,7 @@ static int test_run_example_files(void) {
             continue;
         }
         fprintf(stdout, "Running file '%s'...\n", ent->d_name);
-        ObjString *outputStr = hiddenString("", 0);
+        ObjString *outputStr = hiddenString("", 0, NEWOBJ_FLAG_OLD);
         setPrintBuf(outputStr, true);
         unhideFromGC((Obj*)outputStr);
         InterpretResult ires = interpret(chunk, ent->d_name);
