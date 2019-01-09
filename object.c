@@ -18,19 +18,15 @@ extern VM vm;
 static Obj *allocateObject(size_t size, ObjType type, int flags) {
     DBG_ASSERT(type > OBJ_T_NONE);
     Obj *object = getNewObject(type, size, flags);
-    object->isDark = false;
     object->type = type;
-    object->isFrozen = false;
 
     if (vm.inited && vm.curThread && vm.curThread->inCCall > 0) {
         vec_push(&vm.curThread->stackObjects, object);
     }
 
     object->objectId = (size_t)object;
-    object->noGC = false;
+    object->flags = OBJ_FLAG_NONE;
     object->GCGen = GC_GEN_FROM_NEWOBJ_FLAGS(flags);
-    object->hasFinalizer = false;
-    object->pushedToStack = false;
     GCStats.generations[object->GCGen]++;
 
     return object;
@@ -54,26 +50,23 @@ static ObjString *allocateString(char *chars, int length, ObjClass *klass, int f
     string->capacity = length;
     string->chars = chars;
     string->hash = 0; // lazily computed
-    string->isInterned = false;
-    string->isStatic = false;
-    string->isShared = false;
     return string;
 }
 
 void objFreeze(Obj *obj) {
     ASSERT(obj);
-    obj->isFrozen = true;
+    OBJ_SET_FROZEN(obj);
 }
 
 void objUnfreeze(Obj *obj) {
     ASSERT(obj);
     if (obj->type == OBJ_T_STRING) {
         ObjString *buf = (ObjString*)obj;
-        if (UNLIKELY(buf->isStatic)) {
+        if (UNLIKELY(STRING_IS_STATIC(buf))) {
             throwErrorFmt(lxErrClass, "Tried to unfreeze static String");
         }
     }
-    obj->isFrozen = false;
+    OBJ_UNSET_FROZEN(obj);
 }
 
 uint32_t hashString(char *key, int length) {
@@ -123,7 +116,7 @@ ObjString *internedString(char *chars, int length, int flags) {
     if (!interned) {
         interned = hiddenString(chars, length, flags|NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_FROZEN);
         ASSERT(tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL));
-        interned->isInterned = true;
+        STRING_SET_INTERNED(interned);
         objFreeze((Obj*)interned);
         GC_OLD((Obj*)interned);
     }
@@ -152,7 +145,7 @@ bool objStringEquals(ObjString *a, ObjString *b) {
 // it's rehashed.
 void pushCString(ObjString *string, char *chars, int lenToAdd) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
-    ASSERT(!((Obj*)string)->isFrozen);
+    ASSERT(!isFrozen((Obj*)string));
 
     if (UNLIKELY(lenToAdd == 0)) return;
 
@@ -176,7 +169,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
 
 void insertCString(ObjString *string, char *chars, int lenToAdd, int at) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
-    ASSERT(!((Obj*)string)->isFrozen);
+    ASSERT(!isFrozen((Obj*)string));
 
     ASSERT(at <= string->length); // TODO: allow `at` that's larger than length, and add space in between
 
@@ -213,7 +206,7 @@ void pushCStringFmt(ObjString *string, const char *format, ...) {
 }
 
 void pushCStringVFmt(ObjString *string, const char *format, va_list ap) {
-    ASSERT(!((Obj*)string)->isFrozen);
+    ASSERT(!isFrozen((Obj*)string));
 
     char sbuf[201] = {'\0'};
     vsnprintf(sbuf, 200, format, ap);
@@ -242,7 +235,7 @@ void pushCStringVFmt(ObjString *string, const char *format, va_list ap) {
 }
 
 static inline void clearObjString(ObjString *string) {
-    ASSERT(!((Obj*)string)->isFrozen);
+    ASSERT(!isFrozen((Obj*)string));
     string->chars = GROW_ARRAY(string->chars, char, string->capacity+1, 1);
     string->chars[0] = '\0';
     string->length = 0;
@@ -486,7 +479,7 @@ ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCM
         memset(obj, 0, sizeof(ObjInternal));
         obj->object.type = OBJ_T_INTERNAL;
         obj->object.GCGen = 0;
-        obj->object.isDark = false;
+        obj->object.flags = OBJ_FLAG_NONE;
     }
     obj->data = data;
     obj->dataSz = dataSz;
@@ -625,7 +618,7 @@ void setObjectFinalizer(ObjInstance *obj, Obj *callable) {
     if (obj->finalizerFunc == NULL) {
         activeFinalizers++;
         GC_PROMOTE_ONCE(obj);
-        ((Obj*) obj)->hasFinalizer = true;
+        OBJ_SET_HAS_FINALIZER(obj);
     }
     OBJ_WRITE(OBJ_VAL(obj), OBJ_VAL(callable));
     obj->finalizerFunc = callable;
@@ -675,6 +668,7 @@ Value newArrayConstant(void) {
     ObjArray *ary = allocateArray(lxAryClass, NEWOBJ_FLAG_OLD);
     ValueArray *valAry = &ary->valAry;
     initValueArray(valAry);
+    ARRAY_SET_STATIC(ary);
     GC_OLD(ary);
     return OBJ_VAL(ary);
 }
@@ -684,11 +678,15 @@ Value arrayDup(Value otherVal) {
     ObjArray *other = AS_ARRAY(otherVal);
     Value ret = newArray();
     ObjArray *retAry = AS_ARRAY(ret);
-    ValueArray *ary = &retAry->valAry;
-    for (int i = 0; i < other->valAry.count; i++) {
-        writeValueArrayEnd(ary, other->valAry.values[i]);
+    if (ARRAY_IS_STATIC(other)) {
+        memcpy(&retAry->valAry, &other->valAry, sizeof(other->valAry));
+        ARRAY_SET_SHARED(retAry);
+    } else {
+        for (int i = 0; i < other->valAry.count; i++) {
+            writeValueArrayEnd(&retAry->valAry, other->valAry.values[i]);
+        }
     }
-    DBG_ASSERT(ary->count == other->valAry.count);
+    DBG_ASSERT(retAry->valAry.count == other->valAry.count);
     return ret;
 }
 
@@ -770,6 +768,7 @@ void arrayPush(Value self, Value el) {
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
+    arrayDedup(selfObj);
     ValueArray *ary = &selfObj->valAry;
     writeValueArrayEnd(ary, el);
     OBJ_WRITE(OBJ_VAL(selfObj), el);
@@ -783,6 +782,7 @@ int arrayDelete(Value self, Value el) {
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
+    arrayDedup(AS_ARRAY(self));
     ValueArray *ary = &AS_ARRAY(self)->valAry;
     Value val; int idx = 0; int found = -1;
     VALARRAY_FOREACH(ary, val, idx) {
@@ -802,6 +802,7 @@ Value arrayPop(Value self) {
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
+    arrayDedup(selfObj);
     ValueArray *ary = &selfObj->valAry;
     if (ary->count == 0) return NIL_VAL;
     Value found = arrayGet(self, ary->count-1);
@@ -814,6 +815,7 @@ Value arrayPopFront(Value self) {
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
+    arrayDedup(selfObj);
     ValueArray *ary = &selfObj->valAry;
     if (ary->count == 0) return NIL_VAL;
     Value found = arrayGet(self, 0);
@@ -826,6 +828,7 @@ void arrayPushFront(Value self, Value el) {
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
+    arrayDedup(selfObj);
     ValueArray *ary = &selfObj->valAry;
     writeValueArrayBeg(ary, el);
     OBJ_WRITE(self, el);
@@ -837,6 +840,7 @@ void arrayClear(Value self) {
     if (isFrozen((Obj*)selfObj)) {
         throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
     }
+    arrayDedup(selfObj);
     freeValueArray(&selfObj->valAry);
 }
 

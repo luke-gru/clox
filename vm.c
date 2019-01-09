@@ -564,7 +564,7 @@ void push(Value value) {
     }
     if (IS_OBJ(value)) {
         ASSERT(LIKELY(AS_OBJ(value)->type != OBJ_T_NONE));
-        AS_OBJ(value)->pushedToStack = true;
+        OBJ_SET_PUSHED_VM_STACK(AS_OBJ(value));
     }
     *ctx->stackTop = value;
     ctx->stackTop++;
@@ -1820,7 +1820,7 @@ void printVMStack(FILE *f, LxThread *th) {
             fprintf(f, " ]");
             if (IS_OBJ(*slot)) {
                 Obj *objPtr = AS_OBJ(*slot);
-                if (objPtr->noGC) {
+                if (OBJ_IS_HIDDEN(objPtr)) {
                     fprintf(f, " (hidden!)");
                 }
             }
@@ -2784,7 +2784,7 @@ vmLoop:
           push(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
           if (UNLIKELY(isStatic)) {
-              buf->isStatic = true;
+              STRING_SET_STATIC(buf);
               push(OBJ_VAL(buf));
           } else {
               push(OBJ_VAL(buf));
@@ -2793,7 +2793,7 @@ vmLoop:
           ASSERT(ret); // the string instance is pushed to top of stack
           if (UNLIKELY(isStatic == 1)) {
               objFreeze(AS_OBJ(peek(0)));
-              AS_STRING(peek(0))->isStatic = true;
+              STRING_SET_STATIC(AS_STRING(peek(0)));
           }
           DISPATCH_BOTTOM();
       }

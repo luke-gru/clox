@@ -26,19 +26,56 @@ typedef enum ObjType {
 
 typedef struct ObjAny ObjAny;
 
+// common flags
+#define OBJ_FLAG_NONE (0)
+#define OBJ_FLAG_DARK (1 << 0)
+#define OBJ_FLAG_HAS_FINALIZER (1 << 1)
+#define OBJ_FLAG_FROZEN (1 << 2)
+#define OBJ_FLAG_NOGC (1 << 3)
+#define OBJ_FLAG_PUSHED_VM_STACK (1 << 4)
+// flags that may or may not be used by certain types
+#define OBJ_FLAG_USER1 (1 << 10)
+#define OBJ_FLAG_USER2 (1 << 11)
+#define OBJ_FLAG_USER3 (1 << 12)
+
+#define OBJ_HAS_FLAG(obj, name) ((((Obj*)obj)->flags & OBJ_FLAG_##name) != 0)
+#define OBJ_SET_FLAG(obj, name) (((Obj*)obj)->flags |= OBJ_FLAG_##name)
+#define OBJ_UNSET_FLAG(obj, name) (((Obj*)obj)->flags &= (~OBJ_FLAG_##name))
+
+#define OBJ_IS_DARK(obj) OBJ_HAS_FLAG(obj, DARK)
+#define OBJ_SET_DARK(obj) OBJ_SET_FLAG(obj, DARK)
+#define OBJ_UNSET_DARK(obj) OBJ_UNSET_FLAG(obj, DARK)
+#define OBJ_HAS_FINALIZER(obj) OBJ_HAS_FLAG(obj, HAS_FINALIZER)
+#define OBJ_SET_HAS_FINALIZER(obj) OBJ_SET_FLAG(obj, HAS_FINALIZER)
+#define OBJ_UNSET_HAS_FINALIZER(obj) OBJ_UNSET_FLAG(obj, HAS_FINALIZER)
+#define OBJ_IS_FROZEN(obj) OBJ_HAS_FLAG(obj, FROZEN)
+#define OBJ_SET_FROZEN(obj) OBJ_SET_FLAG(obj, FROZEN)
+#define OBJ_UNSET_FROZEN(obj) OBJ_UNSET_FLAG(obj, FROZEN)
+#define OBJ_IS_HIDDEN(obj) OBJ_HAS_FLAG(obj, NOGC)
+#define OBJ_SET_HIDDEN(obj) OBJ_SET_FLAG(obj, NOGC)
+#define OBJ_UNSET_HIDDEN(obj) OBJ_UNSET_FLAG(obj, NOGC)
+#define OBJ_IS_PUSHED_VM_STACK(obj) OBJ_HAS_FLAG(obj, PUSHED_VM_STACK)
+#define OBJ_SET_PUSHED_VM_STACK(obj) OBJ_SET_FLAG(obj, PUSHED_VM_STACK)
+#define OBJ_UNSET_PUSHED_VM_STACK(obj) OBJ_UNSET_FLAG(obj, PUSHED_VM_STACK)
+
+#define OBJ_HAS_USER1_FLAG(obj) OBJ_HAS_FLAG(obj, USER1)
+#define OBJ_SET_USER1_FLAG(obj) OBJ_SET_FLAG(obj, USER1)
+#define OBJ_UNSET_USER1_FLAG(obj) OBJ_UNSET_FLAG(obj, USER1)
+#define OBJ_HAS_USER2_FLAG(obj) OBJ_HAS_FLAG(obj, USER2)
+#define OBJ_SET_USER2_FLAG(obj) OBJ_SET_FLAG(obj, USER2)
+#define OBJ_UNSET_USER2_FLAG(obj) OBJ_UNSET_FLAG(obj, USER2)
+#define OBJ_HAS_USER3_FLAG(obj) OBJ_HAS_FLAG(obj, USER3)
+#define OBJ_SET_USER3_FLAG(obj) OBJ_SET_FLAG(obj, USER3)
+#define OBJ_UNSET_USER3_FLAG(obj) OBJ_UNSET_FLAG(obj, USER3)
+
 // basic object structure that all objects (values of VAL_T_OBJ type)
 typedef struct Obj {
-    ObjType type; // redundant, but we need for now
+    ObjType type;
+    uint16_t flags;
     ObjAny *nextFree;
     size_t objectId;
     // GC fields
     unsigned short GCGen;
-    bool isDark; // is this object marked?
-    bool noGC; // don't collect this object
-    bool hasFinalizer;
-    // Other fields
-    bool isFrozen;
-    bool pushedToStack;
 } Obj;
 
 typedef void (*GCMarkFunc)(Obj *obj);
@@ -159,6 +196,21 @@ typedef struct ObjInstance {
   ObjInternal *internal;
 } ObjInstance;
 
+#define STRING_FLAG_STATIC OBJ_FLAG_USER1
+#define STRING_FLAG_INTERNED OBJ_FLAG_USER2
+#define STRING_FLAG_SHARED OBJ_FLAG_USER3
+
+#define STRING_IS_STATIC OBJ_HAS_USER1_FLAG
+#define STRING_SET_STATIC OBJ_SET_USER1_FLAG
+#define STRING_UNSET_STATIC OBJ_UNSET_USER1_FLAG
+
+#define STRING_IS_INTERNED OBJ_HAS_USER2_FLAG
+#define STRING_SET_INTERNED OBJ_SET_USER2_FLAG
+#define STRING_UNSET_INTERNED OBJ_UNSET_USER2_FLAG
+
+#define STRING_IS_SHARED OBJ_HAS_USER3_FLAG
+#define STRING_SET_SHARED OBJ_SET_USER3_FLAG
+#define STRING_UNSET_SHARED OBJ_UNSET_USER3_FLAG
 typedef struct ObjString {
     Obj object;
     ObjClass *klass;
@@ -169,11 +221,16 @@ typedef struct ObjString {
     char *chars;
     uint32_t hash;
     int capacity;
-    bool isStatic;
-    bool isInterned;
-    bool isShared;
 } ObjString;
 
+#define ARRAY_FLAG_SHARED OBJ_FLAG_USER1
+#define ARRAY_FLAG_STATIC OBJ_FLAG_USER2
+#define ARRAY_IS_SHARED OBJ_HAS_USER1_FLAG
+#define ARRAY_SET_SHARED OBJ_SET_USER1_FLAG
+#define ARRAY_UNSET_SHARED OBJ_UNSET_USER1_FLAG
+#define ARRAY_IS_STATIC OBJ_HAS_USER2_FLAG
+#define ARRAY_SET_STATIC OBJ_SET_USER2_FLAG
+#define ARRAY_UNSET_STATIC OBJ_UNSET_USER2_FLAG
 typedef struct ObjArray {
     Obj obj;
     ObjClass *klass;
@@ -363,7 +420,7 @@ static inline void insertObjString(ObjString *a, ObjString *b, int at) {
 void objFreeze(Obj*);
 void objUnfreeze(Obj*);
 static inline bool isFrozen(Obj *obj) {
-    return obj->isFrozen;
+    return OBJ_IS_FROZEN(obj);
 }
 void  setProp(Value self, ObjString *propName, Value val);
 Value getProp(Value self, ObjString *propName);
@@ -383,6 +440,18 @@ void   arrayClear(Value aryVal);
 bool   arrayEquals(Value self, Value other);
 Value  arrayDup(Value other);
 Value  newArrayConstant(void);
+static inline void arrayDedup(ObjArray *ary) {
+    if (ARRAY_IS_SHARED(ary)) {
+        ValueArray newValAry;
+        initValueArray(&newValAry);
+        ValueArray valAry = ary->valAry;
+        for (int i = 0; i < valAry.count; i++) {
+            writeValueArrayEnd(&newValAry, valAry.values[i]);
+        }
+        ary->valAry = newValAry;
+        ARRAY_UNSET_SHARED(ary);
+    }
+}
 /**
  * NOTE: assumes idx is appropriate and within given range. See
  * ARRAY_SIZE(value)

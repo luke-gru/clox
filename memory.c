@@ -361,7 +361,7 @@ void collectYoungGarbage() {
         Obj *stackObjPtr = NULL; int stIdx = 0;
         vec_foreach(&curThread->stackObjects, stackObjPtr, stIdx) {
             numStackObjects++;
-            if (!stackObjPtr->pushedToStack) {
+            if (!OBJ_IS_PUSHED_VM_STACK(stackObjPtr)) {
                 grayObject(stackObjPtr);
             }
         }
@@ -433,9 +433,9 @@ void collectYoungGarbage() {
     for (int i = 0; i < youngStackSz; i++) {
         Obj *youngObj = youngStack[i];
         DBG_ASSERT(youngObj);
-        if (youngObj->GCGen > GC_GEN_MIN || youngObj->noGC) {
+        if (youngObj->GCGen > GC_GEN_MIN || OBJ_IS_HIDDEN(youngObj)) {
             numPromotedOther++;
-            youngObj->isDark = false;
+            OBJ_UNSET_DARK(youngObj);
             continue;
         }
         // Let full GC deal with finalizer object destruction
@@ -443,20 +443,20 @@ void collectYoungGarbage() {
                 ((ObjInstance*)youngObj)->finalizerFunc != NULL) {
             numPromotedOther++;
             GC_PROMOTE_ONCE(youngObj);
-            youngObj->isDark = false;
+            OBJ_UNSET_DARK(youngObj);
             continue;
         }
-        if (youngObj->isDark) {
+        if (OBJ_IS_DARK(youngObj)) {
             numPromotedDark++;
             GC_PROMOTE_ONCE(youngObj);
-            youngObj->isDark = false;
+            OBJ_UNSET_DARK(youngObj);
         } else if (inRememberSet(youngObj)) {
             numPromotedRemembered++;
             GC_PROMOTE_ONCE(youngObj);
-            youngObj->isDark = false;
+            OBJ_UNSET_DARK(youngObj);
         } else {
             ASSERT(IS_YOUNG_OBJ(youngObj));
-            ASSERT(!youngObj->noGC);
+            ASSERT(!OBJ_IS_HIDDEN(youngObj));
             youngObj->nextFree = newFreeList;
             freeObject(youngObj);
             newFreeList = (ObjAny*)youngObj;
@@ -472,7 +472,7 @@ void collectYoungGarbage() {
         // Pop an item from the gray stack.
         Obj *marked = vm.grayStack[--vm.grayCount];
         DBG_ASSERT(marked);
-        marked->isDark = false;
+        OBJ_UNSET_DARK(marked);
     }
 
     GC_TRACE_DEBUG(2, "done FREE (young) process");
@@ -601,7 +601,7 @@ void grayObject(Obj *obj) {
         TRACE_GC_FUNC_END(4, "grayObject (null obj found)");
         return;
     }
-    if (obj->isDark) {
+    if (OBJ_IS_DARK(obj)) {
         TRACE_GC_FUNC_END(4, "grayObject (already dark)");
         return;
     }
@@ -610,7 +610,7 @@ void grayObject(Obj *obj) {
         return;
     }
     GC_TRACE_MARK(4, obj);
-    obj->isDark = true;
+    OBJ_SET_DARK(obj);
     if (!inYoungGC) {
         INC_GEN(obj);
     }
@@ -757,9 +757,14 @@ void blackenObject(Obj *obj) {
                 grayObject(ary->finalizerFunc);
             }
             GC_TRACE_DEBUG(5, "Array count: %ld", valAry->count);
-            for (int i = 0; i < valAry->count; i++) {
-                Value val = valAry->values[i];
-                grayValue(val);
+            // NOTE: right now, shared arrays only point to static arrays,
+            // which only contain constants, so we can skip the graying of
+            // these non-objects.
+            if (!ARRAY_IS_SHARED(ary)) {
+                for (int i = 0; i < valAry->count; i++) {
+                    Value val = valAry->values[i];
+                    grayValue(val);
+                }
             }
             break;
         }
@@ -825,7 +830,7 @@ void freeObject(Obj *obj) {
         return; // already freed
     }
 
-    ASSERT(!obj->noGC);
+    ASSERT(!OBJ_IS_HIDDEN(obj));
     TRACE_GC_FUNC_START(4, "freeObject");
 
     GC_TRACE_FREE(4, obj);
@@ -916,8 +921,10 @@ void freeObject(Obj *obj) {
             GC_TRACE_DEBUG(5, "Freeing array fields table: p=%p", ary->fields);
             freeTable(ary->fields);
             FREE_ARRAY(Table, ary->fields, 1);
-            GC_TRACE_DEBUG(5, "Freeing array ValueArray");
-            freeValueArray(&ary->valAry);
+            if (!ARRAY_IS_SHARED(ary)) {
+                GC_TRACE_DEBUG(5, "Freeing array ValueArray");
+                freeValueArray(&ary->valAry);
+            }
             GC_TRACE_DEBUG(5, "Freeing ObjArray: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;
@@ -959,11 +966,11 @@ void freeObject(Obj *obj) {
             ASSERT(string->chars);
             GC_TRACE_DEBUG(5, "Freeing string chars: p=%p, interned=%s,static=%s,shared=%s",
                     string->chars,
-                    string->isInterned ? "t" : "f",
-                    string->isStatic ? "t" : "f",
-                    string->isShared ? "t" : "f"
+                    STRING_IS_INTERNED(string) ? "t" : "f",
+                    STRING_IS_STATIC(string) ? "t" : "f",
+                    STRING_IS_SHARED(string) ? "t" : "f"
             );
-            if (!string->isShared) {
+            if (!STRING_IS_SHARED(string)) {
                 GC_TRACE_DEBUG(5, "Freeing string chars: s='%s' (len=%d, capa=%d)", string->chars, string->length, string->capacity);
                 FREE_ARRAY(char, string->chars, string->capacity + 1);
             }
@@ -1010,21 +1017,21 @@ void setGCOnOff(bool turnOn) {
 void hideFromGC(Obj *obj) {
     DBG_ASSERT(obj);
     DBG_ASSERT(vm.inited);
-    if (!obj->noGC) {
+    if (!OBJ_IS_HIDDEN(obj)) {
         if (IS_YOUNG_OBJ(obj)) {
             GC_PROMOTE_ONCE(obj);
         }
         vec_push(&vm.hiddenObjs, obj);
-        obj->noGC = true;
+        OBJ_SET_HIDDEN(obj);
     }
 }
 
 void unhideFromGC(Obj *obj) {
     DBG_ASSERT(obj);
     DBG_ASSERT(vm.inited);
-    if (obj->noGC) {
+    if (OBJ_IS_HIDDEN(obj)) {
         vec_remove(&vm.hiddenObjs, obj);
-        obj->noGC = false;
+        OBJ_UNSET_HIDDEN(obj);
     }
 }
 
@@ -1211,7 +1218,7 @@ void collectGarbage(void) {
     int numHiddenRoots = vm.hiddenObjs.length;
     int numHiddenFound = 0;
     vec_foreach(&vm.hiddenObjs, objPtr, j) {
-        if (((Obj*)objPtr)->noGC) {
+        if (OBJ_IS_HIDDEN(objPtr)) {
             GC_TRACE_DEBUG(5, "Hidden root found: %p", objPtr);
             /*GC_TRACE_MARK(3, objPtr);*/
             numHiddenFound++;
@@ -1282,7 +1289,7 @@ freeLoop:
 
             int rootedCStack = -1;
             vec_find(&v_stackObjs, obj, rootedCStack);
-            if (!obj->isDark && !obj->noGC) {
+            if (!OBJ_IS_DARK(obj) && !OBJ_IS_HIDDEN(obj)) {
                 if (phase == 2) { // phase 2, reclaim unmarked objects
                     if (rootedCStack == -1) {
                         numObjectsFreed++;
@@ -1306,14 +1313,14 @@ freeLoop:
                         }
                     }
                 }
-            } else if (obj->noGC && !obj->isDark) { // keep
+            } else if (OBJ_IS_HIDDEN(obj) && !OBJ_IS_DARK(obj)) { // keep
                 if (phase == 2) {
                     numObjectsHiddenNotMarked++;
                 }
             } else { // unmark for next run
                 if (phase == 2) {
                     GCPromoteOnce(obj);
-                    obj->isDark = false;
+                    OBJ_UNSET_DARK(obj);
                     numObjectsKept++;
                 }
             }
@@ -1372,7 +1379,7 @@ freeLoop:
 
 bool isInternedStringObj(Obj *obj) {
     if (obj->type != OBJ_T_STRING) return false;
-    return ((ObjString*) obj)->isInterned;
+    return STRING_IS_INTERNED(obj);
 }
 
 bool isThreadObj(Obj *obj) {
@@ -1447,7 +1454,7 @@ freeLoop:
     Obj *sym; int eidx = 0;
     TABLE_FOREACH(&vm.strings, e, eidx, {
         sym = AS_OBJ(e.key);
-        if (sym->noGC)
+        if (OBJ_IS_HIDDEN(sym))
             continue;
         freeObject(sym);
     })

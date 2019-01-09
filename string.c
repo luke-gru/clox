@@ -28,10 +28,10 @@ Value lxStringInit(int argCount, Value *args) {
     selfStr->capacity = otherStr->capacity;
     selfStr->hash = otherStr->hash;
     selfStr->length = otherStr->length;
-    ((Obj*)selfStr)->isFrozen = false;
-    if (otherStr->isInterned && otherStr->chars) {
+    OBJ_UNSET_FROZEN(selfStr);
+    if (STRING_IS_INTERNED(otherStr) && otherStr->chars) {
         selfStr->chars = otherStr->chars;
-        selfStr->isShared = true; // no need for OBJ_WRITE here, it's interned
+        STRING_SET_SHARED(selfStr);
     } else {
         if (otherStr->chars) {
             selfStr->chars = ALLOCATE(char, otherStr->capacity+1);
@@ -64,11 +64,11 @@ static Value lxStringOpAdd(int argCount, Value *args) {
 }
 
 static inline void dedupString(ObjString *shared) {
-    if (shared->isShared) {
+    if (STRING_IS_SHARED(shared)) {
         char *cpy = shared->chars;
         shared->chars = ALLOCATE(char, shared->capacity+1);
         memcpy(shared->chars, cpy, shared->length+1);
-        shared->isShared = false;
+        STRING_UNSET_SHARED(shared);
     }
 }
 
@@ -92,9 +92,9 @@ static Value lxStringDup(int argCount, Value *args) {
     Value dup = callSuper(0, NULL, NULL);
     ObjString *selfStr = AS_STRING(self);
     ObjString *dupStr = AS_STRING(dup);
-    dupStr->isStatic = selfStr->isStatic;
-    dupStr->isInterned = false;
-    ((Obj*)dupStr)->isFrozen = false;
+    STRING_UNSET_STATIC(dupStr);
+    STRING_UNSET_INTERNED(dupStr);
+    OBJ_UNSET_FROZEN(dupStr);
     dupStr->capacity = selfStr->capacity;
     dupStr->hash = selfStr->hash;
     dupStr->length = selfStr->length;
