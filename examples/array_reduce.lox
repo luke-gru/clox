@@ -1,0 +1,12 @@
+fun add(el, last) { return last + el; }
+fun mul(el, last) { return last * el; }
+fun div(el, last) { return last / el; }
+print [1,2,3].reduce(0, &add);
+print [1,2,3].reduce(2, &mul);
+print [2,2,1].reduce(4, &div);
+
+__END__
+-- expect: --
+6
+12
+1

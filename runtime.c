@@ -286,6 +286,12 @@ Value yieldFromC(int argCount, Value *args, ObjInstance *blockObj) {
     for (int i = 0; i < argCount; i++) {
         push(args[i]);
     }
+    CallInfo *cinfoIn = getFrame()->callInfo;
+    int blockExtraParamsNum = cinfoIn ? cinfoIn->blockArgsNumExtra : 0;
+    for (int i = 0; i < blockExtraParamsNum; i++) {
+        push(cinfoIn->blockArgsExtra[i]);
+        argCount++;
+    }
     CallInfo cinfo = {
         .argc = argCount,
         .blockFunction = NULL,

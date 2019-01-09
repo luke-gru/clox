@@ -343,6 +343,76 @@ static Value lxArraySelect(int argCount, Value *args) {
     }
 }
 
+static void rejectIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+    if (!isTruthy(ret)) {
+        arrayPush(*cinfo->blockIterRet, *args);
+    }
+}
+
+static Value lxArrayReject(int argCount, Value *args) {
+    CHECK_ARITY("Array#reject", 1, 1, argCount);
+    Value self = *args;
+
+    ObjFunction *block = getFrame()->callInfo->blockFunction;
+    volatile Value ret = newArray();
+    CallInfo cinfo;
+    memset(&cinfo, 0, sizeof(cinfo));
+    cinfo.blockIterFunc = rejectIter;
+    cinfo.blockIterRet = &ret;
+    cinfo.blockFunction = block;
+    cinfo.blockInstance = getBlockArg(getFrame());
+    Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
+    if (IS_NIL(res)) {
+        return res;
+    } else {
+        return ret;
+    }
+}
+
+static void reduceIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+    if (!IS_NUMBER(*args)) {
+        throwErrorFmt(lxTypeErrClass, "Return value from reduce() must be a number");
+    }
+    *cinfo->blockIterRet = ret;
+}
+
+static Value lxArrayReduce(int argCount, Value *args) {
+    CHECK_ARITY("Array#reduce", 2, 2, argCount);
+    Value self = *args;
+
+    ObjFunction *block = getFrame()->callInfo->blockFunction;
+    volatile Value ret = args[1];
+    CallInfo cinfo;
+    memset(&cinfo, 0, sizeof(cinfo));
+    cinfo.blockIterFunc = reduceIter;
+    cinfo.blockIterRet = &ret;
+    cinfo.blockFunction = block;
+    cinfo.blockInstance = getBlockArg(getFrame());
+    cinfo.blockArgsExtra = &ret;
+    cinfo.blockArgsNumExtra = 1;
+    Value res = callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
+    if (IS_NIL(res)) {
+        return res;
+    } else {
+        return ret;
+    }
+}
+
+static Value lxArraySum(int argCount, Value *args) {
+    CHECK_ARITY("Array#sum", 1, 1, argCount);
+    Value self = *args;
+    double sum = 0.0;
+    ObjArray *selfObj = AS_ARRAY(self);
+    Value el; int elIdx = 0;
+    VALARRAY_FOREACH(&selfObj->valAry, el, elIdx) {
+        if (!IS_NUMBER(el)) {
+            throwErrorFmt(lxTypeErrClass, "Element in summation is not a number");
+        }
+        sum += AS_NUMBER(el);
+    }
+    return NUMBER_VAL(sum);
+}
+
 static Value lxArrayGetSize(int argCount, Value *args) {
     ValueArray *ary = &AS_ARRAY(*args)->valAry;
     return NUMBER_VAL(ary->count);
@@ -387,6 +457,9 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "each", lxArrayEach);
     addNativeMethod(arrayClass, "map", lxArrayMap);
     addNativeMethod(arrayClass, "select", lxArraySelect);
+    addNativeMethod(arrayClass, "reject", lxArrayReject);
+    addNativeMethod(arrayClass, "reduce", lxArrayReduce);
+    addNativeMethod(arrayClass, "sum", lxArraySum);
 
     // getters
     addNativeGetter(arrayClass, "size", lxArrayGetSize);
