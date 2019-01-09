@@ -13,12 +13,9 @@ Features
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in ruby.
 * Saving/loading bytecode to disk
-* Add benchmark library/internals so I can benchmark/profile performance of the
-interpreter
 * Add tracing/coverage information
 * Add Class#ancestors
 * Add signal trap handlers (`trap(signame, fun() { })`)
-* Add Time class
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Integrate regexes from regex.c
 * Add Process module, with static methods 'waitall'
@@ -48,6 +45,7 @@ compiled lookup
 associated class, and calls the superclass method. [PARTIAL], doesn't work
 with modules
 * Add more to File class
+* Allow giving keyword args to native functions
 
 Bugs
 ----
@@ -72,6 +70,6 @@ Optimizations
 * more bytecode optimization passes (ex: skip OP_NIL,OP_RETURN after an OP_RETURN)
 * Add tailcall optimization
 * simple JIT, maybe?
-* different GC strategies, maybe support copying GC and/or generational GC
+* different GC strategies, maybe support copying GC
 * optimize method lookup with a polymorphic inline cache and benchmark the lookup results
 * Shared maps/arrays, only de-dup when mutate

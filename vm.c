@@ -564,6 +564,7 @@ void push(Value value) {
     }
     if (IS_OBJ(value)) {
         ASSERT(LIKELY(AS_OBJ(value)->type != OBJ_T_NONE));
+        AS_OBJ(value)->pushedToStack = true;
     }
     *ctx->stackTop = value;
     ctx->stackTop++;
@@ -1230,6 +1231,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         push(OBJ_VAL(callInfo->blockInstance));
         argCount++;
     }
+
     ObjClosure *closure = NULL;
     Value instanceVal;
     volatile ObjInstance *instance = NULL;

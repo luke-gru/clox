@@ -361,7 +361,9 @@ void collectYoungGarbage() {
         Obj *stackObjPtr = NULL; int stIdx = 0;
         vec_foreach(&curThread->stackObjects, stackObjPtr, stIdx) {
             numStackObjects++;
-            grayObject(stackObjPtr);
+            if (!stackObjPtr->pushedToStack) {
+                grayObject(stackObjPtr);
+            }
         }
     }
     GC_TRACE_DEBUG(2, "# C-call stack objects found: %d", numStackObjects);

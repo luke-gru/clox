@@ -38,6 +38,7 @@ typedef struct Obj {
     bool hasFinalizer;
     // Other fields
     bool isFrozen;
+    bool pushedToStack;
 } Obj;
 
 typedef void (*GCMarkFunc)(Obj *obj);

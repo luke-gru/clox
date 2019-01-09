@@ -30,6 +30,7 @@ static Obj *allocateObject(size_t size, ObjType type, int flags) {
     object->noGC = false;
     object->GCGen = GC_GEN_FROM_NEWOBJ_FLAGS(flags);
     object->hasFinalizer = false;
+    object->pushedToStack = false;
     GCStats.generations[object->GCGen]++;
 
     return object;
