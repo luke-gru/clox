@@ -156,6 +156,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(objClass, "freeze", lxObjectFreeze);
     addNativeMethod(objClass, "unfreeze", lxObjectUnfreeze);
     addNativeMethod(objClass, "isFrozen", lxObjectIsFrozen);
+    addNativeMethod(objClass, "send", lxObjectSend);
     addNativeGetter(objClass, "class", lxObjectGetClass);
     addNativeGetter(objClass, "singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);

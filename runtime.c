@@ -500,6 +500,15 @@ Value lxObjectOpEquals(int argCount, Value *args) {
     return BOOL_VAL(AS_OBJ(args[0]) == AS_OBJ(args[1])); // pointer equality
 }
 
+Value lxObjectSend(int argCount, Value *args) {
+    CHECK_ARITY("Object#send", 2, -1, argCount);
+    Value self = *args;
+    Value mnameVal = args[1];
+    CHECK_ARG_IS_A(mnameVal, lxStringClass, 1);
+    ObjString *mname = AS_STRING(mnameVal);
+    return callMethod(AS_OBJ(self), mname, argCount-2, args+2, getFrame()->callInfo);
+}
+
 // ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
     CHECK_ARITY("Module#init", 1, 2, argCount);
