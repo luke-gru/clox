@@ -26,6 +26,12 @@ static Obj *allocateObject(size_t size, ObjType type, int flags) {
 
     object->objectId = (size_t)object;
     object->flags = OBJ_FLAG_NONE;
+    if (flags & NEWOBJ_FLAG_HIDDEN) {
+        object->flags |= OBJ_FLAG_NOGC;
+    }
+    if (flags & NEWOBJ_FLAG_FROZEN) {
+        object->flags |= OBJ_FLAG_FROZEN;
+    }
     object->GCGen = GC_GEN_FROM_NEWOBJ_FLAGS(flags);
     GCStats.generations[object->GCGen]++;
 

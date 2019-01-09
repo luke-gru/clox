@@ -269,8 +269,8 @@ static Value lxArrayEach(int argCount, Value *args) {
             if (errInst->klass == lxBreakBlockErrClass) {
                 return NIL_VAL;
             } else if (errInst->klass == lxContinueBlockErrClass) {
-                Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                 if (fn) {
+                    Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                     fn(1, &el, retVal, getFrame()->callInfo);
                 }
             } else if (errInst->klass == lxReturnBlockErrClass) {

@@ -223,17 +223,17 @@ static void defineNativeClasses(void) {
 
     // internal errors for block flow control
     ObjClass *blockIterErr = newClass(INTERN("BlockIterError"), errClass, NEWOBJ_FLAG_OLD);
+    hideFromGC((Obj*)blockIterErr);
     ObjClass *breakBlockErr = newClass(INTERN("BlockBreakError"), blockIterErr, NEWOBJ_FLAG_OLD);
-    ObjClass *continueBlockErr = newClass(INTERN("BlockContinueError"), blockIterErr, NEWOBJ_FLAG_OLD);
-    ObjClass *returnBlockErr = newClass(INTERN("BlockReturnError"), blockIterErr, NEWOBJ_FLAG_OLD);
-    lxBlockIterErrClass = blockIterErr;
+    hideFromGC((Obj*)breakBlockErr);
     lxBreakBlockErrClass = breakBlockErr;
+    ObjClass *continueBlockErr = newClass(INTERN("BlockContinueError"), blockIterErr, NEWOBJ_FLAG_OLD);
+    hideFromGC((Obj*)continueBlockErr);
+    ObjClass *returnBlockErr = newClass(INTERN("BlockReturnError"), blockIterErr, NEWOBJ_FLAG_OLD);
+    hideFromGC((Obj*)returnBlockErr);
+    lxBlockIterErrClass = blockIterErr;
     lxContinueBlockErrClass = continueBlockErr;
     lxReturnBlockErrClass = returnBlockErr;
-    hideFromGC((Obj*)blockIterErr);
-    hideFromGC((Obj*)breakBlockErr);
-    hideFromGC((Obj*)continueBlockErr);
-    hideFromGC((Obj*)returnBlockErr);
 
     // module GC
     ObjModule *GCModule = addGlobalModule("GC");
@@ -2400,7 +2400,12 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(BLOCK_CONTINUE): {
-          Value ret = *THREAD()->lastValue;
+          Value ret;
+          if (th->lastValue) {
+              ret = *th->lastValue;
+          } else {
+              ret = NIL_VAL;
+          }
           Value err = newError(lxContinueBlockErrClass, NIL_VAL);
           th->lastErrorThrown = err;
           setProp(err, INTERN("ret"), ret);
@@ -2560,8 +2565,14 @@ vmLoop:
           // (explicitly or implicitly)
           if (UNLIKELY(th->v_blockStack.length > 0)) {
               pop();
-              Value ret = *THREAD()->lastValue;
+              Value ret;
+              if (th->lastValue) {
+                  ret = *th->lastValue;
+              } else {
+                  ret = NIL_VAL;
+              }
               Value err = newError(lxContinueBlockErrClass, NIL_VAL);
+              th->lastErrorThrown = err;
               setProp(err, INTERN("ret"), ret);
               throwError(err); // blocks catch this, not propagated
               (th->vmRunLvl)--;
