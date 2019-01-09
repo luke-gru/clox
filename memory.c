@@ -39,6 +39,10 @@ bool inYoungGC = false;
 bool inFullGC = false;
 bool inFinalFree = false;
 
+// debugging
+static ObjType lastNewObjectRequestType = OBJ_T_NONE;
+static ObjType curNewObjectRequestType = OBJ_T_NONE;
+
 struct sGCProfile GCProf = {
     .totalGCYoungTime = {
         .tv_sec = 0,
@@ -491,6 +495,8 @@ void collectYoungGarbage() {
 
 Obj *getNewObject(ObjType type, size_t sz, int flags) {
     Obj *obj = NULL;
+    lastNewObjectRequestType = curNewObjectRequestType;
+    curNewObjectRequestType = type;
     bool isOld = (flags & NEWOBJ_FLAG_OLD) != 0;
 #if GEN_GC
     bool triedYoungCollect = false;
@@ -1088,7 +1094,8 @@ void collectGarbage(void) {
     struct timeval tRunStart;
     startGCRunProfileTimer(&tRunStart);
 
-    GC_TRACE_DEBUG(1, "Collecting garbage (full)");
+    GC_TRACE_DEBUG(1, "Collecting garbage (full), obj request type: %s, last obj request type: %s",
+            objTypeName(curNewObjectRequestType), objTypeName(lastNewObjectRequestType));
     size_t before = GCStats.totalAllocated; (void)before;
 
     GC_TRACE_DEBUG(2, "Marking finalizers");
@@ -1108,7 +1115,7 @@ void collectGarbage(void) {
     vec_init(&v_zombies);
     vec_foreach(&vm.threads, thObj, thIdx) {
         LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
-        if (th->status == THREAD_ZOMBIE) {
+        if (th->status == THREAD_ZOMBIE && (th->joined || th->detached)) {
             vec_push(&v_zombies, thIdx);
             continue;
         }
@@ -1128,6 +1135,12 @@ void collectGarbage(void) {
             for (Value *slot = ctx->stack; slot < ctx->stackTop; slot++) {
                 grayValue(*slot);
             }
+        }
+        BlockStackEntry *bentry = NULL; int bidx = 0;
+        vec_foreach(&th->v_blockStack, bentry, bidx) {
+            grayObject((Obj*)bentry->callable);
+            grayObject((Obj*)bentry->cachedBlockClosure);
+            grayObject((Obj*)bentry->blockInstance);
         }
         vec_extend(&v_stackObjs, &th->stackObjects);
     }

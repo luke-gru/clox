@@ -1195,6 +1195,7 @@ static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args
             return UNDEF_VAL;
         }
     } else {
+        VM_DEBUG("%s", "Calling native function");
         return nativeFunc->function(argCount, args);
     }
 }
@@ -3190,7 +3191,7 @@ NORETURN void stopVM(int status) {
         vm.exited = true;
         pthread_exit(NULL);
     } else {
-        exitingThread();
+        exitingThread(th);
         th->exitStatus = status;
         if (th->detached && vm.numDetachedThreads > 0) {
             THREAD_DEBUG(1, "Thread %lu [DETACHED] exiting with %d", th->tid, status);
@@ -3199,7 +3200,7 @@ NORETURN void stopVM(int status) {
             THREAD_DEBUG(1, "Thread %lu exiting with %d", th->tid, status);
         }
         releaseGVL();
-        pthread_exit(&status);
+        pthread_exit(NULL);
     }
 }
 
@@ -3237,6 +3238,7 @@ void releaseGVL(void) {
     pthread_mutex_lock(&vm.GVLock);
     LxThread *th = vm.curThread;
     if (GVLOwner != th->tid) {
+        THREAD_DEBUG(1, "Thread %lu skipping release of GVL due to not holding!\n", pthread_self());
         pthread_mutex_unlock(&vm.GVLock);
         return;
     }

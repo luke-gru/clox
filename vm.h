@@ -304,7 +304,7 @@ void thread_debug(int lvl, const char *format, ...);
 volatile long long GVLOwner;
 void threadSetCurrent(LxThread *th);
 void threadDetach(LxThread *th);
-void exitingThread(void);
+void exitingThread(LxThread *th);
 
 // debug
 void printVMStack(FILE *f, LxThread *th);

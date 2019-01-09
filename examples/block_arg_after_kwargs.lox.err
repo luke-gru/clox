@@ -1,0 +1,9 @@
+fun myfun(a: 1, &blk) {
+  print a;
+  print blk;
+  blk.yield();
+}
+
+fun printme() { print "in blk"; }
+
+myfun(a:1) -> { print "in blk"; };

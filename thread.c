@@ -144,11 +144,11 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
     return thInstance;
 }
 
-void exitingThread() {
-    ASSERT(vm.curThread);
-    vm.curThread->status = THREAD_ZOMBIE;
-    vm.curThread->openUpvalues = NULL;
-    LxThreadCleanup(vm.curThread);
+void exitingThread(LxThread *th) {
+    ASSERT(th);
+    th->status = THREAD_ZOMBIE;
+    th->openUpvalues = NULL;
+    LxThreadCleanup(th);
 }
 
 static void *runCallableInNewThread(void *arg) {
@@ -219,11 +219,12 @@ Value lxJoinThread(int argCount, Value *args) {
     Value threadVal = *args;
     CHECK_ARG_IS_A(threadVal, lxThreadClass, 1);
     LxThread *th = THREAD_GETHIDDEN(threadVal);
-    ASSERT(th->tid != -1);
     ASSERT(th);
+    ASSERT(th->tid != -1);
     THREAD_DEBUG(2, "Joining thread id %lu\n", th->tid);
     int ret = 0;
 
+    pid_t tid = th->tid;
     releaseGVL();
     // blocking call until given thread ends execution
     if ((ret = pthread_join(th->tid, NULL)) != 0) {
@@ -232,9 +233,13 @@ Value lxJoinThread(int argCount, Value *args) {
         // TODO: throw lxThreadErrClass
         throwErrorFmt(lxErrClass, "Error joining thread");
     }
+    THREAD_DEBUG(2, "Joined thread id %lu, acquiring GVL\n", tid);
     acquireGVL();
-    th->joined = true;
-    THREAD_DEBUG(2, "Joined thread id %lu\n", th->tid);
+    THREAD_DEBUG(2, "Joined thread id %lu\n", tid);
+    th = FIND_THREAD(tid);
+    if (th) {
+        th->joined = true;
+    }
     return NIL_VAL;
 }
 
