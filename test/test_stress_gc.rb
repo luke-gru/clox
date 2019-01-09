@@ -3,10 +3,10 @@ TIMEOUT = 30
 examples_dir = File.join(File.expand_path("../../", __FILE__), "examples");
 fails =  Hash.new { |h,k| h[k] = [] }
 timeouts =  Hash.new { |h,k| h[k] = [] }
-skip_pats = [/thread/, /mutex/]
+skip_pats = [] #[/thread/, /mutex/]
 skips = []
-run_young = false
-run_full = true
+run_young = true
+run_full = false
 run_both = false
 Dir.glob(File.join(examples_dir, "*.lox")).each do |file|
   if File.file?(file) && File.extname(file) == ".lox"

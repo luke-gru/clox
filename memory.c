@@ -382,7 +382,7 @@ void collectYoungGarbage() {
     /*thObj = NULL; thIdx = 0;*/
     vec_foreach(&vm.threads, thObj, thIdx) {
         LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
-        if (th->status == THREAD_ZOMBIE) return;
+        if (th->status == THREAD_ZOMBIE) continue;
         /*vec_foreach(&th->v_ecs, ctx, ctxIdx) {*/
             /*grayObject((Obj*)ctx->filename);*/
             /*if (ctx->lastValue) {*/
@@ -756,6 +756,7 @@ void blackenObject(Obj *obj) {
             if (ary->finalizerFunc) {
                 grayObject(ary->finalizerFunc);
             }
+            grayTable(ary->fields);
             GC_TRACE_DEBUG(5, "Array count: %ld", valAry->count);
             // NOTE: right now, shared arrays only point to static arrays,
             // which only contain constants, so we can skip the graying of
@@ -893,10 +894,9 @@ void freeObject(Obj *obj) {
         }
         case OBJ_T_NATIVE_FUNCTION: {
             GC_TRACE_DEBUG(5, "Freeing ObjNative: p=%p", obj);
-            if (!inFinalFree) {
+            if (!inFinalFree) { // method override
                 ObjNative *native = (ObjNative*)obj; (void)native;
-                GC_TRACE_DEBUG(5, "Freeing ObjNative: p=%p, klass = %s", obj, className((ObjClass*)native->klass));
-                ASSERT(0);
+                GC_TRACE_DEBUG(5, "Freeing ObjNative: p=%p, class=%s", obj, className((ObjClass*)native->klass));
             }
             obj->type = OBJ_T_NONE;
             break;

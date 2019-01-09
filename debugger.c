@@ -206,5 +206,6 @@ next:
         fprintf(stdout, DBG_PROMPT);
     }
     fprintf(stdout, "Exiting...\n");
-    exit(1);
+    int status = 1;
+    pthread_exit(&status);
 }

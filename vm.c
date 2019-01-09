@@ -561,7 +561,8 @@ void push(Value value) {
     register VMExecContext *ctx = EC;
     if (UNLIKELY(ctx->stackTop == ctx->stack + STACK_MAX)) {
         errorPrintScriptBacktrace("Stack overflow.");
-        exit(1);
+        int status = 1;
+        pthread_exit(&status);
     }
     if (IS_OBJ(value)) {
         ASSERT(LIKELY(AS_OBJ(value)->type != OBJ_T_NONE));
@@ -797,7 +798,6 @@ static inline bool isBlockControlFlow(Value err) {
     return IS_A(err, lxBlockIterErrClass);
 }
 
-// every new error value, when thrown, gets its backtrace set first
 void setBacktrace(Value err) {
     // waste of time to set backtrace on an error which is just part of
     // internal control flow (break/continue/return in blocks)
@@ -2395,12 +2395,14 @@ vmLoop:
       }
       CASE_OP(BLOCK_BREAK): {
           Value err = newError(lxBreakBlockErrClass, NIL_VAL);
+          th->lastErrorThrown = err;
           throwError(err); // blocks catch this, not propagated
           DISPATCH_BOTTOM();
       }
       CASE_OP(BLOCK_CONTINUE): {
           Value ret = *THREAD()->lastValue;
           Value err = newError(lxContinueBlockErrClass, NIL_VAL);
+          th->lastErrorThrown = err;
           setProp(err, INTERN("ret"), ret);
           throwError(err); // blocks catch this, not propagated
           DISPATCH_BOTTOM();
@@ -2408,6 +2410,7 @@ vmLoop:
       CASE_OP(BLOCK_RETURN): {
           Value ret = pop();
           Value err = newError(lxReturnBlockErrClass, NIL_VAL);
+          th->lastErrorThrown = err;
           setProp(err, INTERN("ret"), ret);
           throwError(err); // blocks catch this, not propagated
           DISPATCH_BOTTOM();
@@ -3174,7 +3177,7 @@ NORETURN void stopVM(int status) {
             printGCProfile();
         }
         vm.exited = true;
-        exit(status);
+        pthread_exit(NULL);
     } else {
         exitingThread();
         th->exitStatus = status;
@@ -3185,7 +3188,7 @@ NORETURN void stopVM(int status) {
             THREAD_DEBUG(1, "Thread %lu exiting with %d", th->tid, status);
         }
         releaseGVL();
-        pthread_exit(NULL);
+        pthread_exit(&status);
     }
 }
 
