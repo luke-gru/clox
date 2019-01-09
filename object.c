@@ -1039,11 +1039,11 @@ Value newThread(void) {
     }
 }
 
-Value newBlock(ObjClosure *closure) {
+Value newBlock(Obj *callable) {
     DBG_ASSERT(nativeBlockInit);
     ObjInstance *instance = newInstance(lxBlockClass, NEWOBJ_FLAG_NONE);
-    Value closureArg = OBJ_VAL(closure);
-    callVMMethod(instance, OBJ_VAL(nativeBlockInit), 1, &closureArg, NULL);
+    Value callableVal = OBJ_VAL(callable);
+    callVMMethod(instance, OBJ_VAL(nativeBlockInit), 1, &callableVal, NULL);
     return pop();
 }
 

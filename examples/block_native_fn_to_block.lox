@@ -1,0 +1,14 @@
+["print 'hi';", "print 'OMG';"].each(&eval);
+
+class Inited {
+  init(val) {
+    print "inited: ${val}";
+  }
+}
+[1].each(&Inited);
+
+__END__
+-- expect: --
+hi
+OMG
+inited: 1

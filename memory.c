@@ -497,9 +497,6 @@ Obj *getNewObject(ObjType type, size_t sz, int flags) {
     (void)isOld;
 #endif
     bool noGC = dontGC || OPTION_T(disableGC) || !GCOn;
-    if (vm.inited) {
-        ASSERT(!dontGC);
-    }
     if (noGC) triedYoungCollect = true;
     int tries = 0;
 #ifndef NDEBUG

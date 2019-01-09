@@ -243,14 +243,14 @@ static Value lxArrayEach(int argCount, Value *args) {
     volatile int iterStart = 0;
     volatile LxThread *th = vm.curThread;
     volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
-    volatile ObjFunction *block = NULL;
+    volatile Obj *block = NULL;
     volatile ObjInstance *blockInstance = NULL;
     blockInstance = getBlockArg(getFrame());
     if (blockInstance) {
-        block = blockClosure(OBJ_VAL(blockInstance))->function;
+        block = blockCallableBlock(OBJ_VAL(blockInstance));
     }
     if (!block && getFrame()->callInfo) {
-        block = getFrame()->callInfo->blockFunction;
+        block = (Obj*)(getFrame()->callInfo->blockFunction);
     }
     if (!block) {
         throwErrorFmt(lxErrClass, "no block given");

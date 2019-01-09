@@ -113,7 +113,7 @@ typedef struct CallInfo {
     bool usesSplat;
     Token kwargNames[LX_MAX_KWARGS];
     // for blocks
-    ObjFunction *blockFunction; // lox block
+    ObjFunction *blockFunction; // lox block given as argument to fn
     ObjInstance *blockInstance; // from &blk, turned closure to block instance
     BlockIterFunc blockIterFunc; // lox iterators that work on top of #each
     Value *blockIterRet; // return value from iterator

@@ -1508,7 +1508,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     if (func->hasBlockArg && callInfo->blockFunction) {
         // TODO: get closure created here with upvals!
         Value blockClosure = OBJ_VAL(newClosure(callInfo->blockFunction, NEWOBJ_FLAG_NONE));
-        ObjClosure *blkClosure = AS_CLOSURE(blockClosure);
+        Obj *blkClosure = AS_OBJ(blockClosure);
         push(newBlock(blkClosure));
         argCountWithRestAry++;
     } else if (func->hasBlockArg) {
@@ -2411,10 +2411,10 @@ vmLoop:
       }
       CASE_OP(TO_BLOCK): {
           Value func = pop();
-          if (UNLIKELY(!IS_CLOSURE(func))) {
+          if (UNLIKELY(!isCallable(func))) {
               throwErrorFmt(lxTypeErrClass, "Cannot use '&' operator on a non-function");
           }
-          push(newBlock(AS_CLOSURE(func)));
+          push(newBlock(AS_OBJ(func)));
           DISPATCH_BOTTOM();
       }
       CASE_OP(CALL): {
@@ -3051,11 +3051,11 @@ void unwindJumpRecover(ErrTagInfo *info) {
     }
 }
 
-BlockStackEntry *addBlockEntry(ObjFunction *blockFunction) {
+BlockStackEntry *addBlockEntry(Obj *callable) {
     /*fprintf(stderr, "Pushing block entry\n");*/
-    DBG_ASSERT(blockFunction);
+    DBG_ASSERT(callable);
     BlockStackEntry *entry = ALLOCATE(BlockStackEntry, 1);
-    entry->blockFunction = blockFunction;
+    entry->callable = callable; // closure or native
     entry->cachedBlockClosure = NULL;
     entry->blockInstance = NULL;
     entry->frame = NULL;

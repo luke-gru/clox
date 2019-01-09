@@ -202,15 +202,17 @@ static void fillClosureUpvalues(ObjClosure *block, ObjClosure *outer, CallFrame 
 
 static ObjClosure *getCFrameBlockClosure() {
     BlockStackEntry *bentry = vec_last_or(&THREAD()->v_blockStack, NULL);
-    ObjFunction *block = NULL;
-    if (bentry) block = bentry->blockFunction;
+    Obj *block = NULL;
+    if (bentry) {
+        block = bentry->callable;
+    }
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
     if (bentry->cachedBlockClosure) {
         return bentry->cachedBlockClosure;
     }
-    ObjClosure *blockClosure = closureFromFn(block);
+    ObjClosure *blockClosure = closureFromFn((ObjFunction*)block);
     blockClosure->isBlock = true;
     CallFrame *frame = getOuterClosureFrame();
     ASSERT(frame);
@@ -224,12 +226,13 @@ static ObjClosure *getCFrameBlockClosure() {
 Value lxYield(int argCount, Value *args) {
     CallFrame *frame = getFrame()->prev;
     ASSERT(frame->callInfo);
-    ObjFunction *block = frame->callInfo->blockFunction;
+    Obj *block = (Obj*)frame->callInfo->blockFunction;
     if (!block) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
+    DBG_ASSERT(IS_FUNCTION(OBJ_VAL(block)));
     ObjClosure *blockClosure = NULL;
-    blockClosure = closureFromFn(block);
+    blockClosure = closureFromFn((ObjFunction*)block);
     blockClosure->isBlock = true;
     CallFrame *outerFrame = getOuterClosureFrame();
     ObjClosure *outerClosure = outerFrame->closure;
@@ -268,14 +271,17 @@ Value lxYield(int argCount, Value *args) {
     UNREACHABLE("block didn't longjmp?"); // blocks should always longjmp out
 }
 
-NORETURN void yieldFromC(int argCount, Value *args, ObjInstance *blockObj) {
-    ObjClosure *blkClosure;
+Value yieldFromC(int argCount, Value *args, ObjInstance *blockObj) {
+    Value callable;
     if (blockObj) {
-        blkClosure = blockClosure(OBJ_VAL(blockObj));
+        Obj *blkCallable = NULL;
+        blkCallable = blockCallable(OBJ_VAL(blockObj));
+        callable = OBJ_VAL(blkCallable);
     } else {
+        ObjClosure *blkClosure = NULL;
         blkClosure = getCFrameBlockClosure();
+        callable = OBJ_VAL(blkClosure);
     }
-    Value callable = OBJ_VAL(blkClosure);
     push(callable);
     for (int i = 0; i < argCount; i++) {
         push(args[i]);
@@ -288,7 +294,7 @@ NORETURN void yieldFromC(int argCount, Value *args, ObjInstance *blockObj) {
         .blockInstance = blockObj,
     };
     callCallable(callable, argCount, false, &cinfo);
-    UNREACHABLE("block didn't longjmp?"); // blocks should always longjmp out
+    return pop(); // if got here, was a native function
 }
 
 // Register atExit handler for process

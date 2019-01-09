@@ -444,8 +444,9 @@ static inline LxThread *threadGetHidden(Value thread) {
 Value mapDup(Value other);
 
 // blocks
-Value newBlock(ObjClosure *closure);
-ObjClosure *blockClosure(Value blk);
+Value newBlock(Obj *callable);
+Obj *blockCallable(Value blk); // returns Closure/ObjNative
+Obj *blockCallableBlock(Value blk); // returns Function/ObjNative
 typedef struct CallFrame CallFrame; // fwd decl
 ObjInstance *getBlockArg(CallFrame *frame);
 

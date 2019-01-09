@@ -314,14 +314,14 @@ static Value lxMapEach(int argCount, Value *args) {
     volatile int startIdx = 0;
     volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
     volatile Value yieldArgs[2];
-    volatile ObjFunction *block = NULL;
+    volatile Obj *block = NULL;
     volatile ObjInstance *blockInstance = NULL;
     blockInstance = getBlockArg(getFrame());
     if (blockInstance) {
-        block = blockClosure(OBJ_VAL(blockInstance))->function;
+        block = blockCallableBlock(OBJ_VAL(blockInstance));
     }
     if (!block && getFrame()->callInfo) {
-        block = getFrame()->callInfo->blockFunction;
+        block = (Obj*)(getFrame()->callInfo->blockFunction);
     }
     if (!block) {
         throwErrorFmt(lxErrClass, "no block given");

@@ -92,7 +92,7 @@ typedef enum ThreadStatus {
 #define THREAD_OPS_UNTIL_SWITCH 10000
 
 typedef struct BlockStackEntry {
-    ObjFunction *blockFunction;
+    Obj *callable; // ObjClosure or ObjNative
     ObjClosure *cachedBlockClosure;
     ObjInstance *blockInstance;
     CallFrame *frame;
@@ -238,7 +238,7 @@ void popErrInfo(void);
 void errorPrintScriptBacktrace(const char *format, ...);
 
 // blocks
-BlockStackEntry *addBlockEntry(ObjFunction *blockFunction);
+BlockStackEntry *addBlockEntry(Obj *closureOrNative);
 void popBlockEntryUntil(BlockStackEntry *bentry);
 void popBlockEntry(BlockStackEntry *bentry);
 
