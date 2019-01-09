@@ -755,9 +755,14 @@ void blackenObject(Obj *obj) {
                 grayObject(ary->finalizerFunc);
             }
             GC_TRACE_DEBUG(5, "Array count: %ld", valAry->count);
-            for (int i = 0; i < valAry->count; i++) {
-                Value val = valAry->values[i];
-                grayValue(val);
+            // NOTE: right now, shared arrays only point to static arrays,
+            // which only contain constants, so we can skip the graying of
+            // these non-objects.
+            if (!ARRAY_IS_SHARED(ary)) {
+                for (int i = 0; i < valAry->count; i++) {
+                    Value val = valAry->values[i];
+                    grayValue(val);
+                }
             }
             break;
         }
@@ -914,8 +919,10 @@ void freeObject(Obj *obj) {
             GC_TRACE_DEBUG(5, "Freeing array fields table: p=%p", ary->fields);
             freeTable(ary->fields);
             FREE_ARRAY(Table, ary->fields, 1);
-            GC_TRACE_DEBUG(5, "Freeing array ValueArray");
-            freeValueArray(&ary->valAry);
+            if (!ARRAY_IS_SHARED(ary)) {
+                GC_TRACE_DEBUG(5, "Freeing array ValueArray");
+                freeValueArray(&ary->valAry);
+            }
             GC_TRACE_DEBUG(5, "Freeing ObjArray: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;
@@ -957,11 +964,11 @@ void freeObject(Obj *obj) {
             ASSERT(string->chars);
             GC_TRACE_DEBUG(5, "Freeing string chars: p=%p, interned=%s,static=%s,shared=%s",
                     string->chars,
-                    string->isInterned ? "t" : "f",
-                    string->isStatic ? "t" : "f",
-                    string->isShared ? "t" : "f"
+                    STRING_IS_INTERNED(string) ? "t" : "f",
+                    STRING_IS_STATIC(string) ? "t" : "f",
+                    STRING_IS_SHARED(string) ? "t" : "f"
             );
-            if (!string->isShared) {
+            if (!STRING_IS_SHARED(string)) {
                 GC_TRACE_DEBUG(5, "Freeing string chars: s='%s' (len=%d, capa=%d)", string->chars, string->length, string->capacity);
                 FREE_ARRAY(char, string->chars, string->capacity + 1);
             }
@@ -1370,7 +1377,7 @@ freeLoop:
 
 bool isInternedStringObj(Obj *obj) {
     if (obj->type != OBJ_T_STRING) return false;
-    return ((ObjString*) obj)->isInterned;
+    return STRING_IS_INTERNED(obj);
 }
 
 bool isThreadObj(Obj *obj) {

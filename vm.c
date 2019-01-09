@@ -2782,7 +2782,7 @@ vmLoop:
           push(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
           if (UNLIKELY(isStatic)) {
-              buf->isStatic = true;
+              STRING_SET_STATIC(buf);
               push(OBJ_VAL(buf));
           } else {
               push(OBJ_VAL(buf));
@@ -2791,7 +2791,7 @@ vmLoop:
           ASSERT(ret); // the string instance is pushed to top of stack
           if (UNLIKELY(isStatic == 1)) {
               objFreeze(AS_OBJ(peek(0)));
-              AS_STRING(peek(0))->isStatic = true;
+              STRING_SET_STATIC(AS_STRING(peek(0)));
           }
           DISPATCH_BOTTOM();
       }

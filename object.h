@@ -217,11 +217,16 @@ typedef struct ObjString {
     char *chars;
     uint32_t hash;
     int capacity;
-    bool isStatic;
-    bool isInterned;
-    bool isShared;
 } ObjString;
 
+#define ARRAY_FLAG_SHARED OBJ_FLAG_USER1
+#define ARRAY_FLAG_STATIC OBJ_FLAG_USER2
+#define ARRAY_IS_SHARED OBJ_HAS_USER1_FLAG
+#define ARRAY_SET_SHARED OBJ_SET_USER1_FLAG
+#define ARRAY_UNSET_SHARED OBJ_UNSET_USER1_FLAG
+#define ARRAY_IS_STATIC OBJ_HAS_USER2_FLAG
+#define ARRAY_SET_STATIC OBJ_SET_USER2_FLAG
+#define ARRAY_UNSET_STATIC OBJ_UNSET_USER2_FLAG
 typedef struct ObjArray {
     Obj obj;
     ObjClass *klass;
@@ -431,6 +436,18 @@ void   arrayClear(Value aryVal);
 bool   arrayEquals(Value self, Value other);
 Value  arrayDup(Value other);
 Value  newArrayConstant(void);
+static inline void arrayDedup(ObjArray *ary) {
+    if (ARRAY_IS_SHARED(ary)) {
+        ValueArray newValAry;
+        initValueArray(&newValAry);
+        ValueArray valAry = ary->valAry;
+        for (int i = 0; i < valAry.count; i++) {
+            writeValueArrayEnd(&newValAry, valAry.values[i]);
+        }
+        ary->valAry = newValAry;
+        ARRAY_SET_SHARED(ary);
+    }
+}
 /**
  * NOTE: assumes idx is appropriate and within given range. See
  * ARRAY_SIZE(value)
