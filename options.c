@@ -13,7 +13,6 @@ char *boolOptNames[] = { // order doesn't matter
     "traceParserCalls",
     "traceVMExecution",
     "stepVMExecution",
-    "debugVM",
     "debugThreads",
     "debugTokens",
     "debugBytecode",
@@ -39,6 +38,7 @@ char *stringOptNames[] = { // order doesn't matter
 
 char *intOptNames[] = { // order doesn't matter
     "traceGCLvl",
+    "debugVMLvl",
     NULL
 };
 
@@ -51,7 +51,6 @@ void initOptions(int argc, char **argv) {
     options.printAST = false;
     options.debugTokens = false;
     options.debugBytecode = false;
-    options.debugVM = false;
     options.debugThreads = false;
 
     options.traceParserCalls = false;
@@ -75,6 +74,7 @@ void initOptions(int argc, char **argv) {
     options.initialScript = "";
 
     options.traceGCLvl = 0;
+    options.debugVMLvl = 0;
 
     options._inited = true;
 }
@@ -199,7 +199,7 @@ int parseOption(char **argv, int i) {
         return 1;
     }
     if (strcmp(argv[i], "--debug-VM") == 0) {
-        SET_OPTION(debugVM, true);
+        SET_OPTION(debugVMLvl, GET_OPTION(debugVMLvl)+1);
         return 1;
     }
     if (strcmp(argv[i], "--debug-threads") == 0) {

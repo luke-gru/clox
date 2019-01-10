@@ -357,7 +357,7 @@ static inline uint32_t hashBits(DoubleBits bits) {
 
 uint32_t valHash(Value val) {
     if (IS_OBJ(val)) {
-        if (IS_STRING(val)) {
+        if (LIKELY(IS_STRING(val))) {
             ObjString *string = AS_STRING(val);
             if (LIKELY(string->hash > 0)) {
                 return string->hash;
@@ -367,7 +367,7 @@ uint32_t valHash(Value val) {
                 return hash;
             }
         } else {
-            if (IS_INSTANCE(val) || IS_ARRAY(val) || IS_STRING(val) || IS_MAP(val)) {
+            if (IS_INSTANCE(val) || IS_ARRAY(val) || IS_MAP(val)) {
                 if (UNLIKELY(!vm.inited)) {
                     fprintf(stderr, "val type: %s\n", typeOfVal(val));
                     ASSERT(0);
@@ -401,7 +401,7 @@ uint32_t valHash(Value val) {
         bits.bits64 = val;
         return hashBits(bits);
 #else
-        if (IS_NUMBER(val)) {
+        if (LIKELY(IS_NUMBER(val))) {
             return ((uint32_t)AS_NUMBER(val))+3;
         } else if (IS_BOOL(val)) {
             if (AS_BOOL(val)) {
@@ -437,7 +437,7 @@ bool valEqual(Value a, Value b) {
                 if (aStr->hash && bStr->hash) {
                     return aStr->hash == bStr->hash;
                 }
-                return strcmp(aStr->chars, bStr->chars) == 0;
+                return aStr->length == bStr->length && strcmp(aStr->chars, bStr->chars) == 0;
             }
             if (IS_INSTANCE_LIKE(a)) {
                 return AS_BOOL(callMethod(AS_OBJ(a), INTERNED("opEquals", 8), 1, &b, NULL));

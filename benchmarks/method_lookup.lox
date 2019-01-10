@@ -13,6 +13,6 @@ class C {
 var objs = [A(),B(),C()];
 
 for (var i = 0; i < 1000000; i+=1) {
-  var obj = objs[random(3)];
+  var obj = objs[i%3];
   obj.meth();
 }

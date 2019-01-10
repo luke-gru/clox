@@ -9,10 +9,10 @@ typedef struct sCloxOptions {
     bool traceParserCalls;
     bool traceVMExecution;
     bool stepVMExecution;
-    bool debugVM;
     bool debugThreads;
     bool debugTokens;
     bool debugBytecode;
+    int debugVMLvl;
     int traceGCLvl;
     bool traceCompiler;
     bool disableBcodeOptimizer;
