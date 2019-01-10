@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <stdio.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -12,8 +13,6 @@
 #include "nodes.h"
 
 VM vm;
-
-volatile long long GVLOwner;
 
 #ifndef NDEBUG
 #define VM_DEBUG(lvl, ...) vm_debug(lvl, __VA_ARGS__)
@@ -346,6 +345,7 @@ static int curLine = 1; // TODO: per thread
 // Add and use a new execution context
 static inline void push_EC(void) {
     LxThread *th = THREAD();
+    ASSERT(th);
     VMExecContext *ectx = ALLOCATE(VMExecContext, 1);
     memset(ectx, 0, sizeof(*ectx));
     initTable(&ectx->roGlobals);
@@ -384,29 +384,20 @@ void resetStack(void) {
 }
 
 static ObjInstance *initMainThread(void) {
-    if (pthread_mutex_init(&vm.GVLock, NULL) != 0) {
-        die("Global VM lock unable to initialize");
-    }
-    if (pthread_cond_init(&vm.GVLCond, NULL) != 0) {
-        die("Global VM lock cond unable to initialize");
-    }
-    vm.GVLockStatus = 0;
-    vm.GVLWaiters = 0;
-    vm.curThread = NULL;
     vm.mainThread = NULL;
     vm.numDetachedThreads = 0;
 
     Value mainThread = newThread();
     LxThread *th = THREAD_GETHIDDEN(mainThread);
+    pthread_key_create(&thr_th_key, NULL);
+    pthread_setspecific(thr_th_key, (void*)th);
 
-    vm.curThread = th;
     vm.mainThread = th;
     vec_init(&vm.threads);
     vec_push(&vm.threads, AS_INSTANCE(mainThread));
 
     pthread_t tid = pthread_self();
     threadSetId(mainThread, tid);
-    acquireGVL();
     threadSetStatus(mainThread, THREAD_RUNNING);
     THREAD_DEBUG(1, "Main thread initialized");
     return AS_INSTANCE(mainThread);
@@ -502,15 +493,6 @@ void freeVM(void) {
 
     while (THREAD()->ec) { pop_EC(); }
 
-    THREAD_DEBUG(1, "VM lock destroying... # threads: %d, # waiters: %d", vm.threads.length, vm.GVLWaiters);
-    releaseGVL();
-    if (vm.numDetachedThreads <= 0) {
-        pthread_mutex_destroy(&vm.GVLock);
-        pthread_cond_destroy(&vm.GVLCond);
-    }
-    vm.GVLWaiters = 0;
-
-    vm.curThread = NULL;
     vm.mainThread = NULL;
     vec_deinit(&vm.threads);
     vm.lastOp = -1;
@@ -577,8 +559,8 @@ Value pop(void) {
     ASSERT(LIKELY(ctx->stackTop > ctx->stack));
     ctx->stackTop--;
     ctx->lastValue = ctx->stackTop;
-    vm.curThread->lastValue = ctx->lastValue;
-    return *(vm.curThread->lastValue);
+    THREAD()->lastValue = ctx->lastValue;
+    return *(THREAD()->lastValue);
 }
 
 Value peek(unsigned n) {
@@ -592,7 +574,7 @@ static inline void setThis(unsigned n) {
     if (UNLIKELY((ctx->stackTop-n) <= ctx->stack)) {
         ASSERT(0);
     }
-    vm.curThread->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
+    THREAD()->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
 }
 
 Value *getLastValue(void) {
@@ -801,7 +783,7 @@ void setBacktrace(Value err) {
         return;
     }
     VM_DEBUG(2, "Setting backtrace");
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     DBG_ASSERT(IS_AN_ERROR(err));
     Value ret = newArray();
     setProp(err, INTERNED("backtrace", 9), ret);
@@ -1003,7 +985,7 @@ static void defineSetter(ObjString *name) {
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args, CallInfo *cinfo) {
     VM_DEBUG(2, "Calling VM method");
     push(OBJ_VAL(instance));
-    Obj *oldThis = vm.curThread->thisObj;
+    Obj *oldThis = THREAD()->thisObj;
     setThis(0);
     for (int i = 0; i < argCount; i++) {
         DBG_ASSERT(args); // can be null when if i = 0
@@ -1011,7 +993,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
     }
     VM_DEBUG(3, "call begin");
     callCallable(callable, argCount, true, cinfo); // pushes return value to stack
-    vm.curThread->thisObj = oldThis;
+    THREAD()->thisObj = oldThis;
     VM_DEBUG(3, "call end");
     return peek(0);
 }
@@ -1069,7 +1051,7 @@ Value callFunctionValue(Value callable, int argCount, Value *args) {
 }
 
 static void unwindErrInfo(CallFrame *frame) {
-    ErrTagInfo *info = vm.curThread->errInfo;
+    ErrTagInfo *info = THREAD()->errInfo;
     while (info && info->frame == frame) {
         if (info->bentry) {
             /*fprintf(stderr, "Popping block entry (unwindErrInfo)\n");*/
@@ -1079,13 +1061,13 @@ static void unwindErrInfo(CallFrame *frame) {
         FREE(ErrTagInfo, info);
         info = prev;
     }
-    vm.curThread->errInfo = info;
+    THREAD()->errInfo = info;
 }
 
 
 void popFrame(void) {
     DBG_ASSERT(vm.inited);
-    register LxThread *th = vm.curThread;
+    register LxThread *th = THREAD();
     ASSERT(EC->frameCount >= 1);
     CallFrame *frame = getFrameI();
     VM_DEBUG(2, "popping callframe (%s)", frame->isCCall ? "native" : "non-native");
@@ -1096,7 +1078,7 @@ void popFrame(void) {
         DBG_ASSERT(th->inCCall > 0);
         th->inCCall--;
         if (th->inCCall == 0) {
-            vec_clear(&vm.curThread->stackObjects);
+            vec_clear(&THREAD()->stackObjects);
         }
     }
     EC->frameCount--;
@@ -1163,12 +1145,12 @@ static void pushNativeFrame(ObjNative *native) {
     if (bentry && bentry->frame == NULL) {
         bentry->frame = newFrame;
     }
-    vm.curThread->inCCall++;
+    THREAD()->inCCall++;
 }
 
 // sets up VM/C call jumpbuf if not set
 static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args, CallInfo *cinfo) {
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     if (cinfo && cinfo->blockInstance) {
         DBG_ASSERT(argCount > 0); // at least the block argument
         argCount--; // block arg is implicit
@@ -1218,7 +1200,7 @@ static inline bool checkFunctionArity(ObjFunction *func, int argCount, CallInfo 
 // new instance and puts it in the proper spot in the stack. The return value
 // is pushed to the stack.
 static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo *callInfo) {
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     if (argCount > 0 && callInfo) {
         if (IS_A_BLOCK(peek(0))) {
             Value blkObj = peek(0);
@@ -1551,7 +1533,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
  */
 bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     DBG_ASSERT(vm.inited);
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     int lenBefore = th->stackObjects.length;
     bool ret = doCallCallable(callable, argCount, isMethod, info);
     int lenAfter = th->stackObjects.length;
@@ -1606,7 +1588,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
         if (!superMethod) {
             throwErrorFmt(lxErrClass, "No super method found for callSuper");
         }
-        LxThread *th = vm.curThread;
+        LxThread *th = THREAD();
         int inCCall = th->inCCall;
         callVMMethod(frame->instance, OBJ_VAL(superMethod), argCount, args, cinfo);
         ASSERT(th->inCCall == inCCall);
@@ -1710,7 +1692,7 @@ NORETURN void throwError(Value self) {
     VM_DEBUG(2, "throwing error");
     ASSERT(vm.inited);
     ASSERT(IS_INSTANCE(self));
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     th->lastErrorThrown = self;
     if (IS_NIL(getProp(self, INTERNED("backtrace", 9)))) {
         setBacktrace(self);
@@ -1747,11 +1729,11 @@ NORETURN void throwError(Value self) {
 }
 
 void popErrInfo(void) {
-    vm.curThread->errInfo = vm.curThread->errInfo->prev;
+    THREAD()->errInfo = THREAD()->errInfo->prev;
 }
 
 void unsetErrInfo(void) {
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     th->lastErrorThrown = NIL_VAL;
     ASSERT(th->errInfo);
     th->errInfo = th->errInfo->prev;
@@ -1778,7 +1760,7 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     hideFromGC((Obj*)buf);
     Value msg = OBJ_VAL(buf);
     Value err = newError(klass, msg);
-    vm.curThread->lastErrorThrown = err;
+    THREAD()->lastErrorThrown = err;
     unhideFromGC((Obj*)buf);
     throwError(err);
     UNREACHABLE("thrown");
@@ -1830,7 +1812,7 @@ void printVMStack(FILE *f, LxThread *th) {
 }
 
 ObjUpvalue *captureUpvalue(Value *local) {
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     if (th->openUpvalues == NULL) {
         th->openUpvalues = newUpvalue(local, NEWOBJ_FLAG_NONE);
         return th->openUpvalues;
@@ -1872,7 +1854,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
 }
 
 static void closeUpvalues(Value *last) {
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     while (th->openUpvalues != NULL && th->openUpvalues->value >= last) {
         ObjUpvalue *upvalue = th->openUpvalues;
 
@@ -1988,16 +1970,6 @@ static InterpretResult vm_run() {
   /*fprintf(stderr, "VM run level: %d\n", vmRunLvl);*/
   /* Main vm loop */
 vmLoop:
-      th->opsRemaining--;
-      if (UNLIKELY(th->opsRemaining <= 0)) {
-          th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
-          if (!isOnlyThread()) {
-              THREAD_DEBUG(2, "Releasing GVL after ops up %lu", pthread_self());
-              releaseGVL();
-              threadSleepNano(th, 100);
-              acquireGVL();
-          }
-      }
       if (UNLIKELY(th->hadError)) {
           (th->vmRunLvl)--;
           return INTERPRET_RUNTIME_ERROR;
@@ -3081,7 +3053,7 @@ BlockStackEntry *addBlockEntry(Obj *callable) {
 
 void popBlockEntryUntil(BlockStackEntry *bentry) {
     DBG_ASSERT(bentry);
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     BlockStackEntry *last = NULL;
     if (th->v_blockStack.length == 0) {
         /*fprintf(stderr, "Empty block stack (pop until)\n");*/
@@ -3100,7 +3072,7 @@ void popBlockEntryUntil(BlockStackEntry *bentry) {
 
 void popBlockEntry(BlockStackEntry *bentry) {
     DBG_ASSERT(bentry);
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     BlockStackEntry *last = NULL;
     if ((last = vec_last_or(&th->v_blockStack, NULL)) != NULL && last == bentry) {
         /*fprintf(stderr, "Popping block entry (pop)\n");*/
@@ -3177,7 +3149,7 @@ static void detachUnjoinedThreads() {
 // TODO: rename to exitThread(), as this either stops the VM or exits the
 // current non-main thread
 NORETURN void stopVM(int status) {
-    LxThread *th = vm.curThread;
+    LxThread *th = THREAD();
     if (th == vm.mainThread) {
         THREAD_DEBUG(1, "Main thread exiting with %d", status);
         detachUnjoinedThreads();
@@ -3197,65 +3169,59 @@ NORETURN void stopVM(int status) {
         } else {
             THREAD_DEBUG(1, "Thread %lu exiting with %d", th->tid, status);
         }
-        releaseGVL();
         pthread_exit(NULL);
     }
 }
 
-void acquireGVL(void) {
-    pthread_mutex_lock(&vm.GVLock);
-    LxThread *th = vm.curThread;
-    // this is because a releaseGVL() call may not have actually released the
-    // GVL due to held mutex, so the next acquireGVL() has to take that into account
-    if (th && th->mutexCounter > 0 && GVLOwner == th->tid && th->tid == pthread_self()) {
-        THREAD_DEBUG(1, "Thread %lu skipping acquire of GVL due to held mutex\n", pthread_self());
-        pthread_mutex_unlock(&vm.GVLock);
-        return;
-    }
-    vm.GVLWaiters++;
-    while (vm.GVLockStatus > 0) {
-        pthread_cond_wait(&vm.GVLCond, &vm.GVLock); // block on wait queue
-    }
-    vm.GVLWaiters--;
-    vm.GVLockStatus = 1;
-    vm.curThread = FIND_THREAD(pthread_self());
-    if (vm.curThread) {
-        vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
-    }
-    GVLOwner = pthread_self();
-    pthread_mutex_unlock(&vm.GVLock);
-    if (vm.curThread && !(IS_NIL(vm.curThread->errorToThrow))) {
-        Value err = vm.curThread->errorToThrow;
-        vm.curThread->errorToThrow = NIL_VAL;
-        throwError(err);
-    }
+/*void acquireGVL(void) {*/
+    /*pthread_mutex_lock(&vm.GVLock);*/
+    /*LxThread *th = vm.curThread;*/
+    /*// this is because a releaseGVL() call may not have actually released the*/
+    /*// GVL due to held mutex, so the next acquireGVL() has to take that into account*/
+    /*if (th && th->mutexCounter > 0 && GVLOwner == th->tid && th->tid == pthread_self()) {*/
+        /*THREAD_DEBUG(1, "Thread %lu skipping acquire of GVL due to held mutex\n", pthread_self());*/
+        /*pthread_mutex_unlock(&vm.GVLock);*/
+        /*return;*/
+    /*}*/
+    /*vm.GVLWaiters++;*/
+    /*while (vm.GVLockStatus > 0) {*/
+        /*pthread_cond_wait(&vm.GVLCond, &vm.GVLock); // block on wait queue*/
+    /*}*/
+    /*vm.GVLWaiters--;*/
+    /*vm.GVLockStatus = 1;*/
+    /*vm.curThread = FIND_THREAD(pthread_self());*/
+    /*if (vm.curThread) {*/
+        /*vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;*/
+    /*}*/
+    /*GVLOwner = pthread_self();*/
+    /*pthread_mutex_unlock(&vm.GVLock);*/
+    /*if (vm.curThread && !(IS_NIL(vm.curThread->errorToThrow))) {*/
+        /*Value err = vm.curThread->errorToThrow;*/
+        /*vm.curThread->errorToThrow = NIL_VAL;*/
+        /*throwError(err);*/
+    /*}*/
 
-}
+/*}*/
 
-void releaseGVL(void) {
-    pthread_mutex_lock(&vm.GVLock);
-    LxThread *th = vm.curThread;
-    if (GVLOwner != th->tid) {
-        THREAD_DEBUG(1, "Thread %lu skipping release of GVL due to not holding!\n", pthread_self());
-        pthread_mutex_unlock(&vm.GVLock);
-        return;
-    }
-    if (th && th->mutexCounter > 0 && th->tid == GVLOwner && th->tid == pthread_self()) {
-        THREAD_DEBUG(1, "Thread %lu skipping release of GVL due to held mutex\n", pthread_self());
-        pthread_mutex_unlock(&vm.GVLock);
-        return;
-    }
-    vm.GVLockStatus = 0;
-    GVLOwner = -1;
-    vm.curThread = NULL;
-    pthread_mutex_unlock(&vm.GVLock);
-    pthread_cond_signal(&vm.GVLCond); // signal waiters
-}
-
-void threadSetCurrent(LxThread *th) {
-    vm.curThread = th;
-    GVLOwner = th->tid;
-}
+/*void releaseGVL(void) {*/
+    /*pthread_mutex_lock(&vm.GVLock);*/
+    /*LxThread *th = vm.curThread;*/
+    /*if (GVLOwner != th->tid) {*/
+        /*THREAD_DEBUG(1, "Thread %lu skipping release of GVL due to not holding!\n", pthread_self());*/
+        /*pthread_mutex_unlock(&vm.GVLock);*/
+        /*return;*/
+    /*}*/
+    /*if (th && th->mutexCounter > 0 && th->tid == GVLOwner && th->tid == pthread_self()) {*/
+        /*THREAD_DEBUG(1, "Thread %lu skipping release of GVL due to held mutex\n", pthread_self());*/
+        /*pthread_mutex_unlock(&vm.GVLock);*/
+        /*return;*/
+    /*}*/
+    /*vm.GVLockStatus = 0;*/
+    /*GVLOwner = -1;*/
+    /*vm.curThread = NULL;*/
+    /*pthread_mutex_unlock(&vm.GVLock);*/
+    /*pthread_cond_signal(&vm.GVLCond); // signal waiters*/
+/*}*/
 
 LxThread *FIND_THREAD(pthread_t tid) {
     ObjInstance *threadInstance; int thIdx = 0;
@@ -3277,17 +3243,4 @@ ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid) {
         if (th->tid == tid) return threadInstance;
     }
     return NULL;
-}
-
-LxThread *THREAD() {
-    if (!vm.curThread) {
-        pthread_mutex_lock(&vm.GVLock);
-        vm.curThread = FIND_THREAD(pthread_self());
-        DBG_ASSERT(vm.curThread);
-        DBG_ASSERT(vm.curThread->tid == GVLOwner);
-        DBG_ASSERT(vm.curThread->status != THREAD_ZOMBIE);
-        vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
-        pthread_mutex_unlock(&vm.GVLock);
-    }
-    return vm.curThread;
 }

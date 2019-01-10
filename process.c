@@ -53,9 +53,7 @@ static Value lxWaitpid(int argCount, Value *args) {
     pid_t childpid = (pid_t)AS_NUMBER(pidVal);
     int wstatus;
     // TODO: allow wait flags
-    releaseGVL();
     pid_t wret = waitpid(childpid, &wstatus, 0);
-    acquireGVL();
     if (wret == -1) { // error, should throw?
         return NUMBER_VAL(-1);
     }
@@ -89,9 +87,7 @@ static Value lxSystem(int argCount, Value *args) {
     CHECK_ARG_IS_A(cmd, lxStringClass, 1);
 
     const char *cmdStr = VAL_TO_STRING(cmd)->chars;
-    releaseGVL();
     int status = system(cmdStr); // man 3 system
-    acquireGVL();
     int exitStatus = WEXITSTATUS(status);
     if (exitStatus != 0) {
         return BOOL_VAL(false);

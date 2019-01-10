@@ -241,7 +241,7 @@ static Value lxArrayEach(int argCount, Value *args) {
     volatile Value el; volatile int valIdx = 0;
     volatile int status = 0;
     volatile int iterStart = 0;
-    volatile LxThread *th = vm.curThread;
+    volatile LxThread *th = THREAD();
     volatile BlockIterFunc fn = getFrame()->callInfo->blockIterFunc;
     volatile Obj *block = NULL;
     volatile ObjInstance *blockInstance = NULL;

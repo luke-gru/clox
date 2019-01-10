@@ -28,9 +28,7 @@ static int fileExists(char *fname) {
 
 static int checkOpen(const char *fname, int flags, mode_t mode) {
     int last = errno;
-    releaseGVL();
     int fd = open(fname, flags, mode);
-    acquireGVL();
     if (fd < 0) {
         int err = errno;
         errno = last;
@@ -45,9 +43,7 @@ static int checkOpen(const char *fname, int flags, mode_t mode) {
 
 static FILE *checkFopen(const char *path, const char *modeStr) {
     int last = errno;
-    releaseGVL();
     FILE *f = fopen(path, modeStr);
-    acquireGVL();
     if (!f) {
         int err = errno;
         errno = last;
@@ -105,12 +101,10 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
     FILE *f = checkFopen(fnameStr->chars, "r");
     Value ary = newArray();
     size_t nread = 0;
-    releaseGVL();
     Value line = NIL_VAL;
     bool leftoverLine = false;
     char fileReadBuf[READBUF_SZ];
     while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
-        acquireGVL();
         size_t nleft = nread;
         char *bufp = fileReadBuf;
         char *bufpStart = bufp;
@@ -136,9 +130,7 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
             }
             bufpStart = bufp;
         }
-        releaseGVL();
     }
-    acquireGVL();
     checkFerror(f, "reading", fnameStr->chars);
     checkFclose(f);
     return ary;

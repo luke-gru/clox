@@ -10,29 +10,28 @@ ObjClass *lxThreadClass;
 ObjClass *lxMutexClass;
 ObjNative *nativeThreadInit = NULL;
 
-#define BLOCKING_REGION_CORE(exec) do { \
-    GVL_UNLOCK_BEGIN(); {\
-	    exec; \
-    } \
-    GVL_UNLOCK_END(); \
-} while(0)
+pthread_key_t thr_th_key;
 
 void threadSetStatus(Value thread, ThreadStatus status) {
     LxThread *th = THREAD_GETHIDDEN(thread);
+    ASSERT(th);
     th->status = status;
 }
 void threadSetId(Value thread, pthread_t tid) {
     LxThread *th = THREAD_GETHIDDEN(thread);
+    ASSERT(th);
     th->tid = tid;
 }
 
 ThreadStatus threadGetStatus(Value thread) {
     LxThread *th = THREAD_GETHIDDEN(thread);
+    ASSERT(th);
     return th->status;
 }
 
 pthread_t threadGetId(Value thread) {
     LxThread *th = THREAD_GETHIDDEN(thread);
+    ASSERT(th);
     return th->tid;
 }
 
@@ -43,7 +42,7 @@ bool isOnlyThread() {
     ObjInstance *thI; int thIdx = 0;
     vec_foreach(&vm.threads, thI, thIdx) {
         LxThread *found = THREAD_GETHIDDEN(OBJ_VAL(thI));
-        if (found != vm.curThread && found->status != THREAD_ZOMBIE) {
+        if (found != THREAD() && found->status != THREAD_ZOMBIE) {
             return false;
         } else {
             return true;
@@ -76,7 +75,6 @@ static void LxThreadSetup(LxThread *th) {
     vec_init(&th->stackObjects);
     pthread_mutex_init(&th->sleepMutex, NULL);
     pthread_cond_init(&th->sleepCond, NULL);
-    th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
     th->exitStatus = 0;
     th->joined = false;
     th->detached = false;
@@ -94,10 +92,6 @@ typedef struct NewThreadArgs {
     LxThread *th;
 } NewThreadArgs;
 
-// NOTE: vm.curThread is NOT the current thread here, and doesn't hold
-// the GVL. We can't call ANY functions that call THREAD() in them, as they'll
-// fail (phthread_self() tid is NOT in vm.threads vector until end of
-// function).
 static ObjInstance *newThreadSetup(LxThread *parentThread) {
     ASSERT(parentThread);
     THREAD_DEBUG(3, "New thread setup");
@@ -151,28 +145,30 @@ void exitingThread(LxThread *th) {
     LxThreadCleanup(th);
 }
 
+LxThread *THREAD() {
+    LxThread *th = (LxThread*)pthread_getspecific(thr_th_key);
+    ASSERT(th);
+    return th;
+}
+
 static void *runCallableInNewThread(void *arg) {
     NewThreadArgs *tArgs = (NewThreadArgs*)arg;
     pthread_t tid = pthread_self();
     LxThread *th = tArgs->th;
+    pthread_setspecific(thr_th_key, th);
     th->tid = tid;
     THREAD_DEBUG(2, "switching to newly created thread, acquiring lock %lu", th->tid);
-    acquireGVL();
-    th = vm.curThread;
     th->status = THREAD_RUNNING;
     THREAD_DEBUG(2, "in new thread %lu", th->tid);
     ObjClosure *closure = tArgs->func;
     ASSERT(closure);
     FREE(NewThreadArgs, tArgs);
     ASSERT(th);
-    ASSERT(GVLOwner == tid);
     ASSERT(tid == pthread_self());
-    ASSERT(vm.curThread->tid == pthread_self());
     push(OBJ_VAL(closure));
     unhideFromGC((Obj*)closure);
     if (vm.exited) {
         THREAD_DEBUG(2, "vm exited, quitting new thread %lu", pthread_self());
-        releaseGVL();
         pthread_exit(NULL);
     }
     THREAD_DEBUG(2, "calling callable %lu", pthread_self());
@@ -189,7 +185,7 @@ Value lxNewThread(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(closure, IS_CLOSURE_FUNC, "function", 1);
     ObjClosure *func = AS_CLOSURE(closure);
     pthread_t tnew;
-    ObjInstance *threadInst = newThreadSetup(vm.curThread);
+    ObjInstance *threadInst = newThreadSetup(THREAD());
     LxThread *th = (LxThread*)threadInst->internal->data;
     ASSERT(th);
     // Argument to pthread_create not called right away, only called when new
@@ -199,14 +195,11 @@ Value lxNewThread(int argCount, Value *args) {
     thArgs->func = func;
     hideFromGC((Obj*)func); // XXX: this is needed, because it's only pushed onto the stack when the new thread runs
     thArgs->th = th;
-    releaseGVL();
     if (pthread_create(&tnew, NULL, runCallableInNewThread, thArgs) == 0) {
-        acquireGVL();
         th->tid = tnew;
         THREAD_DEBUG(2, "created thread id %lu", (unsigned long)tnew);
         return OBJ_VAL(threadInst);
     } else {
-        acquireGVL();
         THREAD_DEBUG(2, "Error making new thread, throwing\n");
         // TODO: throw lxThreadErrClass
         throwErrorFmt(lxErrClass, "Error creating new thread");
@@ -225,16 +218,12 @@ Value lxJoinThread(int argCount, Value *args) {
     int ret = 0;
 
     pid_t tid = th->tid;
-    releaseGVL();
     // blocking call until given thread ends execution
     if ((ret = pthread_join(th->tid, NULL)) != 0) {
         THREAD_DEBUG(1, "Error joining thread: (ret=%d), throwing", ret);
-        acquireGVL();
         // TODO: throw lxThreadErrClass
         throwErrorFmt(lxErrClass, "Error joining thread");
     }
-    THREAD_DEBUG(2, "Joined thread id %lu, acquiring GVL\n", tid);
-    acquireGVL();
     THREAD_DEBUG(2, "Joined thread id %lu\n", tid);
     th = FIND_THREAD(tid);
     if (th) {
@@ -250,15 +239,13 @@ Value lxThreadMainStatic(int argCount, Value *args) {
 
 Value lxThreadCurrentStatic(int argCount, Value *args) {
     CHECK_ARITY("Thread.current", 1, 1, argCount);
-    ObjInstance *curThread = FIND_THREAD_INSTANCE(vm.curThread->tid);
+    ObjInstance *curThread = FIND_THREAD_INSTANCE(THREAD()->tid);
     return OBJ_VAL(curThread);
 }
 
 Value lxThreadScheduleStatic(int argCount, Value *args) {
     CHECK_ARITY("Thread.schedule", 1, 1, argCount);
-    releaseGVL();
     pthread_yield();
-    acquireGVL();
     return NIL_VAL;
 }
 
@@ -277,9 +264,7 @@ Value lxThreadInit(int argCount, Value *args) {
 
 static void threadSchedule(LxThread *th) {
     // TODO: wake thread up pre-emptively if sleeping or blocked on IO
-    releaseGVL();
     pthread_cond_signal(&th->sleepCond);
-    acquireGVL();
 }
 
 Value lxThreadThrow(int argCount, Value *args) {
@@ -299,7 +284,7 @@ Value lxThreadThrow(int argCount, Value *args) {
 }
 
 void threadDetach(LxThread *th) {
-    ASSERT(th && th != vm.curThread);
+    ASSERT(th && th != THREAD());
     th->detached = true;
     pthread_detach(th->tid);
     vm.numDetachedThreads++;
@@ -347,38 +332,26 @@ static void lockFunc(LxMutex *mutex, LxThread *th) {
 void lockMutex(LxMutex *mutex) {
     pthread_mutex_lock(&mutex->lock); // can block
     LxThread *th = THREAD();
-    if (mutex->owner == NULL) {
-        THREAD_DEBUG(1, "Thread %lu LOCKED mutex (no contention)", th->tid);
-        ASSERT(mutex->waiting == 0);
-        mutex->owner = th;
-        th->mutexCounter++;
-        pthread_mutex_unlock(&mutex->lock); // can block
-        return;
-    }
-    pthread_mutex_unlock(&mutex->lock); // can block
-    THREAD_DEBUG(1, "Thread %lu locking mutex (contention)", th->tid);
-    while (mutex->owner != th) {
-        BLOCKING_REGION_CORE({
-            lockFunc(mutex, th);
-        });
-        if (mutex->owner == th) break;
-        THREAD_DEBUG(1, "Thread %lu trying again...", th->tid);
-    }
+    THREAD_DEBUG(1, "Thread %lu LOCKED mutex", th->tid);
+    mutex->owner = th;
+    th->mutexCounter++;
+    return;
+    /*THREAD_DEBUG(1, "Thread %lu locking mutex (contention)", th->tid);*/
+    /*while (mutex->owner != th) {*/
+        /*lockFunc(mutex, th);*/
+        /*if (mutex->owner == th) break;*/
+        /*THREAD_DEBUG(1, "Thread %lu trying again...", th->tid);*/
+    /*}*/
 }
 
 void unlockMutex(LxMutex *mutex) {
-    pthread_mutex_lock(&mutex->lock);
     LxThread *th = THREAD();
     ASSERT(mutex->owner == th);
     mutex->owner = NULL;
     THREAD_DEBUG(1, "Thread %lu unlocking mutex...", th->tid);
-    if (mutex->waiting > 0) {
-        THREAD_DEBUG(1, "Thread %lu signaling waiter(s)...", th->tid);
-        pthread_cond_signal(&mutex->cond);
-    }
     th->mutexCounter--;
-    THREAD_DEBUG(1, "Thread %lu UNLOCKED mutex", th->tid);
     pthread_mutex_unlock(&mutex->lock);
+    THREAD_DEBUG(1, "Thread %lu UNLOCKED mutex", th->tid);
 }
 
 static LxMutex *mutexGetHidden(Value mutex) {

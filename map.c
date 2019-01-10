@@ -307,7 +307,7 @@ static Value lxMapGetSize(int argCount, Value *args) {
 
 static Value lxMapEach(int argCount, Value *args) {
     CHECK_ARITY("Map#each", 1, 1, argCount);
-    volatile LxThread *th = vm.curThread;
+    volatile LxThread *th = THREAD();
     Value self = *args;
     volatile Table *map = AS_MAP(self)->table;
     volatile int status = 0;

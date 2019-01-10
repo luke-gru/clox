@@ -161,9 +161,7 @@ Value lxSleep(int argCount, Value *args) {
     int secs = (int)AS_NUMBER(nsecs);
     if (secs > 0) {
         LxThread *th = THREAD();
-        releaseGVL();
         threadSleep(th, secs);
-        acquireGVL();
     }
     return NIL_VAL;
 }

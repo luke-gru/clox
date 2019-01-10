@@ -20,8 +20,8 @@ static Obj *allocateObject(size_t size, ObjType type, int flags) {
     Obj *object = getNewObject(type, size, flags);
     object->type = type;
 
-    if (vm.inited && vm.curThread && vm.curThread->inCCall > 0) {
-        vec_push(&vm.curThread->stackObjects, object);
+    if (vm.inited && THREAD() && THREAD()->inCCall > 0) {
+        vec_push(&THREAD()->stackObjects, object);
     }
 
     object->objectId = (size_t)object;

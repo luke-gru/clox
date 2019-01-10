@@ -551,9 +551,6 @@ retry:
 // NOTE: memory is NOT initialized to 0 (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START(10, "reallocate");
-    if (vm.inited && vm.curThread) {
-        ASSERT(GVLOwner == vm.curThread->tid);
-    }
     if (newSize > 0 && UNLIKELY(inGC)) {
         ASSERT(0); // if we're in GC phase we shouldn't allocate memory (other than adding heaps, if necessary)
     }
@@ -1086,9 +1083,6 @@ static void callFinalizer(Obj *obj) {
 // Full collection single-phase mark and sweep
 // TODO: divide work up into mark and sweep phases to limit GC pauses
 void collectGarbage(void) {
-    if (vm.inited && vm.curThread) {
-        ASSERT(GVLOwner == vm.curThread->tid);
-    }
     if (vm.grayCount != 0) {
         fprintf(stderr, "Non-zero graycount? %d\n", vm.grayCount);
         ASSERT(vm.grayCount == 0);

@@ -125,7 +125,6 @@ typedef struct LxThread {
     int mutexCounter;
     pthread_mutex_t sleepMutex;
     pthread_cond_t sleepCond;
-    int opsRemaining;
     int exitStatus;
     bool joined;
     bool detached;
@@ -165,11 +164,6 @@ typedef struct VM {
     vec_void_t exitHandlers;
 
     // threading
-    pthread_mutex_t GVLock; // global VM lock
-    pthread_cond_t GVLCond;
-    volatile int GVLockStatus;
-    int GVLWaiters;
-    LxThread *curThread;
     LxThread *mainThread;
     vec_void_t threads; // list of current thread ObjInstance pointers
     int numDetachedThreads;
@@ -178,21 +172,11 @@ typedef struct VM {
 
 extern VM vm;
 
-#define EC (vm.curThread->ec)
+extern pthread_key_t thr_th_key;
+#define EC (THREAD()->ec)
 LxThread *THREAD();
 LxThread *FIND_THREAD(pthread_t tid);
 ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid);
-
-#define GVL_UNLOCK_BEGIN() do { \
-  LxThread *thStored = THREAD(); \
-  pthread_mutex_unlock(&vm.GVLock); \
-  vm.curThread = NULL; GVLOwner = -1; \
-  vm.GVLockStatus = 0
-
-#define GVL_UNLOCK_END() \
-  pthread_mutex_lock(&vm.GVLock); \
-  threadSetCurrent(thStored); \
-} while(0)
 
 typedef enum {
   INTERPRET_OK = 1,
@@ -298,10 +282,7 @@ ObjUpvalue *captureUpvalue(Value *local);
 Value createIterator(Value iterable);
 
 // threads
-void acquireGVL(void);
-void releaseGVL(void);
 void thread_debug(int lvl, const char *format, ...);
-volatile long long GVLOwner;
 void threadSetCurrent(LxThread *th);
 void threadDetach(LxThread *th);
 void exitingThread(LxThread *th);
