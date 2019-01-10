@@ -643,11 +643,7 @@ static int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
     } else if (IS_STRING(lhs) && IS_STRING(rhs)) {
         ObjString *lhsStr = AS_STRING(lhs);
         ObjString *rhsStr = AS_STRING(rhs);
-        if (lhsStr->hash > 0 && rhsStr->hash > 0) {
-            return lhsStr->hash == rhsStr->hash;
-        } else {
-            return strcmp(lhsStr->chars, rhsStr->chars);
-        }
+        return strcmp(lhsStr->chars, rhsStr->chars);
     }
 
     UNREACHABLE_RETURN(-2);

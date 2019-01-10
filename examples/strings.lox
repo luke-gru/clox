@@ -25,6 +25,8 @@ try {
   err = e;
 }
 print typeof(err);
+print "a" < "b";
+print "b" < "a";
 
 __END__
 -- expect: --
@@ -41,3 +43,5 @@ true
 O
 true
 instance
+true
+false
