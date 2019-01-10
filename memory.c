@@ -711,6 +711,13 @@ void blackenObject(Obj *obj) {
             grayTable(mod->classInfo->setters);
             break;
         }
+        case OBJ_T_ICLASS: {
+            ObjIClass *iklass = (ObjIClass*)obj;
+            grayObject((Obj*)iklass->mod);
+            grayObject((Obj*)iklass->klass);
+            grayObject(iklass->superklass);
+            break;
+        }
         case OBJ_T_FUNCTION: {
             GC_TRACE_DEBUG(5, "Blackening function %p", obj);
             ObjFunction *func = (ObjFunction*)obj;
@@ -876,6 +883,11 @@ void freeObject(Obj *obj) {
             freeClassInfo(mod->classInfo);
             FREE(ClassInfo, mod->classInfo);
             GC_TRACE_DEBUG(5, "Freeing module: p=%p", obj);
+            obj->type = OBJ_T_NONE;
+            break;
+        }
+        case OBJ_T_ICLASS: {
+            GC_TRACE_DEBUG(5, "Freeing iclass");
             obj->type = OBJ_T_NONE;
             break;
         }

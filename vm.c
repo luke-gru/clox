@@ -853,22 +853,23 @@ static inline bool isThrowable(Value val) {
     return IS_AN_ERROR(val);
 }
 
-// FIXME: use v_includedMods
 static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
     ObjClass *givenClass = klass;
     if (klass == obj->klass && obj->singletonKlass) {
         klass = obj->singletonKlass;
     }
     Value key = OBJ_VAL(propName);
-    while (klass) {
-        if (!lookInGivenClass && klass == givenClass) {
-            klass = CLASSINFO(klass)->superclass; // FIXME: work in modules
+    Obj *classLookup = (Obj*)klass;
+    while (classLookup) {
+        if (!lookInGivenClass && classLookup == (Obj*)givenClass) {
+            classLookup = CLASS_SUPER(classLookup);
             continue;
         }
-        if (tableGet(CLASSINFO(klass)->methods, key, ret)) {
+        Table *mtable = CLASS_METHOD_TBL(classLookup);
+        if (tableGet(mtable, key, ret)) {
             return true;
         }
-        klass = CLASSINFO(klass)->superclass;
+        classLookup = CLASS_SUPER(classLookup);
     }
     return false;
 }
@@ -1566,13 +1567,15 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     return ret;
 }
 
-static Obj *findMethod(ObjClass *klass, ObjString *methodName) {
+static Obj *findMethod(Obj *klass, ObjString *methodName) {
     Value method;
-    while (klass) {
-        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(methodName), &method)) {
+    Obj *classLookup = klass;
+    while (classLookup) {
+        Table *mtable = CLASS_METHOD_TBL(classLookup);
+        if (tableGet(mtable, OBJ_VAL(methodName), &method)) {
             return AS_OBJ(method);
         }
-        klass = CLASSINFO(klass)->superclass;
+        classLookup = CLASS_SUPER(classLookup);
     }
     return NULL;
 }
@@ -1594,13 +1597,11 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
     }
     ObjString *methodName = method->name;
     ASSERT(methodName);
-    if (klass->type == OBJ_T_MODULE) {
-        // TODO
-    } else if (klass->type == OBJ_T_CLASS) {
+    if (klass->type == OBJ_T_CLASS || klass->type == OBJ_T_MODULE) {
         if ((ObjClass*)klass == lxObjClass) {
             return NIL_VAL;
         }
-        ObjClass *superClass = CLASSINFO(klass)->superclass; // TODO: look in modules too
+        Obj *superClass = CLASS_SUPER(klass);
         if (!superClass) {
             throwErrorFmt(lxErrClass, "No superclass found for callSuper");
         }

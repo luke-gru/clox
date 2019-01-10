@@ -345,7 +345,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass, int flags) {
     void *tablesMem = (void*)ALLOCATE(Table, 1);
     klass->fields = (Table*)tablesMem;
     initTable(klass->fields);
-    klass->classInfo->superclass = superclass;
+    klass->classInfo->superclass = (Obj*)superclass;
     if (superclass) {
         OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(superclass));
     }
@@ -380,6 +380,30 @@ ObjModule *newModule(ObjString *name, int flags) {
     }
     GC_OLD(mod);
     return mod;
+}
+
+ObjIClass *newIClass(ObjClass *klass, ObjModule *mod, int flags) {
+    ObjIClass *iclass = ALLOCATE_OBJ(
+        ObjIClass, OBJ_T_ICLASS, flags|NEWOBJ_FLAG_OLD
+    );
+    iclass->klass = klass;
+    OBJ_WRITE(OBJ_VAL(iclass), OBJ_VAL(klass));
+    iclass->mod = mod;
+    OBJ_WRITE(OBJ_VAL(iclass), OBJ_VAL(mod));
+    iclass->superklass = NULL;
+    iclass->isSetup = false;
+    return iclass;
+}
+
+void setupIClass(ObjIClass *iclass) {
+    if (!iclass->isSetup) {
+        Obj *origSuper = CLASSINFO(iclass->klass)->superclass;
+        CLASSINFO(iclass->klass)->superclass = (Obj*)iclass;
+        OBJ_WRITE(OBJ_VAL(iclass->klass), OBJ_VAL(iclass));
+        iclass->superklass = origSuper;
+        OBJ_WRITE(OBJ_VAL(iclass), OBJ_VAL(iclass->superklass));
+        iclass->isSetup = true;
+    }
 }
 
 ObjArray *allocateArray(ObjClass *klass, int flags) {
@@ -496,72 +520,57 @@ ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCM
 }
 
 Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
-    ObjClass *klass = obj->klass;
+    Obj *klass = (Obj*)obj->klass;
     // interned strings that are created before lxStringClass exists have no class
-    if (!klass && ((Obj*) obj)->type == OBJ_T_STRING) {
-        klass = lxStringClass;
-        obj->klass = klass;
+    if (UNLIKELY(!klass && ((Obj*) obj)->type == OBJ_T_STRING)) {
+        klass = (Obj*)lxStringClass;
+        obj->klass = (ObjClass*)klass;
     }
     if (obj->singletonKlass) {
-        klass = obj->singletonKlass;
+        klass = (Obj*)obj->singletonKlass;
     }
     Value method;
     Value nameVal = OBJ_VAL(name);
     while (klass) {
-        ObjModule *mod = NULL; int i = 0;
-        vec_foreach_rev(&CLASSINFO(klass)->v_includedMods, mod, i) {
-            if (tableGet(CLASSINFO(mod)->methods, nameVal, &method)) {
-                return AS_OBJ(method);
-            }
-        }
-        if (tableGet(CLASSINFO(klass)->methods, nameVal, &method)) {
+        Table *mtable = CLASS_METHOD_TBL(klass);
+        if (tableGet(mtable, nameVal, &method)) {
             return AS_OBJ(method);
         }
-        klass = CLASSINFO(klass)->superclass;
+        klass = CLASS_SUPER(klass);
     }
     return NULL;
 }
 
 Obj *instanceFindGetter(ObjInstance *obj, ObjString *name) {
-    ObjClass *klass = obj->klass;
+    Obj *klass = (Obj*)obj->klass;
     if (obj->singletonKlass) {
-        klass = obj->singletonKlass;
+        klass = (Obj*)obj->singletonKlass;
     }
     Value getter;
     Value nameVal = OBJ_VAL(name);
     while (klass) {
-        ObjModule *mod = NULL; int i = 0;
-        vec_foreach_rev(&CLASSINFO(klass)->v_includedMods, mod, i) {
-            if (tableGet(CLASSINFO(mod)->getters, nameVal, &getter)) {
-                return AS_OBJ(getter);
-            }
-        }
-        if (tableGet(CLASSINFO(klass)->getters, nameVal, &getter)) {
+        Table *mtable = CLASS_GETTER_TBL(klass);
+        if (tableGet(mtable, nameVal, &getter)) {
             return AS_OBJ(getter);
         }
-        klass = CLASSINFO(klass)->superclass;
+        klass = CLASS_SUPER(klass);
     }
     return NULL;
 }
 
 Obj *instanceFindSetter(ObjInstance *obj, ObjString *name) {
-    ObjClass *klass = obj->klass;
+    Obj *klass = (Obj*)obj->klass;
     if (obj->singletonKlass) {
-        klass = obj->singletonKlass;
+        klass = (Obj*)obj->singletonKlass;
     }
     Value setter;
     Value nameVal = OBJ_VAL(name);
     while (klass) {
-        ObjModule *mod = NULL; int i = 0;
-        vec_foreach_rev(&CLASSINFO(klass)->v_includedMods, mod, i) {
-            if (tableGet(CLASSINFO(mod)->setters, nameVal, &setter)) {
-                return AS_OBJ(setter);
-            }
-        }
-        if (tableGet(CLASSINFO(klass)->setters, nameVal, &setter)) {
+        Table *mtable = CLASS_SETTER_TBL(klass);
+        if (tableGet(mtable, nameVal, &setter)) {
             return AS_OBJ(setter);
         }
-        klass = CLASSINFO(klass)->superclass;
+        klass = CLASS_SUPER(klass);
     }
     return NULL;
 }
@@ -578,43 +587,47 @@ Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name) {
 }
 
 Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
-    ObjClass *klass = classSingletonClass(obj);
+    Obj *klass = (Obj*)classSingletonClass(obj);
     Value method;
     // look up in singleton class hierarchy
     while (klass) {
-        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(name), &method)) {
+        Table *mtable = CLASS_METHOD_TBL(klass);
+        if (tableGet(mtable, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
-        klass = CLASSINFO(klass)->superclass;
+        klass = CLASS_SUPER(klass);
     }
     // not found, look up in class `Class` instance methods, to Object
-    klass = lxClassClass;
+    klass = (Obj*)lxClassClass;
     while (klass) {
-        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(name), &method)) {
+        Table *mtable = CLASS_METHOD_TBL(klass);
+        if (tableGet(mtable, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
-        klass = CLASSINFO(klass)->superclass;
+        klass = CLASS_SUPER(klass);
     }
     return NULL;
 }
 
 Obj *moduleFindStaticMethod(ObjModule *mod, ObjString *name) {
-    ObjClass *klass = moduleSingletonClass(mod);
+    Obj *klass = (Obj*)moduleSingletonClass(mod);
     Value method;
     // look up in singleton class hierarchy
     while (klass) {
-        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(name), &method)) {
+        Table *mtable = CLASS_METHOD_TBL(klass);
+        if (tableGet(mtable, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
-        klass = CLASSINFO(klass)->superclass;
+        klass = CLASS_SUPER(klass);
     }
     // not found, look up in class `Module` instance methods, to Object
-    klass = lxModuleClass;
+    klass = (Obj*)lxModuleClass;
     while (klass) {
-        if (tableGet(CLASSINFO(klass)->methods, OBJ_VAL(name), &method)) {
+        Table *mtable = CLASS_METHOD_TBL(klass);
+        if (tableGet(mtable, OBJ_VAL(name), &method)) {
             return AS_OBJ(method);
         }
-        klass = CLASSINFO(klass)->superclass;
+        klass = CLASS_SUPER(klass);
     }
     return NULL;
 }
@@ -926,12 +939,12 @@ void setProp(Value self, ObjString *propName, Value val) {
 }
 
 bool instanceIsA(ObjInstance *inst, ObjClass *klass) {
-    ObjClass *instKlass = inst->klass;
-    if (instKlass == klass) return true;
-    while (instKlass != NULL && instKlass != klass) {
-        instKlass = CLASSINFO(instKlass)->superclass;
+    Obj *instKlass = (Obj*)inst->klass;
+    if (instKlass == (Obj*)klass) return true;
+    while (instKlass != NULL && instKlass != (Obj*)klass) {
+        instKlass = CLASS_SUPER(instKlass);
     }
-    return instKlass == klass;
+    return instKlass == (Obj*)klass;
 }
 
 Value newError(ObjClass *errClass, Value msg) {
@@ -948,12 +961,11 @@ bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
     DBG_ASSERT(subklass);
     DBG_ASSERT(superklass);
     if (subklass == superklass) { return true; }
-    while (subklass != NULL && subklass != superklass) {
-        ClassInfo *cinfo = CLASSINFO(subklass);
-        DBG_ASSERT(cinfo);
-        subklass = cinfo->superclass;
+    Obj *subLookup = (Obj*)subklass;
+    while (subLookup != NULL && subLookup != (Obj*)superklass) {
+        subLookup = CLASS_SUPER(subLookup);
     }
-    return subklass != NULL;
+    return subLookup != NULL;
 }
 
 static const char *anonClassName = "(anon)";
@@ -1004,7 +1016,7 @@ ObjClass *classSingletonClass(ObjClass *klass) {
         CLASSINFO(klass)->name = name;
     }
     pushCString(name, " (meta)", 7);
-    ObjClass *meta = newClass(name, CLASSINFO(klass)->superclass, NEWOBJ_FLAG_OLD);
+    ObjClass *meta = newClass(name, (ObjClass*)CLASSINFO(klass)->superclass, NEWOBJ_FLAG_OLD);
     CLASSINFO(meta)->singletonOf = (Obj*)klass;
     klass->singletonKlass = meta;
     OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(meta));
@@ -1104,6 +1116,8 @@ size_t sizeofObjType(ObjType type) {
             return sizeof(ObjClass);
         case OBJ_T_MODULE:
             return sizeof(ObjModule);
+        case OBJ_T_ICLASS:
+            return sizeof(ObjIClass);
         case OBJ_T_NATIVE_FUNCTION:
             return sizeof(ObjNative);
         case OBJ_T_BOUND_METHOD:
@@ -1135,6 +1149,8 @@ const char *objTypeName(ObjType type) {
             return "T_CLASS";
         case OBJ_T_MODULE:
             return "T_MODULE";
+        case OBJ_T_ICLASS:
+            return "T_ICLASS";
         case OBJ_T_NATIVE_FUNCTION:
             return "T_NATIVE_FUNCTION";
         case OBJ_T_CLOSURE:

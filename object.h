@@ -15,6 +15,7 @@ typedef enum ObjType {
   OBJ_T_INSTANCE, // includes Maps
   OBJ_T_CLASS,
   OBJ_T_MODULE,
+  OBJ_T_ICLASS, // included module
   OBJ_T_FUNCTION,
   OBJ_T_NATIVE_FUNCTION,
   OBJ_T_BOUND_METHOD,
@@ -155,7 +156,7 @@ typedef struct ClassInfo {
   Table *setters;
   ObjString *name;
   // for classes only
-  ObjClass *superclass;
+  Obj *superclass; // ObjClass or ObjIClass
   vec_void_t v_includedMods; // pointers to ObjModule
   Obj *singletonOf;  // if singleton class
 } ClassInfo;
@@ -186,6 +187,19 @@ typedef struct ObjModule {
   ClassInfo *classInfo;
 } ObjModule;
 
+#define CLASS_SUPER(klass)      (((Obj*)klass)->type == OBJ_T_CLASS ? CLASSINFO(klass)->superclass : ((ObjIClass*) klass)->superklass)
+#define CLASS_METHOD_TBL(klass) (klass->type == OBJ_T_CLASS ? CLASSINFO(klass)->methods : CLASSINFO(((ObjIClass*) klass)->mod)->methods)
+#define CLASS_GETTER_TBL(klass) (klass->type == OBJ_T_CLASS ? CLASSINFO(klass)->getters : CLASSINFO(((ObjIClass*) klass)->mod)->getters)
+#define CLASS_SETTER_TBL(klass) (klass->type == OBJ_T_CLASS ? CLASSINFO(klass)->setters : CLASSINFO(((ObjIClass*) klass)->mod)->setters)
+
+// included module "class"
+typedef struct ObjIClass {
+    Obj object;
+    ObjClass *klass;
+    ObjModule *mod;
+    Obj *superklass; // ObjClass or ObjIClass
+    bool isSetup;
+} ObjIClass;
 
 typedef struct ObjInstance {
   Obj object;
@@ -524,6 +538,8 @@ ObjInstance *getBlockArg(CallFrame *frame);
 ObjFunction *newFunction(Chunk *chunk, Node *funcNode, int flags);
 ObjClass *newClass(ObjString *name, ObjClass *superclass, int flags);
 ObjModule *newModule(ObjString *name, int flags);
+ObjIClass *newIClass(ObjClass *klass, ObjModule *mod, int flags);
+void setupIClass(ObjIClass *iclass);
 ObjInstance *newInstance(ObjClass *klass, int flags);
 ObjArray *allocateArray(ObjClass *klass, int flags);
 ObjNative *newNative(ObjString *name, NativeFn function, int flags);

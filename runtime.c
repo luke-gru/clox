@@ -557,7 +557,7 @@ Value lxClassInit(int argCount, Value *args) {
         superClass = AS_CLASS(args[2]);
     }
     CLASSINFO(klass)->name = name;
-    CLASSINFO(klass)->superclass = superClass;
+    CLASSINFO(klass)->superclass = (Obj*)superClass;
     if (superClass) {
         OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(superClass));
     }
@@ -577,6 +577,9 @@ Value lxClassInclude(int argCount, Value *args) {
     OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(mod));
     if (alreadyIncluded == -1) {
         vec_push(&CLASSINFO(klass)->v_includedMods, mod);
+        ObjIClass *iclass = newIClass(klass, mod, NEWOBJ_FLAG_OLD);
+        OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(iclass));
+        setupIClass(iclass);
     }
     return modVal;
 }
@@ -598,9 +601,17 @@ Value lxClassGetName(int argCount, Value *args) {
 // ex: print Object._superClass;
 Value lxClassGetSuperclass(int argCount, Value *args) {
     Value self = *args;
-    ObjClass *klass = AS_CLASS(self);
-    if (CLASSINFO(klass)->superclass) {
-        return OBJ_VAL(CLASSINFO(klass)->superclass);
+    Obj *klass = AS_OBJ(self);
+    Obj *superClass;
+    while ((superClass = CLASS_SUPER(klass))) {
+        if (superClass->type == OBJ_T_CLASS) { // found
+            break;
+        } else { // iclass (module)
+            klass = CLASS_SUPER(superClass);
+        }
+    }
+    if (superClass) {
+        return OBJ_VAL(superClass);
     } else {
         return NIL_VAL;
     }
