@@ -53,11 +53,7 @@ without overriding each other if not valEqual().
 
 Bugs
 ----
-* Method lookup bugged for static methods, don't look in superclass statics
-* Method lookup is bugged, instances get methods from static methods
-* Fix method lookup, look in modules for instances and classes/modules as well
-as singleton classes, etc.
-* super() bug in examples/super.lox (super doesn's look in modules for method)
+* super() bug in examples/super.lox (super doesn't look in modules for method)
 * super bug for getters/setters (examples/super_setter.lox)
 * Nodes created during parsing are never freed. This results in memory leak
 when evaling.

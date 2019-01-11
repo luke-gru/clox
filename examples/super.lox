@@ -44,17 +44,15 @@ class C < B {}
 print "";
 C().test(); // "A method"
 
-/*print "";*/
-/*module D {*/
-  /*method() {*/
-    /*print "from D";*/
-    /*super.method();*/
-  /*}*/
-/*}*/
-/*B.include(D);*/
-/*C().test();*/
-/*from D*/
-/*A method*/
+print "";
+module D {
+  method() {
+    print "from D";
+    super.method();
+  }
+}
+B.include(D);
+C().test();
 
 __END__
 -- expect: --
@@ -62,4 +60,7 @@ red
 <instance Snake>
 my color: red
 
+A method
+
+from D
 A method

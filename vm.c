@@ -834,15 +834,15 @@ static inline bool isThrowable(Value val) {
     return IS_AN_ERROR(val);
 }
 
-static bool lookupMethod(ObjInstance *obj, ObjClass *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
-    ObjClass *givenClass = klass;
-    if (klass == obj->klass && obj->singletonKlass) {
-        klass = obj->singletonKlass;
+static bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
+    Obj *givenClass = klass;
+    if (klass == (Obj*)obj->klass && obj->singletonKlass) {
+        klass = (Obj*)obj->singletonKlass;
     }
     Value key = OBJ_VAL(propName);
-    Obj *classLookup = (Obj*)klass;
+    Obj *classLookup = klass;
     while (classLookup) {
-        if (!lookInGivenClass && classLookup == (Obj*)givenClass) {
+        if (!lookInGivenClass && classLookup == givenClass) {
             classLookup = CLASS_SUPER(classLookup);
             continue;
         }
@@ -2526,16 +2526,32 @@ vmLoop:
           Value methodName = READ_CONSTANT();
           ASSERT(th->thisObj);
           Value instanceVal = OBJ_VAL(th->thisObj);
-          ASSERT(IS_INSTANCE_LIKE(instanceVal)); // FIXME: get working for classes (singleton methods)
-          ObjClass *klass = (ObjClass*)frame->closure->function->klass;
-          ASSERT(klass); // TODO: get working for module functions that call super
-          ASSERT(((Obj*) klass)->type == OBJ_T_CLASS);
+          ASSERT(IS_INSTANCE_LIKE(instanceVal));
+          ObjClass *klass = (ObjClass*)frame->closure->function->klass; // NOTE: class or module
+          ASSERT(klass);
+          ObjIClass *iclassFound = NULL;
+          if (((Obj*)klass)->type == OBJ_T_MODULE) {
+              ObjModule *mod = (ObjModule*)klass;
+              klass = AS_INSTANCE(instanceVal)->klass;
+              Obj *iclass = (Obj*)klass;
+              while (iclass != (Obj*)mod) {
+                  iclass = CLASSINFO(iclass)->superclass;
+                  if (iclass->type == OBJ_T_CLASS) {
+                      // do nothing
+                  } else if (iclass->type == OBJ_T_ICLASS) {
+                      iclassFound = (ObjIClass*)iclass;
+                      iclass = (Obj*)((ObjIClass*)iclass)->mod;
+                  }
+              }
+              ASSERT(iclass == (Obj*)mod);
+              klass = (ObjClass*)iclassFound;
+          }
           Value method;
           bool found = lookupMethod(
-              AS_INSTANCE(instanceVal), klass,
+              AS_INSTANCE(instanceVal), (Obj*)klass,
               AS_STRING(methodName), &method, false);
           if (UNLIKELY(!found)) {
-              throwErrorFmt(lxErrClass, "Could not find method %s for 'super': %s",
+              throwErrorFmt(lxErrClass, "Could not find method '%s' for 'super': %s",
                       AS_CSTRING(methodName));
           }
           ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method), NEWOBJ_FLAG_NONE);
