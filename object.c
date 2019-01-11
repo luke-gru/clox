@@ -120,11 +120,10 @@ ObjString *internedString(char *chars, int length, int flags) {
     uint32_t hash = hashString(chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
     if (!interned) {
-        interned = hiddenString(chars, length, flags|NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_FROZEN);
+        interned = copyString(chars, length, flags|NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_FROZEN);
         ASSERT(tableSet(&vm.strings, OBJ_VAL(interned), NIL_VAL));
         STRING_SET_INTERNED(interned);
         objFreeze((Obj*)interned);
-        GC_OLD((Obj*)interned);
     }
     return interned;
 }

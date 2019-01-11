@@ -24,9 +24,18 @@ void initTable(Table *table);
 void initTableWithCapa(Table *table, size_t capa);
 void freeTable(Table *table); // free internal table structures, not table itself
 
+uint32_t findEntry(Entry *entries, int capacityMask, Value key);
+static inline bool tableGet(Table *table, Value key, Value *value) {
+    // If the table is empty, we definitely won't find it.
+    if (table->entries == NULL) return false;
 
+    uint32_t index = findEntry(table->entries, table->capacityMask, key);
+    Entry *entry = &table->entries[index];
+    if (IS_UNDEF(entry->key)) return false;
+    *value = entry->value;
+    return true;
+}
 // fills given Value with found value, if any
-bool tableGet(Table *table, Value key, Value *value);
 bool tableSet(Table *table, Value key, Value value);
 bool tableDelete(Table *table, Value key);
 void tableAddAll(Table *from, Table *to);

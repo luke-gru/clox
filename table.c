@@ -70,7 +70,7 @@ void freeTable(Table *table) {
     initTable(table);
 }
 
-static uint32_t findEntry(Entry *entries, int capacityMask, Value key) {
+uint32_t findEntry(Entry *entries, int capacityMask, Value key) {
     // NOTE: valHash() can call method `hashKey()` if key is an instance
     uint32_t index = valHash(key) & capacityMask;
 
@@ -86,17 +86,6 @@ static uint32_t findEntry(Entry *entries, int capacityMask, Value key) {
 
         index = (index + 1) & capacityMask;
     }
-}
-
-bool tableGet(Table *table, Value key, Value *value) {
-    // If the table is empty, we definitely won't find it.
-    if (table->entries == NULL) return false;
-
-    uint32_t index = findEntry(table->entries, table->capacityMask, key);
-    Entry *entry = &table->entries[index];
-    if (IS_UNDEF(entry->key)) return false;
-    *value = entry->value;
-    return true;
 }
 
 static void resize(Table *table, int capacityMask) {

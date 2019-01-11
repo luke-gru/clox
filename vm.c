@@ -692,18 +692,6 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
     }
 }
 
-CallFrame *getFrame(void) {
-    VMExecContext *ctx = EC;
-    ASSERT(ctx->frameCount >= 1);
-    return &ctx->frames[ctx->frameCount-1];
-}
-
-static inline CallFrame *getFrameI(void) {
-    VMExecContext *ctx = EC;
-    ASSERT(ctx->frameCount >= 1);
-    return &ctx->frames[ctx->frameCount-1];
-}
-
 void debugFrame(CallFrame *frame) {
     const char *fnName = frame->isCCall ? frame->nativeFunc->name->chars :
         (frame->closure->function->name ? frame->closure->function->name->chars : "(anon)");
@@ -724,7 +712,7 @@ static inline CallFrame *getFrameOrNull(void) {
 }
 
 static inline Chunk *currentChunk(void) {
-    return getFrameI()->closure->function->chunk;
+    return getFrame()->closure->function->chunk;
 }
 
 void errorPrintScriptBacktrace(const char *format, ...) {
@@ -1087,7 +1075,7 @@ void popFrame(void) {
     DBG_ASSERT(vm.inited);
     register LxThread *th = vm.curThread;
     ASSERT(EC->frameCount >= 1);
-    CallFrame *frame = getFrameI();
+    CallFrame *frame = getFrame();
     VM_DEBUG(2, "popping callframe (%s)", frame->isCCall ? "native" : "non-native");
     int stackAdjust = frame->stackAdjustOnPop;
     /*VM_DEBUG("stack adjust: %d", stackAdjust);*/
@@ -1150,7 +1138,7 @@ static void pushNativeFrame(ObjNative *native) {
         errorPrintScriptBacktrace("Stack overflow.");
         return;
     }
-    CallFrame *prevFrame = getFrameI();
+    CallFrame *prevFrame = getFrame();
     CallFrame *newFrame = pushFrame();
     newFrame->closure = prevFrame->closure;
     newFrame->ip = prevFrame->ip;
@@ -1298,7 +1286,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                     return false;
                 } else {
                     VM_DEBUG(2, "native initializer returned");
-                    EC->stackTop = getFrameI()->slots;
+                    EC->stackTop = getFrame()->slots;
                     popFrame();
                     ASSERT(LIKELY(IS_INSTANCE_LIKE(val)));
                     push(val);
@@ -1473,7 +1461,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         /*}*/
     }
 
-    CallFrame *f = getFrameI();
+    CallFrame *f = getFrame();
     Chunk *ch = f->closure->function->chunk;
     int parentStart = f->ip - ch->code - 2;
     ASSERT(parentStart >= 0);
@@ -1579,37 +1567,34 @@ static Obj *findMethod(Obj *klass, ObjString *methodName) {
 
 // API for calling 'super' in native C methods
 Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
-    if (!isClassHierarchyCreated) return NIL_VAL;
+    if (UNLIKELY(!isClassHierarchyCreated)) return NIL_VAL;
     CallFrame *frame = getFrame();
     DBG_ASSERT(frame->instance);
-    DBG_ASSERT(frame->klass);
-    if (!frame->isCCall) {
+    DBG_ASSERT(frame->klass); // TODO: maybe throw error if no class here?
+    if (UNLIKELY(!frame->isCCall)) {
         throwErrorFmt(lxErrClass, "callSuper must be called from native C function!");
     }
     ObjNative *method = frame->nativeFunc;
-    ASSERT(method);
+    DBG_ASSERT(method);
     Obj *klass = method->klass;
-    if (!klass) {
+    if (UNLIKELY(!klass)) {
         throwErrorFmt(lxErrClass, "No class found for callSuper, current frame must be a method!");
     }
     ObjString *methodName = method->name;
-    ASSERT(methodName);
-    if (klass->type == OBJ_T_CLASS || klass->type == OBJ_T_MODULE) {
-        if ((ObjClass*)klass == lxObjClass) {
+    DBG_ASSERT(methodName);
+    if (LIKELY(klass->type == OBJ_T_CLASS || klass->type == OBJ_T_MODULE)) {
+        if ((ObjClass*)klass == lxObjClass) { // no super
             return NIL_VAL;
         }
         Obj *superClass = CLASS_SUPER(klass);
-        if (!superClass) {
+        if (UNLIKELY(!superClass)) {
             throwErrorFmt(lxErrClass, "No superclass found for callSuper");
         }
         Obj *superMethod = findMethod(superClass, methodName);
-        if (!superMethod) {
+        if (UNLIKELY(!superMethod)) {
             throwErrorFmt(lxErrClass, "No super method found for callSuper");
         }
-        LxThread *th = vm.curThread;
-        int inCCall = th->inCCall;
         callVMMethod(frame->instance, OBJ_VAL(superMethod), argCount, args, cinfo);
-        ASSERT(th->inCCall == inCCall);
         return pop();
     } else {
         UNREACHABLE("bug");
@@ -1695,7 +1680,7 @@ static CatchTable *getCatchTableRow(int idx) {
 
 ErrTagInfo *findErrTag(ObjClass *klass) {
     ASSERT(klass);
-    ErrTagInfo *cur = THREAD()->errInfo;
+    ErrTagInfo *cur = vm.curThread->errInfo;
     while (cur) {
         // NULL = tag for all errors
         if (cur->errClass == NULL || IS_SUBCLASS(klass, cur->errClass)) {
@@ -1737,7 +1722,7 @@ NORETURN void throwError(Value self) {
         catchRow->lastThrownValue = self;
         getFrame()->ip = ipNew;
         DBG_ASSERT(getFrame()->closure->function->chunk->catchTbl);
-        ASSERT(getFrame()->jmpBufSet);
+        DBG_ASSERT(getFrame()->jmpBufSet);
         longjmp(getFrame()->jmpBuf, JUMP_PERFORMED);
     } else {
         ASSERT(rootVMLoopJumpBufSet);
@@ -3046,7 +3031,7 @@ void unsetPrintBuf(void) {
 void unwindJumpRecover(ErrTagInfo *info) {
     DBG_ASSERT(info);
     LxThread *th = THREAD();
-    CallFrame *f = getFrameI();
+    CallFrame *f = getFrame();
     DBG_ASSERT(f);
     while (f != info->frame) {
         VM_DEBUG(2, "popping callframe from unwind");
@@ -3136,19 +3121,6 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
         UNREACHABLE("setjmp error");
     }
     return NULL;
-}
-
-ErrTagInfo *addErrInfo(ObjClass *errClass) {
-    LxThread *th = THREAD();
-    ErrTagInfo *info = ALLOCATE(ErrTagInfo, 1);
-    info->status = TAG_NONE;
-    info->errClass = errClass;
-    info->bentry = NULL;
-    info->frame = getFrameI();
-    info->prev = th->errInfo;
-    th->errInfo = info;
-    info->caughtError = NIL_VAL;
-    return info;
 }
 
 void runAtExitHooks(void) {

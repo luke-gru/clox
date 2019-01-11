@@ -551,10 +551,10 @@ retry:
 // NOTE: memory is NOT initialized to 0 (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START(10, "reallocate");
-    if (vm.inited && vm.curThread) {
+    if (LIKELY(vm.inited && vm.curThread)) {
         ASSERT(GVLOwner == vm.curThread->tid);
     }
-    if (newSize > 0 && UNLIKELY(inGC)) {
+    if (UNLIKELY(newSize > 0 && inGC)) {
         ASSERT(0); // if we're in GC phase we shouldn't allocate memory (other than adding heaps, if necessary)
     }
 

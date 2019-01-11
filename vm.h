@@ -8,6 +8,7 @@
 #include "object.h"
 #include "table.h"
 #include "debugger.h"
+#include "memory.h"
 #include "debug.h"
 
 #define STACK_MAX 256
@@ -223,12 +224,20 @@ void resetStack(void); // reset operand stack
 
 NORETURN void repl(void);
 
+// call frames
+void popFrame(void);
+CallFrame *pushFrame(void);
+static inline CallFrame *getFrame(void) {
+    VMExecContext *ctx = EC;
+    ASSERT(ctx->frameCount >= 1);
+    return &ctx->frames[ctx->frameCount-1];
+}
+
 // errors
 void setBacktrace(Value err);
 NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...);
 #define throwArgErrorFmt(format, ...) throwErrorFmt(lxArgErrClass, format, __VA_ARGS__)
 NORETURN void throwError(Value err);
-ErrTagInfo *addErrInfo(ObjClass *errClass);
 typedef void* (vm_cb_func)(void*);
 void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status);
 void unwindJumpRecover(ErrTagInfo *info);
@@ -236,6 +245,18 @@ void rethrowErrInfo(ErrTagInfo *info);
 void unsetErrInfo(void);
 void popErrInfo(void);
 void errorPrintScriptBacktrace(const char *format, ...);
+static inline ErrTagInfo *addErrInfo(ObjClass *errClass) {
+    LxThread *th = vm.curThread;
+    ErrTagInfo *info = ALLOCATE(ErrTagInfo, 1);
+    info->status = TAG_NONE;
+    info->errClass = errClass;
+    info->bentry = NULL;
+    info->frame = getFrame();
+    info->prev = th->errInfo;
+    th->errInfo = info;
+    info->caughtError = NIL_VAL;
+    return info;
+}
 
 // blocks
 BlockStackEntry *addBlockEntry(Obj *closureOrNative);
@@ -284,12 +305,6 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo);
         popErrInfo();\
     }\
 }
-
-
-// call frames
-void popFrame(void);
-CallFrame *pushFrame(void);
-CallFrame *getFrame(void);
 
 // upvalues
 ObjUpvalue *captureUpvalue(Value *local);
