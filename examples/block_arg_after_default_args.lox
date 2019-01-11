@@ -1,0 +1,35 @@
+fun myfun(a = 1, &blk) {
+  print a;
+  print blk;
+  if (blk) {
+    blk.yield();
+  }
+}
+
+fun printme() { print "in printme"; }
+
+myfun() -> { print "in blk"; };
+myfun(1) -> { print "in blk"; };
+myfun(1, &printme);
+myfun(&printme);
+myfun(2);
+myfun();
+
+__END__
+-- expect: --
+1
+<instance Block>
+in blk
+1
+<instance Block>
+in blk
+1
+<instance Block>
+in printme
+1
+<instance Block>
+in printme
+2
+nil
+1
+nil

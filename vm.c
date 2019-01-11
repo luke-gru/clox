@@ -1206,6 +1206,7 @@ static inline bool checkFunctionArity(ObjFunction *func, int argCount, CallInfo 
 static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo *callInfo) {
     LxThread *th = vm.curThread;
     Value blockInstance = NIL_VAL;
+    bool blockInstancePopped = false;
     if (argCount > 0 && callInfo) {
         if (IS_A_BLOCK(peek(0))) {
             Value blkObj = peek(0);
@@ -1384,6 +1385,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         if (!IS_NIL(blockInstance) && IS_A_BLOCK(peek(0))) {
             argCount--;
             pop();
+            blockInstancePopped = true;
         }
         kwargsMap = newMap();
         Node *param = NULL;
@@ -1403,6 +1405,12 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 }
             }
         }
+    }
+
+    if (func->numDefaultArgs > 0 && !IS_NIL(blockInstance) && !blockInstancePopped && IS_A_BLOCK(peek(0))) {
+        pop();
+        argCount--;
+        blockInstancePopped = true;
     }
 
     // default arg processing
@@ -1478,6 +1486,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         int unused = numDefaultArgsUnused;
         vec_foreach_rev(params, param, pi) {
             if (param->type.kind == PARAM_NODE_SPLAT) continue;
+            if (param->type.kind == PARAM_NODE_BLOCK) continue;
             if (param->type.kind == PARAM_NODE_DEFAULT_ARG) {
                 size_t offset = ((ParamNodeInfo*)param->data)->defaultArgIPOffset;
                 VM_DEBUG(2, "default param found: offset=%d", (int)offset);
@@ -1485,7 +1494,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 unused--;
                 if (unused == 0) break;
             } else {
-                ASSERT(0); // unreachable, default args should be last args, not including splats
+                ASSERT(0); // unreachable, default args should be last args, not including splat or block arg
                 break;
             }
         }
@@ -1502,11 +1511,12 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         argCountWithRestAry++;
     }
 
+    if (blockInstancePopped) {
+        push(blockInstance);
+        argCountWithRestAry++;
+    }
+
     if (callInfo && func->numKwargs > 0) {
-        if (!IS_NIL(blockInstance)) {
-            push(blockInstance);
-            argCountWithRestAry++;
-        }
         push(kwargsMap);
     }
 
