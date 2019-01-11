@@ -253,8 +253,8 @@ void grayTable(Table *table) {
     for (int i = 0; i <= table->capacityMask; i++) {
         ASSERT(table->entries);
         Entry *entry = &table->entries[i];
-        if (!entry || (IS_UNDEF(entry->key))) continue;
         ASSERT(entry);
+        if (!entry || (IS_UNDEF(entry->key))) continue;
         grayValue(entry->key);
         grayValue(entry->value);
     }

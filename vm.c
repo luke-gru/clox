@@ -148,6 +148,7 @@ static void defineNativeClasses(void) {
 
     // class Object
     ObjClass *objClass = addGlobalClass("Object", NULL);
+    lxObjClass = objClass;
     nativeObjectInit = addNativeMethod(objClass, "init", lxObjectInit);
     addNativeMethod(objClass, "dup", lxObjectDup);
     addNativeMethod(objClass, "extend", lxObjectExtend);
@@ -160,7 +161,6 @@ static void defineNativeClasses(void) {
     addNativeGetter(objClass, "class", lxObjectGetClass);
     addNativeGetter(objClass, "singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
-    lxObjClass = objClass;
 
     // class Module
     ObjClass *modClass = addGlobalClass("Module", objClass);
@@ -1584,6 +1584,9 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
             return NIL_VAL;
         }
         Obj *superClass = CLASS_SUPER(klass);
+        if (superClass == (Obj*)lxObjClass) {
+            superClass->type = OBJ_T_CLASS; // FIXME: not sure why needed, but when stressing GC with --stress-GC=young, some scripts fails without this!
+        }
         if (UNLIKELY(!superClass)) {
             throwErrorFmt(lxErrClass, "No superclass found for callSuper");
         }
@@ -1959,7 +1962,6 @@ static InterpretResult vm_run() {
             callable = instanceFindMethod(inst, methodName);\
           }\
           if (UNLIKELY(!callable)) {\
-              fprintf(stderr, "Method %s#%s not found for operation '%s'", className(inst->klass), methodName->chars, #op);\
               throwErrorFmt(lxNameErrClass, "Method %s#%s not found for operation '%s'", className(inst->klass), methodName->chars, #op);\
           }\
           callCallable(OBJ_VAL(callable), 1, true, NULL);\
@@ -2377,28 +2379,27 @@ vmLoop:
       }
       CASE_OP(BLOCK_BREAK): {
           Value err = newError(lxBreakBlockErrClass, NIL_VAL);
-          th->lastErrorThrown = err;
           throwError(err); // blocks catch this, not propagated
           DISPATCH_BOTTOM();
       }
       CASE_OP(BLOCK_CONTINUE): {
           Value ret;
+          ObjString *key = INTERN("ret");
           if (th->lastValue) {
               ret = *th->lastValue;
           } else {
               ret = NIL_VAL;
           }
           Value err = newError(lxContinueBlockErrClass, NIL_VAL);
-          th->lastErrorThrown = err;
-          setProp(err, INTERN("ret"), ret);
+          setProp(err, key, ret);
           throwError(err); // blocks catch this, not propagated
           DISPATCH_BOTTOM();
       }
       CASE_OP(BLOCK_RETURN): {
+          ObjString *key = INTERN("ret");
           Value ret = pop();
           Value err = newError(lxReturnBlockErrClass, NIL_VAL);
-          th->lastErrorThrown = err;
-          setProp(err, INTERN("ret"), ret);
+          setProp(err, key, ret);
           throwError(err); // blocks catch this, not propagated
           DISPATCH_BOTTOM();
       }
@@ -2546,6 +2547,7 @@ vmLoop:
           // this is if we're in a block given by (&block), and we returned
           // (explicitly or implicitly)
           if (UNLIKELY(th->v_blockStack.length > 0)) {
+              ObjString *key = INTERN("ret");
               pop();
               Value ret;
               if (th->lastValue) {
@@ -2554,8 +2556,7 @@ vmLoop:
                   ret = NIL_VAL;
               }
               Value err = newError(lxContinueBlockErrClass, NIL_VAL);
-              th->lastErrorThrown = err;
-              setProp(err, INTERN("ret"), ret);
+              setProp(err, key, ret);
               throwError(err); // blocks catch this, not propagated
               (th->vmRunLvl)--;
               DISPATCH_BOTTOM();

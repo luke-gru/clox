@@ -743,8 +743,8 @@ void blackenObject(Obj *obj) {
             break;
         }
         case OBJ_T_INSTANCE: {
-            GC_TRACE_DEBUG(5, "Blackening instance %p", obj);
             ObjInstance *instance = (ObjInstance*)obj;
+            GC_TRACE_DEBUG(5, "Blackening instance %p, class: %s", obj, className(instance->klass));
             grayObject((Obj*)instance->klass);
             if (instance->singletonKlass) {
                 grayObject((Obj*)instance->singletonKlass);
@@ -752,8 +752,10 @@ void blackenObject(Obj *obj) {
             if (instance->finalizerFunc) {
                 grayObject(instance->finalizerFunc);
             }
+            GC_TRACE_DEBUG(5, "Blackening instance fields");
             grayTable(instance->fields);
             if (instance->internal && instance->internal->markFunc) {
+                GC_TRACE_DEBUG(5, "Blackening instance internal (markFunc)");
                 instance->internal->markFunc((Obj*)instance->internal);
             }
             break;

@@ -16,7 +16,7 @@ extern VM vm;
 
 #define GC_GEN_FROM_NEWOBJ_FLAGS(flags) (flags & NEWOBJ_FLAG_OLD ? GC_GEN_MAX : GC_GEN_MIN)
 static Obj *allocateObject(size_t size, ObjType type, int flags) {
-    DBG_ASSERT(type > OBJ_T_NONE);
+    DBG_ASSERT(type > OBJ_T_NONE && type < OBJ_T_LAST);
     Obj *object = getNewObject(type, size, flags);
     object->type = type;
 

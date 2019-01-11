@@ -110,7 +110,7 @@ typedef struct LxThread {
     Value *lastValue;
     bool hadError;
     ErrTagInfo *errInfo;
-    Value lastErrorThrown; // TODO: change to Obj pointer
+    volatile Value lastErrorThrown; // TODO: change to Obj pointer
     volatile Value errorToThrow; // error raised by other thread
     int inCCall;
     bool cCallThrew;
