@@ -586,41 +586,22 @@ Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name) {
 }
 
 Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
-    Obj *klass = (Obj*)classSingletonClass(obj);
     Value method;
+    Obj *klass = (Obj*)obj;
+    ObjClass *lookupClass = NULL;
     // look up in singleton class hierarchy
     while (klass) {
-        Table *mtable = CLASS_METHOD_TBL(klass);
-        if (tableGet(mtable, OBJ_VAL(name), &method)) {
-            return AS_OBJ(method);
+        lookupClass = ((ObjClass*)klass)->singletonKlass;
+        if (lookupClass) {
+            Table *mtable = CLASS_METHOD_TBL((Obj*)lookupClass);
+            if (tableGet(mtable, OBJ_VAL(name), &method)) {
+                return AS_OBJ(method);
+            }
         }
         klass = CLASS_SUPER(klass);
     }
     // not found, look up in class `Class` instance methods, to Object
-    klass = (Obj*)lxClassClass;
-    while (klass) {
-        Table *mtable = CLASS_METHOD_TBL(klass);
-        if (tableGet(mtable, OBJ_VAL(name), &method)) {
-            return AS_OBJ(method);
-        }
-        klass = CLASS_SUPER(klass);
-    }
-    return NULL;
-}
-
-Obj *moduleFindStaticMethod(ObjModule *mod, ObjString *name) {
-    Obj *klass = (Obj*)moduleSingletonClass(mod);
-    Value method;
-    // look up in singleton class hierarchy
-    while (klass) {
-        Table *mtable = CLASS_METHOD_TBL(klass);
-        if (tableGet(mtable, OBJ_VAL(name), &method)) {
-            return AS_OBJ(method);
-        }
-        klass = CLASS_SUPER(klass);
-    }
-    // not found, look up in class `Module` instance methods, to Object
-    klass = (Obj*)lxModuleClass;
+    klass = (Obj*)obj->klass;
     while (klass) {
         Table *mtable = CLASS_METHOD_TBL(klass);
         if (tableGet(mtable, OBJ_VAL(name), &method)) {

@@ -1030,7 +1030,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, Cal
         return pop();
     } else if (obj->type == OBJ_T_MODULE) {
         ObjModule *mod = (ObjModule*)obj;
-        Obj *callable = moduleFindStaticMethod(mod, methodName);
+        Obj *callable = classFindStaticMethod((ObjClass*)mod, methodName);
         if (UNLIKELY(!callable)) {
             ObjString *modName = CLASSINFO(mod)->name;
             const char *modStr = modName ? modName->chars : "(anon)";
@@ -2486,7 +2486,7 @@ vmLoop:
               th->thisObj = oldThis;
           } else if (IS_MODULE(instanceVal)) {
               ObjModule *mod = AS_MODULE(instanceVal);
-              Obj *callable = moduleFindStaticMethod(mod, mname);
+              Obj *callable = classFindStaticMethod((ObjClass*)mod, mname);
               /*if (!callable && numArgs == 0) {*/
                   /*callable = instanceFindGetter((ObjInstance*)mod, mname);*/
               /*}*/

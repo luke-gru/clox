@@ -188,9 +188,9 @@ typedef struct ObjModule {
 } ObjModule;
 
 #define CLASS_SUPER(klass)      (((Obj*)klass)->type == OBJ_T_CLASS ? CLASSINFO(klass)->superclass : ((ObjIClass*) klass)->superklass)
-#define CLASS_METHOD_TBL(klass) (klass->type == OBJ_T_CLASS ? CLASSINFO(klass)->methods : CLASSINFO(((ObjIClass*) klass)->mod)->methods)
-#define CLASS_GETTER_TBL(klass) (klass->type == OBJ_T_CLASS ? CLASSINFO(klass)->getters : CLASSINFO(((ObjIClass*) klass)->mod)->getters)
-#define CLASS_SETTER_TBL(klass) (klass->type == OBJ_T_CLASS ? CLASSINFO(klass)->setters : CLASSINFO(((ObjIClass*) klass)->mod)->setters)
+#define CLASS_METHOD_TBL(klass) ((klass)->type == OBJ_T_CLASS ? CLASSINFO((klass))->methods : CLASSINFO(((ObjIClass*) (klass))->mod)->methods)
+#define CLASS_GETTER_TBL(klass) ((klass)->type == OBJ_T_CLASS ? CLASSINFO((klass))->getters : CLASSINFO(((ObjIClass*) (klass))->mod)->getters)
+#define CLASS_SETTER_TBL(klass) ((klass)->type == OBJ_T_CLASS ? CLASSINFO((klass))->setters : CLASSINFO(((ObjIClass*) (klass))->mod)->setters)
 
 // included module "class"
 typedef struct ObjIClass {
@@ -557,7 +557,6 @@ Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name);
 Obj *instanceFindGetter(ObjInstance *obj, ObjString *name);
 Obj *instanceFindSetter(ObjInstance *obj, ObjString *name);
 Obj *classFindStaticMethod(ObjClass *obj, ObjString *name);
-Obj *moduleFindStaticMethod(ObjModule *obj, ObjString *name);
 bool instanceIsA(ObjInstance *inst, ObjClass *klass);
 bool isSubclass(ObjClass *subklass, ObjClass *superklass);
 const char *instanceClassName(ObjInstance *obj);

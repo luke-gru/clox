@@ -16,12 +16,21 @@ class Math {
   }
 }
 
+module MA {
+  class a() { print "mod a"; }
+}
+
+class CA {
+  this.include(MA); // works different from Ruby, include does add it like a virtual superclass
+}
+
 print Math.square(3);
 print Math.me();
 Math.PI = 3.14;
 print Math.PI;
 print Math.pi();
 Math.wowie();
+CA.a();
 
 __END__
 -- expect: --
@@ -30,3 +39,4 @@ __END__
 3.14
 3.14
 zowie
+mod a
