@@ -814,10 +814,10 @@ void checkArgIsInstanceOf(Value arg, ObjClass *klass, int argnum) {
 
 void checkArgIsA(Value arg, ObjClass *klass, int argnum) {
     if (UNLIKELY(!is_value_a_p(arg, klass))) {
-        const char *typeExpect = NULL;
+        const char *typeExpect = className(klass);
         const char *typeActual = NULL;
         if (IS_INSTANCE(arg)) {
-            typeActual = className(klass);
+            typeActual = className(AS_INSTANCE(arg)->klass);
         } else {
             typeActual = typeOfVal(arg);
         }
