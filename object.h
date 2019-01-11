@@ -306,6 +306,8 @@ typedef struct LxFile {
     ObjString *name; // copied (owned value)
 } LxFile;
 
+#define TO_OBJ(obj) ((Obj*)(obj))
+#define TO_CLASS(obj) ((ObjClass*)(obj))
 
 // is the value an instance of this type, no subtype check
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))

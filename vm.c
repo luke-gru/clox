@@ -227,7 +227,7 @@ static void defineNativeClasses(void) {
     lxBreakBlockErrClass = breakBlockErr;
     ObjClass *continueBlockErr = newClass(INTERN("BlockContinueError"), blockIterErr, NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_HIDDEN);
     ObjClass *returnBlockErr = newClass(INTERN("BlockReturnError"), blockIterErr, NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_HIDDEN);
-    hideFromGC((Obj*)returnBlockErr);
+    hideFromGC(TO_OBJ(returnBlockErr));
     lxBlockIterErrClass = blockIterErr;
     lxContinueBlockErrClass = continueBlockErr;
     lxReturnBlockErrClass = returnBlockErr;
@@ -266,7 +266,7 @@ static void defineGlobalVariables(void) {
     pushCString(libPath, QUOTE(LX_BUILT_DIR), strlen(QUOTE(LX_BUILT_DIR)));
     pushCString(libPath, "/lib", strlen("/lib"));
     arrayPush(loadPathVal, OBJ_VAL(libPath));
-    unhideFromGC((Obj*)libPath);
+    unhideFromGC(TO_OBJ(libPath));
     // populate load path from -L option given to commandline
     char *lpath = GET_OPTION(initialLoadPath);
     if (lpath && strlen(lpath) > 0) {
@@ -291,8 +291,8 @@ static void defineGlobalVariables(void) {
         Value arg = OBJ_VAL(argStr);
         arrayPush(OBJ_VAL(lxArgv), arg);
     }
-    hideFromGC((Obj*)lxArgv);
-    hideFromGC((Obj*)lxLoadPath);
+    hideFromGC(TO_OBJ(lxArgv));
+    hideFromGC(TO_OBJ(lxLoadPath));
 }
 
 static bool isIterableType(Value val) {
@@ -824,7 +824,7 @@ void setBacktrace(Value err) {
                 }
             }
             arrayPush(ret, out);
-            unhideFromGC((Obj*)outBuf);
+            unhideFromGC(TO_OBJ(outBuf));
         }
     }
     VM_DEBUG(2, "/Setting backtrace");
@@ -836,8 +836,8 @@ static inline bool isThrowable(Value val) {
 
 static bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
     Obj *givenClass = klass;
-    if (klass == (Obj*)obj->klass && obj->singletonKlass) {
-        klass = (Obj*)obj->singletonKlass;
+    if (klass == TO_OBJ(obj->klass) && obj->singletonKlass) {
+        klass = TO_OBJ(obj->singletonKlass);
     }
     Value key = OBJ_VAL(propName);
     Obj *classLookup = klass;
@@ -883,7 +883,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
 }
 
 static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
-    if (isFrozen((Obj*)obj)) {
+    if (isFrozen(TO_OBJ(obj))) {
         throwErrorFmt(lxErrClass, "Tried to set property on frozen object");
     }
     Obj *setter = NULL;
@@ -1094,7 +1094,7 @@ void popFrame(void) {
             }
         }
         if (frame->instance) {
-            th->thisObj = (Obj*)frame->instance;
+            th->thisObj = TO_OBJ(frame->instance);
         } else {
             th->thisObj = NULL;
         }
@@ -1222,8 +1222,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     ObjClass *frameClass = NULL;
     if (isMethod) {
         instance = AS_INSTANCE(EC->stackTop[-argCount-1]);
-        if (UNLIKELY(!isInstanceLikeObj((Obj*)instance))) {
-            throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfObj((Obj*)instance));
+        if (UNLIKELY(!isInstanceLikeObj(TO_OBJ(instance)))) {
+            throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfObj(TO_OBJ(instance)));
         }
         frameClass = instance->klass; // TODO: make class the callable's class, not the instance class
     } else {
@@ -1247,7 +1247,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         frameClass = klass;
         instanceVal = OBJ_VAL(instance);
         volatile Obj *oldThis = th->thisObj;
-        th->thisObj = (Obj*)instance;
+        th->thisObj = TO_OBJ(instance);
         /*ASSERT(IS_CLASS(EC->stackTop[-argCount - 1])); this holds true if the # of args is correct for the function */
         EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
         // Call the initializer, if there is one.
@@ -1319,7 +1319,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
             argCountActual++;
             if (!instance) {
                 instance = AS_INSTANCE(*(EC->stackTop-argCount));
-                DBG_ASSERT(((Obj*)instance)->type == OBJ_T_INSTANCE);
+                DBG_ASSERT(TO_OBJ(instance)->type == OBJ_T_INSTANCE);
                 frameClass = instance->klass;
             }
         } else {
@@ -1585,7 +1585,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
             return NIL_VAL;
         }
         Obj *superClass = CLASS_SUPER(klass);
-        if (superClass == (Obj*)lxObjClass) {
+        if (superClass == TO_OBJ(lxObjClass)) {
             superClass->type = OBJ_T_CLASS; // FIXME: not sure why needed, but when stressing GC with --stress-GC=young, some scripts fails without this!
         }
         if (UNLIKELY(!superClass)) {
@@ -1761,11 +1761,11 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
     strncpy(cbuf, sbuf, len);
     cbuf[len] = '\0';
     ObjString *buf = takeString(cbuf, len, NEWOBJ_FLAG_NONE);
-    hideFromGC((Obj*)buf);
+    hideFromGC(TO_OBJ(buf));
     Value msg = OBJ_VAL(buf);
     Value err = newError(klass, msg);
     vm.curThread->lastErrorThrown = err;
-    unhideFromGC((Obj*)buf);
+    unhideFromGC(TO_OBJ(buf));
     throwError(err);
     UNREACHABLE("thrown");
 }
@@ -2016,7 +2016,7 @@ vmLoop:
 #ifndef NDEBUG
     if (CLOX_OPTION_T(traceVMExecution)) {
         printVMStack(stderr, THREAD());
-        printDisassembledInstruction(stderr, ch, (int)(getFrame()->ip - ch->code), NULL);
+        printDisassembledInstruction(stderr, ch, (int)(frame->ip - ch->code), NULL);
     }
 #endif
 
@@ -2179,7 +2179,9 @@ vmLoop:
           if (!vm.printBuf || vm.printToStdout) {
               printValue(stdout, val, true, -1);
               printf("\n");
+#ifdef LOX_TEST
               fflush(stdout);
+#endif
           }
 #ifndef NDEBUG
           // used during testing
@@ -2188,7 +2190,7 @@ vmLoop:
               ASSERT(out);
               pushCString(vm.printBuf, out->chars, strlen(out->chars));
               pushCString(vm.printBuf, "\n", 1);
-              unhideFromGC((Obj*)out);
+              unhideFromGC(TO_OBJ(out));
           }
 #endif
           DISPATCH_BOTTOM();
@@ -2535,25 +2537,25 @@ vmLoop:
           ObjClass *klass = (ObjClass*)frame->closure->function->klass; // NOTE: class or module
           ASSERT(klass);
           ObjIClass *iclassFound = NULL;
-          if (((Obj*)klass)->type == OBJ_T_MODULE) {
+          if (TO_OBJ(klass)->type == OBJ_T_MODULE) {
               ObjModule *mod = (ObjModule*)klass;
               klass = AS_INSTANCE(instanceVal)->klass;
-              Obj *iclass = (Obj*)klass;
-              while (iclass != (Obj*)mod) {
+              Obj *iclass = TO_OBJ(klass);
+              while (iclass != TO_OBJ(mod)) {
                   iclass = CLASSINFO(iclass)->superclass;
                   if (iclass->type == OBJ_T_CLASS) {
                       // do nothing
                   } else if (iclass->type == OBJ_T_ICLASS) {
                       iclassFound = (ObjIClass*)iclass;
-                      iclass = (Obj*)((ObjIClass*)iclass)->mod;
+                      iclass = TO_OBJ(((ObjIClass*)iclass)->mod);
                   }
               }
-              ASSERT(iclass == (Obj*)mod);
+              ASSERT(iclass == TO_OBJ(mod));
               klass = (ObjClass*)iclassFound;
           }
           Value method;
           bool found = lookupMethod(
-              AS_INSTANCE(instanceVal), (Obj*)klass,
+              AS_INSTANCE(instanceVal), TO_OBJ(klass),
               AS_STRING(methodName), &method, false);
           if (UNLIKELY(!found)) {
               throwErrorFmt(lxErrClass, "Could not find method '%s' for 'super': %s",
@@ -2915,7 +2917,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     frame->ip = chunk->code;
     frame->slots = EC->stack;
     ObjFunction *func = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
-    hideFromGC((Obj*)func);
+    hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
@@ -2946,7 +2948,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     frame->ip = chunk->code;
     frame->slots = EC->stack;
     ObjFunction *func = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
-    hideFromGC((Obj*)func);
+    hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     frame->isCCall = false;
     frame->nativeFunc = NULL;
@@ -2997,9 +2999,9 @@ static Value doVMEval(const char *src, const char *filename, int lineno, bool th
     frame->ip = chunk->code;
     frame->slots = EC->stack;
     ObjFunction *func = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
-    hideFromGC((Obj*)func);
+    hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
-    unhideFromGC((Obj*)func);
+    unhideFromGC(TO_OBJ(func));
     frame->isCCall = false;
     frame->nativeFunc = NULL;
 

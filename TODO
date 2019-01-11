@@ -45,8 +45,6 @@ compiled lookup
 * Allow giving keyword args to native functions
 * Use alloca where possible to reduce mallocs/frees for data structures like
 ErrTagInfo and BlockStackEntry, used during setjmp/longjmp
-* Use `table` data structure that allows 2 values to hash to same hash number
-without overriding each other if not valEqual().
 
 Bugs
 ----
