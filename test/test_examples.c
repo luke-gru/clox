@@ -1,6 +1,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 #include "test.h"
 #include "compiler.h"
 #include "vm.h"
@@ -54,7 +55,10 @@ static int test_run_example_files(void) {
     struct dirent *ent = NULL;
     int numErrors = 0;
     int numSuccesses = 0;
-    const char *filePrefix = "./examples/";
+    const char filePrefix[4096] = { '\0' };
+    getcwd(filePrefix, 4096);
+    const char *filePrefixAdd = "/examples/";
+    strcat(filePrefix, filePrefixAdd);
     size_t filePrefixLen = strlen(filePrefix);
     vec_str_t vfiles_failed;
     vec_init(&vfiles_failed);
@@ -100,7 +104,7 @@ static int test_run_example_files(void) {
         unhideFromGC((Obj*)outputStr);
         // TODO: instead of passing ent->d_name, it should be the full path to the file
         // so that __DIR__ is populated correctly for the script.
-        InterpretResult ires = interpret(chunk, ent->d_name);
+        InterpretResult ires = interpret(chunk, fbuf);
         if (ires != INTERPRET_OK) {
             fprintf(stderr, "Error during interpretation: (%d)\n", ires);
             vec_push(&vfiles_failed, strdup(fbuf));
