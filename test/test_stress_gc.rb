@@ -1,4 +1,5 @@
 require 'timeout'
+require 'pp'
 TIMEOUT = 30
 examples_dir = File.join(File.expand_path("../../", __FILE__), "examples");
 fails =  Hash.new { |h,k| h[k] = [] }
@@ -59,12 +60,16 @@ Dir.glob(File.join(examples_dir, "*.lox")).each do |file|
   end
 end
 
+unless skips.empty?
+  puts "Skips:"
+  PP.pp skips
+end
 if fails.empty? && timeouts.empty?
   puts "None"
 else
-  require 'pp'
-  puts "Failures"
+  puts "Failures:"
   PP.pp fails
-  puts "Timeouts"
+  puts "Timeouts:"
   PP.pp timeouts
 end
+exit(fails.size+timeouts.size)

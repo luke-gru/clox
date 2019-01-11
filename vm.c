@@ -222,14 +222,11 @@ static void defineNativeClasses(void) {
     lxLoadErrClass = loadErrClass;
 
     // internal errors for block flow control
-    ObjClass *blockIterErr = newClass(INTERN("BlockIterError"), errClass, NEWOBJ_FLAG_OLD);
-    hideFromGC((Obj*)blockIterErr);
-    ObjClass *breakBlockErr = newClass(INTERN("BlockBreakError"), blockIterErr, NEWOBJ_FLAG_OLD);
-    hideFromGC((Obj*)breakBlockErr);
+    ObjClass *blockIterErr = newClass(INTERN("BlockIterError"), errClass, NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_HIDDEN);
+    ObjClass *breakBlockErr = newClass(INTERN("BlockBreakError"), blockIterErr, NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_HIDDEN);
     lxBreakBlockErrClass = breakBlockErr;
-    ObjClass *continueBlockErr = newClass(INTERN("BlockContinueError"), blockIterErr, NEWOBJ_FLAG_OLD);
-    hideFromGC((Obj*)continueBlockErr);
-    ObjClass *returnBlockErr = newClass(INTERN("BlockReturnError"), blockIterErr, NEWOBJ_FLAG_OLD);
+    ObjClass *continueBlockErr = newClass(INTERN("BlockContinueError"), blockIterErr, NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_HIDDEN);
+    ObjClass *returnBlockErr = newClass(INTERN("BlockReturnError"), blockIterErr, NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_HIDDEN);
     hideFromGC((Obj*)returnBlockErr);
     lxBlockIterErrClass = blockIterErr;
     lxContinueBlockErrClass = continueBlockErr;
@@ -1597,7 +1594,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
         callVMMethod(frame->instance, OBJ_VAL(superMethod), argCount, args, cinfo);
         return pop();
     } else {
-        UNREACHABLE("bug");
+        UNREACHABLE("bug: class type: %s", objTypeName(klass->type));
     }
     return NIL_VAL;
 }
@@ -1962,6 +1959,7 @@ static InterpretResult vm_run() {
             callable = instanceFindMethod(inst, methodName);\
           }\
           if (UNLIKELY(!callable)) {\
+              fprintf(stderr, "Method %s#%s not found for operation '%s'", className(inst->klass), methodName->chars, #op);\
               throwErrorFmt(lxNameErrClass, "Method %s#%s not found for operation '%s'", className(inst->klass), methodName->chars, #op);\
           }\
           callCallable(OBJ_VAL(callable), 1, true, NULL);\
@@ -2778,18 +2776,18 @@ vmLoop:
       }
       CASE_OP(STRING): {
           Value strLit = READ_CONSTANT();
-          ASSERT(IS_STRING(strLit));
+          DBG_ASSERT(IS_STRING(strLit));
           uint8_t isStatic = READ_BYTE();
           push(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
+          buf->klass = lxStringClass;
           if (UNLIKELY(isStatic)) {
               STRING_SET_STATIC(buf);
               push(OBJ_VAL(buf));
           } else {
               push(OBJ_VAL(buf));
           }
-          bool ret = callCallable(peek(1), 1, false, NULL);
-          ASSERT(ret); // the string instance is pushed to top of stack
+          callCallable(peek(1), 1, false, NULL);
           if (UNLIKELY(isStatic == 1)) {
               objFreeze(AS_OBJ(peek(0)));
               STRING_SET_STATIC(AS_STRING(peek(0)));
@@ -2799,16 +2797,19 @@ vmLoop:
       CASE_OP(ARRAY): {
           uint8_t numEls = READ_BYTE();
           Value aryVal = newArray();
+          hideFromGC(AS_OBJ(aryVal));
           ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
           for (int i = 0; i < numEls; i++) {
               Value el = pop();
               writeValueArrayEnd(ary, el);
           }
           push(aryVal);
+          unhideFromGC(AS_OBJ(aryVal));
           DISPATCH_BOTTOM();
       }
       CASE_OP(DUPARRAY): {
           Value ary = READ_CONSTANT();
+          AS_ARRAY(ary)->klass = lxAryClass; // NOTE: this is actually needed
           DBG_ASSERT(IS_AN_ARRAY(ary));
           push(arrayDup(ary));
           DISPATCH_BOTTOM();
