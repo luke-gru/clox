@@ -58,7 +58,6 @@ file lookup, not pwd when calling loadScript/requireScript
 * &blk args after keyword args don't work properly
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
-* Allow &blk parameter after kwargs
 
 Optimizations
 -------------

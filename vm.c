@@ -245,6 +245,7 @@ static void defineNativeClasses(void) {
 
     // order of initialization not important here
     Init_ProcessModule();
+    Init_SignalModule();
     Init_IOClass();
     Init_FileClass();
     Init_ThreadClass();

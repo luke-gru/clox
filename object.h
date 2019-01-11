@@ -607,6 +607,7 @@ extern ObjClass *lxBlockClass;
 extern ObjClass *lxMutexClass;
 extern ObjModule *lxGCModule;
 extern ObjModule *lxProcessMod;
+extern ObjModule *lxSignalMod;
 extern ObjClass *lxIOClass;
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
