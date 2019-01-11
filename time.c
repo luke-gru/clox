@@ -19,30 +19,35 @@ typedef struct LxTimer {
 
 static struct timespec timeAdd(struct timespec a, struct timespec b) {
     if (a.tv_nsec + b.tv_nsec >= 1E9) {
-        return (struct timespec){
-            tv_sec: a.tv_sec + b.tv_sec + 1,
-            tv_nsec: a.tv_nsec + b.tv_nsec - 1E9
+        struct timespec ret = {
+            .tv_sec = a.tv_sec + b.tv_sec + 1,
+            .tv_nsec = a.tv_nsec + b.tv_nsec - 1E9
         };
+        return ret;
     } else {
-        return (struct timespec){
-            tv_sec: a.tv_sec + b.tv_sec,
-            tv_nsec: a.tv_nsec + b.tv_nsec
+        struct timespec ret = {
+            .tv_sec = a.tv_sec + b.tv_sec,
+            .tv_nsec = a.tv_nsec + b.tv_nsec
         };
+        return ret;
     }
 }
 
 static struct timespec timeDiff(struct timespec t1 /* old */,
         struct timespec t2 /* new */) {
-    if (t2.tv_nsec < t1.tv_nsec)
-        return (struct timespec){
-            tv_sec: t2.tv_sec - 1 - t1.tv_sec,
-            tv_nsec: 1E9 + t2.tv_nsec - t1.tv_nsec
+    if (t2.tv_nsec < t1.tv_nsec) {
+        struct timespec ret = {
+            .tv_sec = t2.tv_sec - 1 - t1.tv_sec,
+            .tv_nsec = 1E9 + t2.tv_nsec - t1.tv_nsec
         };
-    else
-        return (struct timespec){
-            tv_sec: t2.tv_sec - t1.tv_sec,
-            tv_nsec: t2.tv_nsec - t1.tv_nsec
+        return ret;
+    } else {
+        struct timespec ret = {
+            .tv_sec = t2.tv_sec - t1.tv_sec,
+            .tv_nsec = t2.tv_nsec - t1.tv_nsec
         };
+        return ret;
+    }
 }
 
 // Is `t1` older than (or the same as) `t2`?
