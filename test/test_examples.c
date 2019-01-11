@@ -98,6 +98,8 @@ static int test_run_example_files(void) {
         ObjString *outputStr = hiddenString("", 0, NEWOBJ_FLAG_OLD);
         setPrintBuf(outputStr, true);
         unhideFromGC((Obj*)outputStr);
+        // TODO: instead of passing ent->d_name, it should be the full path to the file
+        // so that __DIR__ is populated correctly for the script.
         InterpretResult ires = interpret(chunk, ent->d_name);
         if (ires != INTERPRET_OK) {
             fprintf(stderr, "Error during interpretation: (%d)\n", ires);
