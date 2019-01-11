@@ -1183,6 +1183,7 @@ static Node *call() {
             nodeAddChild(callNode, expr);
             expr = callNode;
             bool seenBlockArg = false;
+            (void)seenBlockArg;
             if (match(TOKEN_RIGHT_PAREN)) {
                 // no args
             } else {
@@ -1216,9 +1217,7 @@ static Node *call() {
                         break;
                     }
                 }
-                if (!seenBlockArg) {
-                    consume(TOKEN_RIGHT_PAREN, "Expected ')' to end call expression");
-                }
+                consume(TOKEN_RIGHT_PAREN, "Expected ')' to end call expression");
             }
             // block
             if (match(TOKEN_ARROW)) {

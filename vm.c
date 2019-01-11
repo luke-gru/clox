@@ -1205,14 +1205,17 @@ static inline bool checkFunctionArity(ObjFunction *func, int argCount, CallInfo 
 // is pushed to the stack.
 static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo *callInfo) {
     LxThread *th = vm.curThread;
+    Value blockInstance = NIL_VAL;
     if (argCount > 0 && callInfo) {
         if (IS_A_BLOCK(peek(0))) {
             Value blkObj = peek(0);
             callInfo->blockInstance = AS_INSTANCE(blkObj);
+            blockInstance = blkObj;
         }
     }
     if (callInfo && callInfo->blockInstance && !IS_A_BLOCK(peek(0))) {
         push(OBJ_VAL(callInfo->blockInstance));
+        blockInstance = peek(0);
         argCount++;
     }
 
@@ -1378,6 +1381,10 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     Value kwargsMap = NIL_VAL;
     // keyword arg processing
     if (func->numKwargs > 0 && callInfo) {
+        if (!IS_NIL(blockInstance) && IS_A_BLOCK(peek(0))) {
+            argCount--;
+            pop();
+        }
         kwargsMap = newMap();
         Node *param = NULL;
         int pi = 0;
@@ -1448,15 +1455,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 }
             }
         }
-        // NOTE: &block argument after keyword arguments doesn't work right now
-        /*Value poppedBlock = NIL_VAL;*/
-        /*if ((callInfo->blockFunction || callInfo->blockInstance) && (IS_A_BLOCK(peek(0)) || IS_CLOSURE(peek(0)))) {*/
-            /*poppedBlock = pop();*/
-        /*}*/
-        push(kwargsMap);
-        /*if (!IS_NIL(poppedBlock)) {*/
-            /*push(poppedBlock);*/
-        /*}*/
     }
 
     CallFrame *f = getFrame();
@@ -1493,15 +1491,23 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         }
     }
 
-    if (func->hasBlockArg && callInfo->blockFunction) {
+    if (func->hasBlockArg && callInfo->blockFunction && IS_NIL(blockInstance)) {
         // TODO: get closure created here with upvals!
         Value blockClosure = OBJ_VAL(newClosure(callInfo->blockFunction, NEWOBJ_FLAG_NONE));
         Obj *blkClosure = AS_OBJ(blockClosure);
         push(newBlock(blkClosure));
         argCountWithRestAry++;
-    } else if (func->hasBlockArg) {
+    } else if (func->hasBlockArg && IS_NIL(blockInstance)) {
         push(NIL_VAL);
         argCountWithRestAry++;
+    }
+
+    if (callInfo && func->numKwargs > 0) {
+        if (!IS_NIL(blockInstance)) {
+            push(blockInstance);
+            argCountWithRestAry++;
+        }
+        push(kwargsMap);
     }
 
     // add frame
