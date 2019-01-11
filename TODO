@@ -41,9 +41,6 @@ mutex held blocks release of GVL for a thread)
 * Throw SyntaxError from invalid compile/parse if given flag
 * Make variable lookup work as lookup in Environment tables, not statically
 compiled lookup
-* Add callSuper(argCount, *args) C API function that looks at current call frame, sees the
-associated class, and calls the superclass method. [PARTIAL], doesn't work
-with modules
 * Add more to File class
 * Allow giving keyword args to native functions
 * Use alloca where possible to reduce mallocs/frees for data structures like
@@ -53,7 +50,6 @@ without overriding each other if not valEqual().
 
 Bugs
 ----
-* super() bug in examples/super.lox (super doesn't look in modules for method)
 * super bug for getters/setters (examples/super_setter.lox)
 * Nodes created during parsing are never freed. This results in memory leak
 when evaling.
@@ -62,7 +58,6 @@ file lookup, not pwd when calling loadScript/requireScript
 * Debugger bugs, not evaluating variables in context of function
 * +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] +=1, or other lvalues
 * &blk args after keyword args don't work properly
-* yielding runs things a lot slower, see Benchmark() example when yielding
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
 * Allow &blk parameter after kwargs

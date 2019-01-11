@@ -56,7 +56,8 @@ static int test_run_example_files(void) {
     int numErrors = 0;
     int numSuccesses = 0;
     const char filePrefix[4096] = { '\0' };
-    getcwd(filePrefix, 4096);
+    char *res = getcwd(filePrefix, 4096);
+    ASSERT(res);
     const char *filePrefixAdd = "/examples/";
     strcat(filePrefix, filePrefixAdd);
     size_t filePrefixLen = strlen(filePrefix);

@@ -855,6 +855,7 @@ static bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, Valu
     return false;
 }
 
+static InterpretResult vm_run0(void);
 static InterpretResult vm_run(void);
 
 static Value propertyGet(ObjInstance *obj, ObjString *propName) {
@@ -1901,17 +1902,13 @@ static ObjString *methodNameForBinop(OpCode code) {
     }
 }
 
-/**
- * Run the VM's instructions.
- */
-static InterpretResult vm_run() {
-    register LxThread *th = THREAD();
+static InterpretResult vm_run0() {
     if (CLOX_OPTION_T(parseOnly) || CLOX_OPTION_T(compileOnly)) {
         return INTERPRET_OK;
     }
 
     if (!rootVMLoopJumpBufSet) {
-        ASSERT(th->vmRunLvl == 0);
+        ASSERT(vm.curThread->vmRunLvl == 0);
         int jumpRes = setjmp(rootVMLoopJumpBuf);
         rootVMLoopJumpBufSet = true;
         if (jumpRes == JUMP_SET) {
@@ -1922,6 +1919,14 @@ static InterpretResult vm_run() {
             return INTERPRET_RUNTIME_ERROR;
         }
     }
+    return vm_run();
+}
+
+/**
+ * Run the VM's instructions.
+ */
+static InterpretResult vm_run() {
+    register LxThread *th = vm.curThread;
     th->vmRunLvl++;
     register Chunk *ch = currentChunk();
     register Value *constantSlots = ch->constants->values;
@@ -2916,7 +2921,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     frame->nativeFunc = NULL;
     setupPerScriptROGlobals(filename);
 
-    InterpretResult result = vm_run();
+    InterpretResult result = vm_run0();
     return result;
 }
 
