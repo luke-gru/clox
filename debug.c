@@ -700,11 +700,9 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
 }
 
 static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_funcp_t *funcs) {
-    char *numBuf = calloc(5+1, 1);
-    ASSERT_MEM(numBuf);
+    char numBuf[12] = {'\0'};
     sprintf(numBuf, "%04d\t", i);
     pushCString(buf, numBuf, strlen(numBuf));
-    xfree(numBuf);
     uint8_t byte = chunk->code[i];
     switch (byte) {
         case OP_CONSTANT:
