@@ -3,7 +3,7 @@
 #include <stdbool.h>
 
 typedef enum RNodeType {
-    NODE_ATOM = 1, // a
+    NODE_ATOM = 1, // a,b,c,etc.
     NODE_GROUP, // ()
     NODE_OR, // |
     NODE_REPEAT, // +
@@ -11,7 +11,7 @@ typedef enum RNodeType {
     NODE_REPEAT_N, // {n[,m]}
     NODE_CCLASS, // [aeiou]
     NODE_ECLASS, // \d,\w,\s
-    NODE_ANCHOR,
+    NODE_ANCHOR, // ^,$
     NODE_DOT, // .
     NODE_PROGRAM // top-most node
 } RNodeType;

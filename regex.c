@@ -90,8 +90,11 @@ static void node_remove_child(RNode *parent, RNode *child) {
             break;
         }
     }
-    ASSERT(0); // not found
+    // node not found
+    return;
 }
+
+static RNode *begOrNode = NULL; // beginning of what could be the child of an OR (|) node later on
 
 static RNode *new_node(RNodeType type, const char *tok, int toklen, RNode *parent, RNode *prev) {
     RNode *node = ALLOCATE(RNode, 1);
@@ -124,6 +127,8 @@ static void parse_error(char c, const char *at, const char *msg) {
     regex_debug(1, "%s", msg);
 }
 
+static void regex_output_ast_node(RNode *node, int indent);
+
 static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *err) {
     if (*err != 0) return NULL; // for recursive calls
     char c;
@@ -134,9 +139,14 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
             RNode *grp_child = NULL;
             while (**src_p && **src_p != ')') {
                 /*fprintf(stderr, "parsing %c\n", **src_p);*/
+                RNode *grp_child_old = grp_child;
                 grp_child = regex_parse_node(grp, grp_child, src_p, err);
+                if (!grp_child_old) {
+                    begOrNode = grp_child;
+                }
             }
             if (*err != 0) {
+                fprintf(stderr, "Error parsing NODE_GROUP\n");
                 return NULL;
             }
             if (**src_p) {
@@ -151,32 +161,68 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
         } else if (c == ')') {
             ASSERT(0); // FIXME: ')', unmatched '(', should be parse error
         } else if (c == '|') {
-            if (!prev) {
+            if (!begOrNode) {
                 parse_error(c, *src_p, "Empty alternate");
                 *err = -1;
                 return NULL;
             }
-            node_remove_child(parent, prev);
-            prev->parent = NULL;
-            RNode *node = new_node(NODE_OR, *src_p, 1, parent, prev->prev);
-            if (!prev->prev) {
-                parent->children = node;
+            node_remove_child(parent, begOrNode);
+            begOrNode->parent = NULL;
+            RNode *orNode = new_node(NODE_OR, *src_p, 1, parent, begOrNode->prev);
+            RNode *groupNode = new_node(NODE_GROUP, NULL, 0, orNode, NULL);
+            begOrNode->parent = groupNode;
+
+            if (!begOrNode->prev) {
+                parent->children = orNode;
             } else {
-                prev->prev->next = node;
-                node->prev = prev->prev;
+                begOrNode->prev->next = orNode;
+                orNode->prev = begOrNode->prev;
             }
-            node->children = prev;
-            prev->parent = node;
-            prev->next = NULL;
+
+            groupNode->parent = orNode;
+            orNode->children = groupNode;
+
+            groupNode->children = begOrNode;
+            RNode *beg = begOrNode;
+            node_remove_child(groupNode, orNode);
+            ASSERT(beg != orNode);
+            int idx = 0;
+            while (beg) {
+                ASSERT(beg != orNode);
+                beg->parent = groupNode;
+                beg = beg->next;
+                idx++;
+            }
+
+            /*fprintf(stderr, "groupNode:==\n");*/
+            /*regex_output_ast_node(groupNode, 0);*/
+            /*fprintf(stderr, "/groupNode:==\n");*/
             (*src_p)++;
-            RNode *alt = regex_parse_node(node, prev, src_p, err);
-            if (*err != 0) return NULL;
+            RNode *lastBegOrNode = begOrNode;
+            int lastIdx = 0;
+            RNode *alt = NULL;
+            RNode *altGroupNode = new_node(NODE_GROUP, NULL, 0, orNode, groupNode);
+
+            while (**src_p) {
+                if (**src_p == ')') break; // end of group, don't advance. TODO: check if inGroupLvl > 0
+                alt = regex_parse_node(altGroupNode, alt, src_p, err);
+                if (*err != 0) return NULL;
+                if (begOrNode != lastBegOrNode && lastIdx > 0) break;
+                lastIdx++;
+            }
+
             if (alt == NULL) {
+                ASSERT(0);
                 parse_error(c, *src_p, "Alternate must have 2 choices");
                 *err = -1;
                 return NULL;
             }
-            return node;
+
+            /*fprintf(stderr, "node:==\n");*/
+            /*regex_output_ast_node(orNode, 0);*/
+            /*fprintf(stderr, "/node:==\n");*/
+            begOrNode = orNode;
+            return orNode;
         } else if (c == '+') {
             if (!prev) {
                 parse_error(c, *src_p, "Empty + repeat");
@@ -340,8 +386,7 @@ static int regex_parse(Regex *regex) {
     regex->node = program;
     RNode *parent = program;
 
-    bool debug = false;
-
+    begOrNode = NULL;
     RNode *prev = NULL;
     char *src_p = regex->src;
     char **src_pout = &src_p;
@@ -349,9 +394,14 @@ static int regex_parse(Regex *regex) {
         int err = 0;
         prev = regex_parse_node(parent, prev, src_pout, &err);
         if (err != 0) { return err; }
-        if (debug) {
-            regex_output_ast(regex);
+        if (!begOrNode) {
+            begOrNode = prev;
         }
+        /*} else if (prev->type == NODE_GROUP) {*/
+            /*begOrNode = prev;*/
+        /*} else if (prev->type == NODE_OR) {*/
+            /*begOrNode = prev;*/
+        /*}*/
     }
     return 0;
 }
@@ -489,23 +539,47 @@ bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
             } else {
                 return false;
             }
-        case NODE_OR: { // |
+        case NODE_OR: { // | (2 children)
+            ASSERT(node->children);
             RNode *child = node->children;
-            while (child) {
-                if (node_accepts_ch(child, node, cptr_p, nnext)) {
-                    if (node->next) {
-                        *nnext = node->next;
-                    } else {
-                        *nnext = parent->next;
-                    }
-                    return true;
-                }
-                child = child->next;
+            RNode *child2 = node->children->next;
+            char *start = *cptr_p;
+            bool accepted = false;
+            while ((accepted = node_accepts_ch(child, node, cptr_p, nnext))) {
+                /*fprintf(stderr, "OR accepted\n");*/
+                if (!*nnext) break;
+                child = *nnext;
                 if (child) {
-                    ASSERT(child->next == NULL);
+                    *nnext = child->next;
+                } else {
+                    *nnext = NULL;
                 }
             }
-            return false;
+            if (accepted) {
+                /*fprintf(stderr, "OR success (1)\n");*/
+                return true;
+            }
+            /*fprintf(stderr, "OR reset\n");*/
+            *cptr_p = start;
+            while ((accepted = node_accepts_ch(child2, node, cptr_p, nnext))) {
+                /*fprintf(stderr, "OR accepted (2)\n");*/
+                if (!*nnext) break;
+                child2 = *nnext;
+                if (child2) {
+                    *nnext = child2->next;
+                } else {
+                    *nnext = NULL;
+                }
+            }
+            if (accepted) {
+                /*fprintf(stderr, "OR success (2)\n");*/
+                return true;
+            } else {
+                *cptr_p = start;
+                /*fprintf(stderr, "OR failed\n");*/
+                return false;
+            }
+
         }
         case NODE_REPEAT: { // +
             int count = 0;
