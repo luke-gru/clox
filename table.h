@@ -91,7 +91,7 @@ size_t tableCapacity(Table *table);
   }
 #endif
 
-ObjString *tableFindString(Table* table, const char* chars, int length,
+struct ObjString *tableFindString(Table* table, const char* chars, int length,
                            uint32_t hash);
 
 void tableRemoveWhite(Table *table);

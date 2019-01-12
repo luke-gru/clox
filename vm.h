@@ -20,8 +20,8 @@
 #define THREAD_DEBUG(lvl, ...) (void)0
 #endif
 
-typedef struct CallInfo CallInfo;
-typedef struct BlockStackEntry BlockStackEntry;
+struct CallInfo; // fwd decls
+struct BlockStackEntry;
 
 typedef struct CallFrame {
     // Non-native function fields
@@ -41,9 +41,9 @@ typedef struct CallFrame {
     jmp_buf jmpBuf; // only used if chunk associated with closure has a catch table
     bool jmpBufSet;
     struct CallFrame *prev;
-    BlockStackEntry *blockEntry; // if block, this is the block info
+    struct BlockStackEntry *blockEntry; // if block, this is the block info
     int stackAdjustOnPop;
-    CallInfo *callInfo;
+    struct CallInfo *callInfo;
 } CallFrame; // represents a local scope (block, function, etc)
 
 typedef enum ErrTag {
@@ -57,7 +57,7 @@ typedef struct ErrTagInfo {
     jmp_buf jmpBuf;
     CallFrame *frame;
     struct ErrTagInfo *prev;
-    BlockStackEntry *bentry;
+    struct BlockStackEntry *bentry;
     Value caughtError;
 } ErrTagInfo;
 
@@ -268,23 +268,23 @@ void popBlockEntry(BlockStackEntry *bentry);
 // low-level call function, arguments must be pushed to stack, including
 // callable if it's not a method, or the instance if it is. Argcount does not
 // include the instance, if it's a method. `cinfo` can be NULL.
-bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *cinfo);
+bool callCallable(Value callable, int argCount, bool isMethod, struct CallInfo *cinfo);
 // higher-level call function, but callable must be provided. Return value is
 // pushed to stack. argCount does not include instance.
 Value callVMMethod(
     ObjInstance *instance, Value callable,
-    int argCount, Value *args, CallInfo *cinfo
+    int argCount, Value *args, struct CallInfo *cinfo
 );
 // high-level call function: instance and method name given, if no method then
 // error is raised. Value is returned, popped from stack. argCount does not
 // include instance.
-Value callMethod(Obj *instance, ObjString *methodName, int argCount, Value *args, CallInfo *cinfo);
+Value callMethod(Obj *instance, ObjString *methodName, int argCount, Value *args, struct CallInfo *cinfo);
 // Nothing should be pushed to stack. On return, value is popped from stack.
 // Callable should not be a method.
 Value callFunctionValue(Value callable, int argCount, Value *args);
 // Must be called from native C callframe only. Value is returned, popped from
 // stack. `args` does not include `self`, and `cinfo` can be NULL.
-Value callSuper(int argCount, Value *args, CallInfo *cinfo);
+Value callSuper(int argCount, Value *args, struct CallInfo *cinfo);
 // NOTE: must be called before lxYield to setup error handlers.
 // Similar code to vm_protect.
 #define SETUP_BLOCK(block, bentry, status, errInf) {\

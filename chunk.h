@@ -4,7 +4,6 @@
 #include "value.h"
 #include "vec.h"
 
-typedef struct CatchTable CatchTable;
 typedef struct CatchTable {
     // Row info
     int ifrom; // instruction try start
@@ -13,7 +12,7 @@ typedef struct CatchTable {
     Value catchVal; // catch class or other value
     Value lastThrownValue; // runtime VM value of last thrown instance
 
-    CatchTable *next; // next row in the catch table
+    struct CatchTable *next; // next row in the catch table
 } CatchTable;
 
 /**

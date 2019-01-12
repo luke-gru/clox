@@ -97,8 +97,8 @@ typedef enum {
     COMPILE_SCOPE_MODULE,
 } CompileScopeType;
 
-typedef struct CallInfo CallInfo; // fwd decl
-typedef void (*BlockIterFunc)(int blkArgCount, Value *blkArgs, Value blkRet, CallInfo *cinfo);
+struct CallInfo; // fwd decl
+typedef void (*BlockIterFunc)(int blkArgCount, Value *blkArgs, Value blkRet, struct CallInfo *cinfo);
 
 #ifdef NAN_TAGGING
 typedef Value uint64_t;

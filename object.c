@@ -248,7 +248,7 @@ static inline void clearObjString(ObjString *string) {
     string->hash = 0;
 }
 
-ObjFunction *newFunction(Chunk *chunk, Node *funcNode, int flags) {
+ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, int flags) {
     ObjFunction *function = ALLOCATE_OBJ(
         ObjFunction, OBJ_T_FUNCTION, flags|NEWOBJ_FLAG_OLD
     );

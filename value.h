@@ -6,8 +6,8 @@
 #include "vec.h"
 
 // fwd decls
-typedef struct Obj Obj;
-typedef struct ObjString ObjString;
+struct Obj;
+struct ObjString;
 
 #ifdef NAN_TAGGING
 typedef uint64_t Value;
@@ -41,7 +41,7 @@ typedef uint64_t Value;
 // Value -> 0 or 1.
 #define AS_BOOL(value)    ((value) == TRUE_VAL)
 // Value -> Obj*.
-#define AS_OBJ(value)     ((Obj*)(uintptr_t)((value) & ~(SIGN_BIT | QNAN)))
+#define AS_OBJ(value)     ((struct Obj*)(uintptr_t)((value) & ~(SIGN_BIT | QNAN)))
 #define AS_NUMBER(value)  (valueToNumber(value))
 
 // Singleton values.
@@ -52,7 +52,7 @@ typedef uint64_t Value;
 #define FALSE_VAL     ((Value)(uint64_t)(QNAN | TAG_FALSE))
 #define UNDEF_VAL     ((Value)(uint64_t)(QNAN | TAG_UNDEFINED))
 #define NUMBER_VAL(n) (numberToValue((double)(n)))
-#define OBJ_VAL(obj)  (objectToValue((Obj*)(obj)))
+#define OBJ_VAL(obj)  (objectToValue((struct Obj*)(obj)))
 
 // Gets the singleton type tag for a Value (which must be a singleton).
 #define GET_TAG(value) ((int)((value) & MASK_TAG))
@@ -90,7 +90,7 @@ typedef struct Value {
 #define NIL_VAL       ((Value){ VAL_T_NIL, { .number = 0 } } )
 #define UNDEF_VAL     ((Value){ VAL_T_UNDEF, { .number = -1 } })
 #define NUMBER_VAL(n) ((Value){ VAL_T_NUMBER, { .number = n } })
-#define OBJ_VAL(obj)  ((Value){ VAL_T_OBJ, { .object = (Obj*)obj } })
+#define OBJ_VAL(obj)  ((Value){ VAL_T_OBJ, { .object = (struct Obj*)obj } })
 
 #endif
 
@@ -141,7 +141,7 @@ static inline double valueToNumber(Value val) {
 #endif
 }
 
-static inline Value objectToValue(Obj *obj) {
+static inline Value objectToValue(struct Obj *obj) {
 #if NAN_TAGGING
   // The triple casting is necessary here to satisfy some compilers:
   // 1. (uintptr_t) Convert the pointer to a number of the right size.
@@ -187,8 +187,8 @@ bool is_nil_p(Value);
 bool is_number_p(Value);
 bool is_obj_p(Value);
 
-typedef ObjString *(*newStringFunc)(char *chars, int length, int flags);
-ObjString *valueToString(Value value, newStringFunc fn, int flags);
+typedef struct ObjString *(*newStringFunc)(char *chars, int length, int flags);
+struct ObjString *valueToString(Value value, newStringFunc fn, int flags);
 
 const char *typeOfVal(Value val);
 uint32_t valHash(Value val);

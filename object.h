@@ -25,7 +25,12 @@ typedef enum ObjType {
   OBJ_T_LAST, // should never happen
 } ObjType;
 
-typedef struct ObjAny ObjAny;
+struct ObjAny; // fwd decls
+struct ObjString;
+struct CallFrame;
+struct LxThread;
+struct sNode;
+struct Upvalue;
 
 // common flags
 #define OBJ_FLAG_NONE (0)
@@ -73,7 +78,7 @@ typedef struct ObjAny ObjAny;
 typedef struct Obj {
     ObjType type;
     uint16_t flags;
-    ObjAny *nextFree;
+    struct ObjAny *nextFree;
     size_t objectId;
     // GC fields
     unsigned short GCGen;
@@ -91,17 +96,15 @@ typedef struct ObjInternal {
   bool isRealObject; // is allocated in object heap
 } ObjInternal;
 
-typedef struct sNode Node; // fwd decl
-typedef struct Upvalue Upvalue; // fwd decl
 typedef struct ObjFunction {
   Obj object;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM
   Chunk *chunk;
-  ObjString *name;
+  struct ObjString *name;
   Obj *klass; // ObjClass* or ObjModule* (if method)
-  Node *funcNode;
-  Upvalue *upvaluesInfo;
+  struct sNode *funcNode;
+  struct Upvalue *upvaluesInfo;
   unsigned short arity; // number of required args
   unsigned short numDefaultArgs; // number of optional default args
   unsigned short numKwargs;
@@ -112,7 +115,6 @@ typedef struct ObjFunction {
   bool isBlock;
 } ObjFunction;
 
-typedef struct ObjUpvalue ObjUpvalue; // fwd decl
 typedef struct ObjUpvalue {
   Obj object;
 
@@ -125,7 +127,7 @@ typedef struct ObjUpvalue {
   Value closed;
 
   // Open upvalues are stored in a linked list.
-  ObjUpvalue *next;
+  struct ObjUpvalue *next;
 } ObjUpvalue;
 
 typedef struct ObjClosure {
@@ -141,20 +143,17 @@ typedef Value (*NativeFn)(int argCount, Value *args);
 typedef struct ObjNative {
   Obj object;
   NativeFn function;
-  ObjString *name;
+  struct ObjString *name;
   Obj *klass; // class or module, if a method
   bool isStatic; // if static method
 } ObjNative;
-
-typedef struct ObjClass ObjClass; // fwd decl
-typedef struct ObjModule ObjModule; // fwd decl
 
 #define CLASSINFO(klass) (((ObjClass*) (klass))->classInfo)
 typedef struct ClassInfo {
   Table *methods;
   Table *getters;
   Table *setters;
-  ObjString *name;
+  struct ObjString *name;
   // for classes only
   Obj *superclass; // ObjClass or ObjIClass
   vec_void_t v_includedMods; // pointers to ObjModule
@@ -166,8 +165,8 @@ typedef struct ObjClass {
   // NOTE: same fields, in same order, as ObjInstance. Can be cast to an
   // ObjInstance. Also, can be cast to an ObjModule.
   Obj object;
-  ObjClass *klass; // always lxClassClass
-  ObjClass *singletonKlass;
+  struct ObjClass *klass; // always lxClassClass
+  struct ObjClass *singletonKlass;
   Obj *finalizerFunc;
   Table *fields;
 
@@ -251,10 +250,7 @@ typedef struct ObjArray {
     ObjClass *singletonKlass;
     Obj *finalizerFunc; // ObjClosure* or ObjNative*
     Table *fields;
-    //union {
-        ValueArray valAry;
-        // TODO: add embed
-    //} as;
+    ValueArray valAry;
 } ObjArray;
 
 typedef struct ObjMap {
@@ -263,10 +259,7 @@ typedef struct ObjMap {
     ObjClass *singletonKlass;
     Obj *finalizerFunc; // ObjClosure* or ObjNative*
     Table *fields;
-    //union {
-        Table *table;
-        // TODO: add embed
-    //} as;
+    Table *table;
 } ObjMap;
 
 extern ObjArray *lxLoadPath;
@@ -393,8 +386,6 @@ typedef struct LxFile {
 #define NEWOBJ_FLAG_FROZEN 2
 #define NEWOBJ_FLAG_HIDDEN 4
 
-// strings (internal)
-typedef ObjString *(*newStringFunc)(char *chars, int length, int flags);
 // Strings as ObjString
 ObjString *takeString(char *chars, int length, int flags); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
 ObjString *copyString(char *chars, int length, int flags); // copies provided memory. Object lives on lox heap.
@@ -521,10 +512,9 @@ static inline void mapClear(Value mapVal) {
 
 // threads
 Value newThread(void);
-typedef struct LxThread LxThread; // fwd decl
-static inline LxThread *threadGetHidden(Value thread) {
+static inline struct LxThread *threadGetHidden(Value thread) {
     ObjInternal *i = AS_INSTANCE(thread)->internal;
-    return (LxThread*)i->data;
+    return (struct LxThread*)i->data;
 }
 
 Value mapDup(Value other);
@@ -533,11 +523,10 @@ Value mapDup(Value other);
 Value newBlock(Obj *callable);
 Obj *blockCallable(Value blk); // returns Closure/ObjNative
 Obj *blockCallableBlock(Value blk); // returns Function/ObjNative
-typedef struct CallFrame CallFrame; // fwd decl
-ObjInstance *getBlockArg(CallFrame *frame);
+ObjInstance *getBlockArg(struct CallFrame *frame);
 
 // Object creation functions
-ObjFunction *newFunction(Chunk *chunk, Node *funcNode, int flags);
+ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, int flags);
 ObjClass *newClass(ObjString *name, ObjClass *superclass, int flags);
 ObjModule *newModule(ObjString *name, int flags);
 ObjIClass *newIClass(ObjClass *klass, ObjModule *mod, int flags);
