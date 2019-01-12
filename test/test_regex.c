@@ -1,6 +1,7 @@
 #include "test.h"
 #include "regex.h"
 #include "debug.h"
+#include "vm.h"
 
 int test_compile_empty(void) {
     Regex re;
@@ -29,7 +30,7 @@ int test_compile_only_atoms_success(void) {
     regex_init(&re, "abba", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
 cleanup:
     regex_free(&re);
     return 0;
@@ -40,7 +41,7 @@ int test_match_only_atoms_success(void) {
     regex_init(&re, "abba", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "00abba00");
     T_ASSERT_EQ(2, mdata.match_start);
     T_ASSERT_EQ(4, mdata.match_len);
@@ -54,7 +55,7 @@ int test_match_only_atoms_nomatch(void) {
     regex_init(&re, "abba", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     T_ASSERT_EQ(false, regex_match(&re, "00abbc00").matched);
 cleanup:
     regex_free(&re);
@@ -66,8 +67,9 @@ int test_match_only_atoms_with_alts_success(void) {
     regex_init(&re, "abb|a", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "00abab00");
+    T_ASSERT(mdata.matched);
     T_ASSERT_EQ(2, mdata.match_start);
     T_ASSERT_EQ(3, mdata.match_len);
 cleanup:
@@ -80,8 +82,9 @@ int test_match_only_atoms_with_2_alts_success(void) {
     regex_init(&re, "abb|a|c", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "abc");
+    T_ASSERT(mdata.matched);
     T_ASSERT_EQ(0, mdata.match_start);
     T_ASSERT_EQ(3, mdata.match_len);
 cleanup:
@@ -94,7 +97,7 @@ int test_compile_simple_group(void) {
     regex_init(&re, "(ab)", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
 cleanup:
     regex_free(&re);
     return 0;
@@ -105,7 +108,7 @@ int test_compile_nested_groups(void) {
     regex_init(&re, "(ab(cd|e))", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
 cleanup:
     regex_free(&re);
     return 0;
@@ -126,7 +129,7 @@ int test_compile_repeat(void) {
     regex_init(&re, "ab+", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
 cleanup:
     regex_free(&re);
     return 0;
@@ -137,7 +140,7 @@ int test_compile_repeat2(void) {
     regex_init(&re, "a+", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     T_ASSERT_EQ(NODE_REPEAT, re.node->children->type);
 cleanup:
     regex_free(&re);
@@ -149,7 +152,7 @@ int test_compile_repeat_z(void) {
     regex_init(&re, "ab*", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
 cleanup:
     regex_free(&re);
     return 0;
@@ -160,7 +163,7 @@ int test_compile_repeat_z2(void) {
     regex_init(&re, "a*", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     T_ASSERT_EQ(NODE_REPEAT_Z, re.node->children->type);
 cleanup:
     regex_free(&re);
@@ -172,7 +175,7 @@ int test_compile_repeat_group(void) {
     regex_init(&re, "(ab)*", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
 cleanup:
     regex_free(&re);
     return 0;
@@ -183,7 +186,7 @@ int test_match_repeat_simple(void) {
     regex_init(&re, "ab+", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "0abc");
     T_ASSERT_EQ(1, mdata.match_start);
     T_ASSERT_EQ(2, mdata.match_len);
@@ -197,7 +200,7 @@ int test_match_repeat_z_simple(void) {
     regex_init(&re, "ab*", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "0ac");
     T_ASSERT_EQ(1, mdata.match_start);
     T_ASSERT_EQ(1, mdata.match_len);
@@ -211,7 +214,7 @@ int test_compile_character_class(void) {
     regex_init(&re, "[ab]", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
 cleanup:
     regex_free(&re);
     return 0;
@@ -222,7 +225,7 @@ int test_match_character_class_simple(void) {
     regex_init(&re, "[ab]", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "cca");
     T_ASSERT_EQ(2, mdata.match_start);
     T_ASSERT_EQ(1, mdata.match_len);
@@ -236,7 +239,7 @@ int test_compile_dot(void) {
     regex_init(&re, ".", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
 cleanup:
     regex_free(&re);
     return 0;
@@ -247,7 +250,7 @@ int test_match_dot(void) {
     regex_init(&re, ".", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     T_ASSERT_EQ(NODE_DOT, re.node->children->type);
     MatchData mdata = regex_match(&re, "bbc");
     T_ASSERT_EQ(0, mdata.match_start);
@@ -262,7 +265,7 @@ int test_compile_repeat_n(void) {
     regex_init(&re, "a.{3}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     T_ASSERT_EQ(NODE_REPEAT_N, re.node->children->next->type);
 cleanup:
     regex_free(&re);
@@ -274,7 +277,7 @@ int test_compile_repeat_n2(void) {
     regex_init(&re, ".{3}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     T_ASSERT_EQ(NODE_REPEAT_N, re.node->children->type);
 cleanup:
     regex_free(&re);
@@ -299,7 +302,7 @@ int test_match_escapes(void) {
     regex_init(&re, "\\s*\\d{3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "  \t127.0.0.1");
     T_ASSERT_EQ(0, mdata.match_start);
     T_ASSERT_EQ(12, mdata.match_len);
@@ -313,7 +316,7 @@ int test_match_cclass_ranges(void) {
     regex_init(&re, "[a-zA-Z]{3}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "0azZa");
     T_ASSERT_EQ(1, mdata.match_start);
     T_ASSERT_EQ(3, mdata.match_len);
@@ -327,7 +330,7 @@ int test_match_cclass_hyphen(void) {
     regex_init(&re, "[_-]", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "123-");
     T_ASSERT_EQ(3, mdata.match_start);
     T_ASSERT_EQ(1, mdata.match_len);
@@ -341,7 +344,7 @@ int test_match_cclass_close_bracket(void) {
     regex_init(&re, "[\\]]", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "[]");
     T_ASSERT_EQ(1, mdata.match_start);
     T_ASSERT_EQ(1, mdata.match_len);
@@ -355,7 +358,7 @@ int test_match_eclass_in_cclass(void) {
     regex_init(&re, "[\\d]{2}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    regex_output_ast(&re);
+    /*regex_output_ast(&re);*/
     MatchData mdata = regex_match(&re, "hell01");
     T_ASSERT_EQ(4, mdata.match_start);
     T_ASSERT_EQ(2, mdata.match_len);

@@ -5,19 +5,18 @@
 #include "regex.h"
 #include "debug.h"
 #include "memory.h"
+#include "options.h"
 
 #define DEFAULT_REGEX_OPTIONS (RegexOptions){\
     .case_insensitive = false,\
     .multiline = false\
 }
 
-static bool debug = true;
-
 #ifdef NDEBUG
-#define regex_debug(...) (void)0
+#define regex_debug(lvl, ...) (void)0
 #else
-static void regex_debug(const char *format, ...) {
-    if (!debug) return;
+static void regex_debug(int lvl, const char *format, ...) {
+    if (GET_OPTION(debugRegexLvl) < lvl) return;
     va_list ap;
     va_start(ap, format);
     fprintf(stderr, "[Regex]: ");
@@ -89,7 +88,7 @@ static RNode *new_node(RNodeType type, const char *tok, int toklen, RNode *paren
 }
 
 static void parse_error(char c, const char *at, const char *msg) {
-    regex_debug("%s", msg);
+    regex_debug(1, "%s", msg);
 }
 
 static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *err) {
@@ -168,7 +167,7 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
             node_add_child(repeat, prev);
             return repeat;
         } else if (c == '{') {
-            regex_debug("parsing repeat-n");
+            regex_debug(2, "parsing repeat-n");
             if (!prev) {
                 parse_error(c, *src_p, "Empty {} repeat");
                 *err = -1;
@@ -193,7 +192,7 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
             long lval2 = lval1;
             if (**src_p != '}') {
                 if (**src_p != ',') {
-                    parse_error(c, src_p, "Invalid {} repeat number, expected ',' after first number");
+                    parse_error(c, *src_p, "Invalid {} repeat number, expected ',' after first number");
                     *err = -1;
                     return NULL;
                 }
@@ -231,7 +230,7 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
                 (*src_p)++;
             }
             if (!**src_p) {
-                parse_error('[', *cclass_start, "Unterminated character class");
+                parse_error('[', cclass_start, "Unterminated character class");
                 *err = -1;
                 return NULL;
             }
@@ -328,6 +327,14 @@ RegexCompileResult regex_compile(Regex *regex) {
     return REGEX_COMPILE_SUCCESS;
 }
 
+static const char *i(int indent) {
+    if (indent == 0) return "";
+    const char *buf = malloc((indent*2)+1);
+    memset(buf, ' ', indent*2);
+    ((char*)buf)[indent*2] = '\0';
+    return buf;
+}
+
 static void regex_output_ast_node(RNode *node, int indent) {
     switch (node->type) {
         case NODE_PROGRAM: {
@@ -346,60 +353,61 @@ static void regex_output_ast_node(RNode *node, int indent) {
             break;
         }
         case NODE_ATOM: {
-            fprintf(stderr, "(atom %.*s)\n", 1, node->tok);
+            fprintf(stderr, "%s(atom %.*s)\n", i(indent), 1, node->tok);
             break;
         }
         case NODE_OR: {
-            fprintf(stderr, "(alt\n");
+            fprintf(stderr, "%s(alt\n", i(indent));
             RNode *child = node->children;
             while (child) {
                 regex_output_ast_node(child, indent+1);
                 child = child->next;
             }
-            fprintf(stderr, ")\n");
+            fprintf(stderr, "%s)\n", i(indent));
             break;
         }
         case NODE_GROUP: {
-            fprintf(stderr, "(group\n");
+            fprintf(stderr, "%s(group\n", i(indent));
             RNode *child = node->children;
             while (child) {
                 regex_output_ast_node(child, indent+1);
                 child = child->next;
             }
-            fprintf(stderr, ")\n");
+            fprintf(stderr, "%s)\n", i(indent));
             break;
         }
         case NODE_REPEAT:
         case NODE_REPEAT_Z:
         case NODE_REPEAT_N: {
-            fprintf(stderr, "%s", node->type == NODE_REPEAT ? "(repeat\n" :
+            fprintf(stderr, "%s%s", i(indent),
+                    node->type == NODE_REPEAT ? "(repeat\n" :
                     (node->type == NODE_REPEAT_Z ? "(repeat-z\n" :
                      "(repeat-n "));
             if (node->type == NODE_REPEAT_N) {
-                fprintf(stderr, "%d-%d\n", node->repeat_min, node->repeat_max);
+                fprintf(stderr, "%ld-%ld\n", node->repeat_min, node->repeat_max);
             }
             RNode *child = node->children;
             while (child) {
                 regex_output_ast_node(child, indent+1);
                 child = child->next;
             }
-            fprintf(stderr, ")\n");
+            fprintf(stderr, "%s)\n", i(indent));
             break;
         }
         case NODE_CCLASS: {
-            fprintf(stderr, "(cclass\n");
-            fprintf(stderr, "[%.*s]\n", node->toklen-1, node->tok+1);
-            fprintf(stderr, ")\n");
+            fprintf(stderr, "%s(cclass\n", i(indent));
+            fprintf(stderr, "%s[%.*s]\n", i(indent+1), node->toklen-1, node->tok+1);
+            fprintf(stderr, "%s)\n", i(indent));
             break;
         }
         case NODE_ECLASS: {
-            fprintf(stderr, "(eclass ");
+            fprintf(stderr, "%s(eclass ", i(indent));
             fprintf(stderr, "%s)\n", node->eclass_type == ECLASS_DIGIT ? "\\d" :
                     (node->eclass_type == ECLASS_WORD ? "\\w" : "\\s"));
             break;
         }
         case NODE_DOT: {
-            fprintf(stderr, "(dot)\n");
+            fprintf(stderr, "%s(dot)\n", i(indent));
             break;
         }
         default:
@@ -622,19 +630,19 @@ MatchData regex_match(Regex *regex, const char *string) {
     }
     RNode *nparent = node->parent;
     while (**cptr_p) {
-        regex_debug("matching '%c' at nodetype=%d", **cptr_p, node->type);
+        regex_debug(1, "matching '%c' at nodetype=%s", **cptr_p, nodeTypeName(node->type));
         RNode *nnext = NULL;
         char *match_start = *cptr_p;
         if (node_accepts_ch(node, nparent, cptr_p, &nnext)) {
             if (**cptr_p) {
-                regex_debug("matched '%c'", *match_start);
+                regex_debug(1, "matched '%c'", *match_start);
             } else {
-                regex_debug("matched");
+                regex_debug(1, "matched");
             }
             node = nnext;
             if (node == NULL) { // successful match
                 char *match_end = *cptr_p;
-                regex_debug("Successful match starting at %d", (int)(start - string));
+                regex_debug(1, "Successful match starting at %d", (int)(start - string));
                 mres.matched = true;
                 mres.match_start = start - string;
                 mres.match_len = match_end - start;
@@ -642,10 +650,40 @@ MatchData regex_match(Regex *regex, const char *string) {
             }
             nparent = node->parent;
         } else {
-            regex_debug("no match for '%c'", **cptr_p);
+            regex_debug(1, "no match for '%c'", **cptr_p);
             (*cptr_p)++;
             start = *cptr_p;
         }
     }
     return mres;
+}
+
+
+const char *nodeTypeName(RNodeType nodeType) {
+    switch (nodeType) {
+        case NODE_ATOM:
+            return "ATOM";
+        case NODE_GROUP:
+            return "GROUP";
+        case NODE_OR:
+            return "OR";
+        case NODE_REPEAT:
+            return "REPEAT";
+        case NODE_REPEAT_Z:
+            return "REPEAT_Z";
+        case NODE_REPEAT_N:
+            return "REPEAT_N";
+        case NODE_CCLASS:
+            return "CCLASS";
+        case NODE_ECLASS:
+            return "ECLASS";
+        case NODE_ANCHOR:
+            return "ANCHOR";
+        case NODE_DOT:
+            return "DOT";
+        case NODE_PROGRAM:
+            return "PROGRAM";
+        default:
+            return NULL;
+    }
 }

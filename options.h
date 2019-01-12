@@ -13,6 +13,7 @@ typedef struct sCloxOptions {
     bool debugTokens;
     bool debugBytecode;
     int debugVMLvl;
+    int debugRegexLvl;
     int traceGCLvl;
     bool traceCompiler;
     bool disableBcodeOptimizer;

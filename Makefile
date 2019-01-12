@@ -94,7 +94,7 @@ run_test_examples:
 
 .PHONY: build_test_regex
 build_test_regex: build
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_regex.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_regex
+	${CC} ${CFLAGS} $(TEST_SRCS) regex.c test/test_regex.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_regex
 
 .PHONY: run_test_regex
 run_test_regex:

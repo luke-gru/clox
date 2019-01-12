@@ -39,6 +39,7 @@ char *stringOptNames[] = { // order doesn't matter
 char *intOptNames[] = { // order doesn't matter
     "traceGCLvl",
     "debugVMLvl",
+    "debugRegexLvl",
     NULL
 };
 
@@ -75,6 +76,7 @@ void initOptions(int argc, char **argv) {
 
     options.traceGCLvl = 0;
     options.debugVMLvl = 0;
+    options.debugRegexLvl = 0;
 
     options._inited = true;
 }
@@ -200,6 +202,10 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "--debug-VM") == 0) {
         SET_OPTION(debugVMLvl, GET_OPTION(debugVMLvl)+1);
+        return 1;
+    }
+    if (strcmp(argv[i], "--debug-regex") == 0) {
+        SET_OPTION(debugRegexLvl, GET_OPTION(debugRegexLvl)+1);
         return 1;
     }
     if (strcmp(argv[i], "--debug-threads") == 0) {
