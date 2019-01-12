@@ -408,6 +408,8 @@ void initVM() {
         VM_WARN("initVM: VM already initialized");
         return;
     }
+    pthread_mutex_init(&vm.GCMutex, NULL);
+    pthread_mutex_init(&vm.rememberSetMutex, NULL);
     VM_DEBUG(1, "initVM() start");
     turnGCOff();
     vm.grayCount = 0;
@@ -495,6 +497,8 @@ void freeVM(void) {
 
     vm.mainThread = NULL;
     vec_deinit(&vm.threads);
+    pthread_mutex_destroy(&vm.GCMutex);
+    pthread_mutex_destroy(&vm.rememberSetMutex);
     vm.lastOp = -1;
 
     VM_DEBUG(1, "freeVM() end");

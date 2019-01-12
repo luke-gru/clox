@@ -1,14 +1,13 @@
-for (var j = 0; j < 1000000; j+=1) {
+for (var j = 0; j < 20000; j+=1) {
   Array.fill(1000, nil);
 }
 var threads = [];
 print "done first";
 for (var i = 0; i < 10; i+=1) {
   var t = newThread(fun() {
-    for (var j = 0; j < 1000000; j+=1) {
+    for (var j = 0; j < 20000; j+=1) {
       Array.fill(100, nil);
     }
-    exit(0);
   });
   threads << t;
 }

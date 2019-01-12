@@ -46,7 +46,7 @@ struct sGCProfile {
 };
 
 extern struct sGCProfile GCProf;
-extern int activeFinalizers;
+extern volatile int activeFinalizers;
 
 struct sGCStats {
     // all in bytes
@@ -92,9 +92,9 @@ static inline void objWrite(Value owner, Value pointed) {
 }
 #define OBJ_WRITE(owner, pointed) objWrite(owner, pointed)
 
-extern bool inYoungGC;
-extern bool inFullGC;
-extern bool inFinalFree;
+extern volatile bool inYoungGC;
+extern volatile bool inFullGC;
+extern volatile bool inFinalFree;
 
 bool turnGCOff(void);
 bool turnGCOn(void);

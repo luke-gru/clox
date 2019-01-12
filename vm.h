@@ -168,6 +168,8 @@ typedef struct VM {
     vec_void_t threads; // list of current thread ObjInstance pointers
     int numDetachedThreads;
     int lastOp; // for debugging when error
+    pthread_mutex_t GCMutex;
+    pthread_mutex_t rememberSetMutex;
 } VM; // singleton
 
 extern VM vm;

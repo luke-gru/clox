@@ -32,16 +32,16 @@ static int heapListSize = 0;
 static ObjAny *freeList;
 static int heapsUsed = 0;
 
-static bool inGC = false;
-static bool GCOn = true;
-static bool dontGC = false;
-bool inYoungGC = false;
-bool inFullGC = false;
-bool inFinalFree = false;
+volatile static bool inGC = false;
+volatile static bool GCOn = true;
+volatile static bool dontGC = false;
+volatile bool inYoungGC = false;
+volatile bool inFullGC = false;
+volatile bool inFinalFree = false;
 
 // debugging
-static ObjType lastNewObjectRequestType = OBJ_T_NONE;
-static ObjType curNewObjectRequestType = OBJ_T_NONE;
+volatile static ObjType lastNewObjectRequestType = OBJ_T_NONE;
+volatile static ObjType curNewObjectRequestType = OBJ_T_NONE;
 
 struct sGCProfile GCProf = {
     .totalGCYoungTime = {
@@ -70,7 +70,7 @@ static void stopGCRunProfileTimer(struct timeval *timeStart, struct timeval *tou
 }
 
 struct sGCStats GCStats;
-int activeFinalizers = 0;
+volatile int activeFinalizers = 0;
 
 static void printGenerationInfo() {
     fprintf(stderr, "Generation info:\n");
@@ -172,7 +172,7 @@ static void gc_trace_mark(int lvl, Obj *obj) {
         fprintf(stderr, ", value => ");
         bool oldGC = inGC;
         inGC = false;
-        printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`
+        /*printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`*/
         inGC = oldGC;
     }
     fprintf(stderr, "\n");
@@ -187,7 +187,7 @@ static void gc_trace_free(int lvl, Obj *obj) {
         fprintf(stderr, "type => %s, value => ", typeOfObj(obj));
         bool oldGC = inGC;
         inGC = false;
-        printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`
+        /*printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`*/
         if (obj->type == OBJ_T_INSTANCE) {
             const char *className = "(anon)";
             if (CLASSINFO(((ObjInstance*) obj)->klass)->name) {
@@ -222,18 +222,20 @@ static inline void trace_gc_func_end(int lvl, const char *funcName) {
 // Generational GC details
 #define YOUNG_MARK_STACK_MAX 5000
 static Obj *youngStack[YOUNG_MARK_STACK_MAX];
-static int youngStackSz = 0;
+volatile static int youngStackSz = 0;
 // remembering young objects that should not be collected until next major GC
 // (they are pointed to by old objects)
 static vec_void_t rememberSet;
+volatile static bool rememberSetInited = false;
 
 void pushRememberSet(Obj *obj) {
-    static bool rememberSetInited = false;
+    pthread_mutex_lock(&vm.rememberSetMutex);
     if (UNLIKELY(!rememberSetInited)) {
         vec_init(&rememberSet);
         rememberSetInited = true;
     }
     vec_push(&rememberSet, obj);
+    pthread_mutex_unlock(&vm.rememberSetMutex);
 }
 
 void addHeap() {
@@ -298,9 +300,9 @@ static inline void pushYoungObject(Obj *obj) {
     youngStack[youngStackSz++] = obj;
 }
 
-static inline bool inRememberSet(Obj *obj) {
+static inline bool inRememberSet(Obj *obj, vec_void_t set) {
     int found = -1;
-    vec_find(&rememberSet, obj, found);
+    vec_find(&set, obj, found);
     return found != -1;
 }
 
@@ -325,6 +327,9 @@ void collectYoungGarbage() {
 
     struct timeval tRunStart;
     startGCRunProfileTimer(&tRunStart);
+
+    vec_void_t rset = rememberSet; // copy
+    int rsetLen = rset.length;
 
     GC_TRACE_DEBUG(1, "Collecting garbage (young, stack size: %d)", youngStackSz);
 
@@ -420,6 +425,7 @@ void collectYoungGarbage() {
     int numCollected = 0;
     ObjAny *newFreeList = freeList;
 
+    GC_TRACE_DEBUG(2, "Marking done, begin free");
     int grayCount = vm.grayCount;
     while (grayCount > 0) {
         // Pop an item from the gray stack.
@@ -454,7 +460,7 @@ void collectYoungGarbage() {
             numPromotedDark++;
             GC_PROMOTE_ONCE(youngObj);
             OBJ_UNSET_DARK(youngObj);
-        } else if (inRememberSet(youngObj)) {
+        } else if (inRememberSet(youngObj, rset)) {
             numPromotedRemembered++;
             GC_PROMOTE_ONCE(youngObj);
             OBJ_UNSET_DARK(youngObj);
@@ -514,6 +520,7 @@ Obj *getNewObject(ObjType type, size_t sz, int flags) {
     if (OPTION_T(stressGCFull)  || OPTION_T(stressGCBoth)) collectGarbage();
 #endif
 
+    pthread_mutex_lock(&vm.GCMutex);
 retry:
     DBG_ASSERT(tries < 3);
 #if GEN_GC
@@ -531,6 +538,7 @@ retry:
             pushYoungObject(obj);
         }
 #endif
+        pthread_mutex_unlock(&vm.GCMutex);
         return obj;
     }
     if (!triedYoungCollect && !noGC) {
@@ -551,9 +559,9 @@ retry:
 // NOTE: memory is NOT initialized to 0 (see man 3 realloc)
 void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     TRACE_GC_FUNC_START(10, "reallocate");
-    if (newSize > 0 && UNLIKELY(inGC)) {
-        ASSERT(0); // if we're in GC phase we shouldn't allocate memory (other than adding heaps, if necessary)
-    }
+    /*if (newSize > 0 && UNLIKELY(inGC)) {*/
+        /*ASSERT(0); // if we're in GC phase we shouldn't allocate memory (other than adding heaps, if necessary)*/
+    /*}*/
 
     if (newSize > oldSize) {
         GCStats.totalAllocated += (newSize - oldSize);
