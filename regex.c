@@ -60,6 +60,37 @@ static void node_add_child(RNode *parent, RNode *child) {
         }
     }
     last_child->next = child;
+    child->prev = last_child;
+}
+
+static void node_remove_child(RNode *parent, RNode *child) {
+    ASSERT(parent);
+    ASSERT(child);
+    RNode *childn = parent->children;
+    child->parent = NULL;
+    if (childn == NULL) {
+        return;
+    }
+    while (childn) {
+        if (childn == child) {
+            if (child->prev) {
+                child->prev->next = child->next;
+            }
+            if (child->next) {
+                child->next->prev = child->prev;
+            }
+            if (!child->prev) {
+                parent->children = child->next;
+            }
+            return;
+        }
+        if (childn->next) {
+            childn = childn->next;
+        } else {
+            break;
+        }
+    }
+    ASSERT(0); // not found
 }
 
 static RNode *new_node(RNodeType type, const char *tok, int toklen, RNode *parent, RNode *prev) {
@@ -83,7 +114,9 @@ static RNode *new_node(RNodeType type, const char *tok, int toklen, RNode *paren
         node->prev = prev;
     }
     node->next = NULL;
-    if (parent && !prev) { node_add_child(parent, node); }
+    if (parent && !prev) {
+        node_add_child(parent, node);
+    }
     return node;
 }
 
@@ -123,11 +156,19 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
                 *err = -1;
                 return NULL;
             }
+            node_remove_child(parent, prev);
             prev->parent = NULL;
             RNode *node = new_node(NODE_OR, *src_p, 1, parent, prev->prev);
-            (*src_p)++;
+            if (!prev->prev) {
+                parent->children = node;
+            } else {
+                prev->prev->next = node;
+                node->prev = prev->prev;
+            }
+            node->children = prev;
+            prev->parent = node;
             prev->next = NULL;
-            node_add_child(node, prev);
+            (*src_p)++;
             RNode *alt = regex_parse_node(node, prev, src_p, err);
             if (*err != 0) return NULL;
             if (alt == NULL) {

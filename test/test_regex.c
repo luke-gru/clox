@@ -64,10 +64,10 @@ cleanup:
 
 int test_match_only_atoms_with_alts_success(void) {
     Regex re;
-    regex_init(&re, "abb|a", NULL);
+    regex_init(&re, "ab(b|a)", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    /*regex_output_ast(&re);*/
+    regex_output_ast(&re);
     MatchData mdata = regex_match(&re, "00abab00");
     T_ASSERT(mdata.matched);
     T_ASSERT_EQ(2, mdata.match_start);
@@ -77,12 +77,27 @@ cleanup:
     return 0;
 }
 
+/*int test_match_only_atoms_with_alts_no_parens_success(void) {*/
+    /*Regex re;*/
+    /*regex_init(&re, "abcd|abce", NULL);*/
+    /*RegexCompileResult comp_res = regex_compile(&re);*/
+    /*T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);*/
+    /*regex_output_ast(&re);*/
+    /*MatchData mdata = regex_match(&re, "00abce00");*/
+    /*T_ASSERT(mdata.matched);*/
+    /*T_ASSERT_EQ(2, mdata.match_start);*/
+    /*T_ASSERT_EQ(4, mdata.match_len);*/
+/*cleanup:*/
+    /*regex_free(&re);*/
+    /*return 0;*/
+/*}*/
+
 int test_match_only_atoms_with_2_alts_success(void) {
     Regex re;
-    regex_init(&re, "abb|a|c", NULL);
+    regex_init(&re, "ab(b|a|c)", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
-    /*regex_output_ast(&re);*/
+    regex_output_ast(&re);
     MatchData mdata = regex_match(&re, "abc");
     T_ASSERT(mdata.matched);
     T_ASSERT_EQ(0, mdata.match_start);
@@ -378,6 +393,7 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_match_only_atoms_success);
     RUN_TEST(test_match_only_atoms_nomatch);
     RUN_TEST(test_match_only_atoms_with_alts_success);
+    /*RUN_TEST(test_match_only_atoms_with_alts_no_parens_success);*/
     RUN_TEST(test_match_only_atoms_with_2_alts_success);
     RUN_TEST(test_compile_simple_group);
     RUN_TEST(test_compile_nested_groups);
