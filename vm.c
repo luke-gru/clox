@@ -569,6 +569,10 @@ void push(Value value) {
     ctx->stackTop++;
 }
 
+static inline void pushSwap(Value value) {
+    *(EC->stackTop-1) = value;
+}
+
 Value pop(void) {
     VMExecContext *ctx = EC;
     ASSERT(LIKELY(ctx->stackTop > ctx->stack));
@@ -1966,16 +1970,15 @@ static InterpretResult vm_run() {
 #define READ_CONSTANT() (constantSlots[READ_BYTE()])
 #define BINARY_OP(op, opcode, type) \
     do { \
-      Value b = pop(); \
-      Value a = pop(); \
+      Value b = peek(0);\
+      Value a = peek(1);\
       if (IS_NUMBER(a) && IS_NUMBER(b)) {\
           if (UNLIKELY(((opcode == OP_DIVIDE || opcode == OP_MODULO) && AS_NUMBER(b) == 0.00))) {\
               throwErrorFmt(lxErrClass, "Can't divide by 0");\
           }\
-          push(NUMBER_VAL((type)AS_NUMBER(a) op (type)AS_NUMBER(b))); \
+          pop();\
+          pushSwap(NUMBER_VAL((type)AS_NUMBER(a) op (type)AS_NUMBER(b)));\
       } else if (IS_INSTANCE_LIKE(a)) {\
-          push(a);\
-          push(b);\
           ObjInstance *inst = AS_INSTANCE(a);\
           ObjString *methodName = methodNameForBinop(opcode);\
           Obj *callable = NULL;\
@@ -2098,95 +2101,100 @@ vmLoop:
       CASE_OP(SHOVEL_L): BINARY_OP(<<,OP_SHOVEL_L,int); DISPATCH_BOTTOM();
       CASE_OP(SHOVEL_R): BINARY_OP(>>,OP_SHOVEL_R,int); DISPATCH_BOTTOM();
       CASE_OP(NEGATE): {
-          Value val = pop();
+          Value val = peek(0);
           if (UNLIKELY(!IS_NUMBER(val))) {
+              pop();
               throwErrorFmt(lxTypeErrClass, "Can only negate numbers, type=%s", typeOfVal(val));
           }
-          push(NUMBER_VAL(-AS_NUMBER(val)));
+          pushSwap(NUMBER_VAL(-AS_NUMBER(val)));
           DISPATCH_BOTTOM();
       }
       CASE_OP(LESS): {
           Value rhs = pop(); // rhs
-          Value lhs = pop(); // lhs
+          Value lhs = peek(0); // lhs
           if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
+              pop();
               throwErrorFmt(lxTypeErrClass,
                       "Can only compare 2 numbers or 2 strings with '<', lhs=%s, rhs=%s",
                       typeOfVal(lhs), typeOfVal(rhs));
           }
           if (cmpValues(lhs, rhs, instruction) == -1) {
-              push(trueValue());
+              pushSwap(trueValue());
           } else {
-              push(falseValue());
+              pushSwap(falseValue());
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(GREATER): {
         Value rhs = pop();
-        Value lhs = pop();
+        Value lhs = peek(0);
         if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
+            pop();
             throwErrorFmt(lxTypeErrClass,
                 "Can only compare 2 numbers or 2 strings with '>', lhs=%s, rhs=%s",
                 typeOfVal(lhs), typeOfVal(rhs));
         }
         if (cmpValues(lhs, rhs, instruction) == 1) {
-            push(trueValue());
+            pushSwap(trueValue());
         } else {
-            push(falseValue());
+            pushSwap(falseValue());
         }
         DISPATCH_BOTTOM();
       }
       CASE_OP(EQUAL): {
           Value rhs = pop();
-          Value lhs = pop();
+          Value lhs = peek(0);
           if (isValueOpEqual(lhs, rhs)) {
-              push(trueValue());
+              pushSwap(trueValue());
           } else {
-              push(falseValue());
+              pushSwap(falseValue());
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(NOT_EQUAL): {
           Value rhs = pop();
-          Value lhs = pop();
+          Value lhs = peek(0);
           if (isValueOpEqual(lhs, rhs)) {
-              push(falseValue());
+              pushSwap(falseValue());
           } else {
-              push(trueValue());
+              pushSwap(trueValue());
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(NOT): {
-          Value val = pop();
-          push(BOOL_VAL(!isTruthy(val)));
+          Value val = peek(0);
+          pushSwap(BOOL_VAL(!isTruthy(val)));
           DISPATCH_BOTTOM();
       }
       CASE_OP(GREATER_EQUAL): {
           Value rhs = pop();
-          Value lhs = pop();
+          Value lhs = peek(0);
           if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
+              pop();
               throwErrorFmt(lxTypeErrClass,
                   "Can only compare 2 numbers or 2 strings with '>=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
           }
           if (cmpValues(lhs, rhs, instruction) != -1) {
-              push(trueValue());
+              pushSwap(trueValue());
           } else {
-              push(falseValue());
+              pushSwap(falseValue());
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(LESS_EQUAL): {
           Value rhs = pop();
-          Value lhs = pop();
+          Value lhs = peek(0);
           if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
+              pop();
               throwErrorFmt(lxTypeErrClass,
                   "Can only compare 2 numbers or 2 strings with '<=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
           }
           if (cmpValues(lhs, rhs, instruction) != 1) {
-              push(trueValue());
+              pushSwap(trueValue());
           } else {
-              push(falseValue());
+              pushSwap(falseValue());
           }
           DISPATCH_BOTTOM();
       }
@@ -2259,18 +2267,18 @@ vmLoop:
       }
       CASE_OP(AND): {
           Value rhs = pop();
-          Value lhs = pop();
+          Value lhs = peek(0);
           (void)lhs;
           // NOTE: we only check truthiness of rhs because lhs is
           // short-circuited (a JUMP_IF_FALSE is output in the bytecode for
           // the lhs).
-          push(isTruthy(rhs) ? rhs : BOOL_VAL(false));
+          pushSwap(isTruthy(rhs) ? rhs : BOOL_VAL(false));
           DISPATCH_BOTTOM();
       }
       CASE_OP(OR): {
           Value rhs = pop();
-          Value lhs = pop();
-          push(isTruthy(lhs) || isTruthy(rhs) ? rhs : lhs);
+          Value lhs = peek(0);
+          pushSwap(isTruthy(lhs) || isTruthy(rhs) ? rhs : lhs);
           DISPATCH_BOTTOM();
       }
       CASE_OP(POP): {
@@ -2427,11 +2435,12 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(TO_BLOCK): {
-          Value func = pop();
+          Value func = peek(0);
           if (UNLIKELY(!isCallable(func))) {
+              pop();
               throwErrorFmt(lxTypeErrClass, "Cannot use '&' operator on a non-function");
           }
-          push(newBlock(AS_OBJ(func)));
+          pushSwap(newBlock(AS_OBJ(func)));
           DISPATCH_BOTTOM();
       }
       CASE_OP(CALL): {
@@ -2619,8 +2628,7 @@ vmLoop:
           Value iterator = createIterator(iterable);
           DBG_ASSERT(isIterator(iterator));
           DBG_ASSERT(isIterableType(peek(0)));
-          pop(); // iterable
-          push(iterator);
+          pushSwap(iterator);
           DISPATCH_BOTTOM();
       }
       CASE_OP(ITER_NEXT): {
@@ -2749,8 +2757,7 @@ vmLoop:
               throwErrorFmt(lxTypeErrClass, "Tried to access property '%s' of non-instance (type: %s)", propStr->chars, typeOfVal(instance));
           }
           Value val = propertyGet(AS_INSTANCE(instance), propStr);
-          pop();
-          push(val);
+          pushSwap(val);
           DISPATCH_BOTTOM();
       }
       CASE_OP(PROP_SET): {
@@ -2764,8 +2771,7 @@ vmLoop:
           }
           propertySet(AS_INSTANCE(instance), propStr, rval); // TODO: check frozenness of object
           pop(); // leave rval on stack
-          pop();
-          push(rval);
+          pushSwap(rval);
           DISPATCH_BOTTOM();
       }
       CASE_OP(INDEX_GET): {
