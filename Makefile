@@ -1,9 +1,11 @@
+ifeq ($(strip $(CC)),)
 CC=gcc
+endif
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 DEFINES=-D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLX_BUILT_DIR=$(ROOT_DIR)
-GCC_CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -I. -Ivendor -pthread ${DEFINES}
-CLANG_CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-incompatible-pointer-types-discards-qualifiers -Wno-tautological-constant-out-of-range-compare -I. -Ivendor -pthread ${DEFINES}
-ifeq ($(CC),clang)
+GCC_CFLAGS=-std=c99 -Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -I. -Ivendor -pthread ${DEFINES}
+CLANG_CFLAGS=-std=c99 -Wall -Wno-unused-label -Wno-unused-function -Wno-incompatible-pointer-types-discards-qualifiers -Wno-tautological-constant-out-of-range-compare -I. -Ivendor -pthread ${DEFINES}
+ifneq (,$(findstring clang,$(CC)))
 CFLAGS=${CLANG_CFLAGS}
 else
 CFLAGS=${GCC_CFLAGS}
@@ -43,7 +45,7 @@ clean:
 	rm -f *.o
 
 .PHONY: build_test_object
-build_test_object:
+build_test_object: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_object.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_object
 
 .PHONY: run_test_object
@@ -51,7 +53,7 @@ run_test_object:
 	@ ./bin/test_object
 
 .PHONY: build_test_nodes
-build_test_nodes:
+build_test_nodes: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_nodes.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_nodes
 
 .PHONY: run_test_nodes
@@ -59,7 +61,7 @@ run_test_nodes:
 	@ ./bin/test_nodes
 
 .PHONY: build_test_compiler
-build_test_compiler:
+build_test_compiler: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_compiler.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_compiler
 
 .PHONY: run_test_compiler
@@ -67,7 +69,7 @@ run_test_compiler:
 	@ ./bin/test_compiler
 
 .PHONY: build_test_vm
-build_test_vm:
+build_test_vm: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_vm.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_vm
 
 .PHONY: run_test_vm
@@ -75,7 +77,7 @@ run_test_vm:
 	@ ./bin/test_vm
 
 .PHONY: build_test_gc
-build_test_gc:
+build_test_gc: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_gc.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_gc
 
 .PHONY: run_test_gc
@@ -83,7 +85,7 @@ run_test_gc:
 	@ ./bin/test_gc
 
 .PHONY: build_test_examples
-build_test_examples:
+build_test_examples: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_examples.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_examples
 
 .PHONY: run_test_examples
@@ -91,7 +93,7 @@ run_test_examples:
 	@ ./bin/test_examples
 
 .PHONY: build_test_regex
-build_test_regex:
+build_test_regex: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_regex.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_regex
 
 .PHONY: run_test_regex

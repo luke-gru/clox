@@ -1,0 +1,8 @@
+os:
+  - linux
+  - osx
+language: c
+compiler:
+  - gcc
+  - clang
+script: make build_test_examples && ./bin/test_examples
