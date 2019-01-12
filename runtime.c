@@ -227,19 +227,30 @@ Value lxYield(int argCount, Value *args) {
     CallFrame *frame = getFrame()->prev;
     ASSERT(frame->callInfo);
     Obj *block = (Obj*)frame->callInfo->blockFunction;
-    if (!block) {
+    if (!block && !frame->callInfo->blockInstance) {
         throwErrorFmt(lxErrClass, "Cannot yield, no block given");
     }
-    DBG_ASSERT(IS_FUNCTION(OBJ_VAL(block)));
-    ObjClosure *blockClosure = NULL;
-    blockClosure = closureFromFn((ObjFunction*)block);
-    blockClosure->isBlock = true;
-    CallFrame *outerFrame = getOuterClosureFrame();
-    ObjClosure *outerClosure = outerFrame->closure;
-    ASSERT(outerClosure);
-    fillClosureUpvalues(blockClosure, outerClosure, outerFrame);
-    Value callable = OBJ_VAL(blockClosure);
-    push(callable);
+    Value callable = NIL_VAL;
+    if (block) {
+        DBG_ASSERT(IS_FUNCTION(OBJ_VAL(block)));
+        ObjClosure *blockClosure = NULL;
+        blockClosure = closureFromFn((ObjFunction*)block);
+        blockClosure->isBlock = true;
+        CallFrame *outerFrame = getOuterClosureFrame();
+        ObjClosure *outerClosure = outerFrame->closure;
+        ASSERT(outerClosure);
+        fillClosureUpvalues(blockClosure, outerClosure, outerFrame);
+        callable = OBJ_VAL(blockClosure);
+        push(callable);
+    } else if (frame->callInfo->blockInstance) {
+        ObjInstance *blockInst = frame->callInfo->blockInstance;
+        Obj *blkCallable = blockCallable(OBJ_VAL(blockInst));
+        if (blkCallable->type == OBJ_T_CLOSURE) {
+            block = blkCallable;
+        }
+        callable = OBJ_VAL(blkCallable);
+        push(callable);
+    }
     for (int i = 0; i < argCount; i++) {
         push(args[i]);
     }
@@ -252,23 +263,25 @@ Value lxYield(int argCount, Value *args) {
     volatile int status = 0;
     volatile LxThread *th = THREAD();
     volatile BlockStackEntry *bentry = NULL;
-    SETUP_BLOCK(block, bentry, status, th->errInfo)
-    if (status == TAG_NONE) {
-    } else if (status == TAG_RAISE) {
-        ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
-        ASSERT(errInst);
-        if (errInst->klass == lxBreakBlockErrClass) {
-            return NIL_VAL;
-        } else if (errInst->klass == lxContinueBlockErrClass) { // continue
-            return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
-        } else if (errInst->klass == lxReturnBlockErrClass) {
-            return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
-        } else {
-            throwError(th->lastErrorThrown);
-        }
+    if (block) {
+        SETUP_BLOCK(block, bentry, status, th->errInfo)
+            if (status == TAG_NONE) {
+            } else if (status == TAG_RAISE) {
+                ObjInstance *errInst = AS_INSTANCE(THREAD()->lastErrorThrown);
+                ASSERT(errInst);
+                if (errInst->klass == lxBreakBlockErrClass) {
+                    return NIL_VAL;
+                } else if (errInst->klass == lxContinueBlockErrClass) { // continue
+                    return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+                } else if (errInst->klass == lxReturnBlockErrClass) {
+                    return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+                } else {
+                    throwError(th->lastErrorThrown);
+                }
+            }
     }
     callCallable(callable, argCount, false, &cinfo);
-    UNREACHABLE("block didn't longjmp?"); // blocks should always longjmp out
+    return pop(); // yielded a native function
 }
 
 Value yieldFromC(int argCount, Value *args, ObjInstance *blockObj) {

@@ -1,0 +1,11 @@
+fun yielder() {
+  yield();
+}
+
+fun sayHi() { print "Hi"; }
+
+yielder(&sayHi);
+
+__END__
+-- expect: --
+Hi

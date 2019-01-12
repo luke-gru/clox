@@ -6,6 +6,4 @@ fun bench() {
   }
 }
 
-Benchmark.start(name: "array", iterations: 1) -> {
-  bench();
-};
+Benchmark.start(name: "array", iterations: 1, &bench);
