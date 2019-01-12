@@ -6,8 +6,6 @@ for (var j = 0; j < 100; j+=1) {
   var t = newThread(fun() {
     for (var k = 0; k < 10; k+=1) {
       tmp = i;
-      /*f = File("chunk.c"); // make threads switch*/
-      /*f.close();*/
       Thread.schedule();
       i = tmp + 1;
     }

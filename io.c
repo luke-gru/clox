@@ -451,5 +451,8 @@ void Init_IOClass(void) {
     setProp(ioClassVal, INTERN("F_SETFL"), NUMBER_VAL(F_GETFL));
     // the few file description status flags to set in lox
     setProp(ioClassVal, INTERN("O_NONBLOCK"), NUMBER_VAL(O_NONBLOCK));
+#ifndef O_DIRECT
+#define O_DIRECT 0
+#endif
     setProp(ioClassVal, INTERN("O_DIRECT"), NUMBER_VAL(O_DIRECT));
 }

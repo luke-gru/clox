@@ -257,7 +257,10 @@ Value lxThreadCurrentStatic(int argCount, Value *args) {
 Value lxThreadScheduleStatic(int argCount, Value *args) {
     CHECK_ARITY("Thread.schedule", 1, 1, argCount);
     releaseGVL();
+// not available on OSX
+#ifdef __linux__
     pthread_yield();
+#endif
     acquireGVL();
     return NIL_VAL;
 }

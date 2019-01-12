@@ -322,6 +322,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileClass, "seek", lxFileSeek);
     addNativeMethod(fileClass, "rewind", lxFileRewind);
 
+
     Value fileClassVal = OBJ_VAL(fileClass);
     // TODO: make constants instead of properties
     setProp(fileClassVal, INTERN("O_RDONLY"), NUMBER_VAL(O_RDONLY));
@@ -331,7 +332,13 @@ void Init_FileClass(void) {
     setProp(fileClassVal, INTERN("O_CREAT"), NUMBER_VAL(O_CREAT));
     setProp(fileClassVal, INTERN("O_CLOEXEC"), NUMBER_VAL(O_CLOEXEC));
     setProp(fileClassVal, INTERN("O_NOFOLLOW"), NUMBER_VAL(O_NOFOLLOW));
+#ifndef O_TMPFILE
+#define O_TMPFILE 0
+#endif
     setProp(fileClassVal, INTERN("O_TMPFILE"), NUMBER_VAL(O_TMPFILE));
+#ifndef O_SYNC
+#define O_SYNC 0
+#endif
     setProp(fileClassVal, INTERN("O_SYNC"), NUMBER_VAL(O_SYNC));
     setProp(fileClassVal, INTERN("O_TRUNC"), NUMBER_VAL(O_TRUNC));
     setProp(fileClassVal, INTERN("O_EXCL"), NUMBER_VAL(O_EXCL));
