@@ -1,0 +1,30 @@
+print Process.pid();
+var stop = false;
+Signal.trap(Signal.QUIT, fun() {
+  print "In handler";
+  stop = true;
+  print "exiting handler";
+});
+
+// make sure signal handlers functions are marked
+GC.collect();
+GC.collect();
+
+var childPid = fork(fun() {
+  sleep(2);
+  print "Signalling from child";
+  Process.signal(Process.ppid(), Signal.QUIT);
+});
+Process.detach(childPid);
+
+print "Looping in parent";
+while(stop == false) {
+}
+print "Loop stopped";
+
+__END__
+-- expect: --
+Looping in parent
+Killing from child
+In handler
+Loop stopped

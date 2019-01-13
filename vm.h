@@ -201,8 +201,17 @@ typedef enum {
   INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
 
-// setup
-void initSighandlers(void);
+// setup (core)
+void initCoreSighandlers(void);
+
+// signals
+typedef struct SigHandler {
+    int signum;
+    Obj *callable;
+    struct SigHandler *next;
+} SigHandler;
+extern SigHandler *sigHandlers;
+void removeVMSignalHandlers(void);
 
 // high-level API
 void initVM(void);

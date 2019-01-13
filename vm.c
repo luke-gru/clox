@@ -59,7 +59,7 @@ static void stacktraceHandler(int sig, siginfo_t *si, void *unused) {
     diePrintCBacktrace("info:");
 }
 
-void initSighandlers(void) {
+void initCoreSighandlers(void) {
     struct sigaction sa;
 
     sa.sa_flags = SA_SIGINFO;
@@ -472,6 +472,7 @@ void freeVM(void) {
     }
     VM_DEBUG(1, "freeVM() start");
 
+    removeVMSignalHandlers();
     freeObjects();
 
     freeDebugger(&vm.debugger);
@@ -515,7 +516,6 @@ void freeVM(void) {
 
     VM_DEBUG(1, "freeVM() end");
 }
-
 
 int VMNumStackFrames(void) {
     VMExecContext *ctx; int ctxIdx = 0;
@@ -3193,7 +3193,7 @@ static void detachUnjoinedThreads() {
 NORETURN void stopVM(int status) {
     LxThread *th = vm.curThread;
     if (th == vm.mainThread) {
-        THREAD_DEBUG(1, "Main thread exiting with %d", status);
+        THREAD_DEBUG(1, "Main thread exiting with %d (PID=%d)", status, getpid());
         detachUnjoinedThreads();
         runAtExitHooks();
         freeVM();
@@ -3206,10 +3206,10 @@ NORETURN void stopVM(int status) {
         exitingThread(th);
         th->exitStatus = status;
         if (th->detached && vm.numDetachedThreads > 0) {
-            THREAD_DEBUG(1, "Thread %lu [DETACHED] exiting with %d", th->tid, status);
+            THREAD_DEBUG(1, "Thread %lu [DETACHED] exiting with %d (PID=%d)", th->tid, status, getpid());
             vm.numDetachedThreads--;
         } else {
-            THREAD_DEBUG(1, "Thread %lu exiting with %d", th->tid, status);
+            THREAD_DEBUG(1, "Thread %lu exiting with %d (PID=%d)", th->tid, status, getpid());
         }
         releaseGVL();
         pthread_exit(NULL);

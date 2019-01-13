@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    initSighandlers();
+    initCoreSighandlers();
 
     CompileErr err = COMPILE_ERR_NONE;
     if (fname == NULL || interactive) {

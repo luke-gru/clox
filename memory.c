@@ -1227,6 +1227,13 @@ void collectGarbage(void) {
     grayObject((Obj*)vm.initString);
     grayObject((Obj*)vm.fileString);
     grayObject((Obj*)vm.dirString);
+    GC_TRACE_DEBUG(3, "Marking VM signal handlers");
+    SigHandler *sigh = sigHandlers;
+    while (sigh) {
+        ASSERT(sigh->callable);
+        grayObject(sigh->callable);
+        sigh = sigh->next;
+    }
     if (vm.printBuf) {
         GC_TRACE_DEBUG(3, "Marking VM print buf");
         grayObject((Obj*)vm.printBuf);
