@@ -124,6 +124,7 @@ ObjClass *lxArgErrClass;
 ObjClass *lxTypeErrClass;
 ObjClass *lxNameErrClass;
 ObjClass *lxSyntaxErrClass;
+ObjClass *lxSystemErrClass;
 ObjClass *lxLoadErrClass;
 
 // internal error classes for flow control of blocks
@@ -216,6 +217,10 @@ static void defineNativeClasses(void) {
     // class SyntaxError
     ObjClass *syntaxErrClass = addGlobalClass("SyntaxError", errClass);
     lxSyntaxErrClass = syntaxErrClass;
+
+    // class SystemError
+    ObjClass *systemErrClass = addGlobalClass("SystemError", errClass);
+    lxSystemErrClass = systemErrClass;
 
     // class LoadError
     ObjClass *loadErrClass = addGlobalClass("LoadError", errClass);

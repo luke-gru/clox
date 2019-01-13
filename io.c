@@ -66,7 +66,7 @@ void IOClose(Value ioVal) {
         if ((res = close(f->fd)) != 0) {
             int err = errno;
             errno = last;
-            throwErrorFmt(lxErrClass, "Error closing fd: %d, %s", f->fd, strerror(err));
+            throwErrorFmt(sysErrClass(err), "Error closing fd: %d, %s", f->fd, strerror(err));
         }
         f->isOpen = false;
     }
@@ -74,7 +74,7 @@ void IOClose(Value ioVal) {
 
 static void NORETURN throwIOSyserr(int err, int last, const char *desc) {
     errno = last;
-    throwErrorFmt(lxErrClass, "IO Error during %s: %s", desc, strerror(err));
+    throwErrorFmt(sysErrClass(err), "IO Error during %s: %s", desc, strerror(err));
 }
 
 ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
@@ -160,7 +160,7 @@ size_t IOWrite(Value io, const void *buf, size_t count) {
     if (res == -1) {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error during write: %s", strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error during write: %s", strerror(err));
     }
     return written;
 }
@@ -172,7 +172,7 @@ int IOFcntl(Value io, int cmd, int arg) {
     if (res == -1) {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error during fcntl for fd: %d, %s", fd, strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error during fcntl for fd: %d, %s", fd, strerror(err));
     }
     return res;
 }
@@ -229,7 +229,7 @@ Value lxIOPipeStatic(int argCount, Value *args) {
     if (res == -1) {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error creating pipes: %s", strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error creating pipes: %s", strerror(err));
     }
     Value ret = newArray();
     ObjInstance *reader = newInstance(lxIOClass, NEWOBJ_FLAG_NONE);
@@ -287,7 +287,7 @@ Value lxIOSelectStatic(int argCount, Value *args) {
     if (res == -1) {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error from select: %s", strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error from select: %s", strerror(err));
     }
     int numReady = res;
     if (numReady == 0) { // timeout

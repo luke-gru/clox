@@ -615,11 +615,13 @@ extern ObjClass *lxMutexClass;
 extern ObjModule *lxGCModule;
 extern ObjModule *lxProcessMod;
 extern ObjClass *lxIOClass;
+
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
 extern ObjClass *lxTypeErrClass;
 extern ObjClass *lxNameErrClass;
 extern ObjClass *lxSyntaxErrClass;
+extern ObjClass *lxSystemErrClass;
 extern ObjClass *lxLoadErrClass;
 extern ObjClass *lxRegexErrClass;
 

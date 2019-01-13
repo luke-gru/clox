@@ -1,6 +1,6 @@
 i = 0
 s = nil
 while i < 1000000
-  s = Regexp.new("abcdef")
+  s = /abcdef/
   i += 1
 end

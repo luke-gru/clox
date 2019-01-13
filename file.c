@@ -38,7 +38,7 @@ static int checkOpen(const char *fname, int flags, mode_t mode) {
         if ((mode & O_CREAT) != 0) {
             operation = "creating";
         }
-        throwErrorFmt(lxErrClass, "Error %s File '%s': %s", operation, fname, strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error %s File '%s': %s", operation, fname, strerror(err));
     }
     return fd;
 }
@@ -51,7 +51,7 @@ static FILE *checkFopen(const char *path, const char *modeStr) {
     if (!f) {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error opening File '%s': %s", path, strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error opening File '%s': %s", path, strerror(err));
     }
     return f;
 }
@@ -69,7 +69,7 @@ static void checkFerror(FILE *f, const char *op, const char *fname) {
     if (readErr != 0) {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error %s File '%s': %s", op, fname, strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error %s File '%s': %s", op, fname, strerror(err));
     }
 }
 
@@ -250,7 +250,7 @@ static Value lxFileUnlink(int argCount, Value *args) {
     } else {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error during file unlink: %s", strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error during file unlink: %s", strerror(err));
     }
 }
 
@@ -270,7 +270,7 @@ static Value lxFileRename(int argCount, Value *args) {
     } else {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error during file rename: %s", strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error during file rename: %s", strerror(err));
     }
 }
 
@@ -289,7 +289,7 @@ static Value lxFileSeek(int argCount, Value *args) {
     if (pos == -1) {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error during file seek: %s", strerror(err));
+        throwErrorFmt(sysErrClass(err), "Error during file seek: %s", strerror(err));
     }
     return NUMBER_VAL(pos);
 }

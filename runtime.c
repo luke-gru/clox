@@ -801,6 +801,11 @@ Value lxGCSetFinalizer(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+ObjClass *sysErrClass(int err) {
+    (void)err;
+    return lxSystemErrClass;
+}
+
 bool checkArity(int min, int max, int actual) {
     return min <= actual && (max >= actual || max == -1);
 }

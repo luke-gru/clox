@@ -414,7 +414,7 @@ static Value lxEnvSet(int argCount, Value *args) {
     if (setenv(ckey, cval, 1) != 0) {
         int err = errno;
         errno = last;
-        throwErrorFmt(lxErrClass, "Error setting environment variable '%s': %s",
+        throwErrorFmt(sysErrClass(err), "Error setting environment variable '%s': %s",
                 ckey, strerror(err));
     }
     return val;
@@ -461,7 +461,7 @@ static Value lxEnvDelete(int argCount, Value *args) {
         if (unsetenv(cname) != 0) {
             int err = errno;
             errno = last;
-            throwErrorFmt(lxErrClass, "Error deleting environment variable '%s': %s",
+            throwErrorFmt(sysErrClass(err), "Error deleting environment variable '%s': %s",
                     cname, strerror(err));
         }
     }

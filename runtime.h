@@ -112,6 +112,7 @@ Value lxGCOn(int argCount, Value *args);
 // class Error
 Value lxErrInit(int argCount, Value *args);
 ObjNative *nativeErrorInit;
+ObjClass *sysErrClass(int err);
 
 // class String
 void Init_StringClass(void);

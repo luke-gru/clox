@@ -26,6 +26,7 @@ Added features
 * String interpolation
 * Map (hash/dict) literals
 * Object finalizers
+* Regular expressions
 
 Some internal differences
 -------------------------
@@ -37,7 +38,6 @@ Some internal differences
 
 Future features
 ---------------
-* Support for regex
 * Add some standard library and networking support
 * Support non-ascii strings
 * Add constants (no redefinitions, will given compiler or runtime error)
