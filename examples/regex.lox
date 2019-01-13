@@ -1,0 +1,15 @@
+var re = Regex("abc");
+print re.match("dabc0");
+
+var err = nil;
+try {
+  re = Regex("abc(");
+} catch (RegexError e) {
+  err = e;
+}
+print err != nil;
+
+__END__
+-- expect: --
+1
+true

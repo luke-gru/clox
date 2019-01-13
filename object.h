@@ -6,12 +6,14 @@
 #include "chunk.h"
 #include "value.h"
 #include "table.h"
+#include "regex_lib.h"
 
 typedef enum ObjType {
   OBJ_T_NONE = 0, // when object is unitialized or freed
   OBJ_T_STRING,   // internal string value only, Strings in lox are instances
   OBJ_T_ARRAY,
   OBJ_T_MAP,
+  OBJ_T_REGEX,
   OBJ_T_INSTANCE, // includes Maps
   OBJ_T_CLASS,
   OBJ_T_MODULE,
@@ -262,6 +264,15 @@ typedef struct ObjMap {
     Table *table;
 } ObjMap;
 
+typedef struct ObjRegex {
+    Obj obj;
+    ObjClass *klass;
+    ObjClass *singletonKlass;
+    Obj *finalizerFunc;
+    Table *fields;
+    Regex *regex;
+} ObjRegex;
+
 extern ObjArray *lxLoadPath;
 extern ObjArray *lxArgv;
 
@@ -306,13 +317,15 @@ typedef struct LxFile {
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))
 #define IS_ARRAY(value)         (isObjType(value, OBJ_T_ARRAY))
 #define IS_MAP(value)           (isObjType(value, OBJ_T_MAP))
+#define IS_REGEX(value)         (isObjType(value, OBJ_T_REGEX))
 #define IS_FUNCTION(value)      (isObjType(value, OBJ_T_FUNCTION))
 #define IS_CLOSURE(value)       (isObjType(value, OBJ_T_CLOSURE))
 #define IS_NATIVE_FUNCTION(value) (isObjType(value, OBJ_T_NATIVE_FUNCTION))
 #define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
 #define IS_MODULE(value)        (isObjType(value, OBJ_T_MODULE))
 #define IS_INSTANCE(value)      (isObjType(value, OBJ_T_INSTANCE))
-#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_STRING(value) || IS_ARRAY(value) || IS_MAP(value) || IS_CLASS(value) || IS_MODULE(value))
+// TODO: add `instanceLike` flag in obj->flags to reduce checks
+#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_STRING(value) || IS_ARRAY(value) || IS_MAP(value) || IS_REGEX(value) || IS_CLASS(value) || IS_MODULE(value))
 #define IS_UPVALUE(value)       (isObjType(value, OBJ_T_UPVALUE))
 #define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
 #define IS_INTERNAL(value)      (isObjType(value, OBJ_T_INTERNAL))
@@ -324,7 +337,7 @@ typedef struct LxFile {
 #define IS_INSTANCE_OF_FUNC (is_value_instance_of_p)
 #define IS_A_FUNC (is_value_a_p)
 
-#define IS_A(value, klass)      ((IS_INSTANCE(value) || IS_ARRAY(value) || IS_STRING(value) || IS_MAP(value)) && instanceIsA(AS_INSTANCE(value), klass))
+#define IS_A(value, klass)      ((IS_INSTANCE(value) || IS_ARRAY(value) || IS_STRING(value) || IS_MAP(value) || IS_REGEX(value)) && instanceIsA(AS_INSTANCE(value), klass))
 
 #define IS_A_MODULE(value)      (IS_A(value, lxModuleClass))
 #define IS_AN_ARRAY(value)      (IS_A(value, lxAryClass))
@@ -352,6 +365,7 @@ typedef struct LxFile {
 #define AS_ARRAY(value)         ((ObjArray*)AS_OBJ(value))
 #define AS_INTERNAL(value)      ((ObjInternal*)AS_OBJ(value))
 #define AS_MAP(value)           ((ObjMap*)AS_OBJ(value))
+#define AS_REGEX(value)         ((ObjRegex*)AS_OBJ(value))
 
 #define ARRAY_GET(value, idx)    (arrayGet(value, idx))
 #define ARRAY_SIZE(value)        (arraySize(value))
@@ -381,10 +395,10 @@ typedef struct LxFile {
 #define THREAD_GETHIDDEN(thVal) (threadGetHidden(thVal))
 
 // object creation flags
-#define NEWOBJ_FLAG_NONE 0
-#define NEWOBJ_FLAG_OLD 1
-#define NEWOBJ_FLAG_FROZEN 2
-#define NEWOBJ_FLAG_HIDDEN 4
+#define NEWOBJ_FLAG_NONE (0)
+#define NEWOBJ_FLAG_OLD (1)
+#define NEWOBJ_FLAG_FROZEN (2)
+#define NEWOBJ_FLAG_HIDDEN (4)
 
 // Strings as ObjString
 ObjString *takeString(char *chars, int length, int flags); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
@@ -519,6 +533,9 @@ static inline struct LxThread *threadGetHidden(Value thread) {
 
 Value mapDup(Value other);
 
+// regexes
+Value compileRegex(ObjString *str);
+
 // blocks
 Value newBlock(Obj *callable);
 Obj *blockCallable(Value blk); // returns Closure/ObjNative
@@ -589,6 +606,7 @@ extern ObjClass *lxClassClass;
 extern ObjClass *lxModuleClass;
 extern ObjClass *lxAryClass;
 extern ObjClass *lxMapClass;
+extern ObjClass *lxRegexClass;
 extern ObjClass *lxIteratorClass;
 extern ObjClass *lxFileClass;
 extern ObjClass *lxThreadClass;
@@ -603,6 +621,7 @@ extern ObjClass *lxTypeErrClass;
 extern ObjClass *lxNameErrClass;
 extern ObjClass *lxSyntaxErrClass;
 extern ObjClass *lxLoadErrClass;
+extern ObjClass *lxRegexErrClass;
 
 extern ObjClass *lxBlockIterErrClass;
 extern ObjClass *lxBreakBlockErrClass;

@@ -7,14 +7,11 @@
 #include "memory.h"
 #include "compiler.h"
 
-ObjClass *lxMapClass;
-
-extern ObjNative *nativeMapInit;
-
-static ObjString *mapStr;
-
-ObjClass *lxEnvClass;
-ObjInstance *lxEnv;
+ObjClass *lxMapClass = NULL;
+ObjNative *nativeMapInit = NULL;
+static ObjString *mapStr = NULL;
+ObjClass *lxEnvClass = NULL;
+ObjInstance *lxEnv = NULL;
 extern char **environ; // defined in unistd.h
 
 static Value lxMapInit(int argCount, Value *args) {

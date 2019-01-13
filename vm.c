@@ -187,8 +187,8 @@ static void defineNativeClasses(void) {
     nativeModuleInit = addNativeMethod(modClass, "init", lxModuleInit);
 
     Init_ArrayClass();
-
     Init_MapClass();
+    // NOTE: all other inits need to be below, at the bottom of this function
 
     // class Iterator
     ObjClass *iterClass = addGlobalClass("Iterator", objClass);
@@ -244,6 +244,7 @@ static void defineNativeClasses(void) {
     lxGCModule = GCModule;
 
     // order of initialization not important here
+    Init_RegexClass();
     Init_ProcessModule();
     Init_IOClass();
     Init_FileClass();
@@ -519,6 +520,12 @@ void freeVM(void) {
     vm.mainThread = NULL;
     vec_deinit(&vm.threads);
     vm.lastOp = -1;
+
+    nativeObjectInit = NULL;
+    nativeStringInit = NULL;
+    nativeArrayInit = NULL;
+    nativeMapInit = NULL;
+    nativeRegexInit = NULL;
 
     VM_DEBUG(1, "freeVM() end");
 }
@@ -2495,7 +2502,7 @@ vmLoop:
               th->lastSplatNumArgs = -1;
           }
           Value instanceVal = peek(numArgs);
-          if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal) || IS_MAP(instanceVal)) {
+          if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal) || IS_MAP(instanceVal) || IS_REGEX(instanceVal)) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
               Obj *callable = instanceFindMethod(inst, mname);
               if (!callable && numArgs == 0) {

@@ -59,6 +59,17 @@ static ObjString *allocateString(char *chars, int length, ObjClass *klass, int f
     return string;
 }
 
+static ObjRegex *allocateRegex(ObjClass *klass, int flags) {
+    ObjRegex *reObj = ALLOCATE_OBJ(ObjRegex, OBJ_T_REGEX, flags);
+    reObj->klass = klass;
+    reObj->singletonKlass = NULL;
+    reObj->finalizerFunc = NULL;
+    void *tablesMem = (void*)ALLOCATE(Table, 1);
+    reObj->fields = (Table*)tablesMem;
+    initTable(reObj->fields);
+    return reObj;
+}
+
 void objFreeze(Obj *obj) {
     ASSERT(obj);
     OBJ_SET_FROZEN(obj);
@@ -449,6 +460,8 @@ ObjInstance *newInstance(ObjClass *klass, int flags) {
             return (ObjInstance*)allocateString(NULL, 0, klass, flags);
         } else if (IS_SUBCLASS(klass, lxMapClass)) {
             return (ObjInstance*)allocateMap(klass, flags);
+        } else if (nativeRegexInit && IS_SUBCLASS(klass, lxRegexClass)) {
+            return (ObjInstance*)allocateRegex(klass, flags);
         } else if (klass == lxClassClass) {
             return (ObjInstance*)newClass(NULL, lxObjClass, flags);
         } else if (klass == lxModuleClass) {
@@ -899,6 +912,14 @@ bool mapEquals(Value self, Value other) {
     return true;
 }
 
+Value compileRegex(ObjString *str) {
+    DBG_ASSERT(nativeRegexInit);
+    ObjInstance *instance = newInstance(lxRegexClass, NEWOBJ_FLAG_NONE);
+    Value reStrVal = OBJ_VAL(str);
+    callVMMethod(instance, OBJ_VAL(nativeRegexInit), 1, &reStrVal, NULL);
+    return pop();
+}
+
 Value getProp(Value self, ObjString *propName) {
     DBG_ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
@@ -939,7 +960,14 @@ Value newError(ObjClass *errClass, Value msg) {
 
 bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
     DBG_ASSERT(subklass);
-    DBG_ASSERT(superklass);
+    if (superklass == NULL) {
+        fprintf(stderr, "subclass: %s\n", className(subklass));
+        ASSERT(!vm.inited);
+        return false;
+    }
+    if (vm.inited) {
+        DBG_ASSERT(superklass);
+    }
     if (subklass == superklass) { return true; }
     Obj *subLookup = (Obj*)subklass;
     while (subLookup != NULL && subLookup != (Obj*)superklass) {
@@ -1055,9 +1083,10 @@ bool isInstanceLikeObj(Obj *obj) {
     if (!IS_OBJ(OBJ_VAL(obj))) return false;
     switch (obj->type) {
         case OBJ_T_INSTANCE:
+        case OBJ_T_STRING:
         case OBJ_T_ARRAY:
         case OBJ_T_MAP:
-        case OBJ_T_STRING:
+        case OBJ_T_REGEX:
         case OBJ_T_CLASS:
         case OBJ_T_MODULE:
             return true;
@@ -1071,9 +1100,10 @@ bool isInstanceLikeObjNoClass(Obj *obj) {
     if (!IS_OBJ(OBJ_VAL(obj))) return false;
     switch (obj->type) {
         case OBJ_T_INSTANCE:
+        case OBJ_T_STRING:
         case OBJ_T_ARRAY:
         case OBJ_T_MAP:
-        case OBJ_T_STRING:
+        case OBJ_T_REGEX:
             return true;
         default:
             return false;
@@ -1088,6 +1118,8 @@ size_t sizeofObjType(ObjType type) {
             return sizeof(ObjArray);
         case OBJ_T_MAP:
             return sizeof(ObjMap);
+        case OBJ_T_REGEX:
+            return sizeof(ObjRegex);
         case OBJ_T_FUNCTION:
             return sizeof(ObjFunction);
         case OBJ_T_INSTANCE:
@@ -1121,6 +1153,8 @@ const char *objTypeName(ObjType type) {
             return "T_ARRAY";
         case OBJ_T_MAP:
             return "T_MAP";
+        case OBJ_T_REGEX:
+            return "T_REGEX";
         case OBJ_T_INSTANCE:
             return "T_INSTANCE";
         case OBJ_T_FUNCTION:

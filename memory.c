@@ -798,6 +798,19 @@ void blackenObject(Obj *obj) {
             grayTable(map->table);
             break;
         }
+        case OBJ_T_REGEX: {
+            GC_TRACE_DEBUG(5, "Blackening regex %p", obj);
+            ObjRegex *reObj = (ObjRegex*)obj;
+            grayObject((Obj*)reObj->klass);
+            if (reObj->singletonKlass) {
+                grayObject((Obj*)reObj->klass);
+            }
+            if (reObj->finalizerFunc) {
+                grayObject(reObj->finalizerFunc);
+            }
+            grayTable(reObj->fields);
+            break;
+        }
         case OBJ_T_INTERNAL: {
             GC_TRACE_DEBUG(5, "Blackening internal object %p", obj);
             ObjInternal *internal = (ObjInternal*)obj;
@@ -956,6 +969,16 @@ void freeObject(Obj *obj) {
             freeTable(map->table);
             FREE(Table, map->fields);
             FREE(Table, map->table);
+            obj->type = OBJ_T_NONE;
+            break;
+        }
+        case OBJ_T_REGEX: {
+            ObjRegex *reObj = (ObjRegex*)obj;
+            GC_TRACE_DEBUG(5, "Freeing regex: p=%p", reObj);
+            freeTable(reObj->fields);
+            FREE(Table, reObj->fields);
+            regex_free(reObj->regex);
+            FREE(Regex, reObj->regex);
             obj->type = OBJ_T_NONE;
             break;
         }

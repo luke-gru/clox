@@ -98,6 +98,9 @@ ObjNative *nativeThreadInit;
 // class Block
 ObjNative *nativeBlockInit;
 
+// class Regex
+ObjNative *nativeRegexInit;
+
 // module GC
 Value lxGCStats(int argCount, Value *args);
 Value lxGCCollect(int argCount, Value *args);
@@ -116,6 +119,7 @@ void Init_StringClass(void);
 void Init_ArrayClass(void);
 // class Map
 void Init_MapClass(void);
+void Init_RegexClass(void);
 // class IO
 void Init_IOClass(void);
 LxFile *fileGetHidden(Value io);
