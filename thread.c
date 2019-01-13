@@ -17,6 +17,15 @@ ObjNative *nativeThreadInit = NULL;
     GVL_UNLOCK_END(); \
 } while(0)
 
+void vmCheckInts(LxThread *th) {
+    if (UNLIKELY(INTERRUPTED_ANY(th))) {
+        threadExecuteInterrupts(th);
+    }
+}
+
+void threadExecuteInterrupts(LxThread *th) {
+}
+
 void threadSetStatus(Value thread, ThreadStatus status) {
     LxThread *th = THREAD_GETHIDDEN(thread);
     th->status = status;
@@ -76,6 +85,8 @@ static void LxThreadSetup(LxThread *th) {
     vec_init(&th->stackObjects);
     pthread_mutex_init(&th->sleepMutex, NULL);
     pthread_cond_init(&th->sleepCond, NULL);
+    pthread_mutex_init(&th->interruptLock, NULL);
+    th->interruptFlags = INTERRUPT_NONE;
     th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
     th->exitStatus = 0;
     th->joined = false;
@@ -273,6 +284,18 @@ Value lxThreadInit(int argCount, Value *args) {
     internalObj->data = th;
     selfObj->internal = internalObj;
     return self;
+}
+
+void threadInterrupt(LxThread *th, bool isTrap) {
+    pthread_mutex_lock(&th->interruptLock);
+    if (isTrap) {
+        SET_TRAP_INTERRUPT(th);
+    } else {
+        SET_INTERRUPT(th);
+    }
+    pthread_mutex_unlock(&th->interruptLock);
+    // wake up thread if sleeping
+    pthread_cond_signal(&th->sleepCond);
 }
 
 static void threadSchedule(LxThread *th) {

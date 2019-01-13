@@ -9,7 +9,27 @@
 ObjModule *lxSignalMod;
 SigHandler *sigHandlers = NULL;
 
-#include <unistd.h>
+struct SignalBuf {
+    volatile int cnt[NSIG];
+    volatile int size;
+}
+
+SignalBuf sigbuf;
+
+void enqueueSignal(int signo) {
+    sigbuf.cnt[signo]++;
+    sigbuf.size++;
+}
+
+void dequeueSignal(int signo) {
+    sigbuf.cnt[signo]--;
+    sigbuf.size--;
+}
+
+void threadCheckSignals(LxThread *main) {
+    threadInterrupt(main, true);
+}
+
 static void sigHandlerFunc(int signum, siginfo_t *sinfo, void *_context) {
     bool gotGVL = false;
     if (GVLOwner != pthread_self()) {
@@ -18,7 +38,6 @@ static void sigHandlerFunc(int signum, siginfo_t *sinfo, void *_context) {
         acquireGVL();
         gotGVL = true;
     }
-    fprintf(stderr, "In signal in PID=%d\n", getpid());
     SigHandler *cur = sigHandlers;
     while (cur) {
         if (cur->signum == signum) {
@@ -70,8 +89,8 @@ static int addSigHandler(int signum, Value callable) {
         sigemptyset(&blockMask);
         sa.sa_mask = blockMask;
         sa.sa_sigaction = sigHandlerFunc;
-        struct sigaction *saOld = NULL; // TODO
-        int res = sigaction(signum, &sa, saOld);
+        struct sigaction saOld;
+        int res = sigaction(signum, &sa, &saOld);
         if (res != 0) {
             prev->next = NULL;
             FREE(SigHandler, handler);

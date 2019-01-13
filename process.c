@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <signal.h>
 #include "object.h"
 #include "vm.h"
 #include "runtime.h"
@@ -121,13 +122,24 @@ static Value lxProcessSignalStatic(int argCount, Value *args) {
     if (signo < 0) {
         throwErrorFmt(lxErrClass, "signo must be non-negative");
     }
-    int res = kill((pid_t)pid, signo); // man 2 kill
-    if (res == -1) {
-        fprintf(stderr, "Error sending signal: %s\n", strerror(errno));
-        return BOOL_VAL(false); // TODO: throw error
-    } else {
-        return BOOL_VAL(true);
+    switch (signo) {
+        // synchronous signals
+        case SIGSEGV:
+        case SIGBUS:
+        case SIGKILL:
+        case SIGILL:
+        case SIGFPE:
+        case SIGSTOP: {
+            kill((pid_t)pid, signo); // man 2 kill
+            break;
+        }
+        // async signals
+        default:
+            enqueueSignal(signo);
+            threadCheckSignals(vm.mainThread);
+            break;
     }
+    return NIL_VAL;
 }
 
 static void *reapProcess(void *pidArg) {
