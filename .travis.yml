@@ -7,4 +7,4 @@ compiler:
   - clang
 before_install:
   - if [ "$TRAVIS_OS_NAME" = "osx" ]; then ulimit -n 1024; fi
-script: make build_test_examples && ./bin/test_examples
+script: make test

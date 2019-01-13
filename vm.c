@@ -449,12 +449,20 @@ void initVM() {
 
     pushFrame();
 
+
     defineNativeFunctions();
     defineNativeClasses();
     mainT->klass = lxThreadClass; // now that it's created
     defineGlobalVariables();
 
     popFrame();
+
+    // Some of these strings were created Before lxStringClass was assigned to.
+    Entry e;
+    int strIdx = 0;
+    TABLE_FOREACH(&vm.strings, e, strIdx, {
+        AS_STRING(e.key)->klass = lxStringClass;
+    })
 
     resetStack();
     // don't pop EC here, we'll pop it in freeVM()

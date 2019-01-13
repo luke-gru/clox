@@ -60,6 +60,7 @@ build_test_nodes: build
 run_test_nodes:
 	@ ./bin/test_nodes
 
+# NOTE: the compiler tests are deprecated, and not maintained
 .PHONY: build_test_compiler
 build_test_compiler: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_compiler.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_compiler
@@ -104,7 +105,7 @@ run_test_regex:
 build_tests: build build_test_object build_test_nodes build_test_compiler build_test_vm build_test_gc build_test_examples
 
 .PHONY: run_tests
-run_tests: run_test_object run_test_nodes run_test_compiler run_test_vm run_test_gc run_test_examples
+run_tests: run_test_object run_test_nodes run_test_vm run_test_gc run_test_examples
 
 .PHONY: test
 test: build build_test_object build_test_nodes build_test_compiler build_test_vm build_test_gc build_test_examples run_tests

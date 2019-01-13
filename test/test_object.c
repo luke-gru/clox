@@ -4,7 +4,7 @@
 #include "memory.h"
 
 static int test_string_object(void) {
-    ObjString *string = copyString("", 0);
+    ObjString *string = copyString("", 0, NEWOBJ_FLAG_NONE);
     T_ASSERT(string);
     pushCString(string, "hi\n", strlen("hi\n"));
     char *cStr = string->chars;
@@ -16,7 +16,7 @@ cleanup:
 }
 
 static int test_string_pushCStringFmt(void) {
-    ObjString *string = copyString("hello", 5);
+    ObjString *string = copyString("hello", 5, NEWOBJ_FLAG_NONE);
     T_ASSERT(string);
     pushCStringFmt(string, ", %s", "world");
     char *cStr = string->chars;
