@@ -1,0 +1,24 @@
+var stop = false;
+Signal.trap(Signal.QUIT, fun() {
+  print "In handler";
+  stop = true;
+});
+
+var t = newThread(fun() {
+  sleep(2);
+  print "Signalling from other thread";
+  Process.signal(Process.pid(), Signal.QUIT);
+});
+
+print "Looping in main";
+while(stop == false) {
+}
+joinThread(t);
+print "Loop stopped";
+
+__END__
+-- expect: --
+Looping in main
+Signalling from other thread
+In handler
+Loop stopped

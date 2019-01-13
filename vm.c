@@ -2048,6 +2048,8 @@ vmLoop:
               releaseGVL();
               threadSleepNano(th, 100);
               acquireGVL();
+          } else {
+              THREAD_DEBUG(2, "Skipped releasing GVL after ops up %lu", pthread_self());
           }
       }
       if (UNLIKELY(th->hadError)) {

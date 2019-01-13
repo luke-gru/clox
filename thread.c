@@ -80,10 +80,10 @@ bool isOnlyThread() {
         if (found != vm.curThread && found->status != THREAD_ZOMBIE) {
             return false;
         } else {
-            return true;
+            continue;
         }
     }
-    return false;
+    return true;
 }
 
 static void LxThreadSetup(LxThread *th) {
@@ -338,10 +338,8 @@ void threadInterrupt(LxThread *th, bool isTrap) {
     pthread_mutex_unlock(&th->interruptLock);
     // wake up thread if sleeping
     if (vm.curThread != th) {
-        fprintf(stderr, "scheduling main\n");
         threadSchedule(th);
     } else {
-        fprintf(stderr, "checking interrupts on main\n");
         VM_CHECK_INTS(th);
     }
 }
