@@ -137,6 +137,7 @@ ObjString *IOReadFd(int fd, size_t bytesMax, bool untilEOF);
 void Init_FileClass(void);
 // module Process
 void Init_ProcessModule(void);
+void Init_SignalModule(void);
 // random()/srandom() functions
 void Init_rand(void);
 // class Thread

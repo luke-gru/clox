@@ -17,10 +17,44 @@ ObjNative *nativeThreadInit = NULL;
     GVL_UNLOCK_END(); \
 } while(0)
 
+void vmCheckInts(LxThread *th) {
+    if (UNLIKELY(INTERRUPTED_ANY(th))) {
+        threadExecuteInterrupts(th);
+    }
+}
+
+static int threadGetInterrupt(LxThread *th) {
+    if (th->interruptFlags & INTERRUPT_TRAP) {
+        return INTERRUPT_TRAP;
+    } else if (th->interruptFlags & INTERRUPT_GENERAL) {
+        return INTERRUPT_GENERAL;
+    } else {
+        return INTERRUPT_NONE;
+    }
+}
+
+void threadExecuteInterrupts(LxThread *th) {
+    ASSERT(vm.curThread == vm.mainThread);
+    ASSERT(vm.curThread == th);
+    int interrupt = 0;
+    while ((interrupt = threadGetInterrupt(th)) != INTERRUPT_NONE) {
+        if (interrupt == INTERRUPT_TRAP && th == vm.mainThread) {
+            th->interruptFlags &= (~interrupt);
+            int sig = -1;
+            while ((sig = getSignal()) != -1) {
+                execSignal(th, sig);
+            }
+        } else if (interrupt == INTERRUPT_GENERAL) {
+            ASSERT(0); // TODO
+        }
+    }
+}
+
 void threadSetStatus(Value thread, ThreadStatus status) {
     LxThread *th = THREAD_GETHIDDEN(thread);
     th->status = status;
 }
+
 void threadSetId(Value thread, pthread_t tid) {
     LxThread *th = THREAD_GETHIDDEN(thread);
     th->tid = tid;
@@ -76,6 +110,8 @@ static void LxThreadSetup(LxThread *th) {
     vec_init(&th->stackObjects);
     pthread_mutex_init(&th->sleepMutex, NULL);
     pthread_cond_init(&th->sleepCond, NULL);
+    pthread_mutex_init(&th->interruptLock, NULL);
+    th->interruptFlags = INTERRUPT_NONE;
     th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
     th->exitStatus = 0;
     th->joined = false;
@@ -278,11 +314,36 @@ Value lxThreadInit(int argCount, Value *args) {
     return self;
 }
 
-static void threadSchedule(LxThread *th) {
+void threadSchedule(LxThread *th) {
     // TODO: wake thread up pre-emptively if sleeping or blocked on IO
     releaseGVL();
     pthread_cond_signal(&th->sleepCond);
     acquireGVL();
+}
+
+// called by Process.signal
+void threadCheckSignals(LxThread *main) {
+    threadInterrupt(main, true);
+}
+
+void threadInterrupt(LxThread *th, bool isTrap) {
+    ASSERT(th == vm.mainThread);
+    pthread_mutex_lock(&th->interruptLock);
+    if (isTrap) {
+        SET_TRAP_INTERRUPT(th);
+    } else {
+        ASSERT(0); // not done yet
+        SET_INTERRUPT(th);
+    }
+    pthread_mutex_unlock(&th->interruptLock);
+    // wake up thread if sleeping
+    if (vm.curThread != th) {
+        fprintf(stderr, "scheduling main\n");
+        threadSchedule(th);
+    } else {
+        fprintf(stderr, "checking interrupts on main\n");
+        VM_CHECK_INTS(th);
+    }
 }
 
 Value lxThreadThrow(int argCount, Value *args) {

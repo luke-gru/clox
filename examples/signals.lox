@@ -1,0 +1,29 @@
+var stop = false;
+Signal.trap(Signal.QUIT, fun() {
+  print "In handler";
+  stop = true;
+});
+
+// make sure signal handlers functions are marked
+GC.collect();
+GC.collect();
+
+var childPid = fork(fun() {
+  sleep(2);
+  print "Signalling from child";
+  Process.signal(Process.ppid(), Signal.QUIT);
+});
+Process.detach(childPid);
+
+print "Looping in parent";
+while(stop == false) {
+}
+print "Loop stopped";
+
+// NOTE: vm.printBuf doesn't work for subprocesses right now, so "Signalling from
+// child" doesn't get output in printBuf
+__END__
+-- expect: --
+Looping in parent
+In handler
+Loop stopped

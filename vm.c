@@ -59,7 +59,7 @@ static void stacktraceHandler(int sig, siginfo_t *si, void *unused) {
     diePrintCBacktrace("info:");
 }
 
-void initSighandlers(void) {
+void initCoreSighandlers(void) {
     struct sigaction sa;
 
     sa.sa_flags = SA_SIGINFO;
@@ -251,6 +251,7 @@ static void defineNativeClasses(void) {
     // order of initialization not important here
     Init_RegexClass();
     Init_ProcessModule();
+    Init_SignalModule();
     Init_IOClass();
     Init_FileClass();
     Init_ThreadClass();
@@ -496,6 +497,7 @@ void freeVM(void) {
     }
     VM_DEBUG(1, "freeVM() start");
 
+    removeVMSignalHandlers();
     freeObjects();
 
     freeDebugger(&vm.debugger);
@@ -546,7 +548,6 @@ void freeVM(void) {
 
     VM_DEBUG(1, "freeVM() end");
 }
-
 
 int VMNumStackFrames(void) {
     VMExecContext *ctx; int ctxIdx = 0;
@@ -2411,6 +2412,7 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_TRUE): {
@@ -2420,6 +2422,7 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_FALSE_PEEK): {
@@ -2429,6 +2432,7 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_TRUE_PEEK): {
@@ -2438,12 +2442,14 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP): {
           uint8_t ipOffset = READ_BYTE();
           ASSERT(ipOffset > 0);
           frame->ip += (ipOffset-1);
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(LOOP): {
@@ -2452,6 +2458,7 @@ vmLoop:
           // add 1 for the instruction we just read, and 1 to go 1 before the
           // instruction we want to execute next.
           frame->ip -= (ipOffset+2);
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(BLOCK_BREAK): {
@@ -3259,7 +3266,7 @@ static void detachUnjoinedThreads() {
 NORETURN void stopVM(int status) {
     LxThread *th = vm.curThread;
     if (th == vm.mainThread) {
-        THREAD_DEBUG(1, "Main thread exiting with %d", status);
+        THREAD_DEBUG(1, "Main thread exiting with %d (PID=%d)", status, getpid());
         detachUnjoinedThreads();
         runAtExitHooks();
         freeVM();
@@ -3272,10 +3279,10 @@ NORETURN void stopVM(int status) {
         exitingThread(th);
         th->exitStatus = status;
         if (th->detached && vm.numDetachedThreads > 0) {
-            THREAD_DEBUG(1, "Thread %lu [DETACHED] exiting with %d", th->tid, status);
+            THREAD_DEBUG(1, "Thread %lu [DETACHED] exiting with %d (PID=%d)", th->tid, status, getpid());
             vm.numDetachedThreads--;
         } else {
-            THREAD_DEBUG(1, "Thread %lu exiting with %d", th->tid, status);
+            THREAD_DEBUG(1, "Thread %lu exiting with %d (PID=%d)", th->tid, status, getpid());
         }
         releaseGVL();
         pthread_exit(NULL);
@@ -3309,7 +3316,9 @@ void acquireGVL(void) {
         vm.curThread->errorToThrow = NIL_VAL;
         throwError(err);
     }
-
+    if (vm.curThread == vm.mainThread) {
+        VM_CHECK_INTS(vm.curThread);
+    }
 }
 
 void releaseGVL(void) {

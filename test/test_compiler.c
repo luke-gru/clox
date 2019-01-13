@@ -373,7 +373,7 @@ cleanup:
 
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
-    initSighandlers();
+    initCoreSighandlers();
 
     initVM();
     turnGCOff(); // FIXME: why is this here?

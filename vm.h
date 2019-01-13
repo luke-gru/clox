@@ -99,6 +99,12 @@ typedef struct BlockStackEntry {
     CallFrame *frame;
 } BlockStackEntry;
 
+#define INTERRUPT_NONE 0
+#define INTERRUPT_GENERAL 1
+#define INTERRUPT_TRAP 2
+#define SET_TRAP_INTERRUPT(th) (th->interruptFlags |= INTERRUPT_TRAP)
+#define SET_INTERRUPT(th) (th->interruptFlags |= INTERRUPT_GENERAL)
+#define INTERRUPTED_ANY(th) (th->interruptFlags != INTERRUPT_NONE)
 typedef struct LxThread {
     pthread_t tid;
     ThreadStatus status;
@@ -126,6 +132,8 @@ typedef struct LxThread {
     int mutexCounter;
     pthread_mutex_t sleepMutex;
     pthread_cond_t sleepCond;
+    pthread_mutex_t interruptLock;
+    int interruptFlags;
     int opsRemaining;
     int exitStatus;
     bool joined;
@@ -138,6 +146,11 @@ void threadSetId(Value thread, pthread_t tid);
 ThreadStatus threadGetStatus(Value thread);
 pthread_t threadGetId(Value thread);
 bool isOnlyThread(void);
+#define VM_CHECK_INTS(th) vmCheckInts(th)
+void vmCheckInts(LxThread *th);
+void threadExecuteInterrupts(LxThread *th);
+void threadInterrupt(LxThread *th, bool isTrap);
+void threadSchedule(LxThread *th);
 
 typedef struct VM {
     Table globals; // global variables
@@ -202,8 +215,21 @@ typedef enum {
   INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
 
-// setup
-void initSighandlers(void);
+// setup (core)
+void initCoreSighandlers(void);
+
+// signals
+typedef struct SigHandler {
+    int signum;
+    Obj *callable;
+    struct SigHandler *next;
+} SigHandler;
+extern SigHandler *sigHandlers;
+void removeVMSignalHandlers(void);
+void enqueueSignal(int signo);
+void execSignal(LxThread *th, int signo);
+void threadCheckSignals(LxThread *th);
+int getSignal(void);
 
 // high-level API
 void initVM(void);

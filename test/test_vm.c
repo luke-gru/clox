@@ -727,7 +727,7 @@ cleanup:
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     compilerOpts.noRemoveUnusedExpressions = true;
-    initSighandlers();
+    initCoreSighandlers();
 
     INIT_TESTS();
     REGISTER_T_ASSERT_ON_FAIL(freeVM);

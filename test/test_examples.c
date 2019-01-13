@@ -163,7 +163,7 @@ cleanup:
 
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
-    initSighandlers();
+    initCoreSighandlers();
     INIT_TESTS();
     RUN_TEST(test_run_example_files);
     END_TESTS();
