@@ -135,6 +135,7 @@ typedef enum eLiteralType {
     NUMBER_TYPE,
     STRING_TYPE,
     STATIC_STRING_TYPE,
+    REGEX_TYPE,
     NIL_TYPE,
     BOOL_TYPE,
 

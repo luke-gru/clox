@@ -59,7 +59,8 @@ typedef struct RegexOptions {
 
 typedef struct Regex {
     RNode *node;
-    const char *src; // owned
+    const char *src;
+    bool ownsSrc; // if `ownsSrc`, can free it in regex_free
     RegexOptions opts;
 } Regex;
 
@@ -77,6 +78,7 @@ typedef struct MatchData {
 } MatchData;
 
 void regex_init(Regex *regex, const char *src, RegexOptions *opts);
+void regex_init_from(Regex *regex, const char *src, RegexOptions *opts);
 void regex_free(Regex *regex);
 RegexCompileResult regex_compile(Regex *regex);
 MatchData regex_match(Regex *regex, const char *string);

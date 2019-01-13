@@ -1371,6 +1371,7 @@ static Node *primary() {
                 .type = NODE_EXPR,
                 .kind = CALL_EXPR,
             };
+            // stringify the expression by calling String() on the expr result
             Node *toStringCall = createNode(callT, syntheticToken("String"), NULL);
             node_type_t varT = {
                 .type = NODE_EXPR,
@@ -1515,6 +1516,7 @@ static Node *primary() {
         TRACE_END("primary");
         return arr;
     }
+    // %{key: val}
     if (check(TOKEN_PERCENT) && peekTokN(1).type == TOKEN_LEFT_BRACE) {
         TRACE_START("mapExpr");
         advance(); advance();
@@ -1541,6 +1543,21 @@ static Node *primary() {
         TRACE_END("mapExpr");
         TRACE_END("primary");
         return map;
+    }
+    // %"regex"
+    if (check(TOKEN_PERCENT) && (peekTokN(1).type == TOKEN_STRING_DQUOTE || peekTokN(1).type == TOKEN_STRING_SQUOTE)) {
+        advance(); advance();
+        TRACE_START("regexExpr");
+        Token strTok = current->previous;
+        node_type_t reType = {
+            .type = NODE_EXPR,
+            .kind = LITERAL_EXPR,
+            .litKind = REGEX_TYPE,
+        };
+        Node *regex = createNode(reType, strTok, NULL);
+        TRACE_END("regexExpr");
+        TRACE_END("primary");
+        return regex;
     }
     if (match(TOKEN_LEFT_PAREN)) {
         TRACE_END("groupExpr");

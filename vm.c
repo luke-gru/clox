@@ -424,6 +424,7 @@ void initVM() {
 
     initTable(&vm.globals);
     initTable(&vm.strings); // interned strings
+    initTable(&vm.regexLiterals);
     vec_init(&vm.hiddenObjs);
 
     ObjInstance *mainT = initMainThread();
@@ -491,6 +492,7 @@ void freeVM(void) {
     rootVMLoopJumpBufSet = false;
 
     freeTable(&vm.globals);
+    freeTable(&vm.regexLiterals);
     freeTable(&vm.strings);
     vm.initString = NULL;
     vm.fileString = NULL;
@@ -2894,6 +2896,21 @@ vmLoop:
           Value map = READ_CONSTANT();
           DBG_ASSERT(IS_A_MAP(map));
           push(mapDup(map));
+          DISPATCH_BOTTOM();
+      }
+      CASE_OP(REGEX): {
+          Value reStr = READ_CONSTANT();
+          DBG_ASSERT(IS_STRING(reStr));
+          Value re;
+          if (tableGet(&vm.regexLiterals, reStr, &re)) {
+              push(re);
+          } else {
+              re = compileRegex(AS_STRING(reStr));
+              GC_OLD(AS_OBJ(re));
+              objFreeze(AS_OBJ(re));
+              tableSet(&vm.regexLiterals, reStr, re);
+              push(re);
+          }
           DISPATCH_BOTTOM();
       }
       // exit interpreter, or evaluation context if in eval() or

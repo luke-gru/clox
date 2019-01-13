@@ -128,6 +128,8 @@ const char *opName(OpCode code) {
         return "OP_MAP";
     case OP_DUPMAP:
         return "OP_DUPMAP";
+    case OP_REGEX:
+        return "OP_REGEX";
     case OP_SPLAT_ARRAY:
         return "OP_SPLAT_ARRAY";
     case OP_GET_THIS:
@@ -619,6 +621,7 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_PROP_SET:
         case OP_GET_THROWN:
         case OP_GET_SUPER:
+        case OP_REGEX:
             return printConstantInstruction(f, opName(byte), chunk, i);
         case OP_STRING:
             return printStringInstruction(f, opName(byte), chunk, i);
@@ -720,6 +723,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_PROP_SET:
         case OP_GET_THROWN:
         case OP_GET_SUPER:
+        case OP_REGEX:
             return constantInstruction(buf, opName(byte), chunk, i);
         case OP_STRING:
             return stringInstruction(buf, opName(byte), chunk, i);

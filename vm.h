@@ -142,6 +142,7 @@ bool isOnlyThread(void);
 typedef struct VM {
     Table globals; // global variables
     Table strings; // interned strings
+    Table regexLiterals;
     ObjString *initString;
     ObjString *fileString;
     ObjString *dirString;

@@ -30,6 +30,18 @@ static void regex_debug(int lvl, const char *format, ...) {
 void regex_init(Regex *regex, const char *src, RegexOptions *opts) {
     regex->node = NULL;
     regex->src = strdup(src);
+    regex->ownsSrc = true;
+    if (opts) {
+        regex->opts = *opts;
+    } else {
+        regex->opts = DEFAULT_REGEX_OPTIONS;
+    }
+}
+
+void regex_init_from(Regex *regex, const char *src, RegexOptions *opts) {
+    regex->node = NULL;
+    regex->src = src;
+    regex->ownsSrc = false;
     if (opts) {
         regex->opts = *opts;
     } else {
@@ -39,7 +51,9 @@ void regex_init(Regex *regex, const char *src, RegexOptions *opts) {
 
 void regex_free(Regex *regex) {
     regex->node = NULL; // TODO: free nodes
-    xfree(regex->src);
+    if (regex->ownsSrc) {
+        xfree(regex->src);
+    }
     regex->src = NULL;
 }
 

@@ -1388,17 +1388,24 @@ static void emitNode(Node *n) {
     case LITERAL_EXPR: {
         if (n->tok.type == TOKEN_NUMBER) {
             numberLiteral(n, true);
-            // TODO: handle strtod error condition
+        } else if (n->type.litKind == REGEX_TYPE) {
+            Token *regex = &n->tok;
+            ObjString *reStr = INTERNED(regex->start+1, regex->length-2);
+            STRING_SET_STATIC(reStr);
+            uint8_t strSlot = makeConstant(OBJ_VAL(reStr), CONST_T_STRLIT);
+            emitOp1(OP_REGEX, strSlot);
         // non-static string
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
             ObjString *str = INTERNED(name->start+1, name->length-2);
+            STRING_SET_STATIC(str);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 0);
         // static string
         } else if (n->tok.type == TOKEN_STRING_STATIC) {
             Token *name = &n->tok;
             ObjString *str = INTERNED(name->start+2, name->length-3);
+            STRING_SET_STATIC(str);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 1);
         } else if (n->tok.type == TOKEN_TRUE) {
@@ -1828,6 +1835,7 @@ static void emitNode(Node *n) {
                 int itarget = iseq->byteCount;
                 Token classTok = vec_first(catchStmt->children)->tok;
                 ObjString *className = INTERNED(tokStr(&classTok), strlen(tokStr(&classTok)));
+                STRING_SET_STATIC(className);
                 double catchTblIdx = (double)iseqAddCatchRow(
                     iseq, ifrom, ito,
                     itarget, OBJ_VAL(className)

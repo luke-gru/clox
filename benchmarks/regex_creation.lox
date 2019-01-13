@@ -1,0 +1,5 @@
+var o = nil;
+for (var i = 0; i < 1000000; i+=1) {
+  // regex literal, should be fast
+  o = %"abcdef";
+}

@@ -373,6 +373,8 @@ void collectYoungGarbage() {
     GC_TRACE_DEBUG(2, "# C-call stack objects found: %d", numStackObjects);
 
     grayTable(&vm.globals);
+    /*grayTable(&vm.strings);*/
+    /*grayTable(&vm.regexLiterals);*/
 
     Value *scriptName; int i = 0;
     vec_foreach_ptr(&vm.loadedScripts, scriptName, i) {
@@ -1244,6 +1246,7 @@ void collectGarbage(void) {
     grayTable(&vm.globals);
     GC_TRACE_DEBUG(2, "Marking interned strings (%d found)", vm.strings.count);
     grayTable(&vm.strings);
+    grayTable(&vm.regexLiterals);
     GC_TRACE_DEBUG(2, "Marking compiler roots");
     grayCompilerRoots();
     GC_TRACE_DEBUG(3, "Marking VM cached strings");
