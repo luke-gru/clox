@@ -326,9 +326,19 @@ Value createIterator(Value iterable) {
     } else if (IS_INSTANCE(iterable)) {
         ObjString *iterId = INTERNED("iter", 4);
         ObjInstance *instance = AS_INSTANCE(iterable);
-        Obj *method = instanceFindMethodOrRaise(instance, iterId);
-        callVMMethod(instance, OBJ_VAL(method), 0, NULL, NULL);
-        Value ret = pop();
+        Obj *iterMethod = instanceFindMethod(instance, iterId);
+        Value ret;
+        if (iterMethod) { // called iter(), it should return an iterator or an array/map
+            callVMMethod(instance, OBJ_VAL(iterMethod), 0, NULL, NULL);
+            ret = pop();
+        } else {
+            ObjString *iterNextId = INTERNED("iterNext", 8);
+            Obj *iterNextMethod = instanceFindMethodOrRaise(instance, iterNextId);
+            (void)iterNextMethod; // just check for existence of iterNext method
+            ObjInstance *iterObj = newInstance(lxIteratorClass, NEWOBJ_FLAG_NONE);
+            callVMMethod(iterObj, OBJ_VAL(nativeIteratorInit), 1, &iterable, NULL);
+            return pop();
+        }
         if (IS_AN_ARRAY(ret) || IS_A_MAP(ret)) {
             return createIterator(ret);
         } else if (isIterator(ret)) {

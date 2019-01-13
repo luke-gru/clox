@@ -1,0 +1,21 @@
+class Lineup {
+  init(people) {
+    this.people = people;
+    this.idx = 0;
+  }
+  iterNext() {
+    var ret = this.people[this.idx];
+    this.idx += 1;
+    return ret;
+  }
+}
+
+var l = Lineup(["Grace", "Cooper"]);
+foreach (p in l) {
+  print p;
+}
+
+__END__
+-- expect: --
+Grace
+Cooper

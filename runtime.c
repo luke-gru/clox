@@ -632,6 +632,7 @@ Value lxClassGetSuperclass(int argCount, Value *args) {
 
 #define FLAG_ITER_ARRAY 1
 #define FLAG_ITER_MAP 2
+#define FLAG_ITER_INSTANCE 4
 
 typedef struct Iterator {
     int index; // # of times iterator was called with 'next' - 1
@@ -672,8 +673,10 @@ Value lxIteratorInit(int argCount, Value *args) {
         iter->flags |= FLAG_ITER_ARRAY;
     } else if (IS_A_MAP(iterable)) {
         iter->flags |= FLAG_ITER_MAP;
+    } else if (IS_INSTANCE(iterable)) {
+        iter->flags |= FLAG_ITER_INSTANCE;
     } else {
-        throwErrorFmt(lxTypeErrClass, "Expected Array/Map");
+        throwErrorFmt(lxTypeErrClass, "Expected Array/Map/Instance");
     }
     ObjInternal *internalIter = newInternalObject(false,
         iter, sizeof(Iterator), markInternalIter, freeInternalIter,
@@ -718,6 +721,8 @@ Value lxIteratorNext(int argCount, Value *args) {
                 return NIL_VAL; // shouldn't reach here
             }
         }
+    } else if (iter->flags & FLAG_ITER_INSTANCE) {
+        return callMethod(AS_OBJ(iterable), INTERN("iterNext"), 0, NULL, NULL);
     } else {
         UNREACHABLE("bug, typeof val: %s", typeOfVal(iterable));
     }
