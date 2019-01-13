@@ -2358,6 +2358,7 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_TRUE): {
@@ -2367,6 +2368,7 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_FALSE_PEEK): {
@@ -2376,6 +2378,7 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_TRUE_PEEK): {
@@ -2385,12 +2388,14 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP): {
           uint8_t ipOffset = READ_BYTE();
           ASSERT(ipOffset > 0);
           frame->ip += (ipOffset-1);
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(LOOP): {
@@ -2399,6 +2404,7 @@ vmLoop:
           // add 1 for the instruction we just read, and 1 to go 1 before the
           // instruction we want to execute next.
           frame->ip -= (ipOffset+2);
+          VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(BLOCK_BREAK): {
@@ -3243,7 +3249,9 @@ void acquireGVL(void) {
         vm.curThread->errorToThrow = NIL_VAL;
         throwError(err);
     }
-
+    if (vm.curThread == vm.mainThread) {
+        VM_CHECK_INTS(vm.curThread);
+    }
 }
 
 void releaseGVL(void) {

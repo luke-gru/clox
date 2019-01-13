@@ -102,8 +102,8 @@ typedef struct BlockStackEntry {
 #define INTERRUPT_NONE 0
 #define INTERRUPT_GENERAL 1
 #define INTERRUPT_TRAP 2
-#define SET_TRAP_INTERRUPT(th) (th->interruptFlags = INTERRUPT_TRAP)
-#define SET_INTERRUPT(th) (th->interruptFlags = INTERRUPT_GENERAL)
+#define SET_TRAP_INTERRUPT(th) (th->interruptFlags |= INTERRUPT_TRAP)
+#define SET_INTERRUPT(th) (th->interruptFlags |= INTERRUPT_GENERAL)
 #define INTERRUPTED_ANY(th) (th->interruptFlags != INTERRUPT_NONE)
 typedef struct LxThread {
     pthread_t tid;
@@ -149,6 +149,8 @@ bool isOnlyThread(void);
 #define VM_CHECK_INTS(th) vmCheckInts(th)
 void vmCheckInts(LxThread *th);
 void threadExecuteInterrupts(LxThread *th);
+void threadInterrupt(LxThread *th, bool isTrap);
+void threadSchedule(LxThread *th);
 
 typedef struct VM {
     Table globals; // global variables
@@ -224,7 +226,9 @@ typedef struct SigHandler {
 extern SigHandler *sigHandlers;
 void removeVMSignalHandlers(void);
 void enqueueSignal(int signo);
+void execSignal(LxThread *th, int signo);
 void threadCheckSignals(LxThread *th);
+int getSignal(void);
 
 // high-level API
 void initVM(void);

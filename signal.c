@@ -9,10 +9,10 @@
 ObjModule *lxSignalMod;
 SigHandler *sigHandlers = NULL;
 
-struct SignalBuf {
+typedef struct SignalBuf {
     volatile int cnt[NSIG];
     volatile int size;
-}
+} SignalBuf;
 
 SignalBuf sigbuf;
 
@@ -26,18 +26,20 @@ void dequeueSignal(int signo) {
     sigbuf.size--;
 }
 
-void threadCheckSignals(LxThread *main) {
-    threadInterrupt(main, true);
+int getSignal() {
+    if (sigbuf.size == 0) return -1;
+    for (int i = 0; i < NSIG; i++) {
+        if (sigbuf.cnt[i] > 0) {
+            sigbuf.cnt[i]--;
+            sigbuf.size--;
+            return i;
+        }
+    }
+    return -1;
 }
 
-static void sigHandlerFunc(int signum, siginfo_t *sinfo, void *_context) {
-    bool gotGVL = false;
-    if (GVLOwner != pthread_self()) {
-        // got a signal while asleep or otherwise
-        fprintf(stderr, "Acquiring GVL for sighandler\n");
-        acquireGVL();
-        gotGVL = true;
-    }
+void execSignal(LxThread *th, int signum) {
+    (void)th;
     SigHandler *cur = sigHandlers;
     while (cur) {
         if (cur->signum == signum) {
@@ -45,9 +47,17 @@ static void sigHandlerFunc(int signum, siginfo_t *sinfo, void *_context) {
         }
         cur = cur->next;
     }
-    if (gotGVL) {
-        releaseGVL();
+}
+
+static void sigHandlerFunc(int signum, siginfo_t *sinfo, void *_context) {
+    enqueueSignal(signum);
+    pthread_mutex_lock(&vm.mainThread->interruptLock);
+    SET_TRAP_INTERRUPT(vm.mainThread);
+    pthread_mutex_unlock(&vm.mainThread->interruptLock);
+    if (vm.mainThread != vm.curThread) {
+        threadSchedule(vm.mainThread);
     }
+    return;
 }
 
 void removeVMSignalHandlers(void) {

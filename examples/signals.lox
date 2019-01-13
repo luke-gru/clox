@@ -1,9 +1,7 @@
-print Process.pid();
 var stop = false;
 Signal.trap(Signal.QUIT, fun() {
   print "In handler";
   stop = true;
-  print "exiting handler";
 });
 
 // make sure signal handlers functions are marked
@@ -22,9 +20,10 @@ while(stop == false) {
 }
 print "Loop stopped";
 
+// NOTE: vm.printBuf doesn't work for subprocesses right now, so "Signalling from
+// child" doesn't get output in printBuf
 __END__
 -- expect: --
 Looping in parent
-Killing from child
 In handler
 Loop stopped

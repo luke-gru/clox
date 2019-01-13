@@ -122,22 +122,27 @@ static Value lxProcessSignalStatic(int argCount, Value *args) {
     if (signo < 0) {
         throwErrorFmt(lxErrClass, "signo must be non-negative");
     }
-    switch (signo) {
-        // synchronous signals
-        case SIGSEGV:
-        case SIGBUS:
-        case SIGKILL:
-        case SIGILL:
-        case SIGFPE:
-        case SIGSTOP: {
-            kill((pid_t)pid, signo); // man 2 kill
-            break;
+    bool toSelf = (pid == (int)getpid());
+    if (toSelf) {
+        switch (signo) {
+            // synchronous signals
+            case SIGSEGV:
+            case SIGBUS:
+            case SIGKILL:
+            case SIGILL:
+            case SIGFPE:
+            case SIGSTOP: {
+                kill((pid_t)pid, signo); // man 2 kill
+                break;
+            }
+            // async signals
+            default:
+                enqueueSignal(signo);
+                threadCheckSignals(vm.mainThread);
+                break;
         }
-        // async signals
-        default:
-            enqueueSignal(signo);
-            threadCheckSignals(vm.mainThread);
-            break;
+    } else {
+        kill((pid_t)pid, signo); // man 2 kill
     }
     return NIL_VAL;
 }
