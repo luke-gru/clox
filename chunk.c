@@ -61,6 +61,20 @@ void iseqAddInsn(Iseq *seq, Insn *toAdd) {
     seq->byteCount += (toAdd->numOperands+1);
 }
 
+int iseqInsnIndex(Iseq *seq, Insn *insn) {
+    Insn *cur = seq->insns;
+    int i = 0;
+    while (cur && cur != insn) {
+        cur = cur->next;
+        i++;
+    }
+    if (cur) {
+        return i;
+    } else {
+        return -1;
+    }
+}
+
 // removes and frees the given insn
 bool iseqRmInsn(Iseq *seq, Insn *toRm) {
     Insn *in = seq->insns;
@@ -200,4 +214,38 @@ int iseqAddCatchRow(
 int iseqAddConstant(Iseq *seq, Value value) {
     writeValueArrayEnd(seq->constants, value);
     return seq->constants->count - 1;
+}
+
+void debugInsn(Insn *insn) {
+    ASSERT(insn);
+    fprintf(stderr, "Insn:\n");
+    fprintf(stderr, "  Op: %d\n", insn->code);
+    fprintf(stderr, "  Opname: %s\n", opName(insn->code));
+    fprintf(stderr, "  Operands:\n");
+    for (int i = 0; i < insn->numOperands; i++) {
+        fprintf(stderr, "  %d) %d\n", i, insn->operands[i]);
+    }
+    if (!insn->prev) {
+        fprintf(stderr, "  (first)\n");
+    }
+    if (!insn->next) {
+        fprintf(stderr, "  (last)\n");
+    }
+    if (insn->isLabel) {
+        fprintf(stderr, "  (label)\n");
+    }
+}
+
+Insn *insnAtOffset(Iseq *seq, int offset) {
+    Insn *cur = seq->insns;
+    int i = 0;
+    while (cur && i < offset) {
+        i += cur->numOperands+1;
+        cur = cur->next;
+    }
+    if (i == offset) {
+        return cur;
+    } else {
+        return NULL;
+    }
 }

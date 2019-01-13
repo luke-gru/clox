@@ -76,6 +76,22 @@ static void compiler_trace_debug(const char *fmt, ...) {
     fprintf(stderr, "\n");
 }
 
+static void optimizer_debug(int lvl, const char *fmt, ...) {
+    if (GET_OPTION(debugOptimizerLvl) < lvl) return;
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[OPT]: ");
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fprintf(stderr, "\n");
+}
+
+#ifdef NDEBUG
+#define OPT_DEBUG(lvl, ...) (void)0
+#else
+#define OPT_DEBUG(lvl, ...) optimizer_debug(lvl, __VA_ARGS__)
+#endif
+
 static void error(const char *format, ...) {
     int line = curTok ? curTok->line : 0;
     va_list args;
@@ -408,6 +424,7 @@ static bool isJump(Insn *in) {
     switch (in->code) {
         case OP_JUMP:
         case OP_JUMP_IF_FALSE:
+        case OP_JUMP_IF_TRUE:
         case OP_JUMP_IF_TRUE_PEEK:
         case OP_JUMP_IF_FALSE_PEEK:
             return true;
@@ -416,38 +433,82 @@ static bool isJump(Insn *in) {
     }
 }
 
+static bool isLoop(Insn *in) {
+    return in->code == OP_LOOP;
+}
+
 static inline bool isJumpNextInsn(Insn *in) {
     return in->operands[0] == 0;
 }
 
 static inline bool isJumpOrLoop(Insn *in) {
-    return isJump(in) || in->code == OP_LOOP;
+    return isJump(in) || isLoop(in);
 }
 
-static void rmInsnAndPatchLabels(Iseq *seq, Insn *insn) {
-    if (!insn->isLabel) {
-        COMP_TRACE("Removing non-label instruction %s", opName(insn->code));
+static void patchJumpInsnWithOffset(Insn *jump, int offset) {
+    if (jump->operands[0]+offset > UINT8_MAX) {
+        ASSERT(0); // TODO: error out
+    }
+    if (jump->operands[0]+offset <= 0) {
+        ASSERT(0); // TODO: error out
+    }
+    jump->operands[0] += offset;
+}
+
+static void rmInsnAndPatchJumps(Iseq *seq, Insn *insn) {
+    int insnIdx = iseqInsnIndex(seq, insn);
+    ASSERT(insnIdx >= 0);
+    OPT_DEBUG(2, "rmInsnAndPatchLabels insnIdx: %d\n", insnIdx);
+    ASSERT(insnIdx >= 0);
+    if (insnIdx == 0) {
+        OPT_DEBUG(2, "insnIdx == 0\n");
         iseqRmInsn(seq, insn);
         return;
     }
-    int numBytes = insn->numOperands+1;
     Insn *in = seq->insns;
-    int numLabelsPatched = 0;
+    int idx = 0;
     while (in) {
         if (in == insn) {
             in = in->next;
+            idx++;
             continue;
         }
-        if (isJumpOrLoop(in) && in->jumpTo == insn) {
-            numLabelsPatched++;
-            in->jumpTo = insn->next;
-            insn->next->isLabel = true;
-            in->operands[0] -= numBytes;
+        // jump instruction found before removed instruction, if it jumps
+        // to the removed instruction or after it, then patch the jump
+        if (idx < insnIdx && isJump(in)) {
+            OPT_DEBUG(2, "Found jump at %d", idx);
+            ASSERT(in->jumpTo);
+            int jumpToIndex = iseqInsnIndex(seq, in->jumpTo);
+            ASSERT(jumpToIndex >= 0);
+            OPT_DEBUG(2, "Jump to index: %d", jumpToIndex);
+            if (jumpToIndex >= insnIdx) {
+                if (jumpToIndex == insnIdx) {
+                    in->jumpTo = insn->next; // TODO: might be last instruction, in which case the jump should be removed
+                }
+                OPT_DEBUG(2, "Patching jump, offset before: %d", in->operands[0]);
+                patchJumpInsnWithOffset(in, -(insn->numOperands+1));
+                OPT_DEBUG(2, "Patched jump, offset after: %d", in->operands[0]);
+            }
+        // loop instruction found after removed instruction, if it jumps
+        // to the removed instruction or before it, then patch the loop
+        } else if (idx > insnIdx && isLoop(in)) {
+            OPT_DEBUG(2, "Found loop at %d", idx);
+            ASSERT(in->jumpTo);
+            int jumpToIndex = iseqInsnIndex(seq, in->jumpTo);
+            ASSERT(jumpToIndex >= 0);
+            OPT_DEBUG(2, "Jump to index: %d", jumpToIndex);
+            if (jumpToIndex <= insnIdx) {
+                if (jumpToIndex == insnIdx) {
+                    in->jumpTo = insn->next;
+                }
+                OPT_DEBUG(2, "Patching jump, offset before: %d", in->operands[0]);
+                patchJumpInsnWithOffset(in, -(insn->numOperands+1));
+                OPT_DEBUG(2, "Patched jump, offset after: %d", in->operands[0]);
+            }
         }
         in = in->next;
+        idx++;
     }
-    ASSERT(numLabelsPatched > 0);
-    COMP_TRACE("Removing label instruction %s after patching %d labels", opName(insn->code), numLabelsPatched);
     iseqRmInsn(seq, insn);
 }
 
@@ -457,7 +518,7 @@ static int replaceJumpInsn(Iseq *seq, Insn *jumpInsn) {
         case OP_JUMP_IF_FALSE_PEEK:
         case OP_JUMP_IF_TRUE_PEEK:
             if (!jumpInsn->isLabel) {
-                rmInsnAndPatchLabels(seq, jumpInsn);
+                rmInsnAndPatchJumps(seq, jumpInsn);
                 return -1;
             } else {
                 return 0;
@@ -510,12 +571,78 @@ static inline bool isJumpIfTrue(Insn *insn) {
     return insn->code == OP_JUMP_IF_TRUE_PEEK;
 }
 
-static inline bool isPop(Insn *insns) {
-    return insns->code == OP_POP;
+static inline bool isPop(Insn *insn) {
+    return insn->code == OP_POP;
+}
+
+static inline bool isPopType(Insn *insn) {
+    return insn->code == OP_POP || insn->code == OP_POP_N;
+}
+
+static inline bool isJumpTarget(Insn *insn) {
+    return insn->isLabel;
+}
+
+static void addInsnOperand(Iseq *seq, Insn *insn, uint8_t operand) {
+    ASSERT(insn->numOperands >= 0);
+    if (insn->numOperands == MAX_INSN_OPERANDS) {
+        ASSERT(0); // TODO: error out
+    }
+    insn->operands[insn->numOperands] = operand;
+    insn->numOperands+=1;
+    seq->byteCount += 1;
+    int insnIdx = iseqInsnIndex(seq, insn);
+    ASSERT(insnIdx >= 0);
+    if (insnIdx == 0) {
+        OPT_DEBUG(2, "addInsnOperand insnIdx == 0");
+        iseqRmInsn(seq, insn);
+        return;
+    }
+    Insn *in = seq->insns;
+    int idx = 0;
+    while (in) {
+        if (in == insn) {
+            in = in->next;
+            idx++;
+            continue;
+        }
+        // jump instruction found before removed instruction, if it jumps
+        // to the removed instruction or after it, then patch the jump
+        if (idx < insnIdx && isJump(in)) {
+            OPT_DEBUG(2, "Found jump at %d", idx);
+            ASSERT(in->jumpTo);
+            int jumpToIndex = iseqInsnIndex(seq, in->jumpTo);
+            ASSERT(jumpToIndex >= 0);
+            OPT_DEBUG(2, "Jump to index: %d", jumpToIndex);
+            if (jumpToIndex >= insnIdx) {
+                if (jumpToIndex == insnIdx) {
+                    in->jumpTo = insn->next; // TODO: might be last instruction, in which case the jump should be removed
+                }
+                OPT_DEBUG(2, "Patching jump, offset before: %d", in->operands[0]);
+                patchJumpInsnWithOffset(in, 1);
+                OPT_DEBUG(2, "Patched jump, offset after: %d", in->operands[0]);
+            }
+        } else if (idx > insnIdx && isLoop(in)) {
+            OPT_DEBUG(2, "Found loop at %d", idx);
+            ASSERT(in->jumpTo);
+            int jumpToIndex = iseqInsnIndex(seq, in->jumpTo);
+            ASSERT(jumpToIndex >= 0);
+            OPT_DEBUG(2, "Jump to index: %d", jumpToIndex);
+            if (jumpToIndex <= insnIdx) {
+                if (jumpToIndex == insnIdx) {
+                    in->jumpTo = insn->next;
+                }
+                OPT_DEBUG(2, "Patching jump, offset before: %d\n", in->operands[0]);
+                patchJumpInsnWithOffset(in, 1);
+                OPT_DEBUG(2, "Patched jump, offset after: %d\n", in->operands[0]);
+            }
+        }
+        in = in->next;
+        idx++;
+    }
 }
 
 static void optimizeIseq(Iseq *iseq) {
-    return;
     COMP_TRACE("OptimizeIseq");
     Insn *cur = iseq->insns; // first insn
     Insn *prev = NULL;
@@ -537,13 +664,27 @@ static void optimizeIseq(Iseq *iseq) {
                         continue;
                     }
                     changeConstant(iseq, prevp->operands[0], newVal);
-                    iseqRmInsn(iseq, cur);
-                    iseqRmInsn(iseq, prev);
+                    rmInsnAndPatchJumps(iseq, cur);
+                    rmInsnAndPatchJumps(iseq, prev);
                     cur = prevp;
                     idx -= 2;
                     continue;
                 }
             }
+        }
+
+        // consolidate OP_POPs
+        if (prev && isPopType(cur) && isPopType(prev) && !isJumpTarget(prev) && !isJumpTarget(cur)) {
+            int n = cur->code == OP_POP ? 1 : cur->operands[0];
+            rmInsnAndPatchJumps(iseq, cur);
+            if (prev->code == OP_POP) {
+                addInsnOperand(iseq, prev, n+1);
+                prev->code = OP_POP_N;
+            } else {
+                ASSERT(prev->code == OP_POP_N);
+                prev->operands[0] += n;
+            }
+            cur = prev;
         }
 
          // jump to next insn replacement/deletion
@@ -582,13 +723,17 @@ static void optimizeIseq(Iseq *iseq) {
         // 1+1; OP_CONSTANT '2', OP_POP => nothing (unused constant expression)
         if (!compilerOpts.noRemoveUnusedExpressions) {
             if (isPop(cur) && (prev && noSideEffectsConst(prev))) {
-                COMP_TRACE("removing side effect expr 1");
-                rmInsnAndPatchLabels(iseq, prev);
-                COMP_TRACE("removing side effect expr 2");
-                rmInsnAndPatchLabels(iseq, cur);
-                cur = iseq->insns;
-                idx = 0;
-                continue;
+                Insn *next = cur->next;
+                // OP_BLOCK_CONTINUE takes the popped value from previous pop, so needs it
+                if (!next || next->code != OP_BLOCK_CONTINUE) {
+                    COMP_TRACE("removing side effect expr 1");
+                    rmInsnAndPatchJumps(iseq, prev);
+                    COMP_TRACE("removing side effect expr 2");
+                    rmInsnAndPatchJumps(iseq, cur);
+                    cur = iseq->insns;
+                    idx = 0;
+                    continue;
+                }
             }
         }
         idx++;
@@ -663,8 +808,9 @@ static uint8_t makeConstant(Value value, ConstType ctype) {
 // Add constant to constant pool from the token's lexeme, return index to it
 static uint8_t identifierConstant(Token* name) {
     DBG_ASSERT(vm.inited);
-    return makeConstant(OBJ_VAL(INTERNED(name->start, name->length)),
-        CONST_T_STRLIT);
+    ObjString *ident = INTERNED(name->start, name->length);
+    STRING_SET_STATIC(ident);
+    return makeConstant(OBJ_VAL(ident), CONST_T_STRLIT);
 }
 
 // emits a constant instruction with the given operand
@@ -715,6 +861,7 @@ static int insnOffset(Insn *start, Insn *end) {
 // TODO: make the offset bigger than 1 byte!
 static void patchJump(Insn *toPatch, int jumpoffset, Insn *jumpTo) {
     ASSERT(toPatch->operands[0] == 0);
+    ASSERT(toPatch->jumpTo == NULL);
     if (jumpoffset == -1) {
         if (!jumpTo) {
             jumpTo = currentIseq()->tail;
@@ -734,7 +881,10 @@ static void emitLoop(int loopStart) {
   if (offset > UINT8_MAX) error("Loop body too large.");
   ASSERT(offset >= 0);
 
-  emitOp1(OP_LOOP, offset);
+  Insn *loopInsn = emitOp1(OP_LOOP, offset);
+  loopInsn->jumpTo = insnAtOffset(currentIseq(), loopStart-2);
+  ASSERT(loopInsn->jumpTo);
+  loopInsn->jumpTo->isLabel = true;
 }
 
 static inline bool isBreak(Insn *in) {
@@ -855,7 +1005,7 @@ static void initCompiler(
     compiler->function = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
     initIseq(&compiler->iseq);
     compiler->iseq.constants = compiler->function->chunk->constants;
-    hideFromGC((Obj*)compiler->function); // TODO: figure out way to unhide these functions on freeVM()
+    hideFromGC(TO_OBJ(compiler->function)); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = ftype;
     compiler->hadError = false;
     initTable(&compiler->constTbl);
@@ -867,13 +1017,15 @@ static void initCompiler(
         current->function->name = INTERNED(
             tokStr(fTok), strlen(tokStr(fTok))
         );
+        STRING_SET_STATIC(current->function->name);
+        OBJ_WRITE(OBJ_VAL(current->function), OBJ_VAL(current->function->name));
         break;
     case FUN_TYPE_INIT:
     case FUN_TYPE_GETTER:
     case FUN_TYPE_SETTER:
     case FUN_TYPE_METHOD:
     case FUN_TYPE_CLASS_METHOD: {
-        ASSERT(currentClassOrModule || inINBlock);
+        ASSERT(currentClassOrModule || inINBlock); // TODO: error out
         char *className = "";
         if (currentClassOrModule) {
             className = tokStr(&currentClassOrModule->name);
@@ -891,6 +1043,8 @@ static void initCompiler(
         strcat(methodNameBuf, funcName);
         ObjString *methodName = INTERNED(methodNameBuf, strlen(methodNameBuf));
         current->function->name = methodName;
+        OBJ_WRITE(OBJ_VAL(current->function), OBJ_VAL(methodName));
+        STRING_SET_STATIC(current->function->name);
         xfree(methodNameBuf);
         break;
     }
@@ -1052,7 +1206,7 @@ static CallInfo *emitCall(Node *n) {
             }
         }
         ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_OLD);
-        hideFromGC((Obj*)callInfoObj);
+        hideFromGC(TO_OBJ(callInfoObj));
         uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
         emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
     } else {
@@ -1080,7 +1234,7 @@ static CallInfo *emitCall(Node *n) {
             }
         }
         ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_OLD);
-        hideFromGC((Obj*)callInfoObj);
+        hideFromGC(TO_OBJ(callInfoObj));
         uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
         emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);
     }
@@ -1440,7 +1594,7 @@ static void emitNode(Node *n) {
         } else {
             elNode = NULL; elIdx = 0;
             Value ary = newArrayConstant();
-            hideFromGC((Obj*)AS_OBJ(ary));
+            hideFromGC(AS_OBJ(ary));
             vec_foreach(n->children, elNode, elIdx) {
                 arrayPush(ary, valueFromConstNode(elNode));
             }
@@ -1472,7 +1626,7 @@ static void emitNode(Node *n) {
         } else {
             elNode = NULL; elIdx = 0;
             Value map = newMapConstant();
-            hideFromGC((Obj*)AS_OBJ(map));
+            hideFromGC(AS_OBJ(map));
             Node *lastNode = NULL;
             vec_foreach(n->children, elNode, elIdx) {
                 if (elIdx % 2 != 0 && elIdx > 0) {
@@ -1520,6 +1674,7 @@ static void emitNode(Node *n) {
         whileJumpStart->isLabel = true;
         emitNode(n->children->data[1]); // while block
         loopLabel->jumpTo = whileJumpStart;
+        whileJumpStart->isLabel = true;
         emitLoop(loopStart);
         patchJump(whileJumpStart, -1, NULL);
         patchBreaks(whileJumpStart, currentIseq()->tail);
@@ -1764,7 +1919,7 @@ static void emitNode(Node *n) {
                 emitChildren(n);
             }
             if (breakBlock) {
-                ASSERT(current->type == FUN_TYPE_BLOCK); // TODO: error
+                ASSERT(current->type == FUN_TYPE_BLOCK); // TODO: error, don't assert
                 emitOp0(OP_BLOCK_RETURN);
             } else {
                 emitOp0(OP_RETURN);
@@ -1962,7 +2117,7 @@ Chunk *compile_file(char *fname, CompileErr *err) {
 void grayCompilerRoots(void) {
     Compiler *compiler = current;
     while (compiler != NULL) {
-        grayObject((Obj*)compiler->function);
+        grayObject(TO_OBJ(compiler->function));
         compiler = compiler->enclosing;
     }
 }

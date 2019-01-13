@@ -601,6 +601,7 @@ void push(Value value) {
     ctx->stackTop++;
 }
 
+// NOTE: doesn't perform checks to see if there's at least 1 item on the op stack
 static inline void pushSwap(Value value) {
     *(EC->stackTop-1) = value;
 }
@@ -609,6 +610,15 @@ Value pop(void) {
     VMExecContext *ctx = EC;
     ASSERT(LIKELY(ctx->stackTop > ctx->stack));
     ctx->stackTop--;
+    ctx->lastValue = ctx->stackTop;
+    vm.curThread->lastValue = ctx->lastValue;
+    return *(vm.curThread->lastValue);
+}
+
+Value popN(int n) {
+    VMExecContext *ctx = EC;
+    ASSERT(LIKELY((ctx->stackTop-n) >= ctx->stack));
+    ctx->stackTop-=n;
     ctx->lastValue = ctx->stackTop;
     vm.curThread->lastValue = ctx->lastValue;
     return *(vm.curThread->lastValue);
@@ -2315,6 +2325,10 @@ vmLoop:
       }
       CASE_OP(POP): {
           pop();
+          DISPATCH_BOTTOM();
+      }
+      CASE_OP(POP_N): {
+          popN((int)READ_BYTE());
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_LOCAL): {

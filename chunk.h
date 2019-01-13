@@ -41,12 +41,13 @@ typedef struct NodeLvl {
 } NodeLvl;
 
 #define MAX_INSN_SIZE 4
+#define MAX_INSN_OPERANDS (MAX_INSN_SIZE-1)
 #define INSN_FL_NUMBER 1
 #define INSN_FL_BREAK 2
 // single instruction
 typedef struct Insn {
     uint8_t code;
-    uint8_t operands[MAX_INSN_SIZE-1];
+    uint8_t operands[MAX_INSN_OPERANDS];
     int numOperands;
     int lineno;
     unsigned flags;
@@ -54,7 +55,7 @@ typedef struct Insn {
     struct Insn *prev;
     struct Insn *jumpTo; // for jump instructions
     NodeLvl nlvl;
-    bool isLabel;
+    bool isLabel; // is this a jump target?
 } Insn;
 
 // Instruction sequence for a single function (or top-level).
@@ -90,6 +91,8 @@ bool iseqRmInsn(Iseq *seq, Insn *toRm);
 void freeIseq(Iseq *seq);
 int iseqAddConstant(Iseq *seq, Value value);
 size_t iseqInsnByteDiff(Insn *prev, Insn *after);
+int iseqInsnIndex(Iseq *seq, Insn *insn);
+Insn *insnAtOffset(Iseq *seq, int offset);
 int iseqAddCatchRow(
     Iseq *seq,
     int ifrom,
@@ -97,5 +100,8 @@ int iseqAddCatchRow(
     int itarget,
     Value catchVal
 );
+
+// debugging
+void debugInsn(Insn *insn);
 
 #endif

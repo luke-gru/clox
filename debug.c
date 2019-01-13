@@ -156,6 +156,8 @@ const char *opName(OpCode code) {
         return "OP_OR";
     case OP_POP:
         return "OP_POP";
+    case OP_POP_N:
+        return "OP_POP_N";
     case OP_JUMP_IF_FALSE:
         return "OP_JUMP_IF_FALSE";
     case OP_JUMP_IF_TRUE:
@@ -589,11 +591,24 @@ static int printSimpleInstruction(FILE *f, const char *op, int i) {
     return i+1;
 }
 
+static int printByteInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
+    uint8_t byte = chunk->code[i+1];
+    fprintf(f, "%s\t%d\n", op, byte);
+    return i+2;
+}
+
 // instruction has no operands
 static int simpleInstruction(ObjString *buf, const char *op, int i) {
     pushCString(buf, op, strlen(op));
     pushCString(buf, "\n", 1);
     return i+1;
+}
+
+static int byteInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
+    pushCString(buf, op, strlen(op));
+    pushCString(buf, "\n", 1);
+    // TODO
+    return i+2;
 }
 
 int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *funcs) {
@@ -696,6 +711,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_BLOCK_RETURN:
         case OP_TO_BLOCK:
             return printSimpleInstruction(f, opName(byte), i);
+        case OP_POP_N:
+            return printByteInstruction(f, opName(byte), chunk, i);
         default:
             fprintf(f, "Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
             return -1;
@@ -798,6 +815,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_BLOCK_RETURN:
         case OP_TO_BLOCK:
             return simpleInstruction(buf, opName(byte), i);
+        case OP_POP_N:
+            return byteInstruction(buf, opName(byte), chunk, i);
         default: {
             ASSERT(0);
             char *cBuf = calloc(19+1, 1);

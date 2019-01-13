@@ -1,0 +1,34 @@
+// 2 or more POPs in a row should be consolidated as POP_N, and it shouldn't mess
+// up the jumps/loops
+
+if (true) {
+  if (false) {
+    { var a; var b; var c; var d; var e; }
+    print "no";
+  } else {
+    print "yes";
+  }
+}
+
+for (var i = 0; i < 10; i+=1) {
+  var a;
+  var b;
+  var c;
+  var d;
+  var e;
+  print i;
+}
+
+__END__
+-- expect: --
+yes
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9

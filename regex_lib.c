@@ -762,6 +762,7 @@ MatchData regex_match(Regex *regex, const char *string) {
         regex_debug(1, "matching '%c' at nodetype=%s", **cptr_p, nodeTypeName(node->type));
         RNode *nnext = NULL;
         char *match_start = *cptr_p;
+        (void)match_start;
         if (node_accepts_ch(node, nparent, cptr_p, &nnext)) {
             if (**cptr_p) {
                 regex_debug(1, "matched '%c'", *match_start);
