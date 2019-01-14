@@ -84,6 +84,7 @@ typedef struct VMExecContext {
 // thread internals
 typedef enum ThreadStatus {
     THREAD_STOPPED = 0,
+    THREAD_SLEEPING,
     THREAD_READY,
     THREAD_RUNNING,
     THREAD_KILLED,
@@ -107,7 +108,7 @@ typedef struct BlockStackEntry {
 #define INTERRUPTED_ANY(th) (th->interruptFlags != INTERRUPT_NONE)
 typedef struct LxThread {
     pthread_t tid;
-    ThreadStatus status;
+    volatile ThreadStatus status;
     VMExecContext *ec; // current execution context of vm
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
     ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
@@ -341,12 +342,14 @@ Value createIterator(Value iterable);
 
 // threads
 void acquireGVL(void);
-void releaseGVL(void);
+void releaseGVL(ThreadStatus status);
 void thread_debug(int lvl, const char *format, ...);
 volatile long long GVLOwner;
 void threadSetCurrent(LxThread *th);
 void threadDetach(LxThread *th);
 void exitingThread(LxThread *th);
+void terminateThreads(void);
+const char *threadStatusName(ThreadStatus status);
 
 // debug
 void printVMStack(FILE *f, LxThread *th);

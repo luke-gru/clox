@@ -130,7 +130,9 @@ static void threadSleep(LxThread *th, int secs) {
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec += secs;
     THREAD_DEBUG(1, "Sleeping %lu\n", pthread_self());
+    th->status = THREAD_SLEEPING;
     int res = pthread_cond_timedwait(&th->sleepCond, &th->sleepMutex, &ts);
+    th->status = THREAD_STOPPED;
     if (res == 0) {
         THREAD_DEBUG(1, "Woke up %lu\n", pthread_self());
     } else {
@@ -145,7 +147,9 @@ void threadSleepNano(LxThread *th, int nsecs) {
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += nsecs;
     THREAD_DEBUG(1, "Sleeping %lu\n", pthread_self());
+    th->status = THREAD_SLEEPING;
     int res = pthread_cond_timedwait(&th->sleepCond, &th->sleepMutex, &ts);
+    th->status = THREAD_STOPPED;
     if (res == 0) {
         THREAD_DEBUG(1, "Woke up %lu\n", pthread_self());
     } else {
@@ -161,7 +165,7 @@ Value lxSleep(int argCount, Value *args) {
     int secs = (int)AS_NUMBER(nsecs);
     if (secs > 0) {
         LxThread *th = THREAD();
-        releaseGVL();
+        releaseGVL(THREAD_STOPPED);
         threadSleep(th, secs);
         acquireGVL();
     }

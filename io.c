@@ -84,12 +84,12 @@ ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
     char fileReadBuf[READBUF_SZ];
     size_t maxRead = untilEOF ? READBUF_SZ-1 : (numBytes > (READBUF_SZ-1) ? (READBUF_SZ-1) : numBytes);
     int last = errno;
-    releaseGVL();
+    releaseGVL(THREAD_STOPPED);
     while ((justRead = read(fd, fileReadBuf, maxRead)) > 0) {
         acquireGVL();
         fileReadBuf[justRead] = '\0';
         pushCString(retBuf, fileReadBuf, justRead);
-        releaseGVL();
+        releaseGVL(THREAD_STOPPED);
         nread += justRead;
         numBytes -= justRead;
         maxRead = untilEOF ? READBUF_SZ : (numBytes > READBUF_SZ ? READBUF_SZ : numBytes);
@@ -111,7 +111,7 @@ ObjString *IOReadlineFd(int fd, size_t maxLen) {
     ASSERT(file); // TODO: handle uncommon error, as it's already open this should not fail
     char *line = NULL;
     int last = errno;
-    releaseGVL();
+    releaseGVL(THREAD_STOPPED);
     line = fgets(fileReadBuf, maxLen, file);
     acquireGVL();
     if (line == NULL) {
@@ -151,7 +151,7 @@ size_t IOWrite(Value io, const void *buf, size_t count) {
     size_t written = 0;
     ssize_t res = 0;
     int last = errno;
-    releaseGVL();
+    releaseGVL(THREAD_STOPPED);
     while ((res = write(fd, ioWritebuf, chunkSz)) > 0 && (written += res) && written < count) {
         chunkSz -= written;
         memcpy(ioWritebuf, buf+written, chunkSz > WRITEBUF_SZ ? WRITEBUF_SZ : chunkSz);
@@ -281,7 +281,7 @@ Value lxIOSelectStatic(int argCount, Value *args) {
         }
     }
     int last = errno;
-    releaseGVL();
+    releaseGVL(THREAD_STOPPED);
     int res = select(highestFd+1, &fds[0], &fds[1], &fds[2], &timeout);
     acquireGVL();
     if (res == -1) {

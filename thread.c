@@ -33,19 +33,50 @@ static int threadGetInterrupt(LxThread *th) {
     }
 }
 
+const char *threadStatusName(ThreadStatus status) {
+    switch (status) {
+        case THREAD_STOPPED:
+            return "STOPPED";
+        case THREAD_SLEEPING:
+            return "SLEEPING";
+        case THREAD_READY:
+            return "READY";
+        case THREAD_RUNNING:
+            return "RUNNING";
+        case THREAD_KILLED:
+            return "KILLED";
+        case THREAD_ZOMBIE:
+            return "ZOMBIE";
+        default:
+            return "UNKNOWN?";
+    }
+}
+
 void threadExecuteInterrupts(LxThread *th) {
-    ASSERT(vm.curThread == vm.mainThread);
     ASSERT(vm.curThread == th);
     int interrupt = 0;
     while ((interrupt = threadGetInterrupt(th)) != INTERRUPT_NONE) {
         if (interrupt == INTERRUPT_TRAP && th == vm.mainThread) {
+            ASSERT(th == vm.mainThread);
             th->interruptFlags &= (~interrupt);
             int sig = -1;
             while ((sig = getSignal()) != -1) {
                 execSignal(th, sig);
             }
-        } else if (interrupt == INTERRUPT_GENERAL) {
-            ASSERT(0); // TODO
+        } else if (interrupt == INTERRUPT_GENERAL) { // kill signal
+            THREAD_DEBUG(1, "Thread %lu got interrupt, exiting", th->tid);
+            ASSERT(th != vm.mainThread);
+            if (GVLOwner == th->tid) {
+                THREAD_DEBUG(1, "thread releasing GVL before exit");
+                releaseGVL(THREAD_ZOMBIE);
+                THREAD_DEBUG(1, "thread released GVL before exit");
+            } else {
+                THREAD_DEBUG(1, "thread setting to zombie");
+                th->status = THREAD_ZOMBIE;
+                pthread_cond_signal(&vm.GVLCond); // signal waiters
+            }
+            THREAD_DEBUG(1, "thread exiting");
+            pthread_exit(NULL);
         }
     }
 }
@@ -208,12 +239,13 @@ static void *runCallableInNewThread(void *arg) {
     unhideFromGC((Obj*)closure);
     if (vm.exited) {
         THREAD_DEBUG(2, "vm exited, quitting new thread %lu", pthread_self());
-        releaseGVL();
+        releaseGVL(THREAD_ZOMBIE);
         pthread_exit(NULL);
     }
     THREAD_DEBUG(2, "calling callable %lu", pthread_self());
     callCallable(OBJ_VAL(closure), 0, false, NULL);
     THREAD_DEBUG(2, "Exiting thread (returned) %lu", pthread_self());
+    th->status = THREAD_ZOMBIE;
     stopVM(0); // actually just exits the thread
 }
 
@@ -235,7 +267,7 @@ Value lxNewThread(int argCount, Value *args) {
     thArgs->func = func;
     hideFromGC((Obj*)func); // XXX: this is needed, because it's only pushed onto the stack when the new thread runs
     thArgs->th = th;
-    releaseGVL();
+    releaseGVL(THREAD_STOPPED);
     if (pthread_create(&tnew, NULL, runCallableInNewThread, thArgs) == 0) {
         acquireGVL();
         th->tid = tnew;
@@ -261,7 +293,7 @@ Value lxJoinThread(int argCount, Value *args) {
     int ret = 0;
 
     pid_t tid = th->tid;
-    releaseGVL();
+    releaseGVL(THREAD_STOPPED);
     // blocking call until given thread ends execution
     if ((ret = pthread_join(th->tid, NULL)) != 0) {
         THREAD_DEBUG(1, "Error joining thread: (ret=%d), throwing", ret);
@@ -292,7 +324,7 @@ Value lxThreadCurrentStatic(int argCount, Value *args) {
 
 Value lxThreadScheduleStatic(int argCount, Value *args) {
     CHECK_ARITY("Thread.schedule", 1, 1, argCount);
-    releaseGVL();
+    releaseGVL(THREAD_STOPPED);
 // not available on OSX
 #ifdef __linux__
     pthread_yield();
@@ -315,10 +347,19 @@ Value lxThreadInit(int argCount, Value *args) {
 }
 
 void threadSchedule(LxThread *th) {
+    ASSERT(th != vm.curThread);
     // TODO: wake thread up pre-emptively if sleeping or blocked on IO
-    releaseGVL();
-    pthread_cond_signal(&th->sleepCond);
+    LxThread *oldTh = vm.curThread;
+    fprintf(stderr, "main releasing GVL\n");
+    releaseGVL(THREAD_STOPPED);
+    fprintf(stderr, "main released GVL\n");
+    if (th->status == THREAD_SLEEPING) {
+        fprintf(stderr, "main waking thread from sleep\n");
+        pthread_cond_signal(&th->sleepCond);
+    }
+    fprintf(stderr, "main acquiring GVL\n");
     acquireGVL();
+    fprintf(stderr, "main acquired GVL\n");
 }
 
 // called by Process.signal
@@ -327,19 +368,22 @@ void threadCheckSignals(LxThread *main) {
 }
 
 void threadInterrupt(LxThread *th, bool isTrap) {
-    ASSERT(th == vm.mainThread);
+    if (isTrap) {
+        ASSERT(th == vm.mainThread);
+    }
     pthread_mutex_lock(&th->interruptLock);
     if (isTrap) {
         SET_TRAP_INTERRUPT(th);
     } else {
-        ASSERT(0); // not done yet
         SET_INTERRUPT(th);
     }
     pthread_mutex_unlock(&th->interruptLock);
     // wake up thread if sleeping
     if (vm.curThread != th) {
+        fprintf(stderr, "Scheduling thread\n");
         threadSchedule(th);
     } else {
+        fprintf(stderr, "Checking own ints\n");
         VM_CHECK_INTS(th);
     }
 }

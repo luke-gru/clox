@@ -529,7 +529,7 @@ void freeVM(void) {
     while (THREAD()->ec) { pop_EC(); }
 
     THREAD_DEBUG(1, "VM lock destroying... # threads: %d, # waiters: %d", vm.threads.length, vm.GVLWaiters);
-    releaseGVL();
+    releaseGVL(THREAD_ZOMBIE);
     if (vm.numDetachedThreads <= 0) {
         pthread_mutex_destroy(&vm.GVLock);
         pthread_cond_destroy(&vm.GVLCond);
@@ -593,6 +593,7 @@ void push(Value value) {
     if (UNLIKELY(ctx->stackTop >= ctx->stack + STACK_MAX)) {
         errorPrintScriptBacktrace("Stack overflow.");
         int status = 1;
+        vm.curThread->status = THREAD_ZOMBIE;
         pthread_exit(&status);
     }
     if (IS_OBJ(value)) {
@@ -2046,7 +2047,7 @@ vmLoop:
           th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
           if (!isOnlyThread()) {
               THREAD_DEBUG(2, "Releasing GVL after ops up %lu", pthread_self());
-              releaseGVL();
+              releaseGVL(THREAD_STOPPED);
               threadSleepNano(th, 100);
               acquireGVL();
           } else {
@@ -3264,19 +3265,40 @@ static void detachUnjoinedThreads() {
     }
 }
 
+void terminateThreads() {
+    ObjInstance *threadInst = NULL; int tidx = 0;
+    while (true) {
+        int found = 0;
+        vec_foreach(&vm.threads, threadInst, tidx) {
+            LxThread *th = (LxThread*)threadInst->internal->data;
+            if (th == vm.mainThread || th->status == THREAD_ZOMBIE) continue;
+            if (th->tid == 0) continue;
+            THREAD_DEBUG(1, "Unjoined thread found: %lu: %s", th->tid, threadStatusName(th->status));
+            found++;
+            threadInterrupt(th, false); // exit interrupt
+        }
+        fprintf(stderr, "Found: %d\n", found);
+        if (found == 0) {
+            break;
+        }
+    }
+}
+
 // TODO: rename to exitThread(), as this either stops the VM or exits the
 // current non-main thread
 NORETURN void stopVM(int status) {
     LxThread *th = vm.curThread;
     if (th == vm.mainThread) {
         THREAD_DEBUG(1, "Main thread exiting with %d (PID=%d)", status, getpid());
-        detachUnjoinedThreads();
+        THREAD_DEBUG(1, "Terminating unjoined threads");
+        terminateThreads();
         runAtExitHooks();
         freeVM();
         if (GET_OPTION(profileGC)) {
             printGCProfile();
         }
         vm.exited = true;
+        th->status = THREAD_ZOMBIE;
         pthread_exit(NULL);
     } else {
         exitingThread(th);
@@ -3287,7 +3309,8 @@ NORETURN void stopVM(int status) {
         } else {
             THREAD_DEBUG(1, "Thread %lu exiting with %d (PID=%d)", th->tid, status, getpid());
         }
-        releaseGVL();
+        th->status = THREAD_ZOMBIE;
+        releaseGVL(THREAD_ZOMBIE);
         pthread_exit(NULL);
     }
 }
@@ -3311,6 +3334,9 @@ void acquireGVL(void) {
     vm.curThread = FIND_THREAD(pthread_self());
     if (vm.curThread) {
         vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
+        if (vm.curThread->status != THREAD_ZOMBIE) {
+            vm.curThread->status = THREAD_RUNNING;
+        }
     }
     GVLOwner = pthread_self();
     pthread_mutex_unlock(&vm.GVLock);
@@ -3319,12 +3345,10 @@ void acquireGVL(void) {
         vm.curThread->errorToThrow = NIL_VAL;
         throwError(err);
     }
-    if (vm.curThread == vm.mainThread) {
-        VM_CHECK_INTS(vm.curThread);
-    }
+    VM_CHECK_INTS(vm.curThread);
 }
 
-void releaseGVL(void) {
+void releaseGVL(ThreadStatus thStatus) {
     pthread_mutex_lock(&vm.GVLock);
     LxThread *th = vm.curThread;
     if (GVLOwner != th->tid) {
@@ -3339,6 +3363,9 @@ void releaseGVL(void) {
     }
     vm.GVLockStatus = 0;
     GVLOwner = -1;
+    if (th->status != THREAD_ZOMBIE) {
+        th->status = thStatus;
+    }
     vm.curThread = NULL;
     pthread_mutex_unlock(&vm.GVLock);
     pthread_cond_signal(&vm.GVLCond); // signal waiters

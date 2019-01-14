@@ -59,7 +59,7 @@ static Value lxWaitpid(int argCount, Value *args) {
         CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 2);
         flags = AS_NUMBER(args[1]);
     }
-    releaseGVL();
+    releaseGVL(THREAD_STOPPED);
     pid_t wret = waitpid(childpid, &wstatus, flags);
     acquireGVL();
     if (wret == -1) { // error, should throw?
@@ -109,7 +109,7 @@ static Value lxSystem(int argCount, Value *args) {
     CHECK_ARG_IS_A(cmd, lxStringClass, 1);
 
     const char *cmdStr = VAL_TO_STRING(cmd)->chars;
-    releaseGVL();
+    releaseGVL(THREAD_STOPPED);
     int status = system(cmdStr); // man 3 system
     acquireGVL();
     int exitStatus = WEXITSTATUS(status);
