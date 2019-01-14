@@ -423,6 +423,7 @@ static ObjInstance *initMainThread(void) {
     threadSetId(mainThread, tid);
     acquireGVL();
     threadSetStatus(mainThread, THREAD_RUNNING);
+    vm.numLivingThreads = 1;
     THREAD_DEBUG(1, "Main thread initialized");
     return AS_INSTANCE(mainThread);
 }
@@ -594,6 +595,7 @@ void push(Value value) {
         errorPrintScriptBacktrace("Stack overflow.");
         int status = 1;
         vm.curThread->status = THREAD_ZOMBIE;
+        vm.numLivingThreads--;
         pthread_exit(&status);
     }
     if (IS_OBJ(value)) {
@@ -3266,21 +3268,24 @@ static void detachUnjoinedThreads() {
 }
 
 void terminateThreads() {
-    ObjInstance *threadInst = NULL; int tidx = 0;
+    int tries = 0;
+    (void)tries;
     while (true) {
         int found = 0;
+        volatile ObjInstance *threadInst = NULL; int tidx = 0;
         vec_foreach(&vm.threads, threadInst, tidx) {
-            LxThread *th = (LxThread*)threadInst->internal->data;
+            volatile LxThread *th = (LxThread*)threadInst->internal->data;
             if (th == vm.mainThread || th->status == THREAD_ZOMBIE) continue;
-            if (th->tid == 0) continue;
-            THREAD_DEBUG(1, "Unjoined thread found: %lu: %s", th->tid, threadStatusName(th->status));
+            if (th->tid <= 0) continue;
+            THREAD_DEBUG(2, "Unjoined thread found (idx=%d): %lu: %s", tidx, th->tid, threadStatusName(th->status));
             found++;
+            if (vm.numLivingThreads == 1) break;
             threadInterrupt(th, false); // exit interrupt
         }
-        fprintf(stderr, "Found: %d\n", found);
-        if (found == 0) {
+        if (found == 0 || vm.numLivingThreads == 1) {
             break;
         }
+        tries++;
     }
 }
 
@@ -3299,6 +3304,7 @@ NORETURN void stopVM(int status) {
         }
         vm.exited = true;
         th->status = THREAD_ZOMBIE;
+        vm.numLivingThreads--;
         pthread_exit(NULL);
     } else {
         exitingThread(th);
@@ -3310,6 +3316,7 @@ NORETURN void stopVM(int status) {
             THREAD_DEBUG(1, "Thread %lu exiting with %d (PID=%d)", th->tid, status, getpid());
         }
         th->status = THREAD_ZOMBIE;
+        vm.numLivingThreads--;
         releaseGVL(THREAD_ZOMBIE);
         pthread_exit(NULL);
     }
@@ -3334,8 +3341,8 @@ void acquireGVL(void) {
     vm.curThread = FIND_THREAD(pthread_self());
     if (vm.curThread) {
         vm.curThread->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
-        if (vm.curThread->status != THREAD_ZOMBIE) {
-            vm.curThread->status = THREAD_RUNNING;
+        if (vm.curThread->status == THREAD_ZOMBIE) {
+            ASSERT(0);
         }
     }
     GVLOwner = pthread_self();
@@ -3363,9 +3370,6 @@ void releaseGVL(ThreadStatus thStatus) {
     }
     vm.GVLockStatus = 0;
     GVLOwner = -1;
-    if (th->status != THREAD_ZOMBIE) {
-        th->status = thStatus;
-    }
     vm.curThread = NULL;
     pthread_mutex_unlock(&vm.GVLock);
     pthread_cond_signal(&vm.GVLCond); // signal waiters
@@ -3379,7 +3383,7 @@ void threadSetCurrent(LxThread *th) {
 LxThread *FIND_THREAD(pthread_t tid) {
     ObjInstance *threadInstance; int thIdx = 0;
     LxThread *th = NULL;
-    vec_foreach(&vm.threads, threadInstance, thIdx) {
+    vec_foreach_rev(&vm.threads, threadInstance, thIdx) {
         th = (LxThread*)threadInstance->internal->data;
         ASSERT(th);
         if (th->tid == tid) return th;
@@ -3390,7 +3394,7 @@ LxThread *FIND_THREAD(pthread_t tid) {
 ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid) {
     ObjInstance *threadInstance; int thIdx = 0;
     LxThread *th = NULL;
-    vec_foreach(&vm.threads, threadInstance, thIdx) {
+    vec_foreach_rev(&vm.threads, threadInstance, thIdx) {
         th = (LxThread*)threadInstance->internal->data;
         ASSERT(th);
         if (th->tid == tid) return threadInstance;

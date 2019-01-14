@@ -189,6 +189,7 @@ typedef struct VM {
     LxThread *mainThread;
     vec_void_t threads; // list of current thread ObjInstance pointers
     int numDetachedThreads;
+    volatile int numLivingThreads;
     int lastOp; // for debugging when error
 } VM; // singleton
 
