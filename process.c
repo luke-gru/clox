@@ -70,12 +70,16 @@ static Value lxWaitpid(int argCount, Value *args) {
 
 static Value lxProcessWIFEXITED(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
-    return BOOL_VAL(WIFEXITED(AS_NUMBER(*args)));
+    int status = (int)AS_NUMBER(*args);
+    bool exited = WIFEXITED(status);
+    return BOOL_VAL(exited);
 }
 
 static Value lxProcessWEXITSTATUS(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
-    return NUMBER_VAL(WEXITSTATUS(AS_NUMBER(*args)));
+    int status = (int)AS_NUMBER(*args);
+    int exitStatus = WEXITSTATUS(status);
+    return NUMBER_VAL(exitStatus);
 }
 
 static Value lxExec(int argCount, Value *args) {
