@@ -27,6 +27,7 @@ Added features
 * Map (hash/dict) literals
 * Object finalizers
 * Regular expressions
+* Signal handling: registering signal handlers
 
 Some internal differences
 -------------------------

@@ -15,7 +15,6 @@ the syntax is different for them, like in ruby.
 * Saving/loading bytecode to disk
 * Add tracing/coverage information
 * Add Class#ancestors
-* Add signal trap handlers (`trap(signame, fun() { })`)
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Integrate regexes from regex.c
 * Add Process module, with static methods 'waitall'
@@ -29,7 +28,6 @@ get/set a different sigil maybe, like @prop.
 * Add method privacy (private/public)
 * Add defineMethod() function
 * Allow dynamically loading lox extensions, which can be '.so' files.
-* add iterNext() support for iterator-like objects
 
 Improvements
 ------------

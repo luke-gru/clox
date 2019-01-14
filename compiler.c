@@ -1014,10 +1014,10 @@ static void initCompiler(
 
     switch (ftype) {
     case FUN_TYPE_NAMED:
-        current->function->name = INTERNED(
-            tokStr(fTok), strlen(tokStr(fTok))
+        current->function->name = copyString(
+            tokStr(fTok), strlen(tokStr(fTok)),
+            NEWOBJ_FLAG_OLD
         );
-        STRING_SET_STATIC(current->function->name);
         OBJ_WRITE(OBJ_VAL(current->function), OBJ_VAL(current->function->name));
         break;
     case FUN_TYPE_INIT:
@@ -1041,10 +1041,9 @@ static void initCompiler(
         }
         strncat(methodNameBuf, sep, 1);
         strcat(methodNameBuf, funcName);
-        ObjString *methodName = INTERNED(methodNameBuf, strlen(methodNameBuf));
+        ObjString *methodName = copyString(methodNameBuf, strlen(methodNameBuf), NEWOBJ_FLAG_OLD);
         current->function->name = methodName;
         OBJ_WRITE(OBJ_VAL(current->function), OBJ_VAL(methodName));
-        STRING_SET_STATIC(current->function->name);
         xfree(methodNameBuf);
         break;
     }
@@ -1594,6 +1593,8 @@ static void emitNode(Node *n) {
         } else {
             elNode = NULL; elIdx = 0;
             Value ary = newArrayConstant();
+            // NOTE: no need for OBJ_WRITE here, elements are always non-objects
+            // right now for array constants.
             hideFromGC(AS_OBJ(ary));
             vec_foreach(n->children, elNode, elIdx) {
                 arrayPush(ary, valueFromConstNode(elNode));
