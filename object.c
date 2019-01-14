@@ -565,7 +565,11 @@ Obj *instanceFindGetter(ObjInstance *obj, ObjString *name) {
         if (tableGet(mtable, nameVal, &getter)) {
             return AS_OBJ(getter);
         }
-        klass = CLASS_SUPER(klass);
+        if (klass == TO_OBJ(obj->singletonKlass)) {
+            klass = TO_OBJ(obj->klass);
+        } else {
+            klass = CLASS_SUPER(klass);
+        }
     }
     return NULL;
 }

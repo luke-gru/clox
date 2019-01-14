@@ -254,6 +254,7 @@ static void defineNativeClasses(void) {
     Init_SignalModule();
     Init_IOClass();
     Init_FileClass();
+    Init_DirClass();
     Init_ThreadClass();
     Init_TimeClass();
     Init_BlockClass();

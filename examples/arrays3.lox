@@ -1,0 +1,14 @@
+print Array.name;
+print Array.wrap(nil);
+var a = [1,2,3];
+var b = a.dup();
+a << 4;
+print a;
+print b;
+
+__END__
+-- expect: --
+Array
+[nil]
+[1,2,3,4]
+[1,2,3]
