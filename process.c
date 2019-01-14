@@ -49,18 +49,33 @@ static Value lxFork(int argCount, Value *args) {
 }
 
 static Value lxWaitpid(int argCount, Value *args) {
-    CHECK_ARITY("waitpid", 1, 1, argCount);
+    CHECK_ARITY("waitpid", 1, 2, argCount);
     Value pidVal = *args;
+    CHECK_ARG_BUILTIN_TYPE(args[0], IS_NUMBER_FUNC, "number", 1);
     pid_t childpid = (pid_t)AS_NUMBER(pidVal);
     int wstatus;
-    // TODO: allow wait flags
+    int flags = 0;
+    if (argCount == 2) {
+        CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 2);
+        flags = AS_NUMBER(args[1]);
+    }
     releaseGVL();
-    pid_t wret = waitpid(childpid, &wstatus, 0);
+    pid_t wret = waitpid(childpid, &wstatus, flags);
     acquireGVL();
     if (wret == -1) { // error, should throw?
         return NUMBER_VAL(-1);
     }
-    return pidVal;
+    return NUMBER_VAL(wstatus);
+}
+
+static Value lxProcessWIFEXITED(int argCount, Value *args) {
+    CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
+    return BOOL_VAL(WIFEXITED(AS_NUMBER(*args)));
+}
+
+static Value lxProcessWEXITSTATUS(int argCount, Value *args) {
+    CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
+    return NUMBER_VAL(WEXITSTATUS(AS_NUMBER(*args)));
 }
 
 static Value lxExec(int argCount, Value *args) {
@@ -176,18 +191,6 @@ static Value lxProcessDetachStatic(int argCount, Value *args) {
     }
 }
 
-static Value lxProcessPwdStatic(int argCount, Value *args) {
-    char buf[PATH_MAX];
-    int last = errno;
-    char *res = getcwd(buf, PATH_MAX);
-    if (res == NULL) {
-        int err = errno;
-        errno = last;
-        throwErrorFmt(sysErrClass(err), "Cannot retrieve current directory: %s", strerror(err));
-    }
-    return OBJ_VAL(copyString(buf, strlen(buf), NEWOBJ_FLAG_NONE));
-}
-
 void Init_ProcessModule(void) {
     ObjModule *processMod = addGlobalModule("Process");
     ObjClass *processModStatic = moduleSingletonClass(processMod);
@@ -196,12 +199,16 @@ void Init_ProcessModule(void) {
     addNativeMethod(processModStatic, "ppid", lxProcessPpidStatic);
     addNativeMethod(processModStatic, "signal", lxProcessSignalStatic);
     addNativeMethod(processModStatic, "detach", lxProcessDetachStatic);
-    addNativeMethod(processModStatic, "pwd", lxProcessPwdStatic);
 
     addGlobalFunction("fork", lxFork);
     addGlobalFunction("waitpid", lxWaitpid);
     addGlobalFunction("system", lxSystem);
     addGlobalFunction("exec", lxExec);
 
+    addGlobalFunction("WIFEXITED", lxProcessWIFEXITED);
+    addGlobalFunction("WEXITSTATUS", lxProcessWEXITSTATUS);
+
     lxProcessMod = processMod;
+
+    setProp(OBJ_VAL(processMod), INTERN("WNOHANG"), NUMBER_VAL(WNOHANG));
 }

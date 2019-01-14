@@ -2,8 +2,8 @@ var pid = fork();
 if (pid) {
   print "in parent";
   print "waiting for child...";
-  waitpid(pid);
-  print "child ended";
+  var wstatus = waitpid(pid);
+  print "child ended with ${WEXITSTATUS(wstatus)}";
 } else {
   print "in child, sleeping for 3 seconds";
   sleep(3);
@@ -19,8 +19,8 @@ pid = fork(fun() {
 if (pid) {
   print "in parent";
   print "waiting for child...";
-  waitpid(pid);
-  print "child ended";
+  var wstatus = waitpid(pid);
+  print "child ended with ${WEXITSTATUS(wstatus)}";
 } else {
   print "BUG";
 }
@@ -30,8 +30,8 @@ __END__
 -- expect: --
 in parent
 waiting for child...
-child ended
+child ended with 0
 round 2
 in parent
 waiting for child...
-child ended
+child ended with 0
