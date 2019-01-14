@@ -11,6 +11,15 @@
 
 static char lineBuf[1024];
 
+// like stopVM() but for this test file
+static void _freeVM() {
+    vm.exiting = true;
+    terminateThreads();
+    freeVM();
+    vm.exited = true;
+    vm.numLivingThreads = 0;
+}
+
 DIR *getDir(const char *name) {
     DIR *dir = opendir(name);
     return dir; // can be NULL
@@ -98,7 +107,7 @@ static int test_run_example_files(void) {
         if (cerr != COMPILE_ERR_NONE || !chunk) {
             fprintf(stderr, "Error during compilation\n");
             vec_push(&vfiles_failed, strdup(fbuf));
-            freeVM();
+            _freeVM();
             numErrors++;
             fclose(f);
             continue;
@@ -115,10 +124,10 @@ static int test_run_example_files(void) {
             vec_push(&vfiles_failed, strdup(fbuf));
             numErrors++;
             fclose(f);
-            freeVM();
+            _freeVM();
             continue;
         }
-        runAtExitHooks();
+        runAtExitHooks(); // run the hooks now so that any 'print's will appear in printBuf
         ObjString *outputExpect = fileExpectStr(f);
         if (outputExpect == NULL || stringDiff(outputStr, outputExpect) == 0) {
             fprintf(stdout, "Success\n");
@@ -137,7 +146,7 @@ static int test_run_example_files(void) {
             unhideFromGC((Obj*)outputExpect);
         }
         fclose(f);
-        freeVM();
+        _freeVM();
     }
 
     if (numEntsFound == 0) {

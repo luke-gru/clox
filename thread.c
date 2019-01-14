@@ -232,11 +232,10 @@ static void *runCallableInNewThread(void *arg) {
     ASSERT(th->tid > 0);
     THREAD_DEBUG(2, "switching to newly created thread, acquiring lock %lu", th->tid);
     THREAD_DEBUG(2, "acquiring GVL");
-    acquireGVL();
     vm.numLivingThreads++;
+    acquireGVL();
     THREAD_DEBUG(2, "acquired GVL");
     th = vm.curThread;
-    th->status = THREAD_RUNNING;
     THREAD_DEBUG(2, "in new thread %lu", th->tid);
     ObjClosure *closure = tArgs->func;
     ASSERT(closure);
@@ -247,13 +246,14 @@ static void *runCallableInNewThread(void *arg) {
     ASSERT(vm.curThread->tid == pthread_self());
     push(OBJ_VAL(closure));
     unhideFromGC((Obj*)closure);
-    if (vm.exited) {
+    if (vm.exiting || vm.exited) {
         THREAD_DEBUG(2, "vm exited, quitting new thread %lu", pthread_self());
         releaseGVL(THREAD_ZOMBIE);
         vm.numLivingThreads--;
         pthread_exit(NULL);
     }
     THREAD_DEBUG(2, "calling callable %lu", pthread_self());
+    th->status = THREAD_RUNNING;
     callCallable(OBJ_VAL(closure), 0, false, NULL);
     THREAD_DEBUG(2, "Exiting thread (returned) %lu", pthread_self());
     stopVM(0); // actually just exits the thread

@@ -177,6 +177,7 @@ typedef struct VM {
     bool inited;
 
     volatile bool exited;
+    volatile bool exiting;
 
     vec_void_t exitHandlers;
 

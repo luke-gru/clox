@@ -410,6 +410,7 @@ static ObjInstance *initMainThread(void) {
     vm.curThread = NULL;
     vm.mainThread = NULL;
     vm.numDetachedThreads = 0;
+    vm.numLivingThreads = 0;
 
     Value mainThread = newThread();
     LxThread *th = THREAD_GETHIDDEN(mainThread);
@@ -421,9 +422,9 @@ static ObjInstance *initMainThread(void) {
 
     pthread_t tid = pthread_self();
     threadSetId(mainThread, tid);
-    acquireGVL();
+    vm.numLivingThreads++;
     threadSetStatus(mainThread, THREAD_RUNNING);
-    vm.numLivingThreads = 1;
+    acquireGVL();
     THREAD_DEBUG(1, "Main thread initialized");
     return AS_INSTANCE(mainThread);
 }
@@ -463,6 +464,7 @@ void initVM() {
 
     vm.inited = true; // NOTE: VM has to be inited before creation of strings
     vm.exited = false;
+    vm.exiting = false;
     vm.initString = INTERNED("init", 4);
     vm.fileString = INTERNED("__FILE__", 8);
     vm.dirString = INTERNED("__DIR__", 7);
@@ -3255,38 +3257,31 @@ void runAtExitHooks(void) {
     }
 }
 
-static void detachUnjoinedThreads() {
-    ObjInstance *threadInst = NULL; int tidx = 0;
-    vec_foreach(&vm.threads, threadInst, tidx) {
-        LxThread *th = (LxThread*)threadInst->internal->data;
-        if (th == vm.mainThread) continue;
-        if (!th->detached && th->status != THREAD_ZOMBIE && th->status != THREAD_KILLED && th->tid != -1) {
-            THREAD_DEBUG(1, "Main thread detaching unjoined thread %lu due to exit", th->tid);
-            threadDetach(th);
-        }
-    }
-}
-
 void terminateThreads() {
     int tries = 0;
     (void)tries;
     while (true) {
         int found = 0;
+        int numReadyFound = 0;
         volatile ObjInstance *threadInst = NULL; int tidx = 0;
         vec_foreach(&vm.threads, threadInst, tidx) {
             volatile LxThread *th = (LxThread*)threadInst->internal->data;
             if (th == vm.mainThread || th->status == THREAD_ZOMBIE) continue;
             if (th->tid <= 0) continue;
+            if (th->status == THREAD_READY) {
+                numReadyFound++;
+            }
             THREAD_DEBUG(2, "Unjoined thread found (idx=%d): %lu: %s", tidx, th->tid, threadStatusName(th->status));
             found++;
-            if (vm.numLivingThreads == 1) break;
-            threadInterrupt(th, false); // exit interrupt
+            if (vm.numLivingThreads <= 1 && numReadyFound == 0) break;
+            threadInterrupt(th, false); // 'exit' interrupt
         }
-        if (found == 0 || vm.numLivingThreads == 1) {
+        if (found == 0 || (vm.numLivingThreads <= 1 && numReadyFound == 0)) {
             break;
         }
         tries++;
     }
+    vm.numLivingThreads = 1;
 }
 
 // TODO: rename to exitThread(), as this either stops the VM or exits the
@@ -3294,16 +3289,17 @@ void terminateThreads() {
 NORETURN void stopVM(int status) {
     LxThread *th = vm.curThread;
     if (th == vm.mainThread) {
+        vm.exiting = true;
         THREAD_DEBUG(1, "Main thread exiting with %d (PID=%d)", status, getpid());
         THREAD_DEBUG(1, "Terminating unjoined threads");
         terminateThreads();
         runAtExitHooks();
+        th->status = THREAD_ZOMBIE;
         freeVM();
         if (GET_OPTION(profileGC)) {
             printGCProfile();
         }
         vm.exited = true;
-        th->status = THREAD_ZOMBIE;
         vm.numLivingThreads--;
         pthread_exit(NULL);
     } else {

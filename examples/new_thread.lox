@@ -1,0 +1,4 @@
+/* NOTE: don't run in examples tests right now because terminateThreads isn't
+ * run in freeVM examples */
+newThread(fun() {
+});

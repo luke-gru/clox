@@ -1,0 +1,17 @@
+var t = newThread(fun() {
+  print "in bad thread";
+  var m = Mutex();
+  m.lock();
+  sleep(4);
+  print "woke up but forgot to unlock mutex";
+});
+
+t.detach();
+sleep(1);
+print "thats okay, exiting from main thread destroys all mutexes in unjoined threads";
+
+__END__
+-- expect: --
+in bad thread
+woke up but forgot to unlock mutex
+thats okay, exiting from main thread destroys all mutexes in unjoined threads
