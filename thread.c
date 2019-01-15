@@ -149,11 +149,13 @@ static void LxThreadSetup(LxThread *th) {
     th->exitStatus = 0;
     th->joined = false;
     th->detached = false;
+    vec_init(&th->lockedMutexes);
 }
 
 static void LxThreadCleanup(LxThread *th) {
     vec_deinit(&th->stackObjects);
     vec_deinit(&th->v_blockStack);
+    vec_deinit(&th->lockedMutexes);
     pthread_mutex_destroy(&th->sleepMutex);
     pthread_cond_destroy(&th->sleepCond);
 }
@@ -455,17 +457,19 @@ static void lockFunc(LxMutex *mutex, LxThread *th) {
     th->mutexCounter++;
     THREAD_DEBUG(1, "Thread %lu LOCKED mutex", th->tid);
     mutex->owner = th;
+    vec_push(&th->lockedMutexes, mutex);
     pthread_mutex_unlock(&mutex->lock); // can block
 }
 
 void lockMutex(LxMutex *mutex) {
     pthread_mutex_lock(&mutex->lock); // can block
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     if (mutex->owner == NULL) {
         THREAD_DEBUG(1, "Thread %lu LOCKED mutex (no contention)", th->tid);
         ASSERT(mutex->waiting == 0);
         mutex->owner = th;
         th->mutexCounter++;
+        vec_push(&th->lockedMutexes, mutex);
         pthread_mutex_unlock(&mutex->lock); // can block
         return;
     }
@@ -480,11 +484,35 @@ void lockMutex(LxMutex *mutex) {
     }
 }
 
+void forceUnlockMutexes(LxThread *th) {
+    if (th->mutexCounter == 0) return;
+    LxMutex *m = NULL;
+    while (th->lockedMutexes.length > 0 && (m = (LxMutex*)vec_first(&th->lockedMutexes))) {
+        threadForceUnlockMutex(th, m);
+    }
+}
+
+void threadForceUnlockMutex(LxThread *th, LxMutex *mutex) {
+    pthread_mutex_lock(&mutex->lock);
+    ASSERT(mutex->owner == th); // TODO: throw error
+    mutex->owner = NULL;
+    vec_remove(&th->lockedMutexes, mutex);
+    THREAD_DEBUG(1, "Thread %lu unlocking mutex (forceful)...", th->tid);
+    if (mutex->waiting > 0) {
+        THREAD_DEBUG(1, "Thread %lu signaling waiter(s)...", th->tid);
+        pthread_cond_signal(&mutex->cond);
+    }
+    th->mutexCounter--;
+    THREAD_DEBUG(1, "Thread %lu UNLOCKED mutex (forceful)", th->tid);
+    pthread_mutex_unlock(&mutex->lock);
+}
+
 void unlockMutex(LxMutex *mutex) {
     pthread_mutex_lock(&mutex->lock);
-    LxThread *th = THREAD();
-    ASSERT(mutex->owner == th);
+    LxThread *th = vm.curThread;
+    ASSERT(mutex->owner == th); // TODO: throw error
     mutex->owner = NULL;
+    vec_remove(&th->lockedMutexes, mutex);
     THREAD_DEBUG(1, "Thread %lu unlocking mutex...", th->tid);
     if (mutex->waiting > 0) {
         THREAD_DEBUG(1, "Thread %lu signaling waiter(s)...", th->tid);

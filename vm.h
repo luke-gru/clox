@@ -130,7 +130,7 @@ typedef struct LxThread {
     // control returns to the VM, these are popped. Stack objects aren't
     // collected during GC.
     vec_void_t stackObjects;
-    int mutexCounter;
+    volatile int mutexCounter;
     pthread_mutex_t sleepMutex;
     pthread_cond_t sleepCond;
     pthread_mutex_t interruptLock;
@@ -139,6 +139,7 @@ typedef struct LxThread {
     int exitStatus;
     bool joined;
     bool detached;
+    vec_void_t lockedMutexes; // main thread unlocks these when terminating, if necessary
 } LxThread;
 
 // threads
@@ -152,6 +153,9 @@ void vmCheckInts(LxThread *th);
 void threadExecuteInterrupts(LxThread *th);
 void threadInterrupt(LxThread *th, bool isTrap);
 void threadSchedule(LxThread *th);
+struct LxMutex; // fwd decl
+void threadForceUnlockMutex(LxThread *th, struct LxMutex *m);
+void forceUnlockMutexes(LxThread *th);
 
 typedef struct VM {
     Table globals; // global variables

@@ -425,7 +425,7 @@ static ObjInstance *initMainThread(void) {
     vm.numLivingThreads++;
     threadSetStatus(mainThread, THREAD_RUNNING);
     acquireGVL();
-    THREAD_DEBUG(1, "Main thread initialized");
+    THREAD_DEBUG(1, "Main thread initialized (%lu)", tid);
     return AS_INSTANCE(mainThread);
 }
 
@@ -2050,12 +2050,12 @@ vmLoop:
       if (UNLIKELY(th->opsRemaining <= 0)) {
           th->opsRemaining = THREAD_OPS_UNTIL_SWITCH;
           if (!isOnlyThread()) {
-              THREAD_DEBUG(2, "Releasing GVL after ops up %lu", pthread_self());
+              THREAD_DEBUG(5, "Releasing GVL after ops up %lu", pthread_self());
               releaseGVL(THREAD_STOPPED);
               threadSleepNano(th, 100);
               acquireGVL();
           } else {
-              THREAD_DEBUG(2, "Skipped releasing GVL after ops up %lu", pthread_self());
+              THREAD_DEBUG(5, "Skipped releasing GVL after ops up %lu", pthread_self());
           }
       }
       if (UNLIKELY(th->hadError)) {
@@ -3274,6 +3274,7 @@ void terminateThreads() {
             THREAD_DEBUG(2, "Unjoined thread found (idx=%d): %lu: %s", tidx, th->tid, threadStatusName(th->status));
             found++;
             if (vm.numLivingThreads <= 1 && numReadyFound == 0) break;
+            forceUnlockMutexes(th);
             threadInterrupt(th, false); // 'exit' interrupt
         }
         if (found == 0 || (vm.numLivingThreads <= 1 && numReadyFound == 0)) {
@@ -3313,6 +3314,10 @@ NORETURN void stopVM(int status) {
         }
         th->status = THREAD_ZOMBIE;
         vm.numLivingThreads--;
+        if (th->mutexCounter > 0) {
+            forceUnlockMutexes(th);
+        }
+        th->mutexCounter = 0;
         releaseGVL(THREAD_ZOMBIE);
         pthread_exit(NULL);
     }
