@@ -68,6 +68,31 @@ static Value lxWaitpid(int argCount, Value *args) {
     return NUMBER_VAL(wstatus);
 }
 
+static Value lxWaitall(int argCount, Value *args) {
+    CHECK_ARITY("waitall", 0, 0, argCount);
+    pid_t pid = -1;
+    Value ret = newArray();
+    while (pid == -1) {
+        int wstatus = 0;
+        int flags = 0;
+        releaseGVL(THREAD_STOPPED);
+        pid = waitpid(pid, &wstatus, flags);
+        acquireGVL();
+        if (pid == -1) {
+            if (errno == ECHILD) {
+                break;
+            } else {
+                throwErrorFmt(sysErrClass(errno), "waitall fail: %s", strerror(errno));
+            }
+        }
+        Value el = newArray();
+        arrayPush(el, NUMBER_VAL(pid));
+        arrayPush(el, NUMBER_VAL(wstatus));
+        arrayPush(ret, el);
+    }
+    return ret;
+}
+
 static Value lxProcessWIFEXITED(int argCount, Value *args) {
     CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
     int status = (int)AS_NUMBER(*args);
@@ -206,6 +231,7 @@ void Init_ProcessModule(void) {
 
     addGlobalFunction("fork", lxFork);
     addGlobalFunction("waitpid", lxWaitpid);
+    addGlobalFunction("waitall", lxWaitall);
     addGlobalFunction("system", lxSystem);
     addGlobalFunction("exec", lxExec);
 
