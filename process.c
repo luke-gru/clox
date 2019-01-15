@@ -107,6 +107,20 @@ static Value lxProcessWEXITSTATUS(int argCount, Value *args) {
     return NUMBER_VAL(exitStatus);
 }
 
+static Value lxProcessWIFSIGNALED(int argCount, Value *args) {
+    CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
+    int status = (int)AS_NUMBER(*args);
+    bool signaled = WIFSIGNALED(status);
+    return BOOL_VAL(signaled);
+}
+
+static Value lxProcessWTERMSIG(int argCount, Value *args) {
+    CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
+    int status = (int)AS_NUMBER(*args);
+    int signo = WTERMSIG(status);
+    return NUMBER_VAL(signo);
+}
+
 static Value lxExec(int argCount, Value *args) {
     CHECK_ARITY("exec", 1, -1, argCount);
 
@@ -237,6 +251,8 @@ void Init_ProcessModule(void) {
 
     addGlobalFunction("WIFEXITED", lxProcessWIFEXITED);
     addGlobalFunction("WEXITSTATUS", lxProcessWEXITSTATUS);
+    addGlobalFunction("WIFSIGNALED", lxProcessWIFSIGNALED);
+    addGlobalFunction("WTERMSIG", lxProcessWTERMSIG);
 
     lxProcessMod = processMod;
 

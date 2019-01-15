@@ -1,5 +1,4 @@
-var res = waitall();
-print res;
+waitall();
 var pid = fork(fun() {
   sleep(1);
 });
@@ -9,6 +8,5 @@ print res[0].size;
 
 __END__
 -- expect: --
-[]
 1
 2
