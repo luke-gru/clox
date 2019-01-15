@@ -296,7 +296,9 @@ static inline ErrTagInfo *addErrInfo(ObjClass *errClass) {
 BlockStackEntry *addBlockEntry(Obj *closureOrNative);
 void popBlockEntryUntil(BlockStackEntry *bentry);
 void popBlockEntry(BlockStackEntry *bentry);
-
+bool blockGiven();
+Value yieldBlock(int argCount, Value *args);
+Value yieldBlockCatch(int argCount, Value *args, Value *err);
 
 // calling functions/methods
 // low-level call function, arguments must be pushed to stack, including

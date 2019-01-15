@@ -96,19 +96,12 @@ static Value lxDirPwdStatic(int argCount, Value *args) {
 }
 
 static Value lxDirChdirStatic(int argCount, Value *args) {
-    CHECK_ARITY("Dir.chdir", 2, 3, argCount);
+    CHECK_ARITY("Dir.chdir", 2, 2, argCount);
     Value newDir = args[1];
     CHECK_ARG_IS_A(newDir, lxStringClass, 1);
-    Value callable = NIL_VAL;
     const char *oldDir = NULL;
-    const char buf[4096] = { '\0' };
-    if (argCount == 3) {
-        callable = args[2];
-        if (!isCallable(callable)) {
-            throwErrorFmt(lxArgErrClass, "Second argument must be callable");
-        }
-        oldDir = getcwd(buf, 4096);
-    }
+    const char buf[4096];
+    oldDir = getcwd(buf, 4096);
     const char *dirStr = AS_STRING(newDir)->chars;
     int last = errno;
     int res = chdir(dirStr);
@@ -120,14 +113,19 @@ static Value lxDirChdirStatic(int argCount, Value *args) {
                 strerror(err));
     }
     Value ret = newDir;
-    if (!IS_NIL(callable)) {
-        ret = callFunctionValue(callable, 0, NULL);
+    if (blockGiven()) {
+        Value err = NIL_VAL;
+        ret = yieldBlockCatch(0, NULL, &err);
+        int res = 0;
         if (oldDir) {
-            int res = chdir(oldDir);
-            if (res != 0) {
-                fprintf(stderr, "[Warning]: Couldn't change back to old directory: '%s'\n",
-                        oldDir);
-            }
+            res = chdir(oldDir);
+        }
+        if (res != 0) {
+            fprintf(stderr, "[Warning]: Couldn't change back to old directory: '%s'\n",
+                    oldDir);
+        }
+        if (!IS_NIL(err)) {
+            throwError(err);
         }
     }
     return ret;

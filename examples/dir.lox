@@ -1,0 +1,20 @@
+print "in ${Dir.pwd()}";
+Dir.chdir("lib") -> () {
+  print "in ${Dir.pwd()}";
+};
+print "in ${Dir.pwd()}";
+
+try {
+  Dir.chdir("lib") -> () {
+    print "in ${Dir.pwd()} (throw)";
+    throw Error("should go back");
+  };
+} catch (Error) {
+    print "and now in ${Dir.pwd()} (catch)";
+}
+
+Dir.chdir("lib") -> { };
+Dir.chdir("lib", &fun() { });
+
+__END__
+-- noexpect: --

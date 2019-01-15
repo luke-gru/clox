@@ -263,11 +263,12 @@ Value lxYield(int argCount, Value *args) {
         .blockFunction = NULL,
         .isYield = true, // tell callCallable to adjust frame stack in popFrame()
         .blockIterFunc = NULL,
+        .blockInstance = NULL
     };
     volatile int status = 0;
     volatile LxThread *th = THREAD();
     volatile BlockStackEntry *bentry = NULL;
-    if (block) {
+    if (block) { // is native function if !block
         SETUP_BLOCK(block, bentry, status, th->errInfo)
             if (status == TAG_NONE) {
             } else if (status == TAG_RAISE) {
@@ -286,6 +287,88 @@ Value lxYield(int argCount, Value *args) {
     }
     callCallable(callable, argCount, false, &cinfo);
     return pop(); // yielded a native function
+}
+
+bool blockGiven() {
+    CallInfo *cinfo = getFrame()->callInfo;
+    if (!cinfo) return false;
+    return (cinfo->blockFunction || cinfo->blockInstance);
+}
+
+Value yieldBlock(int argCount, Value *args) {
+    Value err = NIL_VAL;
+    Value ret = yieldBlockCatch(argCount, args, &err);
+    if (!IS_NIL(err)) {
+        throwError(err);
+    }
+    return ret;
+}
+
+Value yieldBlockCatch(int argCount, Value *args, Value *err) {
+    volatile int status = 0;
+    volatile LxThread *th = vm.curThread;
+    volatile BlockStackEntry *bentry = NULL;
+    CallFrame *frame = getFrame();
+
+    volatile Obj *block = (Obj*)frame->callInfo->blockFunction;
+    if (!block && !frame->callInfo->blockInstance) {
+        throwErrorFmt(lxErrClass, "Cannot yield, no block given");
+    }
+    volatile Value callable = NIL_VAL;
+    if (block) {
+        DBG_ASSERT(IS_FUNCTION(OBJ_VAL(block)));
+        ObjClosure *blockClosure = NULL;
+        blockClosure = closureFromFn((ObjFunction*)block);
+        blockClosure->isBlock = true;
+        CallFrame *outerFrame = getOuterClosureFrame();
+        ObjClosure *outerClosure = outerFrame->closure;
+        ASSERT(outerClosure);
+        fillClosureUpvalues(blockClosure, outerClosure, outerFrame);
+        callable = OBJ_VAL(blockClosure);
+        push(callable);
+    } else if (frame->callInfo->blockInstance) {
+        ObjInstance *blockInst = frame->callInfo->blockInstance;
+        Obj *blkCallable = blockCallable(OBJ_VAL(blockInst));
+        if (blkCallable->type == OBJ_T_CLOSURE) {
+            block = blkCallable;
+        }
+        callable = OBJ_VAL(blkCallable);
+        push(callable);
+    }
+
+    if (block) {
+        SETUP_BLOCK(block, bentry, status, th->errInfo)
+        if (status == TAG_NONE) {
+            // do nothing
+        } else if (status == TAG_RAISE) {
+            ObjInstance *errInst = AS_INSTANCE(th->lastErrorThrown);
+            ASSERT(errInst);
+            if (errInst->klass == lxBreakBlockErrClass) {
+                return NIL_VAL;
+            } else if (errInst->klass == lxContinueBlockErrClass) {
+                Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
+                return retVal;
+            } else if (errInst->klass == lxReturnBlockErrClass) {
+                Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
+                return retVal;
+            } else {
+                *err = th->lastErrorThrown;
+                return NIL_VAL;
+            }
+        }
+    }
+    CallInfo cinfo = {
+        .isYield = true,
+        .argc = argCount,
+        .blockFunction = NULL,
+        .blockIterFunc = NULL,
+        .blockInstance = NULL
+    };
+    for (int i = 0; i < argCount; i++) {
+        push(args[i]);
+    }
+    callCallable(callable, argCount, false, &cinfo);
+    return pop(); // native function returned
 }
 
 Value yieldFromC(int argCount, Value *args, ObjInstance *blockObj) {

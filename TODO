@@ -16,7 +16,6 @@ the syntax is different for them, like in ruby.
 * Add tracing/coverage information
 * Add Class#ancestors
 * add multiple var declaration, setters for array returns [GIT BRANCH]
-* Integrate regexes from regex.c
 * Add Process module, with static methods 'waitall'
 * Add constants to language
 * Add socket class in io.c, make it work with multi-threading
@@ -28,7 +27,7 @@ get/set a different sigil maybe, like @prop.
 * Add method privacy (private/public)
 * Add defineMethod() function
 * Allow dynamically loading lox extensions, which can be '.so' files.
-* Add Dir class, with glob static method
+* Add Dir static class method 'glob'
 
 Improvements
 ------------
