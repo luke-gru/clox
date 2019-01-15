@@ -12,6 +12,7 @@ Features
 * Add String#replace(other)
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in ruby.
+* Dumping/loading values to/from disk
 * Saving/loading bytecode to disk
 * Add tracing/coverage information
 * Add Class#ancestors
@@ -28,6 +29,8 @@ get/set a different sigil maybe, like @prop.
 * Add defineMethod() function
 * Allow dynamically loading lox extensions, which can be '.so' files.
 * Add Dir static class method 'glob'
+* Add test/unit framework
+* Add autoloading on NameError for class not found
 
 Improvements
 ------------
@@ -43,6 +46,7 @@ compiled lookup
 * Allow giving keyword args to native functions
 * Use alloca where possible to reduce mallocs/frees for data structures like
 ErrTagInfo and BlockStackEntry, used during setjmp/longjmp
+* Change string representation to UTF8
 
 Bugs
 ----
@@ -62,7 +66,7 @@ Optimizations
 * more bytecode optimization passes (ex: skip OP_NIL,OP_RETURN after an OP_RETURN)
 * Add specialization bytecodes for binary operations on numbers (avoids typechecks)
 * Add tailcall optimization
-* simple JIT, maybe? Is this even possible?
+* simple (tracing?) JIT, for at least x86
 * different GC strategies, maybe support copying GC (but then need to change
 Value representation, no more tagging, need to use struct).
 * optimize method lookup with a polymorphic inline cache and benchmark the lookup results

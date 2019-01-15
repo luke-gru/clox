@@ -1,0 +1,83 @@
+class AssertionError < Error { }
+class TestUnit {}
+class TestUnit {
+  this._successes = 0;
+  this._fails = 0;
+  this._assertionsPassed = 0;
+  this._tests = [];
+  this._errors = [];
+
+  class registerTest(name) {
+    TestUnit._tests << name;
+  }
+
+  class successes() {
+    return TestUnit._successes;
+  }
+
+  class runTests(outputProgress: true, outputReport: true) {
+    var tinstance = this();
+    for (var i = 0; i < TestUnit._tests.size(); i+=1) {
+      var tname = TestUnit._tests[i];
+      try {
+        tinstance.send(tname);
+        if (outputProgress) {
+          print ".";
+        }
+        TestUnit._successes += 1;
+      } catch (AssertionError e) {
+        if (outputProgress) {
+          print "F";
+        }
+        TestUnit._errors << [tname, e.message];
+        TestUnit._fails += 1;
+      }
+    }
+    if (TestUnit._errors.size() == 0) {
+      if (outputReport) {
+        print "Success: passed ${TestUnit.successes} tests with ${TestUnit.assertionsPassed} assertions";
+      }
+      return 0;
+    } else {
+      if (outputReport) {
+        print "${TestUnit._errors.size()} test failures:";
+        foreach (err in TestUnit._errors) {
+          print "${err[0]}: ${err[1]}";
+        }
+        print "passed ${TestUnit._successes} tests with ${TestUnit._assertionsPassed} assertions";
+      }
+      return 1;
+    }
+  }
+
+  assertEq(expected, result) {
+    if (expected != result) {
+      throw AssertionError("Expected ${expected} to equal to ${result}");
+    }
+    this._assertionPassed();
+  }
+
+  assert(result) {
+    if (!result) {
+      throw AssertionError("Expected ${result} to be true");
+    }
+    this._assertionPassed();
+  }
+
+  _assertionPassed() {
+    TestUnit._assertionsPassed += 1;
+  }
+}
+
+__END__
+
+usage:
+requireScript("testunit")
+
+class MyTests < TestUnit {
+  fun testEqual() {
+    this.assertEq(1, 1);
+  }
+  this.registerTest("testEqual");
+  this.runTests();
+}
