@@ -9,7 +9,14 @@ try {
 }
 print typeof(err);
 
+class Outer {
+  class Inner {
+  }
+}
+print typeof(Outer::Inner);
+
 __END__
 -- expect: --
 number
 instance
+class

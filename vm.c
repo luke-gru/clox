@@ -2767,25 +2767,31 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(CLASS): { // add or re-open class
-          Value className = READ_CONSTANT();
+          Value classNm = READ_CONSTANT();
           Value existingClass;
           // FIXME: not perfect, if class is declared non-globally this won't
           // detect it. Maybe a new op-code is needed for class re-opening.
-          if (tableGet(&vm.constants, className, &existingClass)) {
+          if (tableGet(&vm.constants, classNm, &existingClass)) {
               if (IS_CLASS(existingClass)) { // re-open class
                   push(existingClass);
                   setThis(0);
                   pushCref(0);
                   DISPATCH_BOTTOM();
               } else if (UNLIKELY(IS_MODULE(existingClass))) {
-                  const char *classStr = AS_CSTRING(className);
+                  const char *classStr = AS_CSTRING(classNm);
                   throwErrorFmt(lxTypeErrClass, "Tried to define class %s, but it's a module",
                           classStr);
               } // otherwise we override the global var with the new class
           }
-          ObjClass *klass = newClass(AS_STRING(className), lxObjClass, NEWOBJ_FLAG_OLD);
+          ObjClass *klass = newClass(AS_STRING(classNm), lxObjClass, NEWOBJ_FLAG_OLD);
           push(OBJ_VAL(klass));
           setThis(0);
+          if (th->v_crefStack.length > 0) {
+              Value ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
+              addConstantUnder(className(klass), OBJ_VAL(klass), ownerClass);
+          } else {
+              tableSet(&vm.constants, classNm, OBJ_VAL(klass));
+          }
           pushCref(0);
           DISPATCH_BOTTOM();
       }
