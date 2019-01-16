@@ -507,5 +507,5 @@ void Init_MapClass() {
     addNativeMethod(lxEnvClass, "delete", lxEnvDelete);
     addNativeMethod(lxEnvClass, "iter", lxEnvIter);
 
-    tableSet(&vm.globals, OBJ_VAL(INTERNED("ENV", 3)), OBJ_VAL(lxEnv));
+    tableSet(&vm.constants, OBJ_VAL(INTERNED("ENV", 3)), OBJ_VAL(lxEnv));
 }

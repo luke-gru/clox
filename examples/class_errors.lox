@@ -1,4 +1,4 @@
-var S = "STR";
+S = "STR";
 try {
   class LOL < S { }
 } catch (TypeError e) {

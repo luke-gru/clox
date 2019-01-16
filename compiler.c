@@ -1120,11 +1120,12 @@ static void emitClass(Node *n) {
 
     // define the local or global variable for the class itself
     if (current->scopeDepth == 0) {
-        defineVariable(nameConstant, false);
+        emitOp1(OP_SET_CONST, nameConstant);
     } else {
-        uint8_t defineArg = declareVariable(&n->tok);
-        defineVariable(defineArg, true);
+        uint8_t defineArg = identifierConstant(&n->tok);
+        emitOp1(OP_SET_CONST, defineArg);
     }
+    emitOp0(OP_POP);
     currentClassOrModule = cComp.enclosing;
 }
 
@@ -1146,11 +1147,12 @@ static void emitModule(Node *n) {
 
     // define the local or global variable for the class itself
     if (current->scopeDepth == 0) {
-        defineVariable(nameConstant, false);
+        emitOp1(OP_SET_CONST, nameConstant);
     } else {
-        uint8_t defineArg = declareVariable(&n->tok);
-        defineVariable(defineArg, true);
+        uint8_t defineArg = identifierConstant(&n->tok);
+        emitOp1(OP_SET_CONST, defineArg);
     }
+    emitOp0(OP_POP);
     currentClassOrModule = cComp.enclosing;
 }
 
@@ -1822,10 +1824,20 @@ static void emitNode(Node *n) {
         namedVariable(n->tok, VAR_GET);
         break;
     }
+    case CONSTANT_EXPR: {
+        uint8_t arg = identifierConstant(&n->tok);
+        emitOp1(OP_GET_CONST, arg);
+        break;
+    }
     case ASSIGN_EXPR: {
         emitNode(n->children->data[1]); // rval
         Node *varNode = vec_first(n->children);
-        namedVariable(varNode->tok, VAR_SET);
+        if (varNode->type.kind == CONSTANT_EXPR) {
+            uint8_t arg = identifierConstant(&varNode->tok);
+            emitOp1(OP_SET_CONST, arg);
+        } else {
+            namedVariable(varNode->tok, VAR_SET);
+        }
         break;
     }
     case BLOCK_STMT: {

@@ -36,7 +36,7 @@ ObjClass *addGlobalClass(const char *name, ObjClass *super) {
     ObjString *className = INTERNED(name, strlen(name));
     ObjClass *objClass = newClass(className, super, NEWOBJ_FLAG_OLD);
     hideFromGC((Obj*)objClass);
-    ASSERT(tableSet(&vm.globals, OBJ_VAL(className), OBJ_VAL(objClass)));
+    ASSERT(tableSet(&vm.constants, OBJ_VAL(className), OBJ_VAL(objClass)));
     unhideFromGC((Obj*)objClass);
     return objClass;
 }
@@ -45,7 +45,7 @@ ObjModule *addGlobalModule(const char *name) {
     ObjString *modName = INTERNED(name, strlen(name));
     ObjModule *mod = newModule(modName, NEWOBJ_FLAG_OLD);
     hideFromGC((Obj*)mod);
-    ASSERT(tableSet(&vm.globals, OBJ_VAL(modName), OBJ_VAL(mod)));
+    ASSERT(tableSet(&vm.constants, OBJ_VAL(modName), OBJ_VAL(mod)));
     unhideFromGC((Obj*)mod);
     return mod;
 }

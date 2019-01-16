@@ -447,6 +447,7 @@ void initVM() {
     initTable(&vm.globals);
     initTable(&vm.strings); // interned strings
     initTable(&vm.regexLiterals);
+    initTable(&vm.constants);
     vec_init(&vm.hiddenObjs);
 
     ObjInstance *mainT = initMainThread();
@@ -518,6 +519,7 @@ void freeVM(void) {
     freeTable(&vm.globals);
     freeTable(&vm.regexLiterals);
     freeTable(&vm.strings);
+    freeTable(&vm.constants);
     vm.initString = NULL;
     vm.fileString = NULL;
     vm.dirString = NULL;
@@ -1716,7 +1718,7 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
             }
         }
         Value klassFound;
-        if (!tableGet(&vm.globals, row->catchVal, &klassFound)) {
+        if (!tableGet(&vm.constants, row->catchVal, &klassFound)) {
             VM_DEBUG(2, "a class not found for row, next row");
             row = row->next;
             continue;
@@ -2297,6 +2299,8 @@ vmLoop:
               push(val);
           } else if (tableGet(&vm.globals, varName, &val)) {
               push(val);
+          } else if (tableGet(&vm.constants, varName, &val)) {
+              push(val);
           } else {
               throwErrorFmt(lxNameErrClass, "Undefined global variable '%s'.", AS_STRING(varName)->chars);
           }
@@ -2397,6 +2401,22 @@ vmLoop:
       CASE_OP(CLOSE_UPVALUE): {
           closeUpvalues(EC->stackTop - 1);
           pop(); // pop the variable from the stack frame
+          DISPATCH_BOTTOM();
+      }
+      CASE_OP(GET_CONST): {
+          Value varName = READ_CONSTANT();
+          Value val;
+          if (tableGet(&vm.constants, varName, &val)) {
+              push(val);
+          } else {
+              throwErrorFmt(lxNameErrClass, "Undefined constant '%s'.", AS_STRING(varName)->chars);
+          }
+          DISPATCH_BOTTOM();
+      }
+      CASE_OP(SET_CONST): {
+          Value varName = READ_CONSTANT();
+          Value val = peek(0);
+          tableSet(&vm.constants, varName, val);
           DISPATCH_BOTTOM();
       }
       CASE_OP(CLOSURE): {
@@ -2706,7 +2726,7 @@ vmLoop:
           Value existingClass;
           // FIXME: not perfect, if class is declared non-globally this won't
           // detect it. Maybe a new op-code is needed for class re-opening.
-          if (tableGet(&vm.globals, className, &existingClass)) {
+          if (tableGet(&vm.constants, className, &existingClass)) {
               if (IS_CLASS(existingClass)) { // re-open class
                   push(existingClass);
                   DISPATCH_BOTTOM();
@@ -2726,7 +2746,7 @@ vmLoop:
           Value existingMod;
           // FIXME: not perfect, if class is declared non-globally this won't
           // detect it. Maybe a new op-code is needed for class re-opening.
-          if (tableGet(&vm.globals, modName, &existingMod)) {
+          if (tableGet(&vm.constants, modName, &existingMod)) {
               if (IS_MODULE(existingMod)) {
                 push(existingMod); // re-open the module
                 DISPATCH_BOTTOM();
@@ -2752,7 +2772,7 @@ vmLoop:
           }
           // FIXME: not perfect, if class is declared non-globally this won't detect it.
           Value existingClass;
-          if (tableGet(&vm.globals, className, &existingClass)) {
+          if (tableGet(&vm.constants, className, &existingClass)) {
               if (UNLIKELY(IS_CLASS(existingClass))) {
                   throwErrorFmt(lxNameErrClass, "Class %s already exists (if "
                           "re-opening class, no superclass should be given)",

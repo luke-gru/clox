@@ -96,6 +96,10 @@ void outputParserErrors(Parser *p, FILE *f) {
     }
 }
 
+static inline bool isCapital(char c) {
+    return c >= 'A' && c <= 'Z';
+}
+
 // takes into account peekbuffer, which scanToken() doesn't.
 // NOTE: if looking to peek forward for a token, call `peekTokN`
 // instead of this function.
@@ -257,6 +261,9 @@ static Node *declaration(void) {
     if (match(TOKEN_CLASS)) {
         consume(TOKEN_IDENTIFIER, "Expected class name (identifier) after keyword 'class'");
         Token nameTok = current->previous;
+        if (!isCapital(*nameTok.start)) {
+            error("Class name must be a constant (start with a capital letter)");
+        }
         node_type_t classType = {
             .type = NODE_STMT,
             .kind = CLASS_STMT,
@@ -277,6 +284,9 @@ static Node *declaration(void) {
     if (match(TOKEN_MODULE)) {
         consume(TOKEN_IDENTIFIER, "Expected module name (identifier) after keyword 'module'");
         Token nameTok = current->previous;
+        if (!isCapital(*nameTok.start)) {
+            error("Module name must be a constant (start with a capital letter)");
+        }
         node_type_t modType = {
             .type = NODE_STMT,
             .kind = MODULE_STMT,
@@ -336,6 +346,9 @@ static Node *statement() {
         };
         while (match(TOKEN_IDENTIFIER)) {
             Token varTok = current->previous;
+            if (isCapital(*varTok.start)) {
+                error("Can't set constants in a foreach loop");
+            }
             Node *varNode = createNode(varTokT, varTok, NULL);
             nodeAddChild(foreachNode, varNode);
             if (match(TOKEN_IN)) {
@@ -459,10 +472,10 @@ static Node *statement() {
         while (match(TOKEN_CATCH)) {
             Token catchTok = current->previous;
             consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'catch'");
-            Node *catchExpr = expression();
+            Node *catchExpr = expression(); // should be constant expression
             Token identToken;
             bool foundIdentToken = false;
-            if (match(TOKEN_IDENTIFIER)) {
+            if (match(TOKEN_IDENTIFIER)) { // should be variable
                 identToken = current->previous;
                 foundIdentToken = true;
             }
@@ -656,6 +669,9 @@ static Node *varDeclaration(void) {
     TRACE_START("varDeclaration");
     consume(TOKEN_IDENTIFIER, "Expected identifier after keyword 'var'");
     Token identTok = current->previous;
+    if (isCapital(*identTok.start)) {
+        error("Variable names cannot start with a capital letter. That's for constants.");
+    }
     node_type_t nType = {
         .type = NODE_STMT,
         .kind = VAR_STMT,
@@ -900,7 +916,7 @@ static Node *assignment() {
         Token eqTok = current->previous;
         Node *rval = assignment(); // assignment goes right to left in precedence (a = (b = c))
         Node *ret = NULL;
-        if (nodeKind(lval) == VARIABLE_EXPR) {
+        if (nodeKind(lval) == VARIABLE_EXPR || nodeKind(lval) == CONSTANT_EXPR) {
             TRACE_START("assignExpr");
             node_type_t assignT = {
                 .type = NODE_EXPR,
@@ -1375,7 +1391,7 @@ static Node *primary() {
             Node *toStringCall = createNode(callT, syntheticToken("String"), NULL);
             node_type_t varT = {
                 .type = NODE_EXPR,
-                .kind = VARIABLE_EXPR,
+                .kind = CONSTANT_EXPR,
             };
             Node *toStringVar = createNode(varT, syntheticToken("String"), NULL);
             nodeAddChild(toStringCall, toStringVar);
@@ -1487,10 +1503,18 @@ static Node *primary() {
     if (match(TOKEN_IDENTIFIER)) {
         TRACE_START("varExpr");
         Token varName = current->previous;
-        node_type_t nType = {
-            .type = NODE_EXPR,
-            .kind = VARIABLE_EXPR,
-        };
+        node_type_t nType;
+        if (isCapital(*varName.start) && !check(TOKEN_LEFT_PAREN)) {
+            nType = (node_type_t){
+                .type = NODE_EXPR,
+                .kind = CONSTANT_EXPR,
+            };
+        } else {
+            nType = (node_type_t){
+                .type = NODE_EXPR,
+                .kind = VARIABLE_EXPR,
+            };
+        }
         Node *ret = createNode(nType, varName, NULL);
         TRACE_END("varExpr");
         TRACE_END("primary");

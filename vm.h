@@ -162,6 +162,7 @@ typedef struct VM {
     Table globals; // global variables
     Table strings; // interned strings
     Table regexLiterals;
+    Table constants; // global constants
     ObjString *initString;
     ObjString *fileString;
     ObjString *dirString;

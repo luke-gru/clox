@@ -376,6 +376,7 @@ void collectYoungGarbage() {
     GC_TRACE_DEBUG(2, "# C-call stack objects found: %d", numStackObjects);
 
     grayTable(&vm.globals);
+    grayTable(&vm.constants);
     /*grayTable(&vm.strings);*/
     /*grayTable(&vm.regexLiterals);*/
 
@@ -1250,6 +1251,7 @@ void collectGarbage(void) {
 
     GC_TRACE_DEBUG(2, "Marking globals (%d found)", vm.globals.count);
     grayTable(&vm.globals);
+    grayTable(&vm.constants);
     GC_TRACE_DEBUG(2, "Marking interned strings (%d found)", vm.strings.count);
     grayTable(&vm.strings);
     grayTable(&vm.regexLiterals);

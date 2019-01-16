@@ -17,7 +17,7 @@ the syntax is different for them, like in ruby.
 * Add tracing/coverage information
 * Add Class#ancestors
 * add multiple var declaration, setters for array returns [GIT BRANCH]
-* Add constants to language
+* Add constants to language, identifiers starting w/ capital, with namespaces
 * Add socket class in io.c, make it work with multi-threading
 * Allow getters to be called like methods (when given 0 args) [PARTIAL]
   works for instances, not classes or modules (ex: Array.name())

@@ -196,35 +196,35 @@ static void skipWhitespace() {
 }
 
 static Token identifier() {
-  while (isAlphaNumeric(peek())) advance();
+    while (isAlphaNumeric(peek())) advance();
 
-  TokenType type = TOKEN_IDENTIFIER;
+    TokenType type = TOKEN_IDENTIFIER;
 
-  // See if the identifier is a reserved word.
-  size_t length = current->current - current->tokenStart;
-  if (!current->afterDot) {
-    for (Keyword *keyword = keywords; keyword->name != NULL; keyword++) {
-      if (length == keyword->length &&
-          memcmp(current->tokenStart, keyword->name, length) == 0) {
-        type = keyword->type;
-        break;
-      }
+    // See if the identifier is a reserved word.
+    size_t length = current->current - current->tokenStart;
+    if (!current->afterDot) {
+        for (Keyword *keyword = keywords; keyword->name != NULL; keyword++) {
+            if (length == keyword->length &&
+                    memcmp(current->tokenStart, keyword->name, length) == 0) {
+                type = keyword->type;
+                break;
+            }
+        }
     }
-  }
 
-  if (type == TOKEN_IDENTIFIER && memcmp(current->tokenStart, "__LINE__", length) == 0) {
-      Token token = makeToken(TOKEN_NUMBER);
-      char *numBuf = calloc(8, 1);
-      ASSERT_MEM(numBuf);
-      sprintf(numBuf, "%d", current->line);
-      token.start = numBuf;
-      token.length = strlen(numBuf);
-      token.lexeme = numBuf;
-      token.alloced = true;
-      return token;
-  }
+    if (type == TOKEN_IDENTIFIER && memcmp(current->tokenStart, "__LINE__", length) == 0) {
+        Token token = makeToken(TOKEN_NUMBER);
+        char *numBuf = calloc(8, 1);
+        ASSERT_MEM(numBuf);
+        sprintf(numBuf, "%d", current->line);
+        token.start = numBuf;
+        token.length = strlen(numBuf);
+        token.lexeme = numBuf;
+        token.alloced = true;
+        return token;
+    }
 
-  return makeToken(type);
+    return makeToken(type);
 }
 
 static Token number(char cur) {

@@ -1,0 +1,6 @@
+/* Should be an error */
+class Hi {
+}
+print String("hi");
+/*module err {*/
+/*}*/
