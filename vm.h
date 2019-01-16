@@ -372,5 +372,6 @@ void debugFrame(CallFrame *frame);
 // exiting
 void runAtExitHooks(void);
 NORETURN void stopVM(int status);
+NORETURN void _stopVM(int status);
 
 #endif

@@ -1,12 +1,15 @@
 requireScript("testunit");
 
 class MyTests < TestUnit {
-  testEqual() {
+  testPass() {
     this.assertEq(1, 1);
   }
+  testFail() {
+    this.assertEq(1, 2);
+  }
 }
-TestUnit.autorun(outputReport: false);
+TestUnit.autorun(outputReport: false, exit: false);
 
 __END__
 -- expect: --
-.
+.F

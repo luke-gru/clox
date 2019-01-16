@@ -417,10 +417,26 @@ Value lxAtExit(int argCount, Value *args) {
  * ex: exit(0);
  */
 Value lxExit(int argCount, Value *args) {
-    CHECK_ARITY("exit", 1, 1, argCount);
-    Value status = *args;
-    CHECK_ARG_BUILTIN_TYPE(status, IS_NUMBER_FUNC, "number", 1);
-    stopVM((int)AS_NUMBER(status));
+    CHECK_ARITY("exit", 0, 1, argCount);
+    int status = 0;
+    if (argCount == 1) {
+        Value statusVal = *args;
+        CHECK_ARG_BUILTIN_TYPE(statusVal, IS_NUMBER_FUNC, "number", 1);
+        status = (int)AS_NUMBER(statusVal);
+    }
+    stopVM(status);
+    UNREACHABLE_RETURN(NIL_VAL);
+}
+
+Value lx_Exit(int argCount, Value *args) {
+    CHECK_ARITY("_exit", 0, 1, argCount);
+    int status = 0;
+    if (argCount == 1) {
+        Value statusVal = *args;
+        CHECK_ARG_BUILTIN_TYPE(statusVal, IS_NUMBER_FUNC, "number", 1);
+        status = (int)AS_NUMBER(statusVal);
+    }
+    _stopVM(status);
     UNREACHABLE_RETURN(NIL_VAL);
 }
 

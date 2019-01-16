@@ -107,6 +107,7 @@ static void defineNativeFunctions(void) {
     addGlobalFunction("sleep", lxSleep);
     addGlobalFunction("yield", lxYield);
     addGlobalFunction("exit", lxExit);
+    addGlobalFunction("_exit", lx_Exit);
     addGlobalFunction("atExit", lxAtExit);
     addGlobalFunction("newThread", lxNewThread);
     addGlobalFunction("joinThread", lxJoinThread);
@@ -3291,9 +3292,11 @@ NORETURN void stopVM(int status) {
     LxThread *th = vm.curThread;
     if (th == vm.mainThread) {
         vm.exiting = true;
+        th->exitStatus = status;
         THREAD_DEBUG(1, "Main thread exiting with %d (PID=%d)", status, getpid());
         THREAD_DEBUG(1, "Terminating unjoined threads");
         terminateThreads();
+        THREAD_DEBUG(1, "Running atexit hooks threads");
         runAtExitHooks();
         th->status = THREAD_ZOMBIE;
         freeVM();
@@ -3302,7 +3305,7 @@ NORETURN void stopVM(int status) {
         }
         vm.exited = true;
         vm.numLivingThreads--;
-        pthread_exit(NULL);
+        pthread_exit(&th->exitStatus);
     } else {
         exitingThread(th);
         th->exitStatus = status;
@@ -3319,7 +3322,27 @@ NORETURN void stopVM(int status) {
         }
         th->mutexCounter = 0;
         releaseGVL(THREAD_ZOMBIE);
-        pthread_exit(NULL);
+        pthread_exit(&status);
+    }
+}
+
+NORETURN void _stopVM(int status) {
+    if (vm.curThread != vm.mainThread) {
+        stopVM(status);
+    } else {
+        LxThread *th = vm.curThread;
+        vm.exiting = true;
+        THREAD_DEBUG(1, "Main thread exiting with %d (PID=%d)", status, getpid());
+        THREAD_DEBUG(1, "Terminating unjoined threads");
+        terminateThreads();
+        th->status = THREAD_ZOMBIE;
+        freeVM();
+        if (GET_OPTION(profileGC)) {
+            printGCProfile();
+        }
+        vm.exited = true;
+        vm.numLivingThreads--;
+        _exit(status);
     }
 }
 

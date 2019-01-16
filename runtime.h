@@ -43,6 +43,7 @@ void threadSleepNano(LxThread *th, int secs);
 Value lxYield(int argCount, Value *args);
 Value yieldFromC(int argCount, Value *args, ObjInstance *blkObj);
 Value lxExit(int argCount, Value *args);
+Value lx_Exit(int argCount, Value *args);
 Value lxNewThread(int argCount, Value *args);
 Value lxJoinThread(int argCount, Value *args);
 Value lxAtExit(int argCount, Value *args);

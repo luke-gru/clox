@@ -22,15 +22,26 @@ class TestUnit {
     }
   }
 
-  class autorun(outputProgress: true, outputReport: true) {
+  class autorun(outputProgress: true, outputReport: true, exit: true) {
     if (TestUnit._autorunRegistered) {
       return;
     }
     atExit(fun() {
+      var fail = false;
       foreach (klass in TestUnit._classesRegistered.keys()) {
-        klass.runTests(
+        var res = klass.runTests(
           outputProgress: outputProgress,
           outputReport: outputReport);
+        if (!fail and res != 0) {
+          fail = true;
+        }
+      }
+      var exitStatus = 0;
+      if (fail) {
+        exitStatus = 1;
+      }
+      if (exit) {
+        _exit(exitStatus);
       }
     });
     TestUnit._autorunRegistered = true;
@@ -51,12 +62,12 @@ class TestUnit {
       try {
         tinstance.send(tname);
         if (outputProgress) {
-          print ".";
+          stdout.write(".");
         }
         TestUnit._successes += 1;
       } catch (AssertionError e) {
         if (outputProgress) {
-          print "F";
+          stdout.write("F");
         }
         TestUnit._errors << [tname, e.message];
         TestUnit._fails += 1;
@@ -65,16 +76,20 @@ class TestUnit {
     TestUnit._classesRan[this] = true;
     if (TestUnit._errors.size() == 0) {
       if (outputReport) {
-        print "Success: passed ${TestUnit.successes} tests with ${TestUnit.assertionsPassed} assertions";
+        print "\nSuccess: passed ${TestUnit.successes} tests with ${TestUnit.assertionsPassed} assertions";
+      } else {
+        print "";
       }
       return 0;
     } else {
       if (outputReport) {
-        print "${TestUnit._errors.size()} test failures:";
+        print "\n${TestUnit._errors.size()} test failures:";
         foreach (err in TestUnit._errors) {
           print "${err[0]}: ${err[1]}";
         }
         print "passed ${TestUnit._successes} tests with ${TestUnit._assertionsPassed} assertions";
+      } else {
+        print "";
       }
       return 1;
     }
@@ -108,6 +123,7 @@ class MyTests < TestUnit {
   fun testEqual() {
     this.assertEq(1, 1);
   }
-  this.registerTest("testEqual");
-  this.runTests();
 }
+
+TestUnit.autorun() /* or, MyTests.runTests(), to run them immediately instead
+of on program exit */

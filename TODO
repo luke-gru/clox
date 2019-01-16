@@ -17,7 +17,6 @@ the syntax is different for them, like in ruby.
 * Add tracing/coverage information
 * Add Class#ancestors
 * add multiple var declaration, setters for array returns [GIT BRANCH]
-* Add Process module, with static methods 'waitall'
 * Add constants to language
 * Add socket class in io.c, make it work with multi-threading
 * Allow getters to be called like methods (when given 0 args) [PARTIAL]
@@ -46,7 +45,6 @@ compiled lookup
 * Use alloca where possible to reduce mallocs/frees for data structures like
 ErrTagInfo and BlockStackEntry, used during setjmp/longjmp
 * Change string representation to UTF8
-* Add thread-local storage API for Thread class
 
 Bugs
 ----
