@@ -1,6 +1,6 @@
-t1 = Timer(Timer.CLOCK_MONOTONIC);
+t1 = Timer(Timer::CLOCK_MONOTONIC);
 sleep(1);
-t2 = Timer(Timer.CLOCK_MONOTONIC);
+t2 = Timer(Timer::CLOCK_MONOTONIC);
 print t2-t1;
 
 requireScript("benchmark");

@@ -712,16 +712,6 @@ static Node *expression(void) {
         nodeAddChild(toBlockCall, expr);
         expr = toBlockCall;
     }
-    while (match(TOKEN_DICE)) {
-        consume(TOKEN_IDENTIFIER, "Expected identifier after '::'");
-        node_type_t constLookupType = {
-            .type = NODE_EXPR,
-            .kind = CONSTANT_LOOKUP_EXPR
-        };
-        Node *constLookupNode = createNode(constLookupType, current->previous, NULL);
-        nodeAddChild(constLookupNode, expr);
-        expr = constLookupNode;
-    }
     TRACE_END("expression");
     return expr;
 }
@@ -1526,6 +1516,16 @@ static Node *primary() {
             };
         }
         Node *ret = createNode(nType, varName, NULL);
+        if (match(TOKEN_DICE)) {
+            consume(TOKEN_IDENTIFIER, "Expected identifier after '::'");
+            node_type_t constLookupType = {
+                .type = NODE_EXPR,
+                .kind = CONSTANT_LOOKUP_EXPR
+            };
+            Node *constLookupNode = createNode(constLookupType, current->previous, NULL);
+            nodeAddChild(constLookupNode, ret);
+            ret = constLookupNode;
+        }
         TRACE_END("varExpr");
         TRACE_END("primary");
         return ret;
@@ -1637,6 +1637,16 @@ static Node *primary() {
             .kind = THIS_EXPR,
         };
         Node *thisExpr = createNode(nType, thisTok, NULL);
+        if (match(TOKEN_DICE)) {
+            consume(TOKEN_IDENTIFIER, "Expected identifier after '::'");
+            node_type_t constLookupType = {
+                .type = NODE_EXPR,
+                .kind = CONSTANT_LOOKUP_EXPR
+            };
+            Node *constLookupNode = createNode(constLookupType, current->previous, NULL);
+            nodeAddChild(constLookupNode, thisExpr);
+            thisExpr = constLookupNode;
+        }
         TRACE_END("thisExpr");
         TRACE_END("primary");
         return thisExpr;
