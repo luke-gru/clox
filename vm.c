@@ -652,13 +652,7 @@ static inline void setThis(unsigned n) {
     DBG_ASSERT(vm.curThread->thisObj);
 }
 
-static inline void pushCref(unsigned n) {
-    register VMExecContext *ctx = EC;
-    if (UNLIKELY((ctx->stackTop-n) <= ctx->stack)) {
-        ASSERT(0);
-    }
-    Obj *klass = AS_OBJ(*(ctx->stackTop-1-n));
-    DBG_ASSERT(klass);
+static inline void pushCref(ObjClass *klass) {
     vec_push(&vm.curThread->v_crefStack, klass);
 }
 
@@ -1156,6 +1150,10 @@ void popFrame(void) {
             vec_clear(&vm.curThread->stackObjects);
         }
     }
+    if (frame->klass != NULL && th->v_crefStack.length > 0) {
+        VM_DEBUG(2, "popping cref from popFrame");
+        (void)vec_pop(&th->v_crefStack);
+    }
     EC->frameCount--;
     frame = getFrameOrNull(); // new frame
     if (frame) {
@@ -1340,6 +1338,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 DBG_ASSERT(instance);
                 newFrame->instance = instance;
                 newFrame->klass = frameClass;
+                if (newFrame->klass) {
+                    pushCref(newFrame->klass);
+                }
                 newFrame->callInfo = callInfo;
                 VM_DEBUG(2, "calling native initializer for class %s with %d args", klassName, argCount);
                 Value val = captureNativeError(nativeInit, argCount+1, EC->stackTop-argCount-1, callInfo);
@@ -1407,6 +1408,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         volatile VMExecContext *ec = EC;
         newFrame->instance = instance;
         newFrame->klass = frameClass;
+        if (newFrame->klass) {
+            pushCref(newFrame->klass);
+        }
         newFrame->callInfo = callInfo;
         volatile Value val = captureNativeError(native, argci, EC->stackTop-argci, callInfo);
         newFrame->slots = ec->stackTop - argcActuali;
@@ -1600,6 +1604,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     frame->callInfo = callInfo;
     if (instance && !frameClass) frameClass = instance->klass;
     frame->klass = frameClass;
+    if (frame->klass) {
+        pushCref(frame->klass);
+    }
     if (funcOffset > 0) {
         VM_DEBUG(2, "Func offset due to optargs: %d", (int)funcOffset);
     }
@@ -2422,24 +2429,22 @@ vmLoop:
       CASE_OP(GET_CONST): {
           Value varName = READ_CONSTANT();
           Value val;
-          bool found = false;
           ObjClass *cref = NULL;
           if (th->v_crefStack.length > 0) {
               cref = TO_CLASS(vec_last(&th->v_crefStack));
+              ASSERT(cref);
               if (findConstantUnder(cref, AS_STRING(varName), &val)) {
                   push(val);
-                  found = true;
+                  DISPATCH_BOTTOM();
               }
           }
-          if (!found) {
-              if (tableGet(&vm.constants, varName, &val)) {
-                  push(val);
+          if (tableGet(&vm.constants, varName, &val)) {
+              push(val);
+          } else {
+              if (cref) {
+                  throwErrorFmt(lxNameErrClass, "Undefined constant '%s::%s'.", className(cref), AS_STRING(varName)->chars);
               } else {
-                  if (cref) {
-                      throwErrorFmt(lxNameErrClass, "Undefined constant '%s::%s'.", className(cref), AS_STRING(varName)->chars);
-                  } else {
-                      throwErrorFmt(lxNameErrClass, "Undefined constant '%s'.", AS_STRING(varName)->chars);
-                  }
+                  throwErrorFmt(lxNameErrClass, "Undefined constant '%s'.", AS_STRING(varName)->chars);
               }
           }
           DISPATCH_BOTTOM();
@@ -2459,9 +2464,14 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_CONST): {
-          Value varName = READ_CONSTANT();
+          Value constName = READ_CONSTANT();
           Value val = peek(0);
-          tableSet(&vm.constants, varName, val);
+          if (th->v_crefStack.length > 0) {
+              Value ownerKlass = OBJ_VAL(vec_last(&th->v_crefStack));
+              addConstantUnder(AS_STRING(constName)->chars, val, ownerKlass);
+          } else {
+              tableSet(&vm.constants, constName, val);
+          }
           DISPATCH_BOTTOM();
       }
       CASE_OP(CLOSURE): {
@@ -2775,13 +2785,13 @@ vmLoop:
               if (IS_CLASS(existingClass)) { // re-open class
                   push(existingClass);
                   setThis(0);
-                  pushCref(0);
+                  pushCref(AS_CLASS(existingClass));
                   DISPATCH_BOTTOM();
               } else if (UNLIKELY(IS_MODULE(existingClass))) {
                   const char *classStr = AS_CSTRING(classNm);
                   throwErrorFmt(lxTypeErrClass, "Tried to define class %s, but it's a module",
                           classStr);
-              } // otherwise we override the global var with the new class
+              }
           }
           ObjClass *klass = newClass(AS_STRING(classNm), lxObjClass, NEWOBJ_FLAG_OLD);
           push(OBJ_VAL(klass));
@@ -2789,10 +2799,11 @@ vmLoop:
           if (th->v_crefStack.length > 0) {
               Value ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
               addConstantUnder(className(klass), OBJ_VAL(klass), ownerClass);
+              CLASSINFO(klass)->under = AS_OBJ(ownerClass);
           } else {
               tableSet(&vm.constants, classNm, OBJ_VAL(klass));
           }
-          pushCref(0);
+          pushCref(klass);
           DISPATCH_BOTTOM();
       }
       CASE_OP(MODULE): { // add or re-open module
@@ -2808,42 +2819,56 @@ vmLoop:
                   const char *modStr = AS_CSTRING(modName);
                   throwErrorFmt(lxTypeErrClass, "Tried to define module %s, but it's a class",
                           modStr);
-              } // otherwise, we override the global var with the new module
+              }
           }
           ObjModule *mod = newModule(AS_STRING(modName), NEWOBJ_FLAG_OLD);
           push(OBJ_VAL(mod));
           setThis(0);
-          pushCref(0);
+          if (th->v_crefStack.length > 0) {
+              Value ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
+              addConstantUnder(className(TO_CLASS(mod)), OBJ_VAL(mod), ownerClass);
+              CLASSINFO(mod)->under = AS_OBJ(ownerClass);
+          } else {
+              tableSet(&vm.constants, modName, OBJ_VAL(mod));
+          }
+          pushCref(TO_CLASS(mod));
           DISPATCH_BOTTOM();
       }
       CASE_OP(SUBCLASS): { // add new class inheriting from an existing class
-          Value className = READ_CONSTANT();
+          Value classNm = READ_CONSTANT();
           Value superclass =  pop();
           if (!IS_CLASS(superclass)) {
               throwErrorFmt(lxTypeErrClass,
                       "Class %s tried to inherit from non-class",
-                      AS_CSTRING(className)
+                      AS_CSTRING(classNm)
               );
           }
           // FIXME: not perfect, if class is declared non-globally this won't detect it.
           Value existingClass;
-          if (tableGet(&vm.constants, className, &existingClass)) {
+          if (tableGet(&vm.constants, classNm, &existingClass)) {
               if (UNLIKELY(IS_CLASS(existingClass))) {
                   throwErrorFmt(lxNameErrClass, "Class %s already exists (if "
                           "re-opening class, no superclass should be given)",
-                          AS_CSTRING(className));
+                          AS_CSTRING(classNm));
               } else if (UNLIKELY(IS_MODULE(existingClass))) {
-                  throwErrorFmt(lxTypeErrClass, "Tried to define class %s, but it's a module", AS_CSTRING(className));
+                  throwErrorFmt(lxTypeErrClass, "Tried to define class %s, but it's a module", AS_CSTRING(classNm));
               }
           }
           ObjClass *klass = newClass(
-              AS_STRING(className),
+              AS_STRING(classNm),
               AS_CLASS(superclass),
               NEWOBJ_FLAG_OLD
           );
           push(OBJ_VAL(klass));
+          if (th->v_crefStack.length > 0) {
+              Value ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
+              addConstantUnder(className(klass), OBJ_VAL(klass), ownerClass);
+              CLASSINFO(klass)->under = AS_OBJ(ownerClass);
+          } else {
+              tableSet(&vm.constants, classNm, OBJ_VAL(klass));
+          }
           setThis(0);
-          pushCref(0);
+          pushCref(klass);
           DISPATCH_BOTTOM();
       }
       CASE_OP(IN): {

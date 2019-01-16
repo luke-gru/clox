@@ -1,0 +1,30 @@
+class Outer {
+  OuterConst = 1;
+  class Inner {
+    InnerConst = 2;
+    innerConst() {
+      print InnerConst;
+    }
+    outerConst() {
+      print OuterConst;
+    }
+  }
+}
+
+var err = nil;
+try {
+  print OuterConst;
+} catch (NameError e) {
+  err = e;
+}
+print typeof(err);
+
+var i = Outer::Inner();
+i.innerConst();
+i.outerConst();
+
+__END__
+-- expect: --
+instance
+2
+1

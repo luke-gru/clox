@@ -1119,12 +1119,12 @@ static void emitClass(Node *n) {
     popScope(COMPILE_SCOPE_CLASS);
 
     // define the local or global variable for the class itself
-    if (current->scopeDepth == 0) {
-        emitOp1(OP_SET_CONST, nameConstant);
-    } else {
-        uint8_t defineArg = identifierConstant(&n->tok);
-        emitOp1(OP_SET_CONST, defineArg);
-    }
+    /*if (current->scopeDepth == 0) {*/
+        /*emitOp1(OP_SET_CONST, nameConstant);*/
+    /*} else {*/
+        /*uint8_t defineArg = identifierConstant(&n->tok);*/
+        /*emitOp1(OP_SET_CONST, defineArg);*/
+    /*}*/
     emitOp0(OP_POP_CREF);
     currentClassOrModule = cComp.enclosing;
 }
@@ -1146,13 +1146,13 @@ static void emitModule(Node *n) {
     popScope(COMPILE_SCOPE_MODULE);
 
     // define the local or global variable for the class itself
-    if (current->scopeDepth == 0) {
-        emitOp1(OP_SET_CONST, nameConstant);
-    } else {
-        uint8_t defineArg = identifierConstant(&n->tok);
-        emitOp1(OP_SET_CONST, defineArg);
-    }
-    emitOp0(OP_POP);
+    /*if (current->scopeDepth == 0) {*/
+        /*emitOp1(OP_SET_CONST, nameConstant);*/
+    /*} else {*/
+        /*uint8_t defineArg = identifierConstant(&n->tok);*/
+        /*emitOp1(OP_SET_CONST, defineArg);*/
+    /*}*/
+    emitOp0(OP_POP_CREF);
     currentClassOrModule = cComp.enclosing;
 }
 

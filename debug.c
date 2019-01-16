@@ -700,6 +700,7 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_LESS_EQUAL:
         case OP_EQUAL:
         case OP_NOT_EQUAL:
+        case OP_NOT:
         case OP_PRINT:
         case OP_TRUE:
         case OP_FALSE:
@@ -808,6 +809,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_LESS_EQUAL:
         case OP_EQUAL:
         case OP_NOT_EQUAL:
+        case OP_NOT:
         case OP_PRINT:
         case OP_TRUE:
         case OP_FALSE:

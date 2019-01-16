@@ -158,6 +158,7 @@ typedef struct ClassInfo {
   Table *constants;
   struct ObjString *name;
   // for classes only
+  Obj *under; // if defined inside another class/module
   Obj *superclass; // ObjClass or ObjIClass
   vec_void_t v_includedMods; // pointers to ObjModule
   Obj *singletonOf;  // if singleton class

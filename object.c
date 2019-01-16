@@ -327,6 +327,7 @@ static ClassInfo* newClassInfo(ObjString *name) {
     initTable(cinfo->getters);
     initTable(cinfo->setters);
     initTable(cinfo->constants);
+    cinfo->under = NULL;
     cinfo->superclass = NULL;
     vec_init(&cinfo->v_includedMods);
     cinfo->singletonOf = NULL;

@@ -28,7 +28,11 @@ void addGlobalFunction(const char *name, NativeFn func) {
     ObjString *funcName = INTERNED(name, strlen(name));
     ObjNative *natFn = newNative(funcName, func, NEWOBJ_FLAG_OLD);
     hideFromGC((Obj*)natFn);
-    ASSERT(tableSet(&vm.globals, OBJ_VAL(funcName), OBJ_VAL(natFn)));
+    if (*name >= 'A' && *name <= 'Z') {
+        ASSERT(tableSet(&vm.constants, OBJ_VAL(funcName), OBJ_VAL(natFn)));
+    } else {
+        ASSERT(tableSet(&vm.globals, OBJ_VAL(funcName), OBJ_VAL(natFn)));
+    }
     unhideFromGC((Obj*)natFn);
 }
 
@@ -97,12 +101,21 @@ void addConstantUnder(const char *name, Value constVal, Value owner) {
 }
 
 bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut) {
+    ASSERT(klass);
+    ObjClass *origKlass = klass;
     while (klass) {
         // TODO: check in CLASSINFO(klass)->under, which is the class in which the class was defined
         if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
             return true;
         }
         klass = TO_CLASS(CLASS_SUPER(klass));
+    }
+    klass = TO_CLASS(CLASSINFO(origKlass)->under);
+    while (klass) {
+        if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
+            return true;
+        }
+        klass = TO_CLASS(CLASSINFO(klass)->superclass);
     }
     return false;
 }

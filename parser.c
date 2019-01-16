@@ -1504,7 +1504,7 @@ static Node *primary() {
         TRACE_START("varExpr");
         Token varName = current->previous;
         node_type_t nType;
-        if (isCapital(*varName.start) && !check(TOKEN_LEFT_PAREN)) {
+        if (isCapital(*varName.start)) {
             nType = (node_type_t){
                 .type = NODE_EXPR,
                 .kind = CONSTANT_EXPR,
