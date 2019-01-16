@@ -10,6 +10,7 @@
 #include "memory.h"
 #include "compiler.h"
 #include "nodes.h"
+#include "tracer.h"
 
 VM vm;
 
@@ -2426,6 +2427,9 @@ vmLoop:
           if (!isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
+              if (shouldEndTrace(frame->ip)) {
+                  endTrace();
+              }
           }
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
@@ -2436,6 +2440,9 @@ vmLoop:
           if (isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
+              if (shouldEndTrace(frame->ip)) {
+                  endTrace();
+              }
           }
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
@@ -2446,6 +2453,9 @@ vmLoop:
           if (!isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
+              if (shouldEndTrace(frame->ip)) {
+                  endTrace();
+              }
           }
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
@@ -2456,6 +2466,9 @@ vmLoop:
           if (isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
+              if (shouldEndTrace(frame->ip)) {
+                  endTrace();
+              }
           }
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
@@ -2464,6 +2477,9 @@ vmLoop:
           uint8_t ipOffset = READ_BYTE();
           ASSERT(ipOffset > 0);
           frame->ip += (ipOffset-1);
+          if (shouldEndTrace(frame->ip)) {
+              endTrace();
+          }
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
@@ -2472,7 +2488,13 @@ vmLoop:
           ASSERT(ipOffset > 0);
           // add 1 for the instruction we just read, and 1 to go 1 before the
           // instruction we want to execute next.
+          uint8_t *oldIp = frame->ip;
           frame->ip -= (ipOffset+2);
+          loopHeaderRegisterSeen(frame->ip, oldIp);
+          struct LoopSeen *loop = NULL;
+          if (!inTrace() && (loop = loopNeedsTrace(frame->ip))) {
+              beginTrace(loop);
+          }
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
