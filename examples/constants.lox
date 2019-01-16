@@ -1,0 +1,15 @@
+class File {
+  print typeof(O_CREAT);
+}
+var err = nil;
+try {
+  print typeof(O_CREAT);
+} catch (NameError e) {
+  err = e;
+}
+print typeof(err);
+
+__END__
+-- expect: --
+number
+instance

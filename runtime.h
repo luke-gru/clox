@@ -155,4 +155,5 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func);
 
 // API for adding constants
 void addConstantUnder(const char *name, Value constVal, Value owner);
+bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut);
 #endif

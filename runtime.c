@@ -96,6 +96,17 @@ void addConstantUnder(const char *name, Value constVal, Value owner) {
     tableSet(CLASSINFO(AS_CLASS(owner))->constants, OBJ_VAL(INTERN(name)), constVal);
 }
 
+bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut) {
+    while (klass) {
+        // TODO: check in CLASSINFO(klass)->under, which is the class in which the class was defined
+        if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
+            return true;
+        }
+        klass = TO_CLASS(CLASS_SUPER(klass));
+    }
+    return false;
+}
+
 // Does this file exist and is it readable?
 static bool fileReadable(char *fname) {
     struct stat buffer;

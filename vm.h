@@ -113,6 +113,7 @@ typedef struct LxThread {
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
     ObjUpvalue *openUpvalues; // linked list of upvalue objects to keep alive
     Obj *thisObj;
+    vec_void_t v_crefStack; // class or module we're currently in, for constant lookup
     vec_void_t v_blockStack; // pointers to BlockStackEntry
     Value *lastValue;
     bool hadError;

@@ -652,6 +652,16 @@ static inline void setThis(unsigned n) {
     DBG_ASSERT(vm.curThread->thisObj);
 }
 
+static inline void pushCref(unsigned n) {
+    register VMExecContext *ctx = EC;
+    if (UNLIKELY((ctx->stackTop-n) <= ctx->stack)) {
+        ASSERT(0);
+    }
+    Obj *klass = AS_OBJ(*(ctx->stackTop-1-n));
+    DBG_ASSERT(klass);
+    vec_push(&vm.curThread->v_crefStack, klass);
+}
+
 Value *getLastValue(void) {
     if (isOpStackEmpty()) {
         return EC->lastValue;
@@ -2348,6 +2358,12 @@ vmLoop:
           pop();
           DISPATCH_BOTTOM();
       }
+      CASE_OP(POP_CREF): {
+          pop();
+          ASSERT(th->v_crefStack.length > 0);
+          (void)vec_pop(&th->v_crefStack);
+          DISPATCH_BOTTOM();
+      }
       CASE_OP(POP_N): {
           popN((int)READ_BYTE());
           DISPATCH_BOTTOM();
@@ -2406,10 +2422,25 @@ vmLoop:
       CASE_OP(GET_CONST): {
           Value varName = READ_CONSTANT();
           Value val;
-          if (tableGet(&vm.constants, varName, &val)) {
-              push(val);
-          } else {
-              throwErrorFmt(lxNameErrClass, "Undefined constant '%s'.", AS_STRING(varName)->chars);
+          bool found = false;
+          ObjClass *cref = NULL;
+          if (th->v_crefStack.length > 0) {
+              cref = TO_CLASS(vec_last(&th->v_crefStack));
+              if (findConstantUnder(cref, AS_STRING(varName), &val)) {
+                  push(val);
+                  found = true;
+              }
+          }
+          if (!found) {
+              if (tableGet(&vm.constants, varName, &val)) {
+                  push(val);
+              } else {
+                  if (cref) {
+                      throwErrorFmt(lxNameErrClass, "Undefined constant '%s::%s'.", className(cref), AS_STRING(varName)->chars);
+                  } else {
+                      throwErrorFmt(lxNameErrClass, "Undefined constant '%s'.", AS_STRING(varName)->chars);
+                  }
+              }
           }
           DISPATCH_BOTTOM();
       }
@@ -2743,6 +2774,8 @@ vmLoop:
           if (tableGet(&vm.constants, className, &existingClass)) {
               if (IS_CLASS(existingClass)) { // re-open class
                   push(existingClass);
+                  setThis(0);
+                  pushCref(0);
                   DISPATCH_BOTTOM();
               } else if (UNLIKELY(IS_MODULE(existingClass))) {
                   const char *classStr = AS_CSTRING(className);
@@ -2753,6 +2786,7 @@ vmLoop:
           ObjClass *klass = newClass(AS_STRING(className), lxObjClass, NEWOBJ_FLAG_OLD);
           push(OBJ_VAL(klass));
           setThis(0);
+          pushCref(0);
           DISPATCH_BOTTOM();
       }
       CASE_OP(MODULE): { // add or re-open module
@@ -2773,6 +2807,7 @@ vmLoop:
           ObjModule *mod = newModule(AS_STRING(modName), NEWOBJ_FLAG_OLD);
           push(OBJ_VAL(mod));
           setThis(0);
+          pushCref(0);
           DISPATCH_BOTTOM();
       }
       CASE_OP(SUBCLASS): { // add new class inheriting from an existing class
@@ -2802,6 +2837,7 @@ vmLoop:
           );
           push(OBJ_VAL(klass));
           setThis(0);
+          pushCref(0);
           DISPATCH_BOTTOM();
       }
       CASE_OP(IN): {

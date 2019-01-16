@@ -1125,7 +1125,7 @@ static void emitClass(Node *n) {
         uint8_t defineArg = identifierConstant(&n->tok);
         emitOp1(OP_SET_CONST, defineArg);
     }
-    emitOp0(OP_POP);
+    emitOp0(OP_POP_CREF);
     currentClassOrModule = cComp.enclosing;
 }
 

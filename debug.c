@@ -162,6 +162,8 @@ const char *opName(OpCode code) {
         return "OP_OR";
     case OP_POP:
         return "OP_POP";
+    case OP_POP_CREF:
+        return "OP_POP_CREF";
     case OP_POP_N:
         return "OP_POP_N";
     case OP_JUMP_IF_FALSE:
@@ -705,6 +707,7 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_AND:
         case OP_OR:
         case OP_POP:
+        case OP_POP_CREF:
         case OP_LEAVE:
         case OP_THROW:
         case OP_INDEX_GET:
@@ -812,6 +815,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_AND:
         case OP_OR:
         case OP_POP:
+        case OP_POP_CREF:
         case OP_LEAVE:
         case OP_THROW:
         case OP_INDEX_GET:
