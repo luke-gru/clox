@@ -1,5 +1,4 @@
 class AssertionError < Error { }
-class TestUnit {}
 class TestUnit {
   this._successes = 0;
   this._fails = 0;

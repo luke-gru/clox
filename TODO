@@ -29,7 +29,6 @@ get/set a different sigil maybe, like @prop.
 * Add defineMethod() function
 * Allow dynamically loading lox extensions, which can be '.so' files.
 * Add Dir static class method 'glob'
-* Add test/unit framework
 * Add autoloading on NameError for class not found
 
 Improvements
@@ -59,6 +58,7 @@ file lookup, not pwd when calling loadScript/requireScript
 * +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] +=1, or other lvalues
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
+* Kwargs bug when not all kwargs given
 
 Optimizations
 -------------

@@ -643,6 +643,8 @@ static inline void setThis(unsigned n) {
         ASSERT(0);
     }
     vm.curThread->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
+    getFrame()->instance = (ObjInstance*)vm.curThread->thisObj;
+    DBG_ASSERT(vm.curThread->thisObj);
 }
 
 Value *getLastValue(void) {
@@ -1042,15 +1044,12 @@ static void defineSetter(ObjString *name) {
 Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *args, CallInfo *cinfo) {
     VM_DEBUG(2, "Calling VM method");
     push(OBJ_VAL(instance));
-    Obj *oldThis = vm.curThread->thisObj;
-    setThis(0);
     for (int i = 0; i < argCount; i++) {
         DBG_ASSERT(args); // can be null when if i = 0
         push(args[i]);
     }
     VM_DEBUG(3, "call begin");
     callCallable(callable, argCount, true, cinfo); // pushes return value to stack
-    vm.curThread->thisObj = oldThis;
     VM_DEBUG(3, "call end");
     return peek(0);
 }
@@ -1284,8 +1283,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         }
         frameClass = instance->klass; // TODO: make class the callable's class, not the instance class
     } else {
-        // wrong usage of callCallable, callable should be on stack, below the arguments
-        ASSERT(isCallable(*(EC->stackTop-argCount-1))); // should be same as `callable`
+        // callable should be on stack, below the arguments
+        ASSERT(isCallable(*(EC->stackTop-argCount-1))); // should be same as `callable` param
     }
     if (IS_CLOSURE(callable)) { // lox function
         closure = AS_CLOSURE(callable);
@@ -1577,6 +1576,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     VM_DEBUG(2, "%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
     frame->instance = instance;
+    vm.curThread->thisObj = TO_OBJ(instance);
     frame->callInfo = callInfo;
     if (instance && !frameClass) frameClass = instance->klass;
     frame->klass = frameClass;
@@ -2541,7 +2541,6 @@ vmLoop:
           ObjString *mname = AS_STRING(methodName);
           uint8_t numArgs = READ_BYTE();
           Value callInfoVal = READ_CONSTANT();
-          Obj *oldThis = th->thisObj;
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           if (th->lastSplatNumArgs > 0) {
               numArgs += (th->lastSplatNumArgs-1);
@@ -2559,9 +2558,7 @@ vmLoop:
                   const char *classStr = className->chars ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, mname->chars);
               }
-              setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
-              th->thisObj = oldThis;
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);
@@ -2574,9 +2571,7 @@ vmLoop:
                   throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, mname->chars);
               }
               EC->stackTop[-numArgs-1] = instanceVal;
-              setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
-              th->thisObj = oldThis;
           } else if (IS_MODULE(instanceVal)) {
               ObjModule *mod = AS_MODULE(instanceVal);
               Obj *callable = classFindStaticMethod((ObjClass*)mod, mname);
@@ -2589,9 +2584,7 @@ vmLoop:
                   throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, mname->chars);
               }
               EC->stackTop[-numArgs-1] = instanceVal;
-              setThis(numArgs);
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
-              th->thisObj = oldThis;
           } else {
               throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfVal(instanceVal));
           }

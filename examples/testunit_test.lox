@@ -1,12 +1,11 @@
 requireScript("testunit");
 
-class MyTests < TestUnit {}
-class MyTests {
+class MyTests < TestUnit {
   testEqual() {
     this.assertEq(1, 1);
   }
-  MyTests.registerTest("testEqual");
-  MyTests.runTests(outputProgress: true, outputReport: false);
+  this.registerTest("testEqual");
+  this.runTests(outputProgress: true, outputReport: false);
 }
 print MyTests.successes();
 
