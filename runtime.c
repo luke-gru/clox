@@ -104,7 +104,6 @@ bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut) {
     ASSERT(klass);
     ObjClass *origKlass = klass;
     while (klass) {
-        // TODO: check in CLASSINFO(klass)->under, which is the class in which the class was defined
         if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
             return true;
         }
