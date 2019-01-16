@@ -256,5 +256,5 @@ void Init_ProcessModule(void) {
 
     lxProcessMod = processMod;
 
-    setProp(OBJ_VAL(processMod), INTERN("WNOHANG"), NUMBER_VAL(WNOHANG));
+    addConstantUnder("WNOHANG", NUMBER_VAL(WNOHANG), OBJ_VAL(processMod));
 }

@@ -205,9 +205,9 @@ void Init_TimeClass() {
     addNativeMethod(timerClass, "seconds", lxTimerSeconds);
     addNativeMethod(timerClass, "toString", lxTimerToString);
     Value timerClassVal = OBJ_VAL(timerClass);
-    setProp(timerClassVal, INTERN("CLOCK_REALTIME"), NUMBER_VAL(CLOCK_REALTIME));
-    setProp(timerClassVal, INTERN("CLOCK_MONOTONIC"), NUMBER_VAL(CLOCK_MONOTONIC));
-    setProp(timerClassVal, INTERN("CLOCK_PROCESS_CPUTIME_ID"), NUMBER_VAL(CLOCK_PROCESS_CPUTIME_ID));
-    setProp(timerClassVal, INTERN("CLOCK_THREAD_CPUTIME_ID"), NUMBER_VAL(CLOCK_THREAD_CPUTIME_ID));
+    addConstantUnder("CLOCK_REALTIME", NUMBER_VAL(CLOCK_REALTIME), timerClassVal);
+    addConstantUnder("CLOCK_MONOTONIC", NUMBER_VAL(CLOCK_MONOTONIC), timerClassVal);
+    addConstantUnder("CLOCK_PROCESS_CPUTIME_ID", NUMBER_VAL(CLOCK_PROCESS_CPUTIME_ID), timerClassVal);
+    addConstantUnder("CLOCK_THREAD_CPUTIME_ID", NUMBER_VAL(CLOCK_THREAD_CPUTIME_ID), timerClassVal);
     lxTimerClass = timerClass;
 }

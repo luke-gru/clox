@@ -689,6 +689,7 @@ void blackenObject(Obj *obj) {
             grayTable(klass->classInfo->methods);
             grayTable(klass->classInfo->getters);
             grayTable(klass->classInfo->setters);
+            grayTable(klass->classInfo->constants);
             break;
         }
         case OBJ_T_MODULE: {
@@ -715,6 +716,7 @@ void blackenObject(Obj *obj) {
             grayTable(mod->classInfo->methods);
             grayTable(mod->classInfo->getters);
             grayTable(mod->classInfo->setters);
+            grayTable(mod->classInfo->constants);
             break;
         }
         case OBJ_T_ICLASS: {

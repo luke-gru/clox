@@ -152,4 +152,7 @@ ObjModule *addGlobalModule(const char *name);
 ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func);
 ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func);
 ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func);
+
+// API for adding constants
+void addConstantUnder(const char *name, Value constVal, Value owner);
 #endif

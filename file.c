@@ -324,36 +324,35 @@ void Init_FileClass(void) {
 
 
     Value fileClassVal = OBJ_VAL(fileClass);
-    // TODO: make constants instead of properties
-    setProp(fileClassVal, INTERN("O_RDONLY"), NUMBER_VAL(O_RDONLY));
-    setProp(fileClassVal, INTERN("O_WRONLY"), NUMBER_VAL(O_WRONLY));
-    setProp(fileClassVal, INTERN("O_RDWR"), NUMBER_VAL(O_RDWR));
-    setProp(fileClassVal, INTERN("O_APPEND"), NUMBER_VAL(O_APPEND));
-    setProp(fileClassVal, INTERN("O_CREAT"), NUMBER_VAL(O_CREAT));
-    setProp(fileClassVal, INTERN("O_CLOEXEC"), NUMBER_VAL(O_CLOEXEC));
-    setProp(fileClassVal, INTERN("O_NOFOLLOW"), NUMBER_VAL(O_NOFOLLOW));
+    addConstantUnder("O_RDONLY", NUMBER_VAL(O_RDONLY), fileClassVal);
+    addConstantUnder("O_WRONLY", NUMBER_VAL(O_WRONLY), fileClassVal);
+    addConstantUnder("O_RDWR", NUMBER_VAL(O_RDWR), fileClassVal);
+    addConstantUnder("O_APPEND", NUMBER_VAL(O_APPEND), fileClassVal);
+    addConstantUnder("O_CREAT", NUMBER_VAL(O_CREAT), fileClassVal);
+    addConstantUnder("O_CLOEXEC", NUMBER_VAL(O_CLOEXEC), fileClassVal);
+    addConstantUnder("O_NOFOLLOW", NUMBER_VAL(O_NOFOLLOW), fileClassVal);
 #ifndef O_TMPFILE
 #define O_TMPFILE 0
 #endif
-    setProp(fileClassVal, INTERN("O_TMPFILE"), NUMBER_VAL(O_TMPFILE));
+    addConstantUnder("O_TMPFILE", NUMBER_VAL(O_TMPFILE), fileClassVal);
 #ifndef O_SYNC
 #define O_SYNC 0
 #endif
-    setProp(fileClassVal, INTERN("O_SYNC"), NUMBER_VAL(O_SYNC));
-    setProp(fileClassVal, INTERN("O_TRUNC"), NUMBER_VAL(O_TRUNC));
-    setProp(fileClassVal, INTERN("O_EXCL"), NUMBER_VAL(O_EXCL));
+    addConstantUnder("O_SYNC", NUMBER_VAL(O_SYNC), fileClassVal);
+    addConstantUnder("O_TRUNC", NUMBER_VAL(O_TRUNC), fileClassVal);
+    addConstantUnder("O_EXCL", NUMBER_VAL(O_EXCL), fileClassVal);
 
-    setProp(fileClassVal, INTERN("SEEK_SET"), NUMBER_VAL(SEEK_SET));
-    setProp(fileClassVal, INTERN("SEEK_CUR"), NUMBER_VAL(SEEK_CUR));
-    setProp(fileClassVal, INTERN("SEEK_END"), NUMBER_VAL(SEEK_END));
+    addConstantUnder("SEEK_SET", NUMBER_VAL(SEEK_SET), fileClassVal);
+    addConstantUnder("SEEK_CUR", NUMBER_VAL(SEEK_CUR), fileClassVal);
+    addConstantUnder("SEEK_END", NUMBER_VAL(SEEK_END), fileClassVal);
 #ifndef SEEK_DATA
 #define SEEK_DATA 0
 #endif
-    setProp(fileClassVal, INTERN("SEEK_DATA"), NUMBER_VAL(SEEK_DATA));
+    addConstantUnder("SEEK_DATA", NUMBER_VAL(SEEK_DATA), fileClassVal);
 #ifndef SEEK_HOLE
 #define SEEK_HOLE 0
 #endif
-    setProp(fileClassVal, INTERN("SEEK_HOLE"), NUMBER_VAL(SEEK_HOLE));
+    addConstantUnder("SEEK_HOLE", NUMBER_VAL(SEEK_HOLE), fileClassVal);
 
 
     lxFileClass = fileClass;

@@ -106,6 +106,8 @@ const char *opName(OpCode code) {
         return "OP_GET_CONST";
     case OP_SET_CONST:
         return "OP_SET_CONST";
+    case OP_GET_CONST_UNDER:
+        return "OP_GET_CONST_UNDER";
     case OP_PROP_GET:
         return "OP_PROP_GET";
     case OP_PROP_SET:
@@ -631,6 +633,7 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_SET_GLOBAL:
         case OP_GET_CONST:
         case OP_SET_CONST:
+        case OP_GET_CONST_UNDER:
         case OP_CLASS:
         case OP_MODULE:
         case OP_SUBCLASS:
@@ -737,6 +740,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_SET_GLOBAL:
         case OP_GET_CONST:
         case OP_SET_CONST:
+        case OP_GET_CONST_UNDER:
         case OP_CLASS:
         case OP_MODULE:
         case OP_SUBCLASS:

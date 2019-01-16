@@ -1,5 +1,5 @@
 var stop = false;
-Signal.trap(Signal.QUIT, fun() {
+Signal.trap(Signal::QUIT, fun() {
   print "In handler";
   stop = true;
 });
@@ -7,7 +7,7 @@ Signal.trap(Signal.QUIT, fun() {
 var t = newThread(fun() {
   sleep(2);
   print "Signalling from other thread";
-  Process.signal(Process.pid(), Signal.QUIT);
+  Process.signal(Process.pid(), Signal::QUIT);
 });
 
 print "Looping in main";

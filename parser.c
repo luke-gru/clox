@@ -712,6 +712,16 @@ static Node *expression(void) {
         nodeAddChild(toBlockCall, expr);
         expr = toBlockCall;
     }
+    while (match(TOKEN_DICE)) {
+        consume(TOKEN_IDENTIFIER, "Expected identifier after '::'");
+        node_type_t constLookupType = {
+            .type = NODE_EXPR,
+            .kind = CONSTANT_LOOKUP_EXPR
+        };
+        Node *constLookupNode = createNode(constLookupType, current->previous, NULL);
+        nodeAddChild(constLookupNode, expr);
+        expr = constLookupNode;
+    }
     TRACE_END("expression");
     return expr;
 }

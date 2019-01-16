@@ -1,5 +1,5 @@
 var stop = false;
-Signal.trap(Signal.QUIT, fun() {
+Signal.trap(Signal::QUIT, fun() {
   print "In handler";
   stop = true;
 });
@@ -11,7 +11,7 @@ GC.collect();
 var childPid = fork(fun() {
   sleep(2);
   print "Signalling from child";
-  Process.signal(Process.ppid(), Signal.QUIT);
+  Process.signal(Process.ppid(), Signal::QUIT);
 });
 Process.detach(childPid);
 

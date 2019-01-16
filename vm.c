@@ -2413,6 +2413,20 @@ vmLoop:
           }
           DISPATCH_BOTTOM();
       }
+      CASE_OP(GET_CONST_UNDER): {
+          Value klass = pop();
+          if (!IS_CLASS(klass) && !IS_MODULE(klass)) {
+              throwErrorFmt(lxTypeErrClass, "Constants must be defined under classes/modules");
+          }
+          Value varName = READ_CONSTANT();
+          Value val;
+          if (tableGet(CLASSINFO(AS_CLASS(klass))->constants, varName, &val)) {
+              push(val);
+          } else {
+              throwErrorFmt(lxNameErrClass, "Undefined constant '%s::%s'.", className(AS_CLASS(klass)), AS_STRING(varName)->chars);
+          }
+          DISPATCH_BOTTOM();
+      }
       CASE_OP(SET_CONST): {
           Value varName = READ_CONSTANT();
           Value val = peek(0);

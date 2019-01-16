@@ -439,20 +439,19 @@ void Init_IOClass(void) {
     tableSet(&vm.globals, OBJ_VAL(INTERN("stdout")), stdoutVal);
     tableSet(&vm.globals, OBJ_VAL(INTERN("stderr")), stderrVal);
 
-    // class properties
     Value ioClassVal = OBJ_VAL(ioClass);
-    setProp(ioClassVal, INTERN("F_GETFD"), NUMBER_VAL(F_GETFD));
-    setProp(ioClassVal, INTERN("F_SETFD"), NUMBER_VAL(F_SETFD));
+    addConstantUnder("F_GETFD", NUMBER_VAL(F_GETFD), ioClassVal);
+    addConstantUnder("F_SETFD", NUMBER_VAL(F_SETFD), ioClassVal);
     // the one and only file descriptor flag
-    setProp(ioClassVal, INTERN("FD_CLOEXEC"), NUMBER_VAL(FD_CLOEXEC));
+    addConstantUnder("FD_CLOEXEC", NUMBER_VAL(FD_CLOEXEC), ioClassVal);
 
     // get file description status flags (O_xxx flags)
-    setProp(ioClassVal, INTERN("F_GETFL"), NUMBER_VAL(F_SETFL));
-    setProp(ioClassVal, INTERN("F_SETFL"), NUMBER_VAL(F_GETFL));
-    // the few file description status flags to set in lox
-    setProp(ioClassVal, INTERN("O_NONBLOCK"), NUMBER_VAL(O_NONBLOCK));
+    addConstantUnder("F_GETFL", NUMBER_VAL(F_SETFL), ioClassVal);
+    addConstantUnder("F_SETFL", NUMBER_VAL(F_GETFL), ioClassVal);
+    // the few file dlags to set in lox
+    addConstantUnder("O_NONBLOCK", NUMBER_VAL(O_NONBLOCK), ioClassVal);
 #ifndef O_DIRECT
 #define O_DIRECT 0
 #endif
-    setProp(ioClassVal, INTERN("O_DIRECT"), NUMBER_VAL(O_DIRECT));
+    addConstantUnder("O_DIRECT", NUMBER_VAL(O_DIRECT), ioClassVal);
 }

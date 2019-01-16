@@ -37,6 +37,7 @@ typedef enum {
   TOKEN_SHOVEL_R, // >>
 
   TOKEN_ARROW, // ->
+  TOKEN_DICE, // ::, looks like dice ;)
 
   TOKEN_IDENTIFIER,
   TOKEN_STRING_SQUOTE,

@@ -1829,6 +1829,12 @@ static void emitNode(Node *n) {
         emitOp1(OP_GET_CONST, arg);
         break;
     }
+    case CONSTANT_LOOKUP_EXPR: {
+        emitChildren(n); // 1 child, the class/module
+        uint8_t arg = identifierConstant(&n->tok);
+        emitOp1(OP_GET_CONST_UNDER, arg);
+        break;
+    }
     case ASSIGN_EXPR: {
         emitNode(n->children->data[1]); // rval
         Node *varNode = vec_first(n->children);

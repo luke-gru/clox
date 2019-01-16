@@ -318,13 +318,15 @@ ObjUpvalue *newUpvalue(Value *slot, int flags) {
 
 static ClassInfo* newClassInfo(ObjString *name) {
     ClassInfo *cinfo = ALLOCATE(ClassInfo, 1);
-    void *tablesMem = (void*)ALLOCATE(Table, 3);
+    void *tablesMem = (void*)ALLOCATE(Table, 4);
     cinfo->methods = tablesMem;
     cinfo->getters = tablesMem + sizeof(Table);
     cinfo->setters = tablesMem + sizeof(Table)*2;
+    cinfo->constants = tablesMem + sizeof(Table)*3;
     initTable(cinfo->methods);
     initTable(cinfo->getters);
     initTable(cinfo->setters);
+    initTable(cinfo->constants);
     cinfo->superclass = NULL;
     vec_init(&cinfo->v_includedMods);
     cinfo->singletonOf = NULL;
@@ -337,7 +339,8 @@ void freeClassInfo(ClassInfo *classInfo) {
     freeTable(classInfo->methods);
     freeTable(classInfo->getters);
     freeTable(classInfo->setters);
-    FREE_ARRAY(Table, classInfo->methods, 3);
+    freeTable(classInfo->constants);
+    FREE_ARRAY(Table, classInfo->methods, 4);
     vec_deinit(&classInfo->v_includedMods);
 }
 

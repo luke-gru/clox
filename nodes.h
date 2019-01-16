@@ -21,6 +21,7 @@ typedef enum eExprType {
     UNARY_EXPR,
     VARIABLE_EXPR,
     CONSTANT_EXPR,
+    CONSTANT_LOOKUP_EXPR,
     ASSIGN_EXPR,
     CALL_EXPR,
     CALL_BLOCK_EXPR,
@@ -32,7 +33,7 @@ typedef enum eExprType {
     THIS_EXPR,
     SUPER_EXPR,
     SPLAT_EXPR,
-    BINARY_ASSIGN_EXPR, // 23
+    BINARY_ASSIGN_EXPR, // 24
 } ExprType;
 
 static const char *exprTypeNames[] = {

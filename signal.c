@@ -143,141 +143,141 @@ void Init_SignalModule(void) {
 
     Value signalModVal = OBJ_VAL(signalMod);
     // can't trap these:
-    setProp(signalModVal, INTERN("STOP"), NUMBER_VAL(SIGSTOP));
-    setProp(signalModVal, INTERN("KILL"), NUMBER_VAL(SIGKILL));
+    addConstantUnder("STOP", NUMBER_VAL(SIGSTOP), signalModVal);
+    addConstantUnder("KILL", NUMBER_VAL(SIGKILL), signalModVal);
 
     // $ man 7 signal
-    setProp(signalModVal, INTERN("HUP"), NUMBER_VAL(SIGHUP));
-    setProp(signalModVal, INTERN("INT"), NUMBER_VAL(SIGINT));
-    setProp(signalModVal, INTERN("QUIT"), NUMBER_VAL(SIGQUIT));
-    setProp(signalModVal, INTERN("ILL"), NUMBER_VAL(SIGILL));
-    setProp(signalModVal, INTERN("ABRT"), NUMBER_VAL(SIGABRT));
-    setProp(signalModVal, INTERN("FPE"), NUMBER_VAL(SIGFPE));
-    setProp(signalModVal, INTERN("SEGV"), NUMBER_VAL(SIGSEGV));
-    setProp(signalModVal, INTERN("PIPE"), NUMBER_VAL(SIGPIPE));
+    addConstantUnder("HUP",  NUMBER_VAL(SIGHUP), signalModVal);
+    addConstantUnder("INT",  NUMBER_VAL(SIGINT), signalModVal);
+    addConstantUnder("QUIT", NUMBER_VAL(SIGQUIT), signalModVal);
+    addConstantUnder("ILL",  NUMBER_VAL(SIGILL), signalModVal);
+    addConstantUnder("ABRT", NUMBER_VAL(SIGABRT), signalModVal);
+    addConstantUnder("FPE",  NUMBER_VAL(SIGFPE), signalModVal);
+    addConstantUnder("SEGV", NUMBER_VAL(SIGSEGV), signalModVal);
+    addConstantUnder("PIPE", NUMBER_VAL(SIGPIPE), signalModVal);
 
-    setProp(signalModVal, INTERN("ALRM"), NUMBER_VAL(SIGALRM));
-    setProp(signalModVal, INTERN("TERM"), NUMBER_VAL(SIGTERM));
-    setProp(signalModVal, INTERN("USR1"), NUMBER_VAL(SIGUSR1));
-    setProp(signalModVal, INTERN("USR2"), NUMBER_VAL(SIGUSR2));
-    setProp(signalModVal, INTERN("CHLD"), NUMBER_VAL(SIGCHLD));
-    setProp(signalModVal, INTERN("CONT"), NUMBER_VAL(SIGCONT));
-    setProp(signalModVal, INTERN("TSTP"), NUMBER_VAL(SIGTSTP));
-    setProp(signalModVal, INTERN("TTIN"), NUMBER_VAL(SIGTTIN));
-    setProp(signalModVal, INTERN("TTOU"), NUMBER_VAL(SIGTTOU));
+    addConstantUnder("ALRM", NUMBER_VAL(SIGALRM), signalModVal);
+    addConstantUnder("TERM", NUMBER_VAL(SIGTERM), signalModVal);
+    addConstantUnder("USR1", NUMBER_VAL(SIGUSR1), signalModVal);
+    addConstantUnder("USR2", NUMBER_VAL(SIGUSR2), signalModVal);
+    addConstantUnder("CHLD", NUMBER_VAL(SIGCHLD), signalModVal);
+    addConstantUnder("CONT", NUMBER_VAL(SIGCONT), signalModVal);
+    addConstantUnder("TSTP", NUMBER_VAL(SIGTSTP), signalModVal);
+    addConstantUnder("TTIN", NUMBER_VAL(SIGTTIN), signalModVal);
+    addConstantUnder("TTOU", NUMBER_VAL(SIGTTOU), signalModVal);
 
 #ifdef SIGBUS
-    setProp(signalModVal, INTERN("BUS"), NUMBER_VAL(SIGBUS));
+    addConstantUnder("BUS", NUMBER_VAL(SIGBUS), signalModVal);
 #else
-    setProp(signalModVal, INTERN("BUS"), NUMBER_VAL(0));
+    addConstantUnder("BUS", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGPOLL
-    setProp(signalModVal, INTERN("POLL"), NUMBER_VAL(SIGPOLL));
+    addConstantUnder("POLL", NUMBER_VAL(SIGPOLL), signalModVal);
 #else
-    setProp(signalModVal, INTERN("POLL"), NUMBER_VAL(0));
+    addConstantUnder("POLL", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGPROF
-    setProp(signalModVal, INTERN("PROF"), NUMBER_VAL(SIGPROF));
+    addConstantUnder("PROF", NUMBER_VAL(SIGPROF), signalModVal);
 #else
-    setProp(signalModVal, INTERN("PROF"), NUMBER_VAL(0));
+    addConstantUnder("PROF", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGSYS
-    setProp(signalModVal, INTERN("SYS"), NUMBER_VAL(SIGSYS));
+    addConstantUnder("SYS", NUMBER_VAL(SIGSYS), signalModVal);
 #else
-    setProp(signalModVal, INTERN("SYS"), NUMBER_VAL(0));
+    addConstantUnder("SYS", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGTRAP
-    setProp(signalModVal, INTERN("TRAP"), NUMBER_VAL(SIGTRAP));
+    addConstantUnder("TRAP", NUMBER_VAL(SIGTRAP), signalModVal);
 #else
-    setProp(signalModVal, INTERN("TRAP"), NUMBER_VAL(0));
+    addConstantUnder("TRAP", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGURG
-    setProp(signalModVal, INTERN("URG"), NUMBER_VAL(SIGURG));
+    addConstantUnder("URG", NUMBER_VAL(SIGURG), signalModVal);
 #else
-    setProp(signalModVal, INTERN("URG"), NUMBER_VAL(0));
+    addConstantUnder("URG", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGVTALRM
-    setProp(signalModVal, INTERN("VTALRM"), NUMBER_VAL(SIGVTALRM));
+    addConstantUnder("VTALRM", NUMBER_VAL(SIGVTALRM), signalModVal);
 #else
-    setProp(signalModVal, INTERN("VTALRM"), NUMBER_VAL(0));
+    addConstantUnder("VTALRM", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGXCPU
-    setProp(signalModVal, INTERN("XCPU"), NUMBER_VAL(SIGXCPU));
+    addConstantUnder("XCPU", NUMBER_VAL(SIGXCPU), signalModVal);
 #else
-    setProp(signalModVal, INTERN("XCPU"), NUMBER_VAL(0));
+    addConstantUnder("XCPU", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGXFSZ
-    setProp(signalModVal, INTERN("XFSZ"), NUMBER_VAL(SIGXFSZ));
+    addConstantUnder("XFSZ", NUMBER_VAL(SIGXFSZ), signalModVal);
 #else
-    setProp(signalModVal, INTERN("XFSZ"), NUMBER_VAL(0));
+    addConstantUnder("XFSZ", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGIOT
-    setProp(signalModVal, INTERN("IOT"), NUMBER_VAL(SIGIOT));
+    addConstantUnder("IOT", NUMBER_VAL(SIGIOT), signalModVal);
 #else
-    setProp(signalModVal, INTERN("IOT"), NUMBER_VAL(SIGABRT));
+    addConstantUnder("IOT", NUMBER_VAL(SIGABRT), signalModVal);
 #endif
 
 #ifdef SIGEMT
-    setProp(signalModVal, INTERN("EMT"), NUMBER_VAL(SIGEMT));
+    addConstantUnder("EMT", NUMBER_VAL(SIGEMT), signalModVal);
 #else
-    setProp(signalModVal, INTERN("EMT"), NUMBER_VAL(0));
+    addConstantUnder("EMT", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGSTKFLT
-    setProp(signalModVal, INTERN("STKFLT"), NUMBER_VAL(SIGSTKFLT));
+    addConstantUnder("STKFLT", NUMBER_VAL(SIGSTKFLT), signalModVal);
 #else
-    setProp(signalModVal, INTERN("STKFLT"), NUMBER_VAL(0));
+    addConstantUnder("STKFLT", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGIO
-    setProp(signalModVal, INTERN("IO"), NUMBER_VAL(SIGIO));
+    addConstantUnder("IO", NUMBER_VAL(SIGIO), signalModVal);
 #else
-    setProp(signalModVal, INTERN("IO"), NUMBER_VAL(0));
+    addConstantUnder("IO", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGCLD
-    setProp(signalModVal, INTERN("CLD"), NUMBER_VAL(SIGCLD));
+    addConstantUnder("CLD", NUMBER_VAL(SIGCLD), signalModVal);
 #else
-    setProp(signalModVal, INTERN("CLD"), NUMBER_VAL(SIGCHLD));
+    addConstantUnder("CLD", NUMBER_VAL(SIGCHLD), signalModVal);
 #endif
 
 #ifdef SIGPWR
-    setProp(signalModVal, INTERN("PWR"), NUMBER_VAL(SIGPWR));
+    addConstantUnder("PWR", NUMBER_VAL(SIGPWR), signalModVal);
 #else
-    setProp(signalModVal, INTERN("PWR"), NUMBER_VAL(0));
+    addConstantUnder("PWR", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGINFO
-    setProp(signalModVal, INTERN("INFO"), NUMBER_VAL(SIGINFO));
+    addConstantUnder("INFO", NUMBER_VAL(SIGINFO), signalModVal);
 #else
-    setProp(signalModVal, INTERN("INFO"), NUMBER_VAL(0));
+    addConstantUnder("INFO", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGLOST
-    setProp(signalModVal, INTERN("LOST"), NUMBER_VAL(SIGLOST));
+    addConstantUnder("LOST", NUMBER_VAL(SIGLOST), signalModVal);
 #else
-    setProp(signalModVal, INTERN("LOST"), NUMBER_VAL(0));
+    addConstantUnder("LOST", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGWINCH
-    setProp(signalModVal, INTERN("WINCH"), NUMBER_VAL(SIGWINCH));
+    addConstantUnder("WINCH", NUMBER_VAL(SIGWINCH), signalModVal);
 #else
-    setProp(signalModVal, INTERN("WINCH"), NUMBER_VAL(0));
+    addConstantUnder("WINCH", NUMBER_VAL(0), signalModVal);
 #endif
 
 #ifdef SIGUNUSED
-    setProp(signalModVal, INTERN("UNUSED"), NUMBER_VAL(SIGUNUSED));
+    addConstantUnder("UNUSED", NUMBER_VAL(SIGUNUSED), signalModVal);
 #else
-    setProp(signalModVal, INTERN("UNUSED"), NUMBER_VAL(0));
+    addConstantUnder("UNUSED", NUMBER_VAL(0), signalModVal);
 #endif
 
 }

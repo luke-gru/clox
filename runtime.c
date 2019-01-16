@@ -90,6 +90,12 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
     return natFn;
 }
 
+
+void addConstantUnder(const char *name, Value constVal, Value owner) {
+    ASSERT(IS_CLASS(owner) || IS_MODULE(owner));
+    tableSet(CLASSINFO(AS_CLASS(owner))->constants, OBJ_VAL(INTERN(name)), constVal);
+}
+
 // Does this file exist and is it readable?
 static bool fileReadable(char *fname) {
     struct stat buffer;

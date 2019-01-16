@@ -155,6 +155,7 @@ typedef struct ClassInfo {
   Table *methods;
   Table *getters;
   Table *setters;
+  Table *constants;
   struct ObjString *name;
   // for classes only
   Obj *superclass; // ObjClass or ObjIClass

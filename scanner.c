@@ -374,7 +374,13 @@ Token scanToken(void) {
     case '[': return makeToken(TOKEN_LEFT_BRACKET);
     case ']': return makeToken(TOKEN_RIGHT_BRACKET);
     case ';': return makeToken(TOKEN_SEMICOLON);
-    case ':': return makeToken(TOKEN_COLON);
+    case ':': {
+        if (match(':')) {
+            return makeToken(TOKEN_DICE);
+        } else {
+            return makeToken(TOKEN_COLON);
+        }
+    }
     case ',': return makeToken(TOKEN_COMMA);
     case '.': {
         if (current->afterDot) {
@@ -504,6 +510,8 @@ const char *tokTypeStr(TokenType ttype) {
       return "SEMICOLON";
     case TOKEN_COLON:
       return "COLON";
+    case TOKEN_DICE:
+      return "DICE";
     case TOKEN_SLASH:
       return "SLASH";
     case TOKEN_STAR:
