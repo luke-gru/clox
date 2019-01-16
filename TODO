@@ -46,6 +46,7 @@ compiled lookup
 * Use alloca where possible to reduce mallocs/frees for data structures like
 ErrTagInfo and BlockStackEntry, used during setjmp/longjmp
 * Change string representation to UTF8
+* Add thread-local storage API for Thread class
 
 Bugs
 ----

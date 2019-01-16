@@ -140,6 +140,7 @@ static void LxThreadSetup(LxThread *th) {
     th->vmRunLvl = 0;
     th->mutexCounter = 0;
     th->lastSplatNumArgs = -1;
+    th->tlsMap = NULL;
     vec_init(&th->stackObjects);
     pthread_mutex_init(&th->sleepMutex, NULL);
     pthread_cond_init(&th->sleepCond, NULL);
@@ -324,23 +325,27 @@ Value lxJoinThread(int argCount, Value *args) {
     return NIL_VAL;
 }
 
-Value lxThreadMainStatic(int argCount, Value *args) {
+static Value lxThreadMainStatic(int argCount, Value *args) {
     CHECK_ARITY("Thread.main", 1, 1, argCount);
     return OBJ_VAL(vec_first(&vm.threads));
 }
 
-Value lxThreadCurrentStatic(int argCount, Value *args) {
+static Value lxThreadCurrentStatic(int argCount, Value *args) {
     CHECK_ARITY("Thread.current", 1, 1, argCount);
     ObjInstance *curThread = FIND_THREAD_INSTANCE(vm.curThread->tid);
     return OBJ_VAL(curThread);
 }
 
-Value lxThreadScheduleStatic(int argCount, Value *args) {
+static Value lxThreadScheduleStatic(int argCount, Value *args) {
     CHECK_ARITY("Thread.schedule", 1, 1, argCount);
+    LxThread *oldTh = vm.curThread;
+    (void)oldTh;
     releaseGVL(THREAD_STOPPED);
 // not available on OSX
 #ifdef __linux__
     pthread_yield();
+#else
+    threadSleepNano(oldTh, 100);
 #endif
     acquireGVL();
     return NIL_VAL;
@@ -361,7 +366,6 @@ Value lxThreadInit(int argCount, Value *args) {
 
 void threadSchedule(LxThread *th) {
     ASSERT(th != vm.curThread);
-    // TODO: wake thread up pre-emptively if sleeping or blocked on IO
     LxThread *oldTh = vm.curThread;
     (void)oldTh;
     releaseGVL(THREAD_STOPPED);
@@ -397,7 +401,7 @@ void threadInterrupt(LxThread *th, bool isTrap) {
     }
 }
 
-Value lxThreadThrow(int argCount, Value *args) {
+static Value lxThreadThrow(int argCount, Value *args) {
     CHECK_ARITY("Thread#throw", 2, 2, argCount);
     Value self = *args;
     Value err = args[1];
@@ -421,18 +425,47 @@ void threadDetach(LxThread *th) {
     vm.numDetachedThreads++;
 }
 
-Value lxThreadDetach(int argCount, Value *args) {
+static Value lxThreadDetach(int argCount, Value *args) {
     CHECK_ARITY("Thread#detach", 1, 1, argCount);
     Value self = *args;
     LxThread *th = THREAD_GETHIDDEN(self);
     if (th == vm.mainThread) {
-        return BOOL_VAL(false);
+        return BOOL_VAL(false); // throw?
     }
     if (th->detached || th->status == THREAD_KILLED || th->status == THREAD_ZOMBIE) {
         return BOOL_VAL(false);
     }
     threadDetach(th);
     return BOOL_VAL(true);
+}
+
+static Value lxThreadGetTLS(int argCount, Value *args) {
+    CHECK_ARITY("Thread#opIndexGet", 2, 2, argCount);
+    Value self = *args;
+    Value key = args[1];
+    LxThread *th = THREAD_GETHIDDEN(self);
+    if (!th->tlsMap) {
+        th->tlsMap = AS_MAP(newMap());
+    }
+    Value val;
+    if (mapGet(OBJ_VAL(th->tlsMap), key, &val)) {
+        return val;
+    } else {
+        return NIL_VAL;
+    }
+}
+
+static Value lxThreadSetTLS(int argCount, Value *args) {
+    CHECK_ARITY("Thread#opIndexSet", 3, 3, argCount);
+    Value self = *args;
+    Value key = args[1];
+    Value val = args[2];
+    LxThread *th = THREAD_GETHIDDEN(self);
+    if (!th->tlsMap) {
+        th->tlsMap = AS_MAP(newMap());
+    }
+    mapSet(OBJ_VAL(th->tlsMap), key, val);
+    return val;
 }
 
 typedef struct LxMutex {
@@ -572,6 +605,8 @@ void Init_ThreadClass() {
     nativeThreadInit = addNativeMethod(threadClass, "init", lxThreadInit);
     addNativeMethod(threadClass, "throw", lxThreadThrow);
     addNativeMethod(threadClass, "detach", lxThreadDetach);
+    addNativeMethod(threadClass, "opIndexGet", lxThreadGetTLS);
+    addNativeMethod(threadClass, "opIndexSet", lxThreadSetTLS);
 
     ObjClass *mutexClass = addGlobalClass("Mutex", lxObjClass);
     lxMutexClass = mutexClass;

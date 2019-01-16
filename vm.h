@@ -130,6 +130,7 @@ typedef struct LxThread {
     // control returns to the VM, these are popped. Stack objects aren't
     // collected during GC.
     vec_void_t stackObjects;
+    ObjMap *tlsMap; // thread local storage
     volatile int mutexCounter;
     pthread_mutex_t sleepMutex;
     pthread_cond_t sleepCond;

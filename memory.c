@@ -345,6 +345,9 @@ void collectYoungGarbage() {
         if (th->lastValue) {
             grayValue(*th->lastValue);
         }
+        if (th->tlsMap) {
+            grayObject(TO_OBJ(th->tlsMap));
+        }
         grayValue(th->lastErrorThrown);
         VMExecContext *ctx = NULL; int k = 0;
         vec_foreach(&th->v_ecs, ctx, k) {
@@ -1166,6 +1169,9 @@ void collectGarbage(void) {
         }
         if (th->lastValue) {
             grayValue(*th->lastValue);
+        }
+        if (th->tlsMap) {
+            grayObject(TO_OBJ(th->tlsMap));
         }
         grayValue(th->lastErrorThrown);
         VMExecContext *ctx = NULL; int k = 0;

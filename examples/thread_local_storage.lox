@@ -1,0 +1,17 @@
+Thread.main()['key'] = 'val';
+print Thread.main()['key'];
+var t = newThread(fun() {
+  print Thread.current()['key'];
+  Thread.current()['key'] = 'val2';
+  print Thread.current()['key'];
+});
+
+joinThread(t);
+print Thread.main()['key'];
+
+__END__
+-- expect: --
+val
+nil
+val2
+val
