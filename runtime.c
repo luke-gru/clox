@@ -118,6 +118,9 @@ bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut) {
             klass = TO_CLASS(CLASSINFO(klass)->superclass);
         }
     }
+    if (tableGet(&vm.constants, OBJ_VAL(name), valOut)) {
+        return true;
+    }
     return false;
 }
 
@@ -734,7 +737,6 @@ Value lxClassInclude(int argCount, Value *args) {
 // Returns a copy of the class's name as a String
 // ex: print Object.name
 Value lxClassGetName(int argCount, Value *args) {
-    CHECK_ARITY("Class#name", 1, 1, argCount);
     Value self = args[0];
     ObjClass *klass = AS_CLASS(self);
     ObjString *origName = CLASSINFO(klass)->name;
@@ -769,6 +771,19 @@ Value lxClassMethodAdded(int argCount, Value *args) {
     (void)argCount;
     (void)args;
     return NIL_VAL;
+}
+
+Value lxClassConstDefined(int argCount, Value *args) {
+    CHECK_ARITY("Class#constDefined", 2, 2, argCount);
+    Value self = *args;
+    Value constName = args[1];
+    CHECK_ARG_IS_A(constName, lxStringClass, 1);
+    Value val;
+    if (findConstantUnder(AS_CLASS(self), AS_STRING(constName), &val)) {
+        return BOOL_VAL(true);
+    } else {
+        return BOOL_VAL(false);
+    }
 }
 
 #define FLAG_ITER_ARRAY 1

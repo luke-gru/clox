@@ -184,6 +184,7 @@ static void defineNativeClasses(void) {
     // class Class
     nativeClassInit = addNativeMethod(classClass, "init", lxClassInit);
     addNativeMethod(classClass, "methodAdded", lxClassMethodAdded);
+    addNativeMethod(classClass, "constDefined", lxClassConstDefined);
     addNativeMethod(classClass, "include", lxClassInclude);
     addNativeGetter(classClass, "superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
@@ -2430,15 +2431,18 @@ vmLoop:
           Value varName = READ_CONSTANT();
           Value val;
           ObjClass *cref = NULL;
+          bool notFound = false;
           if (th->v_crefStack.length > 0) {
               cref = TO_CLASS(vec_last(&th->v_crefStack));
               ASSERT(cref);
               if (findConstantUnder(cref, AS_STRING(varName), &val)) {
                   push(val);
                   DISPATCH_BOTTOM();
+              } else {
+                  notFound = true;
               }
           }
-          if (tableGet(&vm.constants, varName, &val)) {
+          if (!notFound && tableGet(&vm.constants, varName, &val)) {
               push(val);
           } else {
               if (cref) {

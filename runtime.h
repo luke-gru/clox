@@ -74,6 +74,7 @@ Value lxClassInclude(int argCount, Value *args);
 Value lxClassGetSuperclass(int argCount, Value *args);
 Value lxClassGetName(int argCount, Value *args);
 Value lxClassMethodAdded(int argCount, Value *args);
+Value lxClassConstDefined(int argCount, Value *args);
 //Value lxClassAncestors(int argCount, Value *args);
 ObjNative *nativeClassInit;
 
