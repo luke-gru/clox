@@ -8,8 +8,11 @@ class MyTests < TestUnit {
     this.assertEq(1, 2);
   }
 }
-TestUnit.autorun(outputReport: false, exit: false);
+MyTests.runTests(outputReport: false);
+print MyTests.successes();
+print MyTests.failures();
 
 __END__
 -- expect: --
-.F
+1
+1

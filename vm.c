@@ -3296,7 +3296,7 @@ NORETURN void stopVM(int status) {
         THREAD_DEBUG(1, "Main thread exiting with %d (PID=%d)", status, getpid());
         THREAD_DEBUG(1, "Terminating unjoined threads");
         terminateThreads();
-        THREAD_DEBUG(1, "Running atexit hooks threads");
+        THREAD_DEBUG(1, "Running atexit hooks");
         runAtExitHooks();
         th->status = THREAD_ZOMBIE;
         freeVM();
@@ -3305,7 +3305,8 @@ NORETURN void stopVM(int status) {
         }
         vm.exited = true;
         vm.numLivingThreads--;
-        pthread_exit(&th->exitStatus);
+        // NOTE: pthread_exit in last thread always exits with 0, so have to call _exit manually
+        _exit(th->exitStatus);
     } else {
         exitingThread(th);
         th->exitStatus = status;
