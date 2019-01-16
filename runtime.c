@@ -110,12 +110,14 @@ bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut) {
         }
         klass = TO_CLASS(CLASS_SUPER(klass));
     }
-    klass = TO_CLASS(CLASSINFO(origKlass)->under);
-    while (klass) {
-        if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
-            return true;
+    while ((klass = TO_CLASS(CLASSINFO(origKlass)->under))) {
+        origKlass = klass;
+        while (klass) {
+            if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
+                return true;
+            }
+            klass = TO_CLASS(CLASSINFO(klass)->superclass);
         }
-        klass = TO_CLASS(CLASSINFO(klass)->superclass);
     }
     return false;
 }

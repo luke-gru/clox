@@ -1516,7 +1516,7 @@ static Node *primary() {
             };
         }
         Node *ret = createNode(nType, varName, NULL);
-        if (match(TOKEN_DICE)) {
+        while (match(TOKEN_DICE)) {
             consume(TOKEN_IDENTIFIER, "Expected identifier after '::'");
             node_type_t constLookupType = {
                 .type = NODE_EXPR,

@@ -2779,9 +2779,14 @@ vmLoop:
       CASE_OP(CLASS): { // add or re-open class
           Value classNm = READ_CONSTANT();
           Value existingClass;
-          // FIXME: not perfect, if class is declared non-globally this won't
-          // detect it. Maybe a new op-code is needed for class re-opening.
-          if (tableGet(&vm.constants, classNm, &existingClass)) {
+          Value ownerClass = NIL_VAL;
+          Table *constantTbl = &vm.constants;
+          if (th->v_crefStack.length > 0) {
+              ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
+              constantTbl = CLASSINFO(AS_CLASS(ownerClass))->constants;
+          }
+
+          if (tableGet(constantTbl, classNm, &existingClass)) {
               if (IS_CLASS(existingClass)) { // re-open class
                   push(existingClass);
                   setThis(0);
@@ -2797,7 +2802,6 @@ vmLoop:
           push(OBJ_VAL(klass));
           setThis(0);
           if (th->v_crefStack.length > 0) {
-              Value ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
               addConstantUnder(className(klass), OBJ_VAL(klass), ownerClass);
               CLASSINFO(klass)->under = AS_OBJ(ownerClass);
           } else {
@@ -2809,11 +2813,17 @@ vmLoop:
       CASE_OP(MODULE): { // add or re-open module
           Value modName = READ_CONSTANT();
           Value existingMod;
-          // FIXME: not perfect, if class is declared non-globally this won't
-          // detect it. Maybe a new op-code is needed for class re-opening.
-          if (tableGet(&vm.constants, modName, &existingMod)) {
+          Value ownerClass = NIL_VAL;
+          Table *constantTbl = &vm.constants;
+          if (th->v_crefStack.length > 0) {
+              ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
+              constantTbl = CLASSINFO(AS_CLASS(ownerClass))->constants;
+          }
+          if (tableGet(constantTbl, modName, &existingMod)) {
               if (IS_MODULE(existingMod)) {
                 push(existingMod); // re-open the module
+                pushCref(AS_CLASS(existingMod));
+                setThis(0);
                 DISPATCH_BOTTOM();
               } else if (UNLIKELY(IS_CLASS(existingMod))) {
                   const char *modStr = AS_CSTRING(modName);
@@ -2825,7 +2835,6 @@ vmLoop:
           push(OBJ_VAL(mod));
           setThis(0);
           if (th->v_crefStack.length > 0) {
-              Value ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
               addConstantUnder(className(TO_CLASS(mod)), OBJ_VAL(mod), ownerClass);
               CLASSINFO(mod)->under = AS_OBJ(ownerClass);
           } else {
@@ -2837,15 +2846,20 @@ vmLoop:
       CASE_OP(SUBCLASS): { // add new class inheriting from an existing class
           Value classNm = READ_CONSTANT();
           Value superclass =  pop();
+          Value ownerClass = NIL_VAL;
+          Table *constantTbl = &vm.constants;
+          if (th->v_crefStack.length > 0) {
+              ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
+              constantTbl = CLASSINFO(AS_CLASS(ownerClass))->constants;
+          }
           if (!IS_CLASS(superclass)) {
               throwErrorFmt(lxTypeErrClass,
                       "Class %s tried to inherit from non-class",
                       AS_CSTRING(classNm)
               );
           }
-          // FIXME: not perfect, if class is declared non-globally this won't detect it.
           Value existingClass;
-          if (tableGet(&vm.constants, classNm, &existingClass)) {
+          if (tableGet(constantTbl, classNm, &existingClass)) {
               if (UNLIKELY(IS_CLASS(existingClass))) {
                   throwErrorFmt(lxNameErrClass, "Class %s already exists (if "
                           "re-opening class, no superclass should be given)",
@@ -2861,7 +2875,6 @@ vmLoop:
           );
           push(OBJ_VAL(klass));
           if (th->v_crefStack.length > 0) {
-              Value ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));
               addConstantUnder(className(klass), OBJ_VAL(klass), ownerClass);
               CLASSINFO(klass)->under = AS_OBJ(ownerClass);
           } else {

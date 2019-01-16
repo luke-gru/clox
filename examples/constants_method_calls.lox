@@ -23,8 +23,27 @@ var i = Outer::Inner();
 i.innerConst();
 i.outerConst();
 
+class Outer {
+  class Inner {
+    class InnerInner {
+      innerConst() {
+        print InnerConst;
+      }
+      outerConst() {
+        print OuterConst;
+      }
+    }
+  }
+}
+
+var ii = Outer::Inner::InnerInner();
+ii.innerConst();
+ii.outerConst();
+
 __END__
 -- expect: --
 instance
+2
+1
 2
 1
