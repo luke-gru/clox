@@ -193,6 +193,14 @@ static char *outputVariableExpr(Node *n, int indentLevel) {
     return buf;
 }
 
+static char *outputConstantExpr(Node *n, int indentLevel) {
+    const char *constName = tokStr(&n->tok);
+    char *buf = calloc(strlen(constName)+1+8, 1);
+    ASSERT_MEM(buf);
+    sprintf(buf, "(const %s)", constName);
+    return buf;
+}
+
 static char *outputAssignExpr(Node *n, int indentLevel) {
     char *lhsOut = outputASTString(vec_first(n->children), indentLevel);
     char *rhsOut = outputASTString(n->children->data[1], indentLevel);
@@ -663,6 +671,8 @@ char *outputASTString(Node *node, int indentLevel) {
                     return outputUnaryExpr(node, indentLevel);
                 case VARIABLE_EXPR:
                     return outputVariableExpr(node, indentLevel);
+                case CONSTANT_EXPR:
+                    return outputConstantExpr(node, indentLevel);
                 case ASSIGN_EXPR:
                     return outputAssignExpr(node, indentLevel);
                 case CALL_EXPR:
