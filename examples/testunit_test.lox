@@ -4,12 +4,9 @@ class MyTests < TestUnit {
   testEqual() {
     this.assertEq(1, 1);
   }
-  this.registerTest("testEqual");
-  this.runTests(outputProgress: true, outputReport: false);
 }
-print MyTests.successes();
+TestUnit.autorun(outputReport: false);
 
 __END__
 -- expect: --
 .
-1

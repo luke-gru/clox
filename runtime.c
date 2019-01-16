@@ -698,7 +698,7 @@ Value lxClassGetName(int argCount, Value *args) {
     }
 }
 
-// ex: print Object._superClass;
+// ex: print Object.superClass;
 Value lxClassGetSuperclass(int argCount, Value *args) {
     Value self = *args;
     Obj *klass = AS_OBJ(self);
@@ -715,6 +715,13 @@ Value lxClassGetSuperclass(int argCount, Value *args) {
     } else {
         return NIL_VAL;
     }
+}
+
+// default implementation of Class#methodAdded (empty)
+Value lxClassMethodAdded(int argCount, Value *args) {
+    (void)argCount;
+    (void)args;
+    return NIL_VAL;
 }
 
 #define FLAG_ITER_ARRAY 1

@@ -3,11 +3,37 @@ class TestUnit {
   this._successes = 0;
   this._fails = 0;
   this._assertionsPassed = 0;
-  this._tests = [];
+  this._tests = %{};
   this._errors = [];
+  this._classesRan = %{};
+  this._classesRegistered = %{};
+  this._autorunRegistered = false;
+  this._autorunClasses = %{};
 
   class registerTest(name) {
-    TestUnit._tests << name;
+    TestUnit._tests[this] = TestUnit._tests[this] or [];
+    TestUnit._tests[this] << name;
+  }
+
+  class methodAdded(name) {
+    if (name.substr(0, 4) == "test") {
+      TestUnit._classesRegistered[this] = true;
+      this.registerTest(name);
+    }
+  }
+
+  class autorun(outputProgress: true, outputReport: true) {
+    if (TestUnit._autorunRegistered) {
+      return;
+    }
+    atExit(fun() {
+      foreach (klass in TestUnit._classesRegistered.keys()) {
+        klass.runTests(
+          outputProgress: outputProgress,
+          outputReport: outputReport);
+      }
+    });
+    TestUnit._autorunRegistered = true;
   }
 
   class successes() {
@@ -15,9 +41,13 @@ class TestUnit {
   }
 
   class runTests(outputProgress: true, outputReport: true) {
+    if (TestUnit._classesRan[this]) {
+      return 1;
+    }
     var tinstance = this();
-    for (var i = 0; i < TestUnit._tests.size(); i+=1) {
-      var tname = TestUnit._tests[i];
+    var tests = TestUnit._tests[this] or [];
+    for (var i = 0; i < tests.size(); i+=1) {
+      var tname = tests[i];
       try {
         tinstance.send(tname);
         if (outputProgress) {
@@ -32,6 +62,7 @@ class TestUnit {
         TestUnit._fails += 1;
       }
     }
+    TestUnit._classesRan[this] = true;
     if (TestUnit._errors.size() == 0) {
       if (outputReport) {
         print "Success: passed ${TestUnit.successes} tests with ${TestUnit.assertionsPassed} assertions";

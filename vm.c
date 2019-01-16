@@ -167,6 +167,7 @@ static void defineNativeClasses(void) {
     ObjClass *modClass = addGlobalClass("Module", objClass);
     lxModuleClass = modClass;
 
+    // TODO: make `class` inherit from `module`
     // class Class
     ObjClass *classClass = addGlobalClass("Class", objClass);
     lxClassClass = classClass;
@@ -181,6 +182,7 @@ static void defineNativeClasses(void) {
 
     // class Class
     nativeClassInit = addNativeMethod(classClass, "init", lxClassInit);
+    addNativeMethod(classClass, "methodAdded", lxClassMethodAdded);
     addNativeMethod(classClass, "include", lxClassInclude);
     addNativeGetter(classClass, "superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
@@ -969,7 +971,9 @@ static void defineMethod(ObjString *name) {
         tableSet(CLASSINFO(klass)->methods, OBJ_VAL(name), method);
         OBJ_WRITE(OBJ_VAL(klass), method);
         GC_OLD(AS_OBJ(method));
-    } else {
+        Value methodName = OBJ_VAL(name);
+        callMethod(AS_OBJ(classOrMod), INTERN("methodAdded"), 1, &methodName, NULL);
+    } else if (IS_MODULE(classOrMod)) {
         ObjModule *mod = AS_MODULE(classOrMod);
         const char *modName = CLASSINFO(mod)->name ? CLASSINFO(mod)->name->chars : "(anon)";
         (void)modName;
@@ -977,6 +981,8 @@ static void defineMethod(ObjString *name) {
         tableSet(CLASSINFO(mod)->methods, OBJ_VAL(name), method);
         OBJ_WRITE(OBJ_VAL(mod), method);
         GC_OLD(AS_OBJ(method));
+    } else {
+        UNREACHABLE("class type: %s", typeOfVal(classOrMod));
     }
     pop(); // function
 }
