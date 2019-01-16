@@ -1296,6 +1296,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             Insn *ifJumpStart = emitJump(OP_JUMP_IF_TRUE);
             emitChildren(param);
             emitOp2(OP_SET_LOCAL, localSlot, identifierConstant(&param->tok));
+            emitOp0(OP_POP);
             patchJump(ifJumpStart, -1, NULL);
         } else if (param->type.kind == PARAM_NODE_BLOCK) { // &arg
             uint8_t localSlot = declareVariable(&param->tok);

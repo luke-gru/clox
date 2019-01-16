@@ -1450,11 +1450,10 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                     // keyword argument given, is on stack, we pop it off
                     if (strcmp(kwname, tokStr(callInfo->kwargNames+i)) == 0) {
                         mapSet(kwargsMap, OBJ_VAL(kwStr), pop());
-                    } else {
-                        // keyword argument not given, we need to add UNDEF_VAL to
-                        // stack later
                     }
                 }
+                // when keyword argument not given, we need to add UNDEF_VAL to
+                // stack later
             }
         }
     }
@@ -1525,9 +1524,11 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     size_t funcOffset = 0;
     VM_DEBUG(2,
         "arity: %d, defaultArgs: %d, defaultsUsed: %d\n"
-        "defaultsUnused: %d, numRestArgs: %d, argCount: %d",
+        "defaultsUnused: %d, numRestArgs: %d, argCount: %d\n"
+        "kwargsAvail: %d, kwargsGiven: %d",
         func->arity, func->numDefaultArgs, numDefaultArgsUsed,
-        numDefaultArgsUnused, numRestArgs, argCount
+        numDefaultArgsUnused, numRestArgs, argCount,
+        func->numKwargs, func->numKwargs-numKwargsNotGiven
     );
 
     // skip default argument code in function that's unused
@@ -1568,7 +1569,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         argCountWithRestAry++;
     }
 
-    if (callInfo && func->numKwargs > 0) {
+    if (func->numKwargs > 0) {
         push(kwargsMap);
     }
 

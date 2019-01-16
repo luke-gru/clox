@@ -1,0 +1,8 @@
+fun hi(greeting: "Hi", name: "Luke") {
+  print greeting + ", " + name;
+}
+hi();
+
+__END__
+-- expect: --
+Hi, Luke

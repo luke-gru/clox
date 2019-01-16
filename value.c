@@ -106,6 +106,8 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
         return fprintf(file, "%.*s", PRINTNUM(0, maxLen), "nil");
     } else if (IS_NUMBER(value)) {
         return printNumber(file, AS_NUMBER(value), maxLen);
+    } else if (IS_UNDEF(value)) {
+        return fprintf(file, "%.*s", PRINTNUM(0,maxLen), "undef");
     } else if (IS_OBJ(value)) {
         if (IS_STRING(value)) {
             char *cstring = AS_CSTRING(value);
@@ -331,6 +333,7 @@ const char *typeOfVal(Value val) {
         if (IS_BOOL(val)) return "bool";
         if (IS_NIL(val)) return "nil";
         if (IS_NUMBER(val)) return "number";
+        if (IS_UNDEF(val)) return "UNDEF?"; // for debugging
     }
     UNREACHABLE("Unknown value type! Pointer: %p\n", AS_OBJ(val));
 }
