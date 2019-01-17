@@ -102,6 +102,7 @@ static void defineNativeFunctions(void) {
     addGlobalFunction("typeof", lxTypeof);
     addGlobalFunction("loadScript", lxLoadScript);
     addGlobalFunction("requireScript", lxRequireScript);
+    addGlobalFunction("autoload", lxAutoload);
     addGlobalFunction("debugger", lxDebugger);
     addGlobalFunction("eval", lxEval);
     addGlobalFunction("sleep", lxSleep);
@@ -185,6 +186,8 @@ static void defineNativeClasses(void) {
     nativeClassInit = addNativeMethod(classClass, "init", lxClassInit);
     addNativeMethod(classClass, "methodAdded", lxClassMethodAdded);
     addNativeMethod(classClass, "constDefined", lxClassConstDefined);
+    addNativeMethod(classClass, "constGet", lxClassConstGet);
+    addNativeMethod(classClass, "constants", lxClassConstants);
     addNativeMethod(classClass, "include", lxClassInclude);
     addNativeGetter(classClass, "superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
@@ -449,6 +452,7 @@ void initVM() {
     initTable(&vm.strings); // interned strings
     initTable(&vm.regexLiterals);
     initTable(&vm.constants);
+    initTable(&vm.autoloadTbl);
     vec_init(&vm.hiddenObjs);
 
     ObjInstance *mainT = initMainThread();
@@ -521,6 +525,7 @@ void freeVM(void) {
     freeTable(&vm.regexLiterals);
     freeTable(&vm.strings);
     freeTable(&vm.constants);
+    freeTable(&vm.autoloadTbl);
     vm.initString = NULL;
     vm.fileString = NULL;
     vm.dirString = NULL;
@@ -2445,6 +2450,17 @@ vmLoop:
           if (!notFound && tableGet(&vm.constants, varName, &val)) {
               push(val);
           } else {
+              // not found, try to autoload it
+              Value autoloadPath;
+              if (tableGet(&vm.autoloadTbl, varName, &autoloadPath)) {
+                  Value requireScriptFn;
+                  tableGet(&vm.globals, OBJ_VAL(INTERN("requireScript")), &requireScriptFn);
+                  callFunctionValue(requireScriptFn, 1, &autoloadPath);
+                  if (findConstantUnder(cref, AS_STRING(varName), &val)) {
+                      push(val);
+                      DISPATCH_BOTTOM();
+                  }
+              }
               if (cref) {
                   throwErrorFmt(lxNameErrClass, "Undefined constant '%s::%s'.", className(cref), AS_STRING(varName)->chars);
               } else {

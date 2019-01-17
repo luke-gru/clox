@@ -164,6 +164,7 @@ typedef struct VM {
     Table strings; // interned strings
     Table regexLiterals;
     Table constants; // global constants
+    Table autoloadTbl;
     ObjString *initString;
     ObjString *fileString;
     ObjString *dirString;

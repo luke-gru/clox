@@ -1,0 +1,7 @@
+autoload("Timeout", "timeout");
+
+print typeof(Timeout);
+
+__END__
+-- expect: --
+class

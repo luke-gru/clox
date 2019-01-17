@@ -100,8 +100,8 @@ void addConstantUnder(const char *name, Value constVal, Value owner) {
     tableSet(CLASSINFO(AS_CLASS(owner))->constants, OBJ_VAL(INTERN(name)), constVal);
 }
 
+// NOTE: `klass` can be NULL, in which case only `vm.constants` is checked
 bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut) {
-    ASSERT(klass);
     ObjClass *origKlass = klass;
     while (klass) {
         if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
@@ -109,7 +109,7 @@ bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut) {
         }
         klass = TO_CLASS(CLASS_SUPER(klass));
     }
-    while ((klass = TO_CLASS(CLASSINFO(origKlass)->under))) {
+    while (origKlass && (klass = TO_CLASS(CLASSINFO(origKlass)->under))) {
         origKlass = klass;
         while (klass) {
             if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
@@ -474,6 +474,16 @@ Value lx_Exit(int argCount, Value *args) {
     UNREACHABLE_RETURN(NIL_VAL);
 }
 
+Value lxAutoload(int argCount, Value *args) {
+    CHECK_ARITY("autoload", 2, 2, argCount);
+    Value klassName = *args;
+    Value path = args[1];
+    CHECK_ARG_IS_A(klassName, lxStringClass, 1);
+    CHECK_ARG_IS_A(path, lxStringClass, 1);
+    tableSet(&vm.autoloadTbl, klassName, path);
+    return NIL_VAL;
+}
+
 #define SCRIPT_PATH_MAX (PATH_MAX+1)
 #define SCRIPT_DIR_MAX (PATH_MAX+1-100)
 static Value loadScriptHelper(Value fname, bool checkLoaded) {
@@ -739,12 +749,7 @@ Value lxClassInclude(int argCount, Value *args) {
 Value lxClassGetName(int argCount, Value *args) {
     Value self = args[0];
     ObjClass *klass = AS_CLASS(self);
-    ObjString *origName = CLASSINFO(klass)->name;
-    if (origName == NULL) {
-        return OBJ_VAL(copyString("(anon)", 6, NEWOBJ_FLAG_NONE));
-    } else {
-        return OBJ_VAL(dupString(origName));
-    }
+    return OBJ_VAL(classNameFull(klass));
 }
 
 // ex: print Object.superClass;
@@ -784,6 +789,31 @@ Value lxClassConstDefined(int argCount, Value *args) {
     } else {
         return BOOL_VAL(false);
     }
+}
+
+Value lxClassConstGet(int argCount, Value *args) {
+    CHECK_ARITY("Class#constGet", 2, 2, argCount);
+    Value self = *args;
+    Value constName = args[1];
+    CHECK_ARG_IS_A(constName, lxStringClass, 1);
+    Value val;
+    if (findConstantUnder(AS_CLASS(self), AS_STRING(constName), &val)) {
+        return val;
+    } else {
+        return NIL_VAL;
+    }
+}
+
+Value lxClassConstants(int argCount, Value *args) {
+    CHECK_ARITY("Class#constants", 1, 1, argCount);
+    Value self = *args;
+    Entry e; int eidx = 0;
+    Table *constantTbl = CLASSINFO(AS_CLASS(self))->constants;
+    Value ret = newArray();
+    TABLE_FOREACH(constantTbl, e, eidx, {
+        arrayPush(ret, e.key);
+    });
+    return ret;
 }
 
 #define FLAG_ITER_ARRAY 1

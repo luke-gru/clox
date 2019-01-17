@@ -589,6 +589,7 @@ bool isInstanceLikeObjNoClass(Obj *obj);
 size_t sizeofObjType(ObjType type);
 const char *objTypeName(ObjType type);
 char *className(ObjClass *klass);
+ObjString *classNameFull(ObjClass *klass);
 
 static inline bool isCallable(Value val) {
     return IS_CLASS(val) || IS_NATIVE_FUNCTION(val) ||

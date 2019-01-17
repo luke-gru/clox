@@ -47,6 +47,7 @@ Value lx_Exit(int argCount, Value *args);
 Value lxNewThread(int argCount, Value *args);
 Value lxJoinThread(int argCount, Value *args);
 Value lxAtExit(int argCount, Value *args);
+Value lxAutoload(int argCount, Value *args);
 
 // class Object
 
@@ -75,6 +76,8 @@ Value lxClassGetSuperclass(int argCount, Value *args);
 Value lxClassGetName(int argCount, Value *args);
 Value lxClassMethodAdded(int argCount, Value *args);
 Value lxClassConstDefined(int argCount, Value *args);
+Value lxClassConstants(int argCount, Value *args);
+Value lxClassConstGet(int argCount, Value *args);
 //Value lxClassAncestors(int argCount, Value *args);
 ObjNative *nativeClassInit;
 

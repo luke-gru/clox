@@ -1198,6 +1198,25 @@ char *className(ObjClass *klass) {
     }
 }
 
+// return full class name, ex: `Outer::Inner`
+ObjString *classNameFull(ObjClass *klass) {
+    ObjString *ret = copyString("", 0, NEWOBJ_FLAG_NONE);
+    ObjClass *orig = klass;
+    while (klass) {
+        ObjString *name = CLASSINFO(klass)->name;
+        if (orig != klass) {
+            insertCString(ret, "::", 2, 0);
+        }
+        if (name) {
+            insertCString(ret, name->chars, strlen(name->chars), 0);
+        } else {
+            insertCString(ret, "(anon)", strlen("(anon)"), 0);
+        }
+        klass = TO_CLASS(CLASSINFO(klass)->under);
+    }
+    return ret;
+}
+
 bool is_value_class_p(Value val) {
     return IS_CLASS(val);
 }
