@@ -126,8 +126,10 @@ static void LxThreadSetup(LxThread *th) {
     vec_init(&th->v_ecs);
     th->openUpvalues = NULL;
     th->thisObj = NULL;
+    vec_init(&th->v_thisStack);
     vec_init(&th->v_crefStack);
     vec_init(&th->v_blockStack);
+    vec_init(&th->stackObjects);
     th->lastValue = NULL;
     th->hadError = false;
     th->errInfo = NULL;
@@ -142,7 +144,6 @@ static void LxThreadSetup(LxThread *th) {
     th->mutexCounter = 0;
     th->lastSplatNumArgs = -1;
     th->tlsMap = NULL;
-    vec_init(&th->stackObjects);
     pthread_mutex_init(&th->sleepMutex, NULL);
     pthread_cond_init(&th->sleepCond, NULL);
     pthread_mutex_init(&th->interruptLock, NULL);
@@ -155,8 +156,11 @@ static void LxThreadSetup(LxThread *th) {
 }
 
 static void LxThreadCleanup(LxThread *th) {
-    vec_deinit(&th->stackObjects);
+    /*vec_deinit(&th->v_ecs);*/
+    vec_deinit(&th->v_thisStack);
+    vec_deinit(&th->v_crefStack);
     vec_deinit(&th->v_blockStack);
+    vec_deinit(&th->stackObjects);
     vec_deinit(&th->lockedMutexes);
     pthread_mutex_destroy(&th->sleepMutex);
     pthread_cond_destroy(&th->sleepCond);
@@ -195,12 +199,9 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
         vec_push(&th->v_ecs, newCtx);
     }
     th->ec = vec_last(&th->v_ecs);
-    th->thisObj = parentThread->thisObj;
-    if (th->thisObj) {
-        OBJ_WRITE(OBJ_VAL(thInstance), OBJ_VAL(th->thisObj));
-    }
+    th->thisObj = NULL;
     th->lastValue = NULL;
-    th->errInfo = NULL; // TODO: copy
+    th->errInfo = NULL;
     th->inCCall = 0;
     th->cCallJumpBufSet = false;
     th->cCallThrew = false;

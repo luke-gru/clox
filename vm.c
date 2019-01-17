@@ -656,7 +656,14 @@ static inline void setThis(unsigned n) {
     }
     vm.curThread->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
     getFrame()->instance = (ObjInstance*)vm.curThread->thisObj;
+    vec_push(&vm.curThread->v_thisStack, vm.curThread->thisObj);
     DBG_ASSERT(vm.curThread->thisObj);
+}
+
+static inline void popThis() {
+    ASSERT(vm.curThread->v_thisStack.length > 0);
+    (void)vec_pop(&vm.curThread->v_thisStack);
+    vm.curThread->thisObj = vec_last(&vm.curThread->v_thisStack);
 }
 
 static inline void pushCref(ObjClass *klass) {
@@ -1157,9 +1164,14 @@ void popFrame(void) {
             vec_clear(&vm.curThread->stackObjects);
         }
     }
-    if (frame->klass != NULL && th->v_crefStack.length > 0) {
-        VM_DEBUG(2, "popping cref from popFrame");
+    if (frame->klass != NULL) {
+        ASSERT(th->v_crefStack.length > 0);
+        VM_DEBUG(3, "popping cref from popFrame");
         (void)vec_pop(&th->v_crefStack);
+    }
+    if (frame->instance != NULL) {
+        VM_DEBUG(3, "popping this from popFrame");
+        popThis();
     }
     EC->frameCount--;
     frame = getFrameOrNull(); // new frame
@@ -1168,11 +1180,6 @@ void popFrame(void) {
             if (EC->stackTop-stackAdjust > EC->stack) {
                 EC->stackTop -= stackAdjust;
             }
-        }
-        if (frame->instance) {
-            th->thisObj = TO_OBJ(frame->instance);
-        } else {
-            th->thisObj = NULL;
         }
     }
     ASSERT_VALID_STACK();
@@ -1326,8 +1333,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         instance = newInstance(klass, NEWOBJ_FLAG_NONE); // setup the new instance object
         frameClass = klass;
         instanceVal = OBJ_VAL(instance);
-        volatile Obj *oldThis = th->thisObj;
-        th->thisObj = TO_OBJ(instance);
+        th->thisObj = TO_OBJ(instance); // to avoid GC
         /*ASSERT(IS_CLASS(EC->stackTop[-argCount - 1])); this holds true if the # of args is correct for the function */
         EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
         // Call the initializer, if there is one.
@@ -1344,6 +1350,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 volatile CallFrame *newFrame = getFrame();
                 DBG_ASSERT(instance);
                 newFrame->instance = instance;
+                vec_push(&th->v_thisStack, TO_OBJ(instance));
+                th->thisObj = TO_OBJ(instance);
                 newFrame->klass = frameClass;
                 if (newFrame->klass) {
                     pushCref(newFrame->klass);
@@ -1352,7 +1360,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 VM_DEBUG(2, "calling native initializer for class %s with %d args", klassName, argCount);
                 Value val = captureNativeError(nativeInit, argCount+1, EC->stackTop-argCount-1, callInfo);
                 th = THREAD();
-                th->thisObj = oldThis;
                 newFrame->slots = EC->stackTop-argCount-1;
                 if (UNLIKELY(th->returnedFromNativeErr)) {
                     th->returnedFromNativeErr = false;
@@ -1413,7 +1420,11 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         pushNativeFrame(native);
         volatile CallFrame *newFrame = getFrame();
         volatile VMExecContext *ec = EC;
-        newFrame->instance = instance;
+        newFrame->instance = instance; // NOTE: can be NULL, if not method
+        if (newFrame->instance) {
+            th->thisObj = TO_OBJ(instance);
+            vec_push(&th->v_thisStack, instance);
+        }
         newFrame->klass = frameClass;
         if (newFrame->klass) {
             pushCref(newFrame->klass);
@@ -1607,7 +1618,10 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     VM_DEBUG(2, "%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
     frame->instance = instance;
-    vm.curThread->thisObj = TO_OBJ(instance);
+    if (instance) {
+        th->thisObj = TO_OBJ(instance);
+        vec_push(&vm.curThread->v_thisStack, TO_OBJ(instance));
+    }
     frame->callInfo = callInfo;
     if (instance && !frameClass) frameClass = instance->klass;
     frame->klass = frameClass;
@@ -1742,7 +1756,11 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
             }
         }
         Value klassFound;
-        if (!tableGet(&vm.constants, row->catchVal, &klassFound)) {
+        ObjClass *cref = NULL;
+        if (vm.curThread->v_crefStack.length > 0) {
+            cref = (ObjClass*)vec_last(&vm.curThread->v_crefStack);
+        }
+        if (!findConstantUnder(cref, AS_STRING(row->catchVal), &klassFound)) {
             VM_DEBUG(2, "a class not found for row, next row");
             row = row->next;
             continue;
@@ -2377,11 +2395,7 @@ vmLoop:
           ObjClass *oldKlass = vec_pop(&th->v_crefStack);
           DBG_ASSERT(TO_OBJ(oldKlass) == AS_OBJ(peek(0)));
           pop();
-          if (th->v_crefStack.length > 0) {
-              th->thisObj = (Obj*)vec_last(&th->v_crefStack);
-          } else {
-              th->thisObj = NULL;
-          }
+          popThis();
           DISPATCH_BOTTOM();
       }
       CASE_OP(POP_N): {
@@ -3051,6 +3065,7 @@ vmLoop:
           for (int i = 0; i < numEls; i++) {
               Value el = pop();
               writeValueArrayEnd(ary, el);
+              OBJ_WRITE(aryVal, el);
           }
           push(aryVal);
           unhideFromGC(AS_OBJ(aryVal));

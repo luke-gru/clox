@@ -339,9 +339,6 @@ void collectYoungGarbage() {
         if (th->status == THREAD_ZOMBIE) {
             continue;
         }
-        if (th->thisObj) {
-            grayObject(th->thisObj);
-        }
         if (th->lastValue) {
             grayValue(*th->lastValue);
         }
