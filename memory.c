@@ -1257,6 +1257,7 @@ void collectGarbage(void) {
     GC_TRACE_DEBUG(2, "Marking interned strings (%d found)", vm.strings.count);
     grayTable(&vm.strings);
     grayTable(&vm.regexLiterals);
+    grayTable(&vm.autoloadTbl);
     GC_TRACE_DEBUG(2, "Marking compiler roots");
     grayCompilerRoots();
     GC_TRACE_DEBUG(3, "Marking VM cached strings");

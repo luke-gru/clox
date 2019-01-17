@@ -480,7 +480,11 @@ Value lxAutoload(int argCount, Value *args) {
     Value path = args[1];
     CHECK_ARG_IS_A(klassName, lxStringClass, 1);
     CHECK_ARG_IS_A(path, lxStringClass, 1);
-    tableSet(&vm.autoloadTbl, klassName, path);
+    Value classNameKey = OBJ_VAL(dupString(AS_STRING(klassName)));
+    Value pathValue = OBJ_VAL(dupString(AS_STRING(path)));
+    GC_OLD(AS_OBJ(classNameKey));
+    GC_OLD(AS_OBJ(pathValue));
+    tableSet(&vm.autoloadTbl, classNameKey, pathValue);
     return NIL_VAL;
 }
 
