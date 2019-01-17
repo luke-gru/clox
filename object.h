@@ -190,10 +190,10 @@ typedef struct ObjModule {
   ClassInfo *classInfo;
 } ObjModule;
 
-#define CLASS_SUPER(klass)      (((Obj*)klass)->type == OBJ_T_CLASS ? CLASSINFO(klass)->superclass : ((ObjIClass*) klass)->superklass)
-#define CLASS_METHOD_TBL(klass) ((klass)->type == OBJ_T_CLASS ? CLASSINFO((klass))->methods : CLASSINFO(((ObjIClass*) (klass))->mod)->methods)
-#define CLASS_GETTER_TBL(klass) ((klass)->type == OBJ_T_CLASS ? CLASSINFO((klass))->getters : CLASSINFO(((ObjIClass*) (klass))->mod)->getters)
-#define CLASS_SETTER_TBL(klass) ((klass)->type == OBJ_T_CLASS ? CLASSINFO((klass))->setters : CLASSINFO(((ObjIClass*) (klass))->mod)->setters)
+#define CLASS_SUPER(klass)      (((Obj*)klass)->type == OBJ_T_CLASS ? CLASSINFO((klass))->superclass : ((ObjIClass*) (klass))->superklass)
+#define CLASS_METHOD_TBL(klass) (((klass)->type == OBJ_T_CLASS || (klass)->type == OBJ_T_MODULE) ? (CLASSINFO((klass))->methods) : (CLASSINFO(((ObjIClass*) (klass))->mod)->methods))
+#define CLASS_GETTER_TBL(klass) (((klass)->type == OBJ_T_CLASS || (klass)->type == OBJ_T_MODULE) ? (CLASSINFO((klass))->getters) : (CLASSINFO(((ObjIClass*) (klass))->mod)->getters))
+#define CLASS_SETTER_TBL(klass) (((klass)->type == OBJ_T_CLASS || (klass)->type == OBJ_T_MODULE) ? (CLASSINFO((klass))->setters) : (CLASSINFO(((ObjIClass*) (klass))->mod)->setters))
 
 // included module "class"
 typedef struct ObjIClass {
@@ -314,6 +314,8 @@ typedef struct LxFile {
 
 #define TO_OBJ(obj) ((Obj*)(obj))
 #define TO_CLASS(obj) ((ObjClass*)(obj))
+#define IS_T_CLASS(klass) (((Obj*)(klass))->type == OBJ_T_CLASS)
+#define IS_T_MODULE(klass) (((Obj*)(klass))->type == OBJ_T_MODULE)
 
 // is the value an instance of this type, no subtype check
 #define IS_STRING(value)        (isObjType(value, OBJ_T_STRING))

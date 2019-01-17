@@ -612,7 +612,11 @@ Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
     ObjClass *lookupClass = NULL;
     // look up in singleton class hierarchy
     while (klass) {
-        lookupClass = ((ObjClass*)klass)->singletonKlass;
+        if (TO_OBJ(klass)->type == OBJ_T_ICLASS) {
+            lookupClass = ((ObjIClass*)klass)->mod->singletonKlass;
+        } else {
+            lookupClass = ((ObjClass*)klass)->singletonKlass;
+        }
         if (lookupClass) {
             Table *mtable = CLASS_METHOD_TBL((Obj*)lookupClass);
             if (tableGet(mtable, OBJ_VAL(name), &method)) {
@@ -1026,17 +1030,16 @@ ObjClass *classSingletonClass(ObjClass *klass) {
     }
     ObjString *name = NULL;
     if (CLASSINFO(klass)->name) {
-        name = dupString(CLASSINFO(klass)->name); // TODO: create as old
+        name = dupString(CLASSINFO(klass)->name);
+        GC_OLD(TO_OBJ(name));
     } else {
         name = copyString("(anon)", 6, NEWOBJ_FLAG_OLD);
-        CLASSINFO(klass)->name = name;
     }
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, (ObjClass*)CLASSINFO(klass)->superclass, NEWOBJ_FLAG_OLD);
     CLASSINFO(meta)->singletonOf = (Obj*)klass;
     klass->singletonKlass = meta;
     OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(meta));
-    /*klass->superclass = meta;*/
     return meta;
 }
 
@@ -1046,11 +1049,11 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
     }
     ObjString *name = NULL;
     if (CLASSINFO(mod)->name) {
-        name = dupString(CLASSINFO(mod)->name); // TODO: make old
+        name = dupString(CLASSINFO(mod)->name);
+        GC_OLD(TO_OBJ(name));
         hideFromGC((Obj*)name);
     } else {
         name = hiddenString("(anon)", 6, NEWOBJ_FLAG_OLD);
-        CLASSINFO(mod)->name = name;
     }
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, lxClassClass, NEWOBJ_FLAG_OLD);
@@ -1191,6 +1194,8 @@ const char *objTypeName(ObjType type) {
 }
 
 char *className(ObjClass *klass) {
+    DBG_ASSERT(klass);
+    DBG_ASSERT(IS_T_CLASS(klass) || IS_T_MODULE(klass));
     if (CLASSINFO(klass)->name) {
         return CLASSINFO(klass)->name->chars;
     } else {
@@ -1200,6 +1205,8 @@ char *className(ObjClass *klass) {
 
 // return full class name, ex: `Outer::Inner`
 ObjString *classNameFull(ObjClass *klass) {
+    DBG_ASSERT(klass);
+    DBG_ASSERT(IS_T_CLASS(klass) || IS_T_MODULE(klass));
     ObjString *ret = copyString("", 0, NEWOBJ_FLAG_NONE);
     ObjClass *orig = klass;
     while (klass) {

@@ -27,7 +27,7 @@ get/set a different sigil maybe, like @prop.
 * Add defineMethod() function
 * Allow dynamically loading lox extensions, which can be '.so' files.
 * Add Dir static class method 'glob'
-* Add autoloading on NameError for class not found
+* Make autoloading thread-safe
 
 Improvements
 ------------
@@ -56,15 +56,15 @@ file lookup, not pwd when calling loadScript/requireScript
 * +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] +=1, or other lvalues
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
+* Allow catch to take qualified class names
 
 Optimizations
 -------------
 
 * more bytecode optimization passes (ex: skip OP_NIL,OP_RETURN after an OP_RETURN)
-* Add specialization bytecodes for binary operations on numbers (avoids typechecks)
+* Add specialization bytecodes
 * Add tailcall optimization
-* simple (tracing?) JIT, for at least x86
+* simple (tracing?) JIT
 * different GC strategies, maybe support copying GC (but then need to change
 Value representation, no more tagging, need to use struct).
 * optimize method lookup with a polymorphic inline cache and benchmark the lookup results
-

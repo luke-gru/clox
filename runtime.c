@@ -820,6 +820,24 @@ Value lxClassConstants(int argCount, Value *args) {
     return ret;
 }
 
+Value lxClassAncestors(int argCount, Value *args) {
+    CHECK_ARITY("Class#ancestors", 1, 1, argCount);
+    Value self = *args;
+    ObjClass *klass = AS_CLASS(self);
+    Value ret = newArray();
+    while (klass) {
+        if (TO_OBJ(klass)->type == OBJ_T_CLASS) {
+            arrayPush(ret, OBJ_VAL(klass));
+        } else if (TO_OBJ(klass)->type == OBJ_T_ICLASS) {
+            arrayPush(ret, OBJ_VAL(((ObjIClass*) klass)->mod));
+        } else {
+            ASSERT(0);
+        }
+        klass = TO_CLASS(CLASS_SUPER(klass));
+    }
+    return ret;
+}
+
 #define FLAG_ITER_ARRAY 1
 #define FLAG_ITER_MAP 2
 #define FLAG_ITER_INSTANCE 4

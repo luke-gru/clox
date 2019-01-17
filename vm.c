@@ -188,6 +188,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(classClass, "constDefined", lxClassConstDefined);
     addNativeMethod(classClass, "constGet", lxClassConstGet);
     addNativeMethod(classClass, "constants", lxClassConstants);
+    addNativeMethod(classClass, "ancestors", lxClassAncestors);
     addNativeMethod(classClass, "include", lxClassInclude);
     addNativeGetter(classClass, "superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
