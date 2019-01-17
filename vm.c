@@ -2373,9 +2373,15 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(POP_CREF): {
-          pop();
           ASSERT(th->v_crefStack.length > 0);
-          (void)vec_pop(&th->v_crefStack);
+          ObjClass *oldKlass = vec_pop(&th->v_crefStack);
+          DBG_ASSERT(TO_OBJ(oldKlass) == AS_OBJ(peek(0)));
+          pop();
+          if (th->v_crefStack.length > 0) {
+              th->thisObj = (Obj*)vec_last(&th->v_crefStack);
+          } else {
+              th->thisObj = NULL;
+          }
           DISPATCH_BOTTOM();
       }
       CASE_OP(POP_N): {
@@ -2843,8 +2849,8 @@ vmLoop:
           if (tableGet(constantTbl, modName, &existingMod)) {
               if (IS_MODULE(existingMod)) {
                 push(existingMod); // re-open the module
-                pushCref(AS_CLASS(existingMod));
                 setThis(0);
+                pushCref(AS_CLASS(existingMod));
                 DISPATCH_BOTTOM();
               } else if (UNLIKELY(IS_CLASS(existingMod))) {
                   const char *modStr = AS_CSTRING(modName);
@@ -2894,13 +2900,13 @@ vmLoop:
               AS_CLASS(superclass),
               NEWOBJ_FLAG_OLD
           );
-          push(OBJ_VAL(klass));
           if (th->v_crefStack.length > 0) {
-              addConstantUnder(className(klass), OBJ_VAL(klass), ownerClass);
+              addConstantUnder(AS_STRING(classNm)->chars, OBJ_VAL(klass), ownerClass);
               CLASSINFO(klass)->under = AS_OBJ(ownerClass);
           } else {
               tableSet(&vm.constants, classNm, OBJ_VAL(klass));
           }
+          push(OBJ_VAL(klass));
           setThis(0);
           pushCref(klass);
           DISPATCH_BOTTOM();
