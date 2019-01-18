@@ -4,6 +4,10 @@
 #include "common.h"
 #include "value.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Value table, maps values to values. Doesn't preserve insertion order during
  * iteration. */
 
@@ -97,5 +101,9 @@ struct ObjString *tableFindString(Table* table, const char* chars, int length,
 void tableRemoveWhite(Table *table);
 void grayTable(Table *table);
 void blackenTable(Table *table);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

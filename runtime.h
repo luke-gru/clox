@@ -1,5 +1,5 @@
-#ifndef _clox_runtime_h
-#define _clox_runtime_h
+#ifndef clox_runtime_h
+#define clox_runtime_h
 
 #include "value.h"
 #include "vm.h"
@@ -21,6 +21,10 @@
 #define CHECK_ARG_BUILTIN_TYPE(value, typechk_p, typenam, argnum) checkBuiltinArgType(value, typechk_p, typenam, argnum)
 #define CHECK_ARG_IS_INSTANCE_OF(value, klass, argnum) checkArgIsInstanceOf(value, klass, argnum)
 #define CHECK_ARG_IS_A(value, klass, argnum) checkArgIsA(value, klass, argnum)
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern const char pathSeparator;
 extern bool isClassHierarchyCreated;
@@ -161,4 +165,9 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func);
 // API for adding constants
 void addConstantUnder(const char *name, Value constVal, Value owner);
 bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

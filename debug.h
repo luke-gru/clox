@@ -12,6 +12,10 @@
 #define NORETURN __attribute__((noreturn))
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // For outputting ObjFunction chunks when printing bytecode
 typedef vec_t(ObjFunction*) vec_funcp_t;
 
@@ -50,6 +54,10 @@ NORETURN extern void diePrintCBacktrace(const char *fmt, ...);
 #define DBG_ASSERT(expr) ASSERT(expr)
 #else
 #define DBG_ASSERT(expr) (void)0
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif

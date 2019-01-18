@@ -12,6 +12,10 @@
 #define LX_MAX_UPVALUES 256
 #define LX_MAX_KWARGS 8
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef vec_t(uint8_t) vec_byte_t;
 
 typedef enum {
@@ -136,5 +140,9 @@ Chunk *compile_src(char *src, CompileErr *err);
 Chunk *compile_file(char *fname, CompileErr *err);
 
 void grayCompilerRoots(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -4,6 +4,10 @@
 #include "value.h"
 #include "vec.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct CatchTable {
     // Row info
     int ifrom; // instruction try start
@@ -103,5 +107,9 @@ int iseqAddCatchRow(
 
 // debugging
 void debugInsn(Insn *insn);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -20,6 +20,10 @@
 #define THREAD_DEBUG(lvl, ...) (void)0
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct CallInfo; // fwd decls
 struct BlockStackEntry;
 
@@ -377,5 +381,9 @@ void debugFrame(CallFrame *frame);
 void runAtExitHooks(void);
 NORETURN void stopVM(int status);
 NORETURN void _stopVM(int status);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

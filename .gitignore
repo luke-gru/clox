@@ -1,4 +1,5 @@
 *.o
+*.dwo
 bin
 gmon.out
 profile.txt

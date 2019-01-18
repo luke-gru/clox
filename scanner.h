@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
   // all AST nodes require a token, so this is just a
   // placeholder token type for nodes that don't need one.
@@ -120,5 +124,9 @@ Token emptyTok(void);
 char *tokStr(Token *tok);
 Token *copyToken(Token *tok);
 Token syntheticToken(const char *lexeme);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

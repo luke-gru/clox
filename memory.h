@@ -38,6 +38,10 @@
 
 #define xfree free
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct sGCProfile {
     struct timeval totalGCYoungTime;
     struct timeval totalGCFullTime;
@@ -106,5 +110,9 @@ void printGCProfile(void);
 
 void addHeap(void);
 Obj *getNewObject(ObjType type, size_t sz, int flags);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,6 +1,10 @@
 #ifndef clox_nodes_h
 #define clox_nodes_h
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
 #include "vec.h"
 #include "scanner.h"
@@ -195,5 +199,9 @@ static inline const char *nodeKindStr(int nKind) {
         return exprTypeNames[nKind-1];
     }
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,6 +1,10 @@
 #ifndef clox_parser_h
 #define clox_parser_h
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <setjmp.h>
 #include "scanner.h"
 #include "object.h"
@@ -26,5 +30,9 @@ void freeParser(Parser *p); // frees parser, but NOT the nodes
 Node *parse(Parser *p);
 Node *parseExpression(Parser *p);
 void outputParserErrors(Parser *p, FILE *f);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

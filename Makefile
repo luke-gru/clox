@@ -1,17 +1,17 @@
 ifeq ($(strip $(CC)),)
-CC=gcc
+CC=g++
 endif
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 DEFINES=-D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLX_BUILT_DIR=$(ROOT_DIR)
-GCC_CFLAGS=-std=c99 -Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -I. -Ivendor -pthread ${DEFINES}
-CLANG_CFLAGS=-std=c99 -Wall -Wno-unused-label -Wno-unused-function -Wno-incompatible-pointer-types-discards-qualifiers -Wno-tautological-constant-out-of-range-compare -I. -Ivendor -pthread ${DEFINES}
+GCC_CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -I. -Ivendor -pthread ${DEFINES}
+CLANG_CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-incompatible-pointer-types-discards-qualifiers -Wno-tautological-constant-out-of-range-compare -I. -Ivendor -pthread ${DEFINES}
 ifneq (,$(findstring clang,$(CC)))
 CFLAGS=${CLANG_CFLAGS}
 else
-CFLAGS=${GCC_CFLAGS}
+CFLAGS=${GCC_CFLAGS} $(shell llvm-config-4.0 --cxxflags --ldflags --system-libs --libs core) -lstdc++
 endif
-SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c signal.c io.c file.c dir.c thread.c block.c rand.c time.c repl.c debugger.c regex_lib.c regex.c vendor/linenoise.c
-TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c signal.c io.c file.c dir.c thread.c block.c rand.c time.c debugger.c regex_lib.c regex.c
+SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c signal.c io.c file.c dir.c thread.c block.c rand.c time.c repl.c debugger.c regex_lib.c regex.c jit_compiler.cpp vendor/linenoise.c
+TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c signal.c io.c file.c dir.c thread.c block.c rand.c time.c debugger.c regex_lib.c regex.c jit_compiler.cpp
 TEST_FILES = test/test_object.c test/test_nodes.c test/test_compiler.c test/test_vm.c test/test_gc.c test/test_examples.c test/test_regex.c
 DEBUG_FLAGS=-O2 -g -rdynamic
 GPROF_FLAGS=-O3 -pg -DNDEBUG

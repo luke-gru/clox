@@ -26,11 +26,19 @@
 #define UNLIKELY(x) x
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // NOTE: when adding/removing from here, add/remove from opName() function in debug.c!
 typedef enum {
     #define OPCODE(name) OP_##name,
     #include "opcodes.h.inc"
     #undef OPCODE
 } OpCode;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

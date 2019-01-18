@@ -1,6 +1,10 @@
 #ifndef clox_object_h
 #define clox_object_h
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <pthread.h>
 #include "common.h"
 #include "chunk.h"
@@ -638,5 +642,9 @@ extern ObjClass *lxBlockIterErrClass;
 extern ObjClass *lxBreakBlockErrClass;
 extern ObjClass *lxContinueBlockErrClass;
 extern ObjClass *lxReturnBlockErrClass;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -5,6 +5,10 @@
 #include "common.h"
 #include "vec.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // fwd decls
 struct Obj;
 struct ObjString;
@@ -195,5 +199,9 @@ uint32_t valHash(Value val);
 bool valEqual(Value a, Value b);
 bool isTruthy(Value a);
 void fillCallableName(Value callable, const char buf[], size_t buflen);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
