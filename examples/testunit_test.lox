@@ -7,6 +7,12 @@ class MyTests < TestUnit {
   testFail() {
     this.assertEq(1, 2);
   }
+  testMatch() {
+    this.assertMatch("hi", %"hi");
+  }
+  testNoMatch() {
+    this.assertMatch("hi", %"bye");
+  }
 }
 MyTests.runTests(outputReport: false);
 print MyTests.successes();
@@ -14,5 +20,5 @@ print MyTests.failures();
 
 __END__
 -- expect: --
-1
-1
+2
+2

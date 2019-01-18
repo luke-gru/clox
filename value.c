@@ -252,7 +252,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
                 ret = stringConstructor(buf, strlen(buf), flags);
                 xfree(buf);
             }
-        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE || OBJ_TYPE(value) == OBJ_T_ARRAY || OBJ_TYPE(value) == OBJ_T_STRING || OBJ_TYPE(value) == OBJ_T_MAP) {
+        } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE || OBJ_TYPE(value) == OBJ_T_ARRAY || OBJ_TYPE(value) == OBJ_T_STRING || OBJ_TYPE(value) == OBJ_T_MAP || OBJ_TYPE(value) == OBJ_T_REGEX) {
             ObjInstance *inst = AS_INSTANCE(value);
             Obj *toString = instanceFindMethod(inst, INTERN("toString"));
             if (toString && vm.inited) {

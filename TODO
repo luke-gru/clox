@@ -15,7 +15,6 @@ the syntax is different for them, like in ruby.
 * Dumping/loading values to/from disk
 * Saving/loading bytecode to disk
 * Add tracing/coverage information
-* Add Class#ancestors
 * add multiple var declaration, setters for array returns [GIT BRANCH]
 * Add socket class in io.c, make it work with multi-threading
 * Allow getters to be called like methods (when given 0 args) [PARTIAL]
@@ -56,7 +55,6 @@ file lookup, not pwd when calling loadScript/requireScript
 * +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] +=1, or other lvalues
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
-* Allow catch to take qualified class names
 
 Optimizations
 -------------

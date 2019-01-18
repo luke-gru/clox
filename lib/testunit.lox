@@ -99,6 +99,13 @@ class TestUnit {
     }
   }
 
+  assert(result) {
+    if (!result) {
+      throw AssertionError("Expected ${result} to be true");
+    }
+    this._assertionPassed();
+  }
+
   assertEq(expected, result) {
     if (expected != result) {
       throw AssertionError("Expected ${expected} to equal to ${result}");
@@ -106,9 +113,12 @@ class TestUnit {
     this._assertionPassed();
   }
 
-  assert(result) {
-    if (!result) {
-      throw AssertionError("Expected ${result} to be true");
+  assertMatch(result, pattern) {
+    if (classof(pattern) != Regex) {
+      throw ArgumentError("Expected regex as 2nd argument to assertMatch");
+    }
+    if (!pattern.match(result)) {
+      throw AssertionError("Expected ${result} to match ${pattern}");
     }
     this._assertionPassed();
   }

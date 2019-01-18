@@ -34,6 +34,7 @@ void checkArgIsA(Value arg, ObjClass *klass, int argnum);
 // builtin (native) functions
 Value lxClock(int argCount, Value *args);
 Value lxTypeof(int argCount, Value *args);
+Value lxClassof(int argCount, Value *args);
 Value lxLoadScript(int argCount, Value *args);
 Value lxRequireScript(int argCount, Value *args);
 Value lxDebugger(int argCount, Value *args);

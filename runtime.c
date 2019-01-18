@@ -141,6 +141,15 @@ Value lxTypeof(int argCount, Value *args) {
     return OBJ_VAL(copyString(strType, strlen(strType), NEWOBJ_FLAG_NONE));
 }
 
+Value lxClassof(int argCount, Value *args) {
+    CHECK_ARITY("classof", 1, 1, argCount);
+    if (IS_OBJ(*args)) {
+        return OBJ_VAL(AS_INSTANCE(*args)->klass);
+    } else {
+        return NIL_VAL;
+    }
+}
+
 Value lxDebugger(int argCount, Value *args) {
     CHECK_ARITY("debugger", 0, 0, argCount);
     vm.debugger.awaitingPause = true;

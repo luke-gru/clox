@@ -671,6 +671,8 @@ const char *typeOfObj(Obj *obj) {
     case OBJ_T_NATIVE_FUNCTION:
     case OBJ_T_BOUND_METHOD:
         return "function";
+    case OBJ_T_REGEX:
+        return "regex";
     case OBJ_T_UPVALUE:
         return "upvalue";
     default: {

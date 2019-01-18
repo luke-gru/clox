@@ -73,6 +73,7 @@ void initCoreSighandlers(void) {
 char *unredefinableGlobals[] = {
     "clock",
     "typeof",
+    "classof",
     "debugger",
     "loadScript",
     "requireScript",
@@ -100,6 +101,7 @@ static bool isUnredefinableGlobal(char *name) {
 static void defineNativeFunctions(void) {
     addGlobalFunction("clock", lxClock);
     addGlobalFunction("typeof", lxTypeof);
+    addGlobalFunction("classof", lxClassof);
     addGlobalFunction("loadScript", lxLoadScript);
     addGlobalFunction("requireScript", lxRequireScript);
     addGlobalFunction("autoload", lxAutoload);
@@ -110,6 +112,7 @@ static void defineNativeFunctions(void) {
     addGlobalFunction("exit", lxExit);
     addGlobalFunction("_exit", lx_Exit);
     addGlobalFunction("atExit", lxAtExit);
+    // TODO: make Thread() and Thread.join
     addGlobalFunction("newThread", lxNewThread);
     addGlobalFunction("joinThread", lxJoinThread);
     Init_rand();
