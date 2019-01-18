@@ -1,0 +1,14 @@
+fun a(*args) { return blockGiven(); }
+print a();
+print a(fun() { });
+print a(&fun() { });
+print a() -> () { };
+print a() -> { };
+
+__END__
+-- expect: --
+false
+false
+true
+true
+true

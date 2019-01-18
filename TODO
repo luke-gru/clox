@@ -62,6 +62,7 @@ Optimizations
 * more bytecode optimization passes (ex: skip OP_NIL,OP_RETURN after an OP_RETURN)
 * Add specialization bytecodes
 * Add tailcall optimization
+* Add common subexpression elimination to optimizations in compiler
 * simple (tracing?) JIT
 * different GC strategies, maybe support copying GC (but then need to change
 Value representation, no more tagging, need to use struct).

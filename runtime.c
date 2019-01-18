@@ -335,7 +335,13 @@ Value lxYield(int argCount, Value *args) {
 bool blockGiven() {
     CallInfo *cinfo = getFrame()->callInfo;
     if (!cinfo) return false;
-    return (cinfo->blockFunction || cinfo->blockInstance);
+    return (cinfo->blockFunction != NULL || cinfo->blockInstance != NULL);
+}
+
+Value lxBlockGiven(int argCount, Value *args) {
+    CallInfo *cinfo = getFrame()->prev->callInfo;
+    if (!cinfo) return FALSE_VAL;
+    return BOOL_VAL(cinfo->blockFunction != NULL || cinfo->blockInstance != NULL);
 }
 
 Value yieldBlock(int argCount, Value *args) {

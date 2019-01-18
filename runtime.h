@@ -42,6 +42,7 @@ Value lxEval(int argCount, Value *args);
 Value lxSleep(int argCount, Value *args);
 void threadSleepNano(LxThread *th, int secs);
 Value lxYield(int argCount, Value *args);
+Value lxBlockGiven(int argCount, Value *args);
 Value yieldFromC(int argCount, Value *args, ObjInstance *blkObj);
 Value lxExit(int argCount, Value *args);
 Value lx_Exit(int argCount, Value *args);

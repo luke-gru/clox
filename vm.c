@@ -109,6 +109,7 @@ static void defineNativeFunctions(void) {
     addGlobalFunction("eval", lxEval);
     addGlobalFunction("sleep", lxSleep);
     addGlobalFunction("yield", lxYield);
+    addGlobalFunction("blockGiven", lxBlockGiven);
     addGlobalFunction("exit", lxExit);
     addGlobalFunction("_exit", lx_Exit);
     addGlobalFunction("atExit", lxAtExit);
