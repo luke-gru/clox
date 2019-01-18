@@ -1530,6 +1530,21 @@ static Node *primary() {
         TRACE_END("primary");
         return ret;
     }
+    if (match(TOKEN_DICE)) {
+        consume(TOKEN_IDENTIFIER, "Expected identifier after '::'");
+        node_type_t constLookupType = {
+            .type = NODE_EXPR,
+            .kind = CONSTANT_LOOKUP_EXPR
+        };
+        Node *constLookupNode = createNode(constLookupType, current->previous, NULL);
+        while (match(TOKEN_DICE)) {
+            consume(TOKEN_IDENTIFIER, "Expected identifier after '::'");
+            Node *constLookupNodeInner = createNode(constLookupType, current->previous, NULL);
+            nodeAddChild(constLookupNodeInner, constLookupNode);
+            constLookupNode = constLookupNodeInner;
+        }
+        return constLookupNode;
+    }
     if (match(TOKEN_LEFT_BRACKET)) {
         TRACE_START("arrayExpr");
         Token lbrackTok = current->previous;

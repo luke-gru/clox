@@ -14,9 +14,11 @@ class Outer {
   }
 }
 print typeof(Outer::Inner);
+print typeof(::Outer::Inner);
 
 __END__
 -- expect: --
 number
 instance
+class
 class

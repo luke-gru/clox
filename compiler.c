@@ -1823,7 +1823,11 @@ static void emitNode(Node *n) {
         break;
     }
     case CONSTANT_LOOKUP_EXPR: {
-        emitChildren(n); // 1 child, the class/module
+        if (n->children->length > 0) {
+            emitChildren(n); // 1 child, the class/module
+        }  else {
+            emitOp0(OP_NIL); // resolve from top-level
+        }
         uint8_t arg = identifierConstant(&n->tok);
         emitOp1(OP_GET_CONST_UNDER, arg);
         break;
