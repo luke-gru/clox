@@ -1164,9 +1164,8 @@ void collectGarbage(void) {
         DBG_ASSERT(thObj);
         grayObject(thObj);
         ASSERT(th);
-        if (th->thisObj) {
-            grayObject(th->thisObj);
-        }
+        /* th->thisObj should be on stack, no need for marking, and it causes errors */
+        /*grayObject(th->thisObj);*/
         if (th->lastValue) {
             grayValue(*th->lastValue);
         }

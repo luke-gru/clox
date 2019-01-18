@@ -1325,10 +1325,10 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     } else if (IS_CLASS(callable)) { // initializer
         ObjClass *klass = AS_CLASS(callable);
         const char *klassName = NULL;
+        (void)klassName;
 #ifndef NDEBUG
         klassName = className(klass);
 #endif
-        (void)klassName;
         VM_DEBUG(2, "calling callable class %s", klassName);
         instance = newInstance(klass, NEWOBJ_FLAG_NONE); // setup the new instance object
         frameClass = klass;
@@ -1621,9 +1621,14 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     if (instance) {
         th->thisObj = TO_OBJ(instance);
         vec_push(&vm.curThread->v_thisStack, TO_OBJ(instance));
+        if (IS_T_CLASS(instance) || IS_T_MODULE(instance)) {
+            frameClass = TO_CLASS(instance);
+        }
     }
     frame->callInfo = callInfo;
-    if (instance && !frameClass) frameClass = instance->klass;
+    if (instance && !frameClass) {
+        frameClass = instance->klass;
+    }
     frame->klass = frameClass;
     if (frame->klass) {
         pushCref(frame->klass);

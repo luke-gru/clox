@@ -1017,6 +1017,7 @@ ObjClass *instanceSingletonClass(ObjInstance *inst) {
     ObjString *name = valueToString(OBJ_VAL(inst), hiddenString, NEWOBJ_FLAG_OLD);
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, inst->klass, NEWOBJ_FLAG_OLD);
+    OBJ_SET_SINGLETON(meta);
     CLASSINFO(meta)->singletonOf = (Obj*)inst;
     inst->singletonKlass = meta;
     OBJ_WRITE(OBJ_VAL(inst), OBJ_VAL(meta));
@@ -1037,6 +1038,7 @@ ObjClass *classSingletonClass(ObjClass *klass) {
     }
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, (ObjClass*)CLASSINFO(klass)->superclass, NEWOBJ_FLAG_OLD);
+    OBJ_SET_SINGLETON(meta);
     CLASSINFO(meta)->singletonOf = (Obj*)klass;
     klass->singletonKlass = meta;
     OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(meta));
@@ -1057,6 +1059,7 @@ ObjClass *moduleSingletonClass(ObjModule *mod) {
     }
     pushCString(name, " (meta)", 7);
     ObjClass *meta = newClass(name, lxClassClass, NEWOBJ_FLAG_OLD);
+    OBJ_SET_SINGLETON(meta);
     mod->singletonKlass = meta;
     OBJ_WRITE(OBJ_VAL(mod), OBJ_VAL(meta));
     CLASSINFO(meta)->singletonOf = (Obj*)mod;

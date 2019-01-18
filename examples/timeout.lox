@@ -5,7 +5,7 @@ try {
   Timeout.timeout(3) -> () {
     sleep(4);
   };
-} catch (TimeoutError e) {
+} catch (Timeout::Error e) {
   err = e;
 }
 print err and err.message; // should timeout after 3 seconds
@@ -15,7 +15,7 @@ try {
   Timeout.timeout(3) -> () {
     sleep(3);
   };
-} catch (TimeoutError e) {
+} catch (Timeout::Error e) {
   err = e;
 }
 print err and err.message; // should be nil

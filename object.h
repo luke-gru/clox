@@ -41,6 +41,7 @@ struct Upvalue;
 #define OBJ_FLAG_FROZEN (1 << 2)
 #define OBJ_FLAG_NOGC (1 << 3)
 #define OBJ_FLAG_PUSHED_VM_STACK (1 << 4)
+#define OBJ_FLAG_SINGLETON (1 << 5)
 // flags that may or may not be used by certain types
 #define OBJ_FLAG_USER1 (1 << 10)
 #define OBJ_FLAG_USER2 (1 << 11)
@@ -65,6 +66,8 @@ struct Upvalue;
 #define OBJ_IS_PUSHED_VM_STACK(obj) OBJ_HAS_FLAG(obj, PUSHED_VM_STACK)
 #define OBJ_SET_PUSHED_VM_STACK(obj) OBJ_SET_FLAG(obj, PUSHED_VM_STACK)
 #define OBJ_UNSET_PUSHED_VM_STACK(obj) OBJ_UNSET_FLAG(obj, PUSHED_VM_STACK)
+#define OBJ_IS_SINGLETON(obj) OBJ_HAS_FLAG(obj, SINGLETON)
+#define OBJ_SET_SINGLETON(obj) OBJ_SET_FLAG(obj, SINGLETON)
 
 #define OBJ_HAS_USER1_FLAG(obj) OBJ_HAS_FLAG(obj, USER1)
 #define OBJ_SET_USER1_FLAG(obj) OBJ_SET_FLAG(obj, USER1)

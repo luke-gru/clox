@@ -1,11 +1,10 @@
 class Tempfile {
-  this.TMP_DIR = "/tmp";
+  TMP_DIR = "/tmp";
 
   class create() {
-    var tmp = this.TMP_DIR;
     var num = random() % 100000;
     var pid = Process.pid();
-    var fname = "${tmp}/${pid}-${num}";
+    var fname = "${TMP_DIR}/${pid}-${num}";
     return this(File.open(fname, File::O_RDWR|File::O_CREAT|File::O_EXCL, 0c664));
   }
 

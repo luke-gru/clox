@@ -1,5 +1,5 @@
-class TimeoutError < Error { }
 class Timeout {
+  class Error < Error {}
 
   class timeout(secs, &blk) {
     if (!blk) {
@@ -11,7 +11,7 @@ class Timeout {
       sleep(secs);
       Thread.schedule();
       if (!done) {
-        outerThread.throw(TimeoutError("timeout"));
+        outerThread.throw(Error("timeout"));
       }
     });
     newThread.detach();
