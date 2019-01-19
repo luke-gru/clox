@@ -41,15 +41,15 @@ void initJit() {
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
 
+    llvm::orc::LoxJit *jit = new llvm::orc::LoxJit();
+    TheJIT = std::unique_ptr<llvm::orc::LoxJit>(jit);
+
     jitInited = true;
     JIT_TRACE(1, "/initJit");
 }
 
 void initJitModuleAndPassManager() {
     theModule = llvm::make_unique<llvm::Module>("clox_jit", theContext);
-
-    llvm::orc::LoxJit *jit = new llvm::orc::LoxJit();
-    TheJIT = std::unique_ptr<llvm::orc::LoxJit>(jit);
     theModule->setDataLayout(TheJIT->getTargetMachine().createDataLayout());
 
     // Create a new pass manager attached to it.
@@ -66,6 +66,7 @@ void initJitModuleAndPassManager() {
 }
 
 llvm::orc::LoxJit::ModuleHandle jitAddModule() {
+    ASSERT(theModule);
     auto m = TheJIT->addModule(std::move(theModule));
     initJitModuleAndPassManager();
     return m;
@@ -262,9 +263,10 @@ llvm::Value *jitFunction(Node *n) {
         i++;
     }
     // Create a new basic block to start insertion into.
-    llvm::BasicBlock *bb = llvm::BasicBlock::Create(theContext, "entry");
+    llvm::BasicBlock *bb = llvm::BasicBlock::Create(theContext, "entry", llvmFunc);
     theBuilder.SetInsertPoint(bb);
     llvm::Value *retVal = nullptr;
+    ASSERT(n->children->length == 1);
     if ((retVal = jitChild(n, 0))) {
         // Finish off the function.
         theBuilder.CreateRet(retVal);
@@ -300,7 +302,7 @@ llvm::Value *jitNode(Node *n) {
         JIT_TRACE(1, "emitting BLOCK");
         return jitBlock(n);
     case STMTLIST_STMT:
-        JIT_TRACE(1, "emitting SMTLIST");
+        JIT_TRACE(1, "emitting SMTLIST (%d)", n->children->length);
         return jitStmtlist(n);
     case EXPR_STMT:
         JIT_TRACE(1, "emitting EXPR_STMT");

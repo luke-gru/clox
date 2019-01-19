@@ -68,15 +68,15 @@ static bool dumpLines(const char *lines[], int numLines) {
         return false;
     }
     ASSERT(program);
-    fprintf(stderr, "Dumping lines\n");
-    program = jitCreateAnonExpr(program);
-    llvm::Value *val = jitNode(program);
+    Node *newProgram = jitCreateAnonExpr(program);
+    llvm::Value *val = jitNode(newProgram);
     ASSERT(val);
+    fprintf(stderr, "Dumping lines\n");
+    jitEmitValueIR(val);
+    fprintf(stderr, "\n");
     auto m = jitAddModule();
     jitEvalAnonExpr();
     jitRemoveModule(m);
-    jitEmitValueIR(val);
-    fprintf(stderr, "\n");
     return true;
 }
 
