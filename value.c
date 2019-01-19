@@ -166,11 +166,11 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             }
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
-            char *klassName = CLASSINFO(klass)->name ? CLASSINFO(klass)->name->chars : "(anon)";
+            char *klassName = CLASSINFO(klass)->name ? CLASSINFO(klass)->name->chars : (char*)"(anon)";
             return fprintf(file, "<class %.*s>", PRINTNUM(8, maxLen), klassName);
         } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
             ObjModule *mod = AS_MODULE(value);
-            char *modName = CLASSINFO(mod)->name ? CLASSINFO(mod)->name->chars : "(anon)";
+            char *modName = CLASSINFO(mod)->name ? CLASSINFO(mod)->name->chars : (char*)"(anon)";
             return fprintf(file, "<module %.*s>", PRINTNUM(9, maxLen), modName);
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);

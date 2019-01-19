@@ -463,12 +463,12 @@ static Node *statement() {
             .kind = TRY_STMT,
         };
         TRACE_START("tryStatement");
-        Node *try = createNode(nType, tryTok, NULL);
+        Node *_try = createNode(nType, tryTok, NULL);
         consume(TOKEN_LEFT_BRACE, "Expected '{' after keyword 'try'");
         Token lbraceTok = current->previous;
         Node *stmtList = blockStatements();
         Node *tryBlock = wrapStmtsInBlock(stmtList, lbraceTok);
-        nodeAddChild(try, tryBlock);
+        nodeAddChild(_try, tryBlock);
         while (match(TOKEN_CATCH)) {
             Token catchTok = current->previous;
             consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'catch'");
@@ -499,11 +499,11 @@ static Node *statement() {
                 nodeAddChild(catchStmt, varExpr); // variable to be bound to in block
             }
             nodeAddChild(catchStmt, catchBlock);
-            nodeAddChild(try, catchStmt);
+            nodeAddChild(_try, catchStmt);
         }
         TRACE_END("tryStatement");
         TRACE_END("statement");
-        return try;
+        return _try;
     }
 
     if (match(TOKEN_THROW)) {
@@ -514,10 +514,10 @@ static Node *statement() {
             .type = NODE_STMT,
             .kind = THROW_STMT,
         };
-        Node *throw = createNode(throwT, throwTok, NULL);
-        nodeAddChild(throw, expr);
+        Node *_throw = createNode(throwT, throwTok, NULL);
+        nodeAddChild(_throw, expr);
         TRACE_END("statement");
-        return throw;
+        return _throw;
     }
     if (match(TOKEN_CONTINUE)) {
         Token contTok = current->previous;

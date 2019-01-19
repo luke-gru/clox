@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct sCloxOptions {
     // debug options (default: false)
     bool printAST;
@@ -33,8 +37,8 @@ typedef struct sCloxOptions {
     bool _inited; // internal use, if singleton is inited
 } CloxOptions; // [singleton]
 
-int origArgc;
-char **origArgv;
+extern int origArgc;
+extern char **origArgv;
 
 void initOptions(int argc, char **argv);
 CloxOptions *getOptions(void);
@@ -49,5 +53,9 @@ int parseOption(char **argv, int idx);
     (getOptions())->name = val;\
     } while (0)
 #define IS_OPTION(name, type) (findOption(name, #type) == true)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

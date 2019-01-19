@@ -8,6 +8,10 @@
 #include "table.h"
 #include "regex_lib.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum ObjType {
   OBJ_T_NONE = 0, // when object is unitialized or freed
   OBJ_T_STRING,   // internal string value only, Strings in lox are instances
@@ -638,5 +642,9 @@ extern ObjClass *lxBlockIterErrClass;
 extern ObjClass *lxBreakBlockErrClass;
 extern ObjClass *lxContinueBlockErrClass;
 extern ObjClass *lxReturnBlockErrClass;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

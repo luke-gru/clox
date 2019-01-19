@@ -6,6 +6,10 @@
 #include "object.h"
 #include "value.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define GC_GEN_MIN 0
 #define GC_GEN_YOUNG_MAX 1
 #define GC_GEN_OLD_MIN 2
@@ -106,5 +110,9 @@ void printGCProfile(void);
 
 void addHeap(void);
 Obj *getNewObject(ObjType type, size_t sz, int flags);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

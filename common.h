@@ -7,6 +7,10 @@
 #include <string.h>
 #include <stdarg.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define JUMP_SET 0
 #define JUMP_PERFORMED 1
 
@@ -32,5 +36,9 @@ typedef enum {
     #include "opcodes.h.inc"
     #undef OPCODE
 } OpCode;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -371,7 +371,8 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
                         UNREACHABLE("bug");
                 }
                 if (isupper(c)) {
-                    etype += 1;
+                    int eOld = (int)etype;
+                    etype = (REClassType)eOld+1;
                 }
                 node->eclass_type = etype;
             } else if (c == '.' || c == '*' || c == '+' || c == '[' || c == '|' ||

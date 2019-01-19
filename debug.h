@@ -8,6 +8,10 @@
 #include "object.h"
 #include "vec.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef NORETURN
 #define NORETURN __attribute__((noreturn))
 #endif
@@ -50,6 +54,10 @@ NORETURN extern void diePrintCBacktrace(const char *fmt, ...);
 #define DBG_ASSERT(expr) ASSERT(expr)
 #else
 #define DBG_ASSERT(expr) (void)0
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif

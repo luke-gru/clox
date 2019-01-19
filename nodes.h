@@ -6,6 +6,10 @@
 #include "scanner.h"
 #include "debug.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct sNode;
 typedef vec_t(struct sNode*) vec_nodep_t;
 
@@ -195,5 +199,9 @@ static inline const char *nodeKindStr(int nKind) {
         return exprTypeNames[nKind-1];
     }
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

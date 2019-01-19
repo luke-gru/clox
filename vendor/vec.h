@@ -11,6 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define VEC_VERSION "0.2.1"
 
 #define VEC_SZ (sizeof(void*)+(sizeof(int)*2))
@@ -33,7 +37,7 @@
 
 
 #define vec_push(v, val)\
-  ( vec_expand_(vec_unpack_(v)) ? (void)0 :\
+  ( vec_expand_(vec_unpack_(v)) ? (val) :\
     ((v)->data[(v)->length++] = (val)) )
 
 
@@ -186,5 +190,9 @@ typedef vec_t(int) vec_int_t;
 typedef vec_t(char) vec_char_t;
 typedef vec_t(float) vec_float_t;
 typedef vec_t(double) vec_double_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -11,6 +11,10 @@
 #include "memory.h"
 #include "debug.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define STACK_MAX 256
 #define FRAMES_MAX 64
 
@@ -357,7 +361,7 @@ Value createIterator(Value iterable);
 void acquireGVL(void);
 void releaseGVL(ThreadStatus status);
 void thread_debug(int lvl, const char *format, ...);
-volatile long long GVLOwner;
+extern volatile long long GVLOwner;
 void threadSetCurrent(LxThread *th);
 void threadDetach(LxThread *th);
 void exitingThread(LxThread *th);
@@ -377,5 +381,9 @@ void debugFrame(CallFrame *frame);
 void runAtExitHooks(void);
 NORETURN void stopVM(int status);
 NORETURN void _stopVM(int status);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -36,7 +36,7 @@ NORETURN void diePrintCBacktrace(const char *fmt, ...) {
         fprintf(stderr, "VM initialized: NO\n");
     }
     if (vm.lastOp != -1) {
-        fprintf(stderr, "Last VM operation: %s\n", opName(vm.lastOp));
+        fprintf(stderr, "Last VM operation: %s\n", opName((OpCode)vm.lastOp));
     }
     vfprintf(stderr, fmt, ap);
     va_end(ap);
@@ -253,7 +253,7 @@ void disassembleCatchTbl(ObjString *buf, CatchTable *tbl) {
     while (row) {
         ASSERT(IS_STRING(row->catchVal));
         char *valstr = AS_CSTRING(row->catchVal);
-        char *cbuf = calloc(strlen(valstr)+1+50, 1);
+        char *cbuf = (char*)calloc(strlen(valstr)+1+50, 1);
         ASSERT_MEM(cbuf);
         sprintf(cbuf, "%04d) from: %04d, to: %04d, target: %04d, value: %s\n",
                 idx, row->ifrom, row->ito, row->itarget, valstr);
@@ -285,7 +285,7 @@ void printDisassembledChunk(FILE *f, Chunk *chunk, const char *name) {
     }
     ObjFunction *func = NULL; int i = 0;
     vec_foreach(&funcs, func, i) {
-        char *name = func->name ? func->name->chars : "(anon)";
+        char *name = func->name ? func->name->chars : (char*)"(anon)";
         fprintf(f, "-- Function %s --\n", name);
         printDisassembledChunk(f, func->chunk, name);
         fprintf(f, "----\n");
@@ -335,7 +335,7 @@ static int stringInstruction(ObjString *buf, const char *op, Chunk *chunk, int i
     Value constant = getConstant(chunk, constantIdx);
     ObjString *constantStr = AS_STRING(constant);
     char *constantCStr = constantStr->chars;
-    char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+20, 1);
+    char *cbuf = (char*)calloc(strlen(op)+1+strlen(constantCStr)+20, 1);
     sprintf(cbuf, "%s\t%04d\t'%s' (static=%d)\n", op, constantIdx, constantCStr, isStatic);
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
@@ -434,7 +434,7 @@ static int closureInstruction(ObjString *buf, const char *op, Chunk *chunk, int 
 
     ObjString *constantStr = valueToString(constant, copyString, NEWOBJ_FLAG_NONE);
     char *constantCStr = constantStr->chars;
-    char *cbuf = calloc(strlen(op)+1+strlen(constantCStr)+23, 1);
+    char *cbuf = (char*)calloc(strlen(op)+1+strlen(constantCStr)+23, 1);
     ASSERT_MEM(cbuf);
     sprintf(cbuf, "%s\t%04" PRId8 "\t'%s'\t(upvals: %03d)\n", op, funcConstIdx,
         constantCStr, numUpvalues);
@@ -452,7 +452,7 @@ static int printJumpInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
 }
 
 static int jumpInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
-    char *cbuf = calloc(strlen(op)+1+18, 1);
+    char *cbuf = (char*)calloc(strlen(op)+1+18, 1);
     ASSERT_MEM(cbuf);
     uint8_t jumpOffset = chunk->code[i + 1];
     /*ASSERT(jumpOffset != 0); // should have been patched*/
@@ -469,7 +469,7 @@ static int printLoopInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
 }
 
 static int loopInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
-    char *cbuf = calloc(strlen(op)+1+18, 1);
+    char *cbuf = (char*)calloc(strlen(op)+1+18, 1);
     ASSERT_MEM(cbuf);
     uint8_t loopOffset = chunk->code[i + 1];
     sprintf(cbuf, "%s\t%4" PRId8 "\t(addr=%04" PRId8 ")\n", op, loopOffset, (i-loopOffset));

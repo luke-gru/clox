@@ -7,6 +7,10 @@
 #include "vec.h"
 #include "nodes.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef vec_t(Token) vec_tok_t;
 
 typedef struct sParser {
@@ -26,5 +30,9 @@ void freeParser(Parser *p); // frees parser, but NOT the nodes
 Node *parse(Parser *p);
 Node *parseExpression(Parser *p);
 void outputParserErrors(Parser *p, FILE *f);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

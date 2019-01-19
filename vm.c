@@ -142,11 +142,11 @@ ObjClass *lxReturnBlockErrClass;
 ObjArray *lxLoadPath; // load path for loadScript/requireScript (-L flag)
 ObjArray *lxArgv;
 
-ObjNative *nativeObjectInit = NULL;
-ObjNative *nativeIteratorInit = NULL;
-ObjNative *nativeErrorInit = NULL;
-ObjNative *nativeClassInit = NULL;
-ObjNative *nativeModuleInit = NULL;
+ObjNative *nativeObjectInit;
+ObjNative *nativeIteratorInit;
+ObjNative *nativeErrorInit;
+ObjNative *nativeClassInit;
+ObjNative *nativeModuleInit;
 
 bool isClassHierarchyCreated = false;
 
@@ -901,7 +901,7 @@ void setBacktrace(Value err) {
                 if (!function || function->name == NULL) {
                     pushCString(outBuf, "<script>\n", 9); // top-level
                 } else {
-                    char *fnName = function->name ? function->name->chars : "(anon)";
+                    char *fnName = function->name ? function->name->chars : (char*)"(anon)";
                     pushCStringFmt(outBuf, "<%s>\n", fnName);
                 }
             }

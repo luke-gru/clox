@@ -4,6 +4,10 @@
 #include "common.h"
 #include "vec.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Breakpoint {
     char *file;
     int line;
@@ -28,5 +32,9 @@ void freeDebugger(Debugger *dbg); // free internal structures
 bool shouldEnterDebugger(Debugger *dbg, char *fname, int curLine, int lastLine,
     int ndepth, int nwidth);
 void enterDebugger(Debugger *dbg, char *fname, int lineno, int ndepth, int nwidth);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

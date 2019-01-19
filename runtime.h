@@ -4,6 +4,10 @@
 #include "value.h"
 #include "vm.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define CHECK_ARITY(func, min, max, actual) do {\
     if (UNLIKELY(!checkArity(min, max, actual))) {\
         if (min == max) {\
@@ -65,11 +69,11 @@ Value lxObjectSend(int argCount, Value *args);
 Value lxObjectGetClass(int argCount, Value *args);
 Value lxObjectGetSingletonClass(int argCount, Value *args);
 Value lxObjectGetObjectId(int argCount, Value *args);
-ObjNative *nativeObjectInit;
+extern ObjNative *nativeObjectInit;
 
 // class Module
 Value lxModuleInit(int argCount, Value *args);
-ObjNative *nativeModuleInit;
+extern ObjNative *nativeModuleInit;
 
 // class Class
 Value lxClassInit(int argCount, Value *args);
@@ -81,33 +85,33 @@ Value lxClassConstDefined(int argCount, Value *args);
 Value lxClassConstants(int argCount, Value *args);
 Value lxClassConstGet(int argCount, Value *args);
 Value lxClassAncestors(int argCount, Value *args);
-ObjNative *nativeClassInit;
+extern ObjNative *nativeClassInit;
 
 // class String
-ObjNative *nativeStringInit;
+extern ObjNative *nativeStringInit;
 
 // class Array
-ObjNative *nativeArrayInit;
+extern ObjNative *nativeArrayInit;
 
 // class Map
-ObjNative *nativeMapInit;
+extern ObjNative *nativeMapInit;
 
 // class Iterator
 Value lxIteratorInit(int argCount, Value *args);
 Value lxIteratorNext(int argCount, Value *args);
 //Value lxIteratorRewind(int argCount, Value *args);
 //Value lxIteratorIsAtEnd(int argCount, Value *args);
-ObjNative *nativeIteratorInit;
+extern ObjNative *nativeIteratorInit;
 
 // class Thread
 Value lxThreadInit(int argCount, Value *args);
-ObjNative *nativeThreadInit;
+extern ObjNative *nativeThreadInit;
 
 // class Block
-ObjNative *nativeBlockInit;
+extern ObjNative *nativeBlockInit;
 
 // class Regex
-ObjNative *nativeRegexInit;
+extern ObjNative *nativeRegexInit;
 
 // module GC
 Value lxGCStats(int argCount, Value *args);
@@ -119,7 +123,7 @@ Value lxGCOn(int argCount, Value *args);
 
 // class Error
 Value lxErrInit(int argCount, Value *args);
-ObjNative *nativeErrorInit;
+extern ObjNative *nativeErrorInit;
 ObjClass *sysErrClass(int err);
 
 // class String
@@ -162,4 +166,9 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func);
 // API for adding constants
 void addConstantUnder(const char *name, Value constVal, Value owner);
 bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
