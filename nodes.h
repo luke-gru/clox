@@ -1,14 +1,14 @@
 #ifndef clox_nodes_h
 #define clox_nodes_h
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdbool.h>
 #include "vec.h"
 #include "scanner.h"
 #include "debug.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct sNode;
 typedef vec_t(struct sNode*) vec_nodep_t;

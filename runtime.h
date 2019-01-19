@@ -4,6 +4,10 @@
 #include "value.h"
 #include "vm.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define CHECK_ARITY(func, min, max, actual) do {\
     if (UNLIKELY(!checkArity(min, max, actual))) {\
         if (min == max) {\
@@ -21,10 +25,6 @@
 #define CHECK_ARG_BUILTIN_TYPE(value, typechk_p, typenam, argnum) checkBuiltinArgType(value, typechk_p, typenam, argnum)
 #define CHECK_ARG_IS_INSTANCE_OF(value, klass, argnum) checkArgIsInstanceOf(value, klass, argnum)
 #define CHECK_ARG_IS_A(value, klass, argnum) checkArgIsA(value, klass, argnum)
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 extern const char pathSeparator;
 extern bool isClassHierarchyCreated;

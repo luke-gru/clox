@@ -8,6 +8,8 @@
 #include "memory.h"
 #include "linenoise.h"
 
+extern Scanner scanner;
+
 static void freeLines(const char *lines[], int numLines) {
     for (int i = 0; i < numLines; i++) {
         xfree((void*)lines[i]);
@@ -67,8 +69,12 @@ static bool dumpLines(const char *lines[], int numLines) {
     }
     ASSERT(program);
     fprintf(stderr, "Dumping lines\n");
+    program = jitCreateAnonExpr(program);
     llvm::Value *val = jitNode(program);
     ASSERT(val);
+    auto m = jitAddModule();
+    jitEvalAnonExpr();
+    jitRemoveModule(m);
     jitEmitValueIR(val);
     fprintf(stderr, "\n");
     return true;
@@ -80,6 +86,7 @@ extern "C" NORETURN void jit_repl(void) {
     _resetScanner();
     initVM();
     initJit();
+    initJitModuleAndPassManager();
     linenoiseHistorySetMaxLen(500);
     const char *lines[50];
     int numLines = 0;

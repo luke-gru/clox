@@ -1,16 +1,16 @@
 #ifndef clox_object_h
 #define clox_object_h
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <pthread.h>
 #include "common.h"
 #include "chunk.h"
 #include "value.h"
 #include "table.h"
 #include "regex_lib.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef enum ObjType {
   OBJ_T_NONE = 0, // when object is unitialized or freed

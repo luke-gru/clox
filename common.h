@@ -7,6 +7,10 @@
 #include <string.h>
 #include <stdarg.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define JUMP_SET 0
 #define JUMP_PERFORMED 1
 
@@ -26,9 +30,6 @@
 #define UNLIKELY(x) x
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // NOTE: when adding/removing from here, add/remove from opName() function in debug.c!
 typedef enum {

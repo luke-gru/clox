@@ -8,13 +8,13 @@
 #include "vec.h"
 #include "value.h"
 
-#define LX_MAX_LOCALS 256
-#define LX_MAX_UPVALUES 256
-#define LX_MAX_KWARGS 8
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define LX_MAX_LOCALS 256
+#define LX_MAX_UPVALUES 256
+#define LX_MAX_KWARGS 8
 
 typedef vec_t(uint8_t) vec_byte_t;
 

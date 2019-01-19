@@ -1,6 +1,10 @@
 #ifndef clox_lox_jit_h
 #define clox_lox_jit_h
 
+#ifndef __cplusplus
+# error "cannot compile lox_jit without C++ compiler"
+#endif
+
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JITSymbol.h"
@@ -15,7 +19,6 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
-#include "lox_jit.hpp"
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -37,7 +40,7 @@ public:
   LoxJit()
       : TM(EngineBuilder().selectTarget()), DL(TM->createDataLayout()),
         CompileLayer(ObjectLayer, SimpleCompiler(*TM)) {
-    llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
+            llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
   }
 
   TargetMachine &getTargetMachine() { return *TM; }

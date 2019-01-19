@@ -6,6 +6,10 @@
 #include "object.h"
 #include "value.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define GC_GEN_MIN 0
 #define GC_GEN_YOUNG_MAX 1
 #define GC_GEN_OLD_MIN 2
@@ -37,10 +41,6 @@
 #define GC_HEAP_GROW_FACTOR 2
 
 #define xfree free
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct sGCProfile {
     struct timeval totalGCYoungTime;

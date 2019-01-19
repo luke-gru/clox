@@ -26,12 +26,22 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include "lox_jit.hpp"
 
-extern "C" llvm::Value *jitFunction(ObjFunction *func);
-extern "C" void initJit(void);
-extern "C" llvm::Value *jitNode(Node *n);
-extern "C" llvm::Value *jitChild(Node *n, unsigned idx);
-extern "C" void jitEmitModuleIR(llvm::Module *m);
-extern "C" void jitEmitValueIR(llvm::Value *v);
+extern "C" {
+
+llvm::Value *jitFunction(ObjFunction *func);
+void initJit(void);
+void initJitModuleAndPassManager(void);
+llvm::orc::LoxJit::ModuleHandle jitAddModule(void);
+void jitRemoveModule(llvm::orc::LoxJit::ModuleHandle m);
+void jitEvalAnonExpr(void);
+Node *jitCreateAnonExpr(Node *n);
+llvm::Value *jitNode(Node *n);
+llvm::Value *jitChild(Node *n, unsigned idx);
+void jitEmitModuleIR(llvm::Module *m);
+void jitEmitValueIR(llvm::Value *v);
+
+}
 
 #endif

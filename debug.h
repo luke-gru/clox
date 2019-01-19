@@ -8,13 +8,14 @@
 #include "object.h"
 #include "vec.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef NORETURN
 #define NORETURN __attribute__((noreturn))
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // For outputting ObjFunction chunks when printing bytecode
 typedef vec_t(ObjFunction*) vec_funcp_t;
