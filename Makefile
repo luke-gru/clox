@@ -4,11 +4,22 @@ endif
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 DEFINES=-D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLX_BUILT_DIR=$(ROOT_DIR)
 GCC_CFLAGS=-std=c99 -Wall -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -I. -Ivendor -pthread ${DEFINES}
+GPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
+# NOTE: clang++ doesn't compile yet, too many C++ type errors
+CLANGPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
 CLANG_CFLAGS=-std=c99 -Wall -Wno-unused-label -Wno-unused-function -Wno-incompatible-pointer-types-discards-qualifiers -Wno-tautological-constant-out-of-range-compare -I. -Ivendor -pthread ${DEFINES}
 ifneq (,$(findstring clang,$(CC)))
-CFLAGS=${CLANG_CFLAGS}
+	ifneq (,$(findstring clang++,$(CC)))
+		CFLAGS=${CLANGPP_CFLAGS}
+	else
+		CFLAGS=${CLANG_CFLAGS}
+	endif
 else
-CFLAGS=${GCC_CFLAGS}
+  ifneq (,$(findstring g++,$(CC)))
+    CFLAGS=${GPP_CFLAGS}
+  else
+    CFLAGS=${GCC_CFLAGS}
+  endif
 endif
 SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c signal.c io.c file.c dir.c thread.c block.c rand.c time.c repl.c debugger.c regex_lib.c regex.c vendor/linenoise.c
 TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c signal.c io.c file.c dir.c thread.c block.c rand.c time.c debugger.c regex_lib.c regex.c
