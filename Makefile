@@ -4,7 +4,7 @@ endif
 CC=g++
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 DEFINES=-D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLX_BUILT_DIR=$(ROOT_DIR)
-GCC_CFLAGS=-w -fpermissive -Wno-unused-label -Wno-unused-function -Wno-discarded-qualifiers -Wno-incompatible-pointer-types-discards-qualifiers -I. -Ivendor -pthread ${DEFINES}
+GCC_CFLAGS=-w -fpermissive -Wno-unused-label -Wno-unused-function -Wno-incompatible-pointer-types-discards-qualifiers -I. -Ivendor -pthread ${DEFINES}
 CLANG_CFLAGS=-Wall -Wno-unused-label -Wno-unused-function -Wno-incompatible-pointer-types-discards-qualifiers -Wno-tautological-constant-out-of-range-compare -I. -Ivendor -pthread ${DEFINES}
 ifneq (,$(findstring clang,$(CC)))
 CFLAGS=${CLANG_CFLAGS}

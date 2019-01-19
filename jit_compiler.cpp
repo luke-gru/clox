@@ -217,11 +217,14 @@ static llvm::Value *jitIfStmt(Node *n) {
     theFunction->getBasicBlockList().push_back(elseBB);
     theBuilder.SetInsertPoint(elseBB);
 
-    JIT_TRACE(1, "if elseVal");
-    llvm::Value *elseVal = jitChild(n, 2);
-    if (!elseVal) {
-        ASSERT(0);
-        return nullptr;
+    llvm::Value *elseVal = nullptr;
+    if (n->children->length > 2) {
+        JIT_TRACE(1, "if elseVal");
+        elseVal = jitChild(n, 2);
+        if (!elseVal) {
+            ASSERT(0);
+            return nullptr;
+        }
     }
 
     theBuilder.CreateBr(mergeBB);
@@ -230,11 +233,16 @@ static llvm::Value *jitIfStmt(Node *n) {
     theFunction->getBasicBlockList().push_back(mergeBB);
     theBuilder.SetInsertPoint(mergeBB);
 
-    llvm::PHINode *PN = theBuilder.CreatePHI(llvm::Type::getDoubleTy(theContext), 2, "iftmp");
-
-    PN->addIncoming(thenVal, thenBB);
-    PN->addIncoming(elseVal, elseBB);
-    return PN;
+    if (elseVal) {
+        llvm::PHINode *PN = theBuilder.CreatePHI(llvm::Type::getDoubleTy(theContext), 2, "iftmp");
+        PN->addIncoming(thenVal, thenBB);
+        PN->addIncoming(elseVal, elseBB);
+        return PN;
+    } else {
+        llvm::PHINode *PN = theBuilder.CreatePHI(llvm::Type::getDoubleTy(theContext), 2, "iftmp");
+        PN->addIncoming(thenVal, thenBB);
+        return PN;
+    }
 }
 
 // TODO: isolate per jitted function
