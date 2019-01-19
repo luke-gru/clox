@@ -25,6 +25,7 @@ int main(int argc, char *argv[]) {
     int i = 0;
     int incrOpt = 0;
     bool interactive = false;
+    bool interactiveJIT = false;
     while (argvp[i] != NULL) {
         if ((incrOpt = parseOption(argvp, i)) > 0) {
             i+=incrOpt;
@@ -33,6 +34,9 @@ int main(int argc, char *argv[]) {
         if (strncmp(argvp[i], "-i", 2) == 0) {
             interactive = true;
             i+=1;
+        } else if (strncmp(argvp[i], "-ji", 3) == 0) {
+            interactiveJIT = true;
+            i+=1;
         } else {
             fprintf(stderr, "Invalid option: %s\n", argvp[i]);
             usage(1);
@@ -40,13 +44,13 @@ int main(int argc, char *argv[]) {
     }
 
     fname = GET_OPTION(initialScript);
-    if (strlen(fname) == 0) {
+    if (strlen(fname) == 0 && !interactiveJIT) {
         interactive = true;
     }
 
     // Normalize filename to full path to file. Don't yet check if the file
     // exists, though.
-    if (!interactive && strlen(fname) > 0 && fname[0] != pathSeparator) {
+    if (!interactive && !interactiveJIT && strlen(fname) > 0 && fname[0] != pathSeparator) {
         char dirbuf[350] = { '\0' };
         memset(dirbuf, 0, 350);
         char *cwdres = getcwd(dirbuf, 250);
@@ -70,8 +74,11 @@ int main(int argc, char *argv[]) {
     initCoreSighandlers();
 
     CompileErr err = COMPILE_ERR_NONE;
-    if (fname == NULL || interactive) {
+    if (interactive) {
         repl();
+        exit(0);
+    } else if (interactiveJIT) {
+        jit_repl();
         exit(0);
     }
 

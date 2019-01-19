@@ -11,9 +11,9 @@
 #include "vm.h"
 
 #ifdef NDEBUG
-#define JIT_TRACE(...) (void)0
+#define JIT_TRACE(lvl, ...) (void)0
 #else
-#define JIT_TRACE(...) jitTraceDebug(__VA_ARGS__)
+#define JIT_TRACE(lvl, ...) jitTraceDebug(lvl, __VA_ARGS__)
 #endif
 
 static llvm::LLVMContext theContext;
@@ -21,8 +21,8 @@ static llvm::IRBuilder<> theBuilder(theContext);
 static std::unique_ptr<llvm::Module> theModule;
 static bool jitInited = false;
 
-static void jitTraceDebug(const char *fmt, ...) {
-    if (!CLOX_OPTION_T(traceCompiler)) return;
+static void jitTraceDebug(int lvl, const char *fmt, ...) {
+    //if (!CLOX_OPTION_T(traceCompiler)) return;
     va_list ap;
     va_start(ap, fmt);
     fprintf(stderr, "[JIT]: ");
@@ -83,7 +83,24 @@ static llvm::Value *jitBinop(Node *n) {
 
 static llvm::Value *jitBlock(Node *n) {
     ASSERT(n->children->length == 1);
-    return jitChild(n, 0);
+    return jitChild(n, 0); // 1 child
+}
+
+static llvm::Value *jitExprStmt(Node *n) {
+    ASSERT(n->children->length == 1);
+    return jitChild(n, 0); // 1 child
+}
+
+static llvm::Value *jitStmtlist(Node *n) {
+    llvm::Value *ret = nullptr;
+    Node *ncur = nullptr;
+    int nidx = 0;
+    ASSERT(n->children->length > 0);
+    vec_foreach(n->children, ncur, nidx) {
+        ret = jitChild(n, nidx);
+    }
+    ASSERT(ret);
+    return ret;
 }
 
 // TODO: isolate per jitted function
@@ -134,17 +151,29 @@ llvm::Value *jitChild(Node *n, unsigned idx) {
 }
 
 llvm::Value *jitNode(Node *n) {
+    ASSERT(n);
     switch (nodeKind(n)) {
     case LITERAL_EXPR:
+        JIT_TRACE(1, "emitting LITERAL");
         return jitLiteral(n);
     case FUNCTION_STMT:
+        JIT_TRACE(1, "emitting FUNC");
         return jitFunction(n);
     case BINARY_EXPR:
+        JIT_TRACE(1, "emitting BINOP");
         return jitBinop(n);
     case BLOCK_STMT:
+        JIT_TRACE(1, "emitting BLOCK");
         return jitBlock(n);
+    case STMTLIST_STMT:
+        JIT_TRACE(1, "emitting SMTLIST");
+        return jitStmtlist(n);
+    case EXPR_STMT:
+        JIT_TRACE(1, "emitting EXPR_STMT");
+        return jitExprStmt(n);
     default:
-            UNREACHABLE_RETURN(NULL);
+        fprintf(stderr, "Tried to jit node of kind %d: %s\n", nodeKind(n), nodeKindStr(nodeKind(n)));
+        UNREACHABLE_RETURN(NULL);
     }
 }
 

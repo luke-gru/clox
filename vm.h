@@ -266,6 +266,7 @@ Value peek(unsigned);
 void resetStack(void); // reset operand stack
 
 NORETURN void repl(void);
+NORETURN void jit_repl(void);
 
 // call frames
 void popFrame(void);
@@ -361,7 +362,7 @@ Value createIterator(Value iterable);
 void acquireGVL(void);
 void releaseGVL(ThreadStatus status);
 void thread_debug(int lvl, const char *format, ...);
-volatile long long GVLOwner;
+extern volatile long long GVLOwner;
 void threadSetCurrent(LxThread *th);
 void threadDetach(LxThread *th);
 void exitingThread(LxThread *th);
