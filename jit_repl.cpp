@@ -30,7 +30,7 @@ static bool scanToEnd(void) {
 }
 
 // Adds copied chars in `src` to `scanner.source`
-void scannerAddSrc(char *src) {
+static void scannerAddSrc(char *src) {
     ASSERT(src);
     ASSERT(scanner.source);
     size_t newsz = strlen(scanner.source)+1+strlen(src);

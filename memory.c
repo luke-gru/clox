@@ -9,6 +9,7 @@
 #include "compiler.h"
 #include "value.h"
 #include "options.h"
+#include "regex_lib.h"
 
 #ifdef NDEBUG
 #define GC_TRACE_MARK(lvl, obj) (void)0

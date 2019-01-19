@@ -2,6 +2,10 @@
 #define clox_regex_h
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum RNodeType {
     NODE_ATOM = 1, // a,b,c,etc.
     NODE_GROUP, // ()
@@ -84,5 +88,9 @@ RegexCompileResult regex_compile(Regex *regex);
 MatchData regex_match(Regex *regex, const char *string);
 void regex_output_ast(Regex *regex);
 const char *nodeTypeName(RNodeType nodeType);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -37,7 +37,7 @@ extern "C" {
 
 
 #define vec_push(v, val)\
-  ( vec_expand_(vec_unpack_(v)) ? (void)0 :\
+  ( vec_expand_(vec_unpack_(v)) ? (val) :\
     ((v)->data[(v)->length++] = (val)) )
 
 

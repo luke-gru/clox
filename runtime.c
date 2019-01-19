@@ -301,13 +301,10 @@ Value lxYield(int argCount, Value *args) {
     for (int i = 0; i < argCount; i++) {
         push(args[i]);
     }
-    CallInfo cinfo = {
-        .argc = argCount,
-        .blockFunction = NULL,
-        .isYield = true, // tell callCallable to adjust frame stack in popFrame()
-        .blockIterFunc = NULL,
-        .blockInstance = NULL
-    };
+    CallInfo cinfo;
+    memset(&cinfo, 0, sizeof(cinfo));
+    cinfo.argc = argCount;
+    cinfo.isYield = true; // tell callCallable to adjust frame stack in popFrame()
     volatile int status = 0;
     volatile LxThread *th = THREAD();
     volatile BlockStackEntry *bentry = NULL;
@@ -400,13 +397,10 @@ Value yieldBlockCatch(int argCount, Value *args, Value *err) {
             }
         }
     }
-    CallInfo cinfo = {
-        .isYield = true,
-        .argc = argCount,
-        .blockFunction = NULL,
-        .blockIterFunc = NULL,
-        .blockInstance = NULL
-    };
+    CallInfo cinfo;
+    memset(&cinfo, 0, sizeof(cinfo));
+    cinfo.isYield = true;
+    cinfo.argc = argCount;
     for (int i = 0; i < argCount; i++) {
         push(args[i]);
     }
@@ -435,13 +429,11 @@ Value yieldFromC(int argCount, Value *args, ObjInstance *blockObj) {
         push(cinfoIn->blockArgsExtra[i]);
         argCount++;
     }
-    CallInfo cinfo = {
-        .argc = argCount,
-        .blockFunction = NULL,
-        .isYield = true, // tell callCallable to adjust frame stack in popFrame()
-        .blockIterFunc = NULL,
-        .blockInstance = blockObj,
-    };
+    CallInfo cinfo;
+    memset(&cinfo, 0, sizeof(cinfo));
+    cinfo.argc = argCount;
+    cinfo.isYield = true; // tell callCallable to adjust frame stack in popFrame()
+    cinfo.blockInstance = blockObj;
     callCallable(callable, argCount, false, &cinfo);
     return pop(); // if got here, was a native function
 }

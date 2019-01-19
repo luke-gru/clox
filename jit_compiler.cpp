@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include "lox_jit.hpp"
 #include "jit_compiler.hpp"
 #include "nodes.h"
 #include "scanner.h"
@@ -18,7 +19,9 @@
 
 static llvm::LLVMContext theContext;
 static llvm::IRBuilder<> theBuilder(theContext);
+static std::unique_ptr<llvm::legacy::FunctionPassManager> theFPM;
 static std::unique_ptr<llvm::Module> theModule;
+static std::unique_ptr<llvm::orc::LoxJit> TheJIT;
 static bool jitInited = false;
 
 static void jitTraceDebug(int lvl, const char *fmt, ...) {
@@ -32,7 +35,20 @@ static void jitTraceDebug(int lvl, const char *fmt, ...) {
 }
 
 void initJit() {
+    theModule->setDataLayout(TheJIT->getTargetMachine().createDataLayout());
+
     theModule = llvm::make_unique<llvm::Module>("clox_jit", theContext);
+    // Create a new pass manager attached to it.
+    theFPM = llvm::make_unique<llvm::legacy::FunctionPassManager>(theModule.get());
+    // Do simple "peephole" optimizations and bit-twiddling optzns.
+    theFPM->add(llvm::createInstructionCombiningPass());
+    // Reassociate expressions.
+    theFPM->add(llvm::createReassociatePass());
+    // Eliminate Common SubExpressions.
+    theFPM->add(llvm::createGVNPass());
+    // Simplify the control flow graph (deleting unreachable blocks, etc).
+    theFPM->add(llvm::createCFGSimplificationPass());
+    theFPM->doInitialization();
     jitInited = true;
 }
 
@@ -137,6 +153,7 @@ llvm::Value *jitFunction(Node *n) {
         theBuilder.CreateRet(retVal);
         // Validate the generated code, checking for consistency.
         llvm::verifyFunction(*llvmFunc);
+        theFPM->run(*llvmFunc);
 
     } else {
         ASSERT(0);

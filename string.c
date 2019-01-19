@@ -6,7 +6,7 @@
 
 ObjClass *lxStringClass;
 
-extern ObjNative *nativeStringInit;
+ObjNative *nativeStringInit = NULL;
 
 // ex: var s = "string";
 // ex: var s2 = String("string");

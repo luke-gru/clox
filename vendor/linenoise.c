@@ -459,11 +459,11 @@ static void abInit(struct abuf *ab) {
 }
 
 static void abAppend(struct abuf *ab, const char *s, int len) {
-    char *new = realloc(ab->b,ab->len+len);
+    char *_new = realloc(ab->b,ab->len+len);
 
-    if (new == NULL) return;
-    memcpy(new+ab->len,s,len);
-    ab->b = new;
+    if (_new == NULL) return;
+    memcpy(_new+ab->len,s,len);
+    ab->b = _new;
     ab->len += len;
 }
 
@@ -1133,14 +1133,14 @@ int linenoiseHistoryAdd(const char *line) {
  * just the latest 'len' elements if the new history length value is smaller
  * than the amount of items already inside the history. */
 int linenoiseHistorySetMaxLen(int len) {
-    char **new;
+    char **_new;
 
     if (len < 1) return 0;
     if (history) {
         int tocopy = history_len;
 
-        new = malloc(sizeof(char*)*len);
-        if (new == NULL) return 0;
+        _new = malloc(sizeof(char*)*len);
+        if (_new == NULL) return 0;
 
         /* If we can't copy everything, free the elements we'll not use. */
         if (len < tocopy) {
@@ -1149,10 +1149,10 @@ int linenoiseHistorySetMaxLen(int len) {
             for (j = 0; j < tocopy-len; j++) free(history[j]);
             tocopy = len;
         }
-        memset(new,0,sizeof(char*)*len);
-        memcpy(new,history+(history_len-tocopy), sizeof(char*)*tocopy);
+        memset(_new,0,sizeof(char*)*len);
+        memcpy(_new,history+(history_len-tocopy), sizeof(char*)*tocopy);
         free(history);
-        history = new;
+        history = _new;
     }
     history_max_len = len;
     if (history_len > history_max_len)

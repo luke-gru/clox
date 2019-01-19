@@ -6,7 +6,7 @@
 #include "compiler.h"
 
 ObjClass *lxAryClass;
-extern ObjNative *nativeArrayInit;
+ObjNative *nativeArrayInit = NULL;
 
 // ex: var a = Array();
 //     var b = ["hi", 2, Map()];
