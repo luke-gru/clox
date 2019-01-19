@@ -1,9 +1,9 @@
-var pid = fork();
+var pid = Process.fork();
 if (pid) {
   print "in parent";
   print "waiting for child...";
-  var wstatus = waitpid(pid);
-  print "child ended with ${WEXITSTATUS(wstatus)}";
+  var wstatus = Process.waitpid(pid);
+  print "child ended with ${Process.WEXITSTATUS(wstatus)}";
 } else {
   print "in child, sleeping for 3 seconds";
   sleep(3);
@@ -12,15 +12,15 @@ if (pid) {
 
 print "round 2";
 
-pid = fork(fun() {
+pid = Process.fork(fun() {
   print "in child, sleeping for 3 seconds";
   sleep(3);
 });
 if (pid) {
   print "in parent";
   print "waiting for child...";
-  var wstatus = waitpid(pid);
-  print "child ended with ${WEXITSTATUS(wstatus)}";
+  var wstatus = Process.waitpid(pid);
+  print "child ended with ${Process.WEXITSTATUS(wstatus)}";
 } else {
   print "BUG";
 }

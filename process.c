@@ -24,11 +24,11 @@ static Value getPpid(void) {
     return NUMBER_VAL(pid);
 }
 
-static Value lxFork(int argCount, Value *args) {
-    CHECK_ARITY("fork", 0, 1, argCount);
+static Value lxForkStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.fork", 1, 2, argCount);
     Value func = NIL_VAL;
-    if (argCount == 1) {
-        func = *args;
+    if (argCount == 2) {
+        func = args[1];
         if (!isCallable(func)) {
             throwArgErrorFmt("Expected argument 1 to be callable, is: %s", typeOfVal(func));
         }
@@ -40,7 +40,7 @@ static Value lxFork(int argCount, Value *args) {
     if (pid) { // in parent
         return NUMBER_VAL(pid);
     } else { // in child
-        if (argCount == 1) {
+        if (argCount == 2) {
             callCallable(func, 0, false, NULL);
             stopVM(0);
         }
@@ -48,16 +48,16 @@ static Value lxFork(int argCount, Value *args) {
     }
 }
 
-static Value lxWaitpid(int argCount, Value *args) {
-    CHECK_ARITY("waitpid", 1, 2, argCount);
-    Value pidVal = *args;
-    CHECK_ARG_BUILTIN_TYPE(args[0], IS_NUMBER_FUNC, "number", 1);
+static Value lxWaitpidStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.waitpid", 2, 3, argCount);
+    Value pidVal = args[1];
+    CHECK_ARG_BUILTIN_TYPE(pidVal, IS_NUMBER_FUNC, "number", 1);
     pid_t childpid = (pid_t)AS_NUMBER(pidVal);
     int wstatus;
     int flags = 0;
-    if (argCount == 2) {
-        CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 2);
-        flags = AS_NUMBER(args[1]);
+    if (argCount == 3) {
+        CHECK_ARG_BUILTIN_TYPE(args[2], IS_NUMBER_FUNC, "number", 2);
+        flags = AS_NUMBER(args[2]);
     }
     releaseGVL(THREAD_STOPPED);
     pid_t wret = waitpid(childpid, &wstatus, flags);
@@ -68,8 +68,8 @@ static Value lxWaitpid(int argCount, Value *args) {
     return NUMBER_VAL(wstatus);
 }
 
-static Value lxWaitall(int argCount, Value *args) {
-    CHECK_ARITY("waitall", 0, 0, argCount);
+static Value lxWaitallStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.waitall", 1, 1, argCount);
     pid_t pid = -1;
     Value ret = newArray();
     while (pid == -1) {
@@ -93,46 +93,50 @@ static Value lxWaitall(int argCount, Value *args) {
     return ret;
 }
 
-static Value lxProcessWIFEXITED(int argCount, Value *args) {
-    CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
-    int status = (int)AS_NUMBER(*args);
+static Value lxProcessWIFEXITEDStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.WIFEXITED", 2, 2, argCount);
+    CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
+    int status = (int)AS_NUMBER(args[1]);
     bool exited = WIFEXITED(status);
     return BOOL_VAL(exited);
 }
 
-static Value lxProcessWEXITSTATUS(int argCount, Value *args) {
-    CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
-    int status = (int)AS_NUMBER(*args);
+static Value lxProcessWEXITSTATUSStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.WEXITSTATUS", 2, 2, argCount);
+    CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
+    int status = (int)AS_NUMBER(args[1]);
     int exitStatus = WEXITSTATUS(status);
     return NUMBER_VAL(exitStatus);
 }
 
-static Value lxProcessWIFSIGNALED(int argCount, Value *args) {
-    CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
-    int status = (int)AS_NUMBER(*args);
+static Value lxProcessWIFSIGNALEDStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.WIFSIGNALED", 2, 2, argCount);
+    CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
+    int status = (int)AS_NUMBER(args[1]);
     bool signaled = WIFSIGNALED(status);
     return BOOL_VAL(signaled);
 }
 
-static Value lxProcessWTERMSIG(int argCount, Value *args) {
-    CHECK_ARG_BUILTIN_TYPE(*args, IS_NUMBER_FUNC, "number", 1);
-    int status = (int)AS_NUMBER(*args);
+static Value lxProcessWTERMSIGStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.WTERMSIG", 2, 2, argCount);
+    CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
+    int status = (int)AS_NUMBER(args[1]);
     int signo = WTERMSIG(status);
     return NUMBER_VAL(signo);
 }
 
-static Value lxExec(int argCount, Value *args) {
-    CHECK_ARITY("exec", 1, -1, argCount);
+static Value lxExecStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.exec", 2, -1, argCount);
 
     char const *argv[argCount+2]; // XXX: only c99
-    memset(argv, 0, sizeof(char*)*(argCount+2));
-    for (int i = 0; i < argCount; i++) {
+    memset(argv, 0, sizeof(char*)*(argCount+1));
+    for (int i = 1; i < argCount; i++) {
         CHECK_ARG_IS_A(args[i], lxStringClass, i+1);
         ASSERT(argv[i] == NULL);
         argv[i] = VAL_TO_STRING(args[i])->chars;
     }
-    ASSERT(argv[argCount+1] == NULL);
-    execvp(argv[0], (char *const *)argv);
+    ASSERT(argv[argCount+2] == NULL);
+    execvp(argv[1], (char *const *)argv);
     fprintf(stderr, "Error during exec: %s\n", strerror(errno));
     // got here, error execing. TODO: throw error?
     return NUMBER_VAL(-1);
@@ -142,9 +146,9 @@ static Value lxExec(int argCount, Value *args) {
  * Runs the given command in a subprocess, waits for it to finish,
  * and returns true if exited successfully from command, otherwise false.
  */
-static Value lxSystem(int argCount, Value *args) {
-    CHECK_ARITY("system", 1, 1, argCount);
-    Value cmd = *args;
+static Value lxSystemStatic(int argCount, Value *args) {
+    CHECK_ARITY("Process.system", 2, 2, argCount);
+    Value cmd = args[1];
     CHECK_ARG_IS_A(cmd, lxStringClass, 1);
 
     const char *cmdStr = VAL_TO_STRING(cmd)->chars;
@@ -243,16 +247,16 @@ void Init_ProcessModule(void) {
     addNativeMethod(processModStatic, "signal", lxProcessSignalStatic);
     addNativeMethod(processModStatic, "detach", lxProcessDetachStatic);
 
-    addGlobalFunction("fork", lxFork);
-    addGlobalFunction("waitpid", lxWaitpid);
-    addGlobalFunction("waitall", lxWaitall);
-    addGlobalFunction("system", lxSystem);
-    addGlobalFunction("exec", lxExec);
+    addNativeMethod(processModStatic, "fork", lxForkStatic);
+    addNativeMethod(processModStatic, "waitpid", lxWaitpidStatic);
+    addNativeMethod(processModStatic, "waitall", lxWaitallStatic);
+    addNativeMethod(processModStatic, "system", lxSystemStatic);
+    addNativeMethod(processModStatic, "exec", lxExecStatic);
 
-    addGlobalFunction("WIFEXITED", lxProcessWIFEXITED);
-    addGlobalFunction("WEXITSTATUS", lxProcessWEXITSTATUS);
-    addGlobalFunction("WIFSIGNALED", lxProcessWIFSIGNALED);
-    addGlobalFunction("WTERMSIG", lxProcessWTERMSIG);
+    addNativeMethod(processModStatic, "WIFEXITED", lxProcessWIFEXITEDStatic);
+    addNativeMethod(processModStatic, "WEXITSTATUS", lxProcessWEXITSTATUSStatic);
+    addNativeMethod(processModStatic, "WIFSIGNALED", lxProcessWIFSIGNALEDStatic);
+    addNativeMethod(processModStatic, "WTERMSIG", lxProcessWTERMSIGStatic);
 
     lxProcessMod = processMod;
 

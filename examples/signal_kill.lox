@@ -1,13 +1,13 @@
-var pid = fork(fun() {
+var pid = Process.fork(fun() {
   print "in fork";
   sleep(5);
 });
 
 sleep(1);
 Process.signal(pid, Signal::KILL);
-var status = waitpid(pid);
-print WIFSIGNALED(status);
-print WTERMSIG(status) == Signal::KILL;
+var status = Process.waitpid(pid);
+print Process.WIFSIGNALED(status);
+print Process.WTERMSIG(status) == Signal::KILL;
 
 __END__
 -- expect: --

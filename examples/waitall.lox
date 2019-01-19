@@ -1,8 +1,8 @@
-waitall();
-var pid = fork(fun() {
+Process.waitall();
+var pid = Process.fork(fun() {
   sleep(1);
 });
-res = waitall();
+res = Process.waitall();
 print res.size;
 print res[0].size;
 

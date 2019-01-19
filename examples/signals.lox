@@ -8,7 +8,7 @@ Signal.trap(Signal::QUIT, fun() {
 GC.collect();
 GC.collect();
 
-var childPid = fork(fun() {
+var childPid = Process.fork(fun() {
   sleep(2);
   print "Signalling from child";
   Process.signal(Process.ppid(), Signal::QUIT);

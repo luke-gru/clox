@@ -1,7 +1,7 @@
-print system("WOAH");
-print system("ls");
-print system("WOAH");
-print system("ls > /dev/null");
+print Process.system("WOAH");
+print Process.system("ls");
+print Process.system("WOAH");
+print Process.system("ls > /dev/null");
 
 __END__
 -- noexpect: --

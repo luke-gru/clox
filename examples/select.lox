@@ -2,7 +2,7 @@ var ios = IO.pipe();
 var rd = ios[0];
 var wr = ios[1];
 
-fork(fun() {
+Process.fork(fun() {
   sleep(1);
   rd.close();
   wr.write("HI");
