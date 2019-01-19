@@ -114,6 +114,7 @@ static Value lxStringClear(int argCount, Value *args) {
     return self;
 }
 
+// NOTE: works on bytes, not codepoints for multibyte chars
 static Value lxStringInsertAt(int argCount, Value *args) {
     CHECK_ARITY("String#insertAt", 3, 3, argCount);
     Value self = args[0];
@@ -126,6 +127,7 @@ static Value lxStringInsertAt(int argCount, Value *args) {
     return self;
 }
 
+// NOTE: works on bytes, not codepoints for multibyte chars
 static Value lxStringSubstr(int argCount, Value *args) {
     CHECK_ARITY("String#substr", 3, 3, argCount);
     Value self = args[0];
@@ -136,6 +138,7 @@ static Value lxStringSubstr(int argCount, Value *args) {
     return stringSubstr(self, AS_NUMBER(startIdx), AS_NUMBER(len));
 }
 
+// NOTE: works on bytes, not codepoints for multibyte chars
 static Value lxStringOpIndexGet(int argCount, Value *args) {
     CHECK_ARITY("String#[]", 2, 2, argCount);
     Value self = args[0];
@@ -144,6 +147,7 @@ static Value lxStringOpIndexGet(int argCount, Value *args) {
     return stringIndexGet(self, AS_NUMBER(index));
 }
 
+// NOTE: works on bytes, not codepoints for multibyte chars
 static Value lxStringOpIndexSet(int argCount, Value *args) {
     CHECK_ARITY("String#[]=", 3, 3, argCount);
     Value self = args[0];

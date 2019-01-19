@@ -49,7 +49,7 @@ OS/compiler support
 -------------------
 * Only tested on linux (Ubuntu 16.04) and mac OS, uses fork() and libpthread, as well as C99 features.
 * Tested with gcc and clang
-* C++ compliant
+* C++ compliant (g++ compiles, clang++ doesn't)
 
 Examples
 --------
