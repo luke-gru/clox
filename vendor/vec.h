@@ -19,6 +19,8 @@ extern "C" {
 
 #define VEC_SZ (sizeof(void*)+(sizeof(int)*2))
 
+#define vec_needs_expand(v, num) ((v)->length+num > (v)->capacity)
+
 #define vec_unpack_(v)\
   (char**)&(v)->data, &(v)->length, &(v)->capacity, sizeof(*(v)->data)
 
@@ -37,7 +39,7 @@ extern "C" {
 
 
 #define vec_push(v, val)\
-  ( vec_expand_(vec_unpack_(v)) ? (val) :\
+  ( vec_needs_expand(v, 1) ? (vec_expand_(vec_unpack_(v)) == 0 ? ((v)->data[(v)->length++] = (val)) : (val)) :\
     ((v)->data[(v)->length++] = (val)) )
 
 
