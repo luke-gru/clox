@@ -949,8 +949,8 @@ Value getProp(Value self, ObjString *propName) {
 void setProp(Value self, ObjString *propName, Value val) {
     DBG_ASSERT(IS_INSTANCE_LIKE(self));
     ObjInstance *inst = AS_INSTANCE(self);
-    tableSet(inst->fields, OBJ_VAL(propName), val);
     OBJ_WRITE(self, val);
+    tableSet(inst->fields, OBJ_VAL(propName), val);
 }
 
 bool instanceIsA(ObjInstance *inst, ObjClass *klass) {

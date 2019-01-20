@@ -625,7 +625,7 @@ void push(Value value) {
         pthread_exit(&status);
     }
     if (IS_OBJ(value)) {
-        DBG_ASSERT(LIKELY(AS_OBJ(value)->type != OBJ_T_NONE));
+        DBG_ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
         OBJ_SET_PUSHED_VM_STACK(AS_OBJ(value)); // for gen gc
     }
     *ctx->stackTop = value;
@@ -634,6 +634,10 @@ void push(Value value) {
 
 // NOTE: doesn't perform checks to see if there's at least 1 item on the op stack
 static inline void pushSwap(Value value) {
+    if (IS_OBJ(value)) {
+        DBG_ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
+        OBJ_SET_PUSHED_VM_STACK(AS_OBJ(value)); // for gen gc
+    }
     *(EC->stackTop-1) = value;
 }
 
@@ -1137,7 +1141,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, Cal
         callVMMethod((ObjInstance*)mod, OBJ_VAL(callable), argCount, args, cinfo);
         return pop();
     } else {
-        throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfObj(obj));
+        throwErrorFmt(lxTypeErrClass, "Tried to invoke method '%s' on non-instance (type=%s)", methodName->chars, typeOfObj(obj));
     }
 }
 
@@ -1338,7 +1342,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     if (isMethod) {
         instance = AS_INSTANCE(EC->stackTop[-argCount-1]);
         if (UNLIKELY(!isInstanceLikeObj(TO_OBJ(instance)))) {
-            throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfObj(TO_OBJ(instance)));
+            throwErrorFmt(lxTypeErrClass, "Tried to invoke method '%s' on non-instance (type=%s)", getCallableFunctionName(callable)->chars, typeOfObj(TO_OBJ(instance)));
         }
         frameClass = instance->klass; // TODO: make class the callable's class, not the instance class
     } else {
@@ -1974,8 +1978,11 @@ void printVMStack(FILE *f, LxThread *th) {
 
 ObjUpvalue *captureUpvalue(Value *local) {
     LxThread *th = vm.curThread;
+    ObjInstance *threadInst = FIND_THREAD_INSTANCE(th->tid);
+    ASSERT(threadInst);
     if (th->openUpvalues == NULL) {
         th->openUpvalues = newUpvalue(local, NEWOBJ_FLAG_NONE);
+        OBJ_WRITE(OBJ_VAL(threadInst), OBJ_VAL(th->openUpvalues));
         return th->openUpvalues;
     }
 
@@ -2002,6 +2009,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
     // it already. Make a new one and link it in in the right place to keep the
     // list sorted.
     ObjUpvalue* createdUpvalue = newUpvalue(local, NEWOBJ_FLAG_NONE);
+    OBJ_WRITE(OBJ_VAL(threadInst), OBJ_VAL(createdUpvalue));
     createdUpvalue->next = upvalue;
 
     if (prevUpvalue == NULL) {
@@ -2568,7 +2576,6 @@ vmLoop:
           Value funcVal = READ_CONSTANT();
           ASSERT(IS_FUNCTION(funcVal));
           ObjFunction *func = AS_FUNCTION(funcVal);
-          bool prevGc = turnGCOff();
           ObjClosure *closure = newClosure(func, NEWOBJ_FLAG_NONE);
           push(OBJ_VAL(closure));
 
@@ -2583,7 +2590,6 @@ vmLoop:
                   closure->upvalues[i] = getFrame()->closure->upvalues[index];
               }
           }
-          setGCOnOff(prevGc);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_FALSE): {
@@ -2662,9 +2668,10 @@ vmLoop:
       }
       CASE_OP(BLOCK_RETURN): {
           ObjString *key = INTERN("ret");
-          Value ret = pop();
+          Value ret = peek(0);
           Value err = newError(lxReturnBlockErrClass, NIL_VAL);
           setProp(err, key, ret);
+          pop();
           throwError(err); // blocks catch this, not propagated
           DISPATCH_BOTTOM();
       }
@@ -2759,7 +2766,7 @@ vmLoop:
               EC->stackTop[-numArgs-1] = instanceVal;
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
           } else {
-              throwErrorFmt(lxTypeErrClass, "Tried to invoke method on non-instance (type=%s)", typeOfVal(instanceVal));
+              throwErrorFmt(lxTypeErrClass, "Tried to invoke method '%s' on non-instance (type=%s)", mname->chars, typeOfVal(instanceVal));
           }
           ASSERT_VALID_STACK();
           DISPATCH_BOTTOM();
