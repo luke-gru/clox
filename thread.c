@@ -211,7 +211,7 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
     th->lastSplatNumArgs = -1;
 
     th->status = THREAD_READY;
-    th->tid = -1; // unknown, not yet created
+    th->tid = 0; // unknown, not yet created
     vec_push(&vm.threads, thInstance);
     unhideFromGC((Obj*)thInstance);
     THREAD_DEBUG(3, "New thread setup done");
@@ -229,7 +229,7 @@ static void *runCallableInNewThread(void *arg) {
     NewThreadArgs *tArgs = (NewThreadArgs*)arg;
     pthread_t tid = pthread_self();
     LxThread *th = tArgs->th;
-    if (th->tid != -1) {
+    if (th->tid != 0) {
         ASSERT(th->tid == tid);
     }
     ASSERT(th->status == THREAD_READY);
@@ -285,7 +285,7 @@ Value lxNewThread(int argCount, Value *args) {
     releaseGVL(THREAD_STOPPED);
     if (pthread_create(&tnew, NULL, runCallableInNewThread, thArgs) == 0) {
         acquireGVL();
-        if (th->tid == -1) {
+        if (th->tid == 0) {
             th->tid = tnew;
         }
         return OBJ_VAL(threadInst);
@@ -304,11 +304,11 @@ Value lxJoinThread(int argCount, Value *args) {
     CHECK_ARG_IS_A(threadVal, lxThreadClass, 1);
     LxThread *th = THREAD_GETHIDDEN(threadVal);
     ASSERT(th);
-    ASSERT(th->tid != -1);
+    ASSERT(th->tid != 0);
     THREAD_DEBUG(2, "Joining thread id %lu\n", th->tid);
     int ret = 0;
 
-    pid_t tid = th->tid;
+    pthread_t tid = th->tid;
     releaseGVL(THREAD_STOPPED);
     // blocking call until given thread ends execution
     if ((ret = pthread_join(th->tid, NULL)) != 0) {

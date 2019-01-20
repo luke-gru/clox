@@ -221,7 +221,7 @@ ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid);
 #define GVL_UNLOCK_BEGIN() do { \
   LxThread *thStored = THREAD(); \
   pthread_mutex_unlock(&vm.GVLock); \
-  vm.curThread = NULL; GVLOwner = -1; \
+  vm.curThread = NULL; GVLOwner = 0; \
   vm.GVLockStatus = 0
 
 #define GVL_UNLOCK_END() \
@@ -365,7 +365,7 @@ Value createIterator(Value iterable);
 void acquireGVL(void);
 void releaseGVL(ThreadStatus status);
 void thread_debug(int lvl, const char *format, ...);
-extern volatile long long GVLOwner;
+extern volatile pthread_t GVLOwner;
 void threadSetCurrent(LxThread *th);
 void threadDetach(LxThread *th);
 void exitingThread(LxThread *th);

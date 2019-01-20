@@ -3,11 +3,11 @@ CC=gcc
 endif
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 DEFINES=-D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLX_BUILT_DIR=$(ROOT_DIR)
-GCC_CFLAGS=-std=c99 -Wall -Wno-unused-label -I. -Ivendor -pthread ${DEFINES}
+GCC_CFLAGS=-std=c99 -Wall -Wno-unused-label -Wno-unused-function -I. -Ivendor -pthread ${DEFINES}
 GPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
 # NOTE: clang++ doesn't compile yet, too many C++ type errors
 CLANGPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
-CLANG_CFLAGS=-std=c99 -Wall -I. -Ivendor -Wno-unused-label -pthread ${DEFINES}
+CLANG_CFLAGS=-std=c99 -Wall -I. -Ivendor -Wno-unused-label -Wno-unused-function -pthread ${DEFINES}
 ifneq (,$(findstring clang,$(CC)))
 	ifneq (,$(findstring clang++,$(CC)))
 		CFLAGS=${CLANGPP_CFLAGS}

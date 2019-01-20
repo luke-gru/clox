@@ -447,7 +447,7 @@ static int closureInstruction(ObjString *buf, const char *op, Chunk *chunk, int 
 static int printJumpInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t jumpOffset = chunk->code[i + 1];
     /*ASSERT(jumpOffset != 0); // should have been patched*/
-    fprintf(f, "%-16s\t%04" PRId8 "\t(addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
+    fprintf(f, "%-16s\t%04d\t(addr=%04d)\n", op, jumpOffset, (i+1+jumpOffset));
     return i+2;
 }
 
@@ -456,7 +456,7 @@ static int jumpInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) 
     ASSERT_MEM(cbuf);
     uint8_t jumpOffset = chunk->code[i + 1];
     /*ASSERT(jumpOffset != 0); // should have been patched*/
-    sprintf(cbuf, "%s\t%04" PRId8 "\t(addr=%04" PRId8 ")\n", op, jumpOffset, (i+1+jumpOffset));
+    sprintf(cbuf, "%s\t%04d\t(addr=%04d)\n", op, jumpOffset, (i+1+jumpOffset));
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
     return i+2;
@@ -464,7 +464,7 @@ static int jumpInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) 
 
 static int printLoopInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     uint8_t loopOffset = chunk->code[i + 1];
-    fprintf(f, "%-16s %4" PRId8 " (addr=%04" PRId8 ")\n", op, loopOffset, (i-loopOffset));
+    fprintf(f, "%-16s %4d (addr=%04d)\n", op, loopOffset, (i-loopOffset));
     return i+2;
 }
 
@@ -472,7 +472,7 @@ static int loopInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) 
     char *cbuf = (char*)calloc(strlen(op)+1+18, 1);
     ASSERT_MEM(cbuf);
     uint8_t loopOffset = chunk->code[i + 1];
-    sprintf(cbuf, "%s\t%4" PRId8 "\t(addr=%04" PRId8 ")\n", op, loopOffset, (i-loopOffset));
+    sprintf(cbuf, "%s\t%4d\t(addr=%04d)\n", op, loopOffset, (i-loopOffset));
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
     return i+2;
@@ -539,7 +539,7 @@ static int printInvokeInstruction(FILE *f, const char *op, Chunk *chunk, int i, 
     Value methodName = getConstant(chunk, methodNameArg);
     char *methodNameStr = AS_CSTRING(methodName);
     uint8_t numArgs = chunk->code[i+2];
-    fprintf(f, "%-16s    ('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
+    fprintf(f, "%-16s    ('%s', argc=%04d)\n", op, methodNameStr, numArgs);
     return i+4;
 }
 
@@ -561,7 +561,7 @@ static int invokeInstruction(ObjString *buf, const char *op, Chunk *chunk, int i
     uint8_t numArgs = chunk->code[i+2];
     char *cbuf = calloc(strlen(op)+1+strlen(methodNameStr)+17, 1);
     ASSERT_MEM(cbuf);
-    sprintf(cbuf, "%s\t('%s', argc=%04" PRId8 ")\n", op, methodNameStr, numArgs);
+    sprintf(cbuf, "%s\t('%s', argc=%04d)\n", op, methodNameStr, numArgs);
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
     return i+4;
@@ -587,7 +587,7 @@ static int localVarInstruction(ObjString *buf, const char *op, Chunk *chunk, int
     Value varName = getConstant(chunk, varNameIdx);
     char *cbuf = calloc(strlen(op)+1+12, 1);
     ASSERT_MEM(cbuf);
-    sprintf(cbuf, "%s\t'%s' [slot %03" PRId8 "]\n", op, VAL_TO_STRING(varName)->chars, slotIdx);
+    sprintf(cbuf, "%s\t'%s' [slot %03d]\n", op, VAL_TO_STRING(varName)->chars, slotIdx);
     pushCString(buf, cbuf, strlen(cbuf));
     xfree(cbuf);
     return i+3;

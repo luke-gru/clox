@@ -13,7 +13,7 @@
 
 VM vm;
 
-volatile long long GVLOwner;
+volatile pthread_t GVLOwner;
 
 #ifndef NDEBUG
 #define VM_DEBUG(lvl, ...) vm_debug(lvl, __VA_ARGS__)
@@ -1924,7 +1924,7 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
 }
 
 void printVMStack(FILE *f, LxThread *th) {
-    unsigned long tid = 0;
+    pthread_t tid = 0;
     if (th != vm.mainThread) {
         tid = th->tid;
     }
@@ -2510,7 +2510,7 @@ vmLoop:
               // not found, try to autoload it
               Value autoloadPath;
               if (tableGet(&vm.autoloadTbl, varName, &autoloadPath)) {
-                  Value requireScriptFn;
+                  Value requireScriptFn = NIL_VAL;
                   tableGet(&vm.globals, OBJ_VAL(INTERN("requireScript")), &requireScriptFn);
                   callFunctionValue(requireScriptFn, 1, &autoloadPath);
                   if (findConstantUnder(cref, AS_STRING(varName), &val)) {
@@ -3592,7 +3592,7 @@ void releaseGVL(ThreadStatus thStatus) {
         return;
     }
     vm.GVLockStatus = 0;
-    GVLOwner = -1;
+    GVLOwner = 0;
     vm.curThread = NULL;
     pthread_mutex_unlock(&vm.GVLock);
     pthread_cond_signal(&vm.GVLCond); // signal waiters

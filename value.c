@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <inttypes.h>
 
 #include "memory.h"
 #include "value.h"
@@ -200,7 +201,7 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
         }
     }
 #ifdef NAN_TAGGING
-    fprintf(file, "Unknown value: %lu. Cannot print!\n", value);
+    fprintf(file, "Unknown value: %" PRIu64 ". Cannot print!\n", value);
 #else
     fprintf(file, "Unknown value type: %d. Cannot print!\n", value.type);
 #endif
