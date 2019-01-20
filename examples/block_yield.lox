@@ -15,8 +15,21 @@ try {
 }
 print err != nil;
 
+yielder(3) -> (num) {
+  print num;
+  yielder(4) -> (n) {
+    print n;
+  };
+};
+
 __END__
 -- expect: --
 5
 6
 true
+5
+6
+7
+6
+6
+7
