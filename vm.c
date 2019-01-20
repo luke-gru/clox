@@ -79,6 +79,7 @@ char *unredefinableGlobals[] = {
     "requireScript",
     "eval",
     "yield",
+    "blockGiven",
     "sleep",
     "__FILE__",
     "__DIR__",
@@ -2362,7 +2363,7 @@ vmLoop:
           char *name = AS_CSTRING(varName);
           if (UNLIKELY(isUnredefinableGlobal(name))) {
               pop();
-              throwErrorFmt(lxNameErrClass, "Can't redeclare global variable '%s'", name);
+              throwErrorFmt(lxNameErrClass, "Can't redefine global variable '%s'", name);
           }
           Value val = peek(0);
           tableSet(&vm.globals, varName, val);
