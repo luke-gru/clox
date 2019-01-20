@@ -96,6 +96,7 @@ void outputParserErrors(Parser *p, FILE *f) {
     }
 }
 
+// NOTE: only ascii capital
 static inline bool isCapital(char c) {
     return c >= 'A' && c <= 'Z';
 }

@@ -22,7 +22,7 @@ static llvm::IRBuilder<> theBuilder(theContext);
 static std::unique_ptr<llvm::legacy::FunctionPassManager> theFPM;
 static std::unique_ptr<llvm::Module> theModule;
 static std::unique_ptr<llvm::orc::LoxJit> TheJIT;
-static std::unique_ptr<llvm::Value> curFunction;
+static std::unique_ptr<llvm::Function> curFunction;
 static bool jitInited = false;
 
 static void jitTraceDebug(int lvl, const char *fmt, ...) {
@@ -33,6 +33,16 @@ static void jitTraceDebug(int lvl, const char *fmt, ...) {
     vfprintf(stderr, fmt, ap);
     va_end(ap);
     fprintf(stderr, "\n");
+}
+
+/// LogError* - These are little helper functions for error handling.
+static void LogError(const char *str) {
+  fprintf(stderr, "Error: %s\n", str);
+}
+
+llvm::Value *LogErrorV(const char *str) {
+  LogError(str);
+  return nullptr;
 }
 
 void initJit() {
@@ -54,6 +64,8 @@ void initJitModuleAndPassManager() {
 
     // Create a new pass manager attached to it.
     theFPM = llvm::make_unique<llvm::legacy::FunctionPassManager>(theModule.get());
+    // Promote allocas to registers.
+    theFPM->add(llvm::createPromoteMemoryToRegisterPass());
     // Do simple "peephole" optimizations and bit-twiddling optzns.
     theFPM->add(llvm::createInstructionCombiningPass());
     // Reassociate expressions.
@@ -246,7 +258,71 @@ static llvm::Value *jitIfStmt(Node *n) {
 }
 
 // TODO: isolate per jitted function
-static std::map<std::string, llvm::Value*> namedValues;
+static std::map<std::string, llvm::AllocaInst*> namedValues;
+
+static llvm::Value *jitVarExpr(Node *n) {
+    // Look this variable up in the function.
+    std::string name(tokStr(&n->tok));
+    llvm::Value *varVal = namedValues[name];
+    if (!varVal) {
+        fprintf(stderr, "Unknown variable name '%s'\n", name.c_str());
+        return LogErrorV("Unknown variable name");
+    }
+
+    // Load the value.
+    llvm::Value *ret = theBuilder.CreateLoad(varVal, name.c_str());
+    return ret;
+}
+
+/// CreateEntryBlockAlloca - Create an alloca instruction in the entry block of
+/// the function.  This is used for mutable variables etc.
+static llvm::AllocaInst *createEntryBlockAlloca(llvm::Function *func, const std::string &varName) {
+    llvm::IRBuilder<> tmpB(&func->getEntryBlock(), func->getEntryBlock().begin());
+  return tmpB.CreateAlloca(llvm::Type::getDoubleTy(theContext), 0, varName.c_str());
+}
+
+static llvm::Value *jitVarStmt(Node *n) {
+    // Codegen the RHS.
+    llvm::Value *rhsVal = nullptr;
+    if (n->children->length > 0) {
+        rhsVal = jitChild(n, 0);
+        if (!rhsVal) {
+            return nullptr;
+        }
+    } else {
+        rhsVal = llvm::ConstantFP::get(theContext, llvm::APFloat(0.0));
+    }
+
+    // Look up the name.
+    const char *cVarName = tokStr(&n->tok);
+    std::string varName(cVarName);
+
+    ASSERT(curFunction);
+    llvm::AllocaInst *_alloca = createEntryBlockAlloca(curFunction.get(), varName);
+    namedValues[varName] = _alloca;
+
+    return theBuilder.CreateStore(rhsVal, _alloca);
+}
+
+void functionCreateArgumentAllocas(llvm::Function *func, vec_nodep_t *params) {
+    llvm::Function::arg_iterator argIter = func->arg_begin();
+    Node *param = NULL; int paramIdx = 0;
+    vec_foreach(params, param, paramIdx) {
+        const char *cname = tokStr(&params->data[paramIdx]->tok);
+        std::string argName(cname);
+        (*argIter).setName(argName);
+        // Create an alloca for this variable.
+        llvm::AllocaInst *_alloca = createEntryBlockAlloca(func, argName);
+
+        llvm::Value *initVal = llvm::ConstantFP::get(theContext, llvm::APFloat(0.0));
+        // Store the initial value into the alloca.
+        theBuilder.CreateStore(initVal, _alloca);
+        // Add arguments to variable symbol table.
+        namedValues[argName] = _alloca;
+        argIter++;
+    }
+}
+
 
 llvm::Value *jitFunction(Node *n) {
     namedValues.clear();
@@ -261,20 +337,14 @@ llvm::Value *jitFunction(Node *n) {
     llvm::Function *llvmFunc =
         llvm::Function::Create(llvmFT, llvm::Function::ExternalLinkage, funcName, theModule.get());
 
-    // Set names for all arguments.
-    int i = 0;
-    for (auto &arg : llvmFunc->args()) {
-        const char *cname = tokStr(&params->data[i]->tok);
-        std::string argName(cname);
-        arg.setName(argName);
-        namedValues[argName] = &arg;
-        i++;
-    }
+    functionCreateArgumentAllocas(llvmFunc, params);
+
     // Create a new basic block to start insertion into.
     llvm::BasicBlock *bb = llvm::BasicBlock::Create(theContext, "entry", llvmFunc);
     theBuilder.SetInsertPoint(bb);
     llvm::Value *retVal = nullptr;
     ASSERT(n->children->length == 1);
+    curFunction = std::unique_ptr<llvm::Function>(llvmFunc);
     if ((retVal = jitChild(n, 0))) {
         // Finish off the function.
         theBuilder.CreateRet(retVal);
@@ -285,7 +355,6 @@ llvm::Value *jitFunction(Node *n) {
         ASSERT(0);
     }
 
-    curFunction = std::unique_ptr<llvm::Value>(llvmFunc);
     return llvmFunc;
 }
 
@@ -318,6 +387,12 @@ llvm::Value *jitNode(Node *n) {
     case IF_STMT:
         JIT_TRACE(1, "emitting IF_STMT");
         return jitIfStmt(n);
+    case VARIABLE_EXPR:
+        JIT_TRACE(1, "emitting VAR_EXPR");
+        return jitVarExpr(n);
+    case VAR_STMT:
+        JIT_TRACE(1, "emitting VAR_STMT");
+        return jitVarStmt(n);
     default:
         fprintf(stderr, "Tried to jit node of kind %d: %s\n", nodeKind(n), nodeKindStr(nodeKind(n)));
         UNREACHABLE_RETURN(NULL);
