@@ -2224,7 +2224,7 @@ vmLoop:
 #else
     switch (instruction) {
 #endif
-      CASE_OP(CONSTANT): { // numbers, code chunks
+      CASE_OP(CONSTANT): { // numbers, code chunks (ObjFunction)
           Value constant = READ_CONSTANT();
           push(constant);
           DISPATCH_BOTTOM();
@@ -2821,7 +2821,7 @@ vmLoop:
       CASE_OP(RETURN): {
           // this is if we're in a block given by (&block), and we returned
           // (explicitly or implicitly)
-          if (UNLIKELY(th->v_blockStack.length > 0)) {
+          if (th->v_blockStack.length > 0) {
               ObjString *key = INTERN("ret");
               pop();
               Value ret;
@@ -2833,8 +2833,7 @@ vmLoop:
               Value err = newError(lxContinueBlockErrClass, NIL_VAL);
               setProp(err, key, ret);
               throwError(err); // blocks catch this, not propagated
-              (th->vmRunLvl)--;
-              DISPATCH_BOTTOM();
+              // not reached
           }
           Value result = pop(); // pop from caller's frame
           ASSERT(!getFrame()->isCCall);
@@ -3131,6 +3130,7 @@ vmLoop:
           uint8_t numKeyVals = READ_BYTE();
           DBG_ASSERT(numKeyVals % 2 == 0);
           Value mapVal = newMap();
+          hideFromGC(AS_OBJ(mapVal));
           Table *map = AS_MAP(mapVal)->table;
           for (int i = 0; i < numKeyVals; i+=2) {
               Value key = pop();
@@ -3140,6 +3140,7 @@ vmLoop:
               OBJ_WRITE(mapVal, val);
           }
           push(mapVal);
+          unhideFromGC(AS_OBJ(mapVal));
           DISPATCH_BOTTOM();
       }
       CASE_OP(DUPMAP): {
