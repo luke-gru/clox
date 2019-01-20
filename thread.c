@@ -127,8 +127,11 @@ static void LxThreadSetup(LxThread *th) {
     th->openUpvalues = NULL;
     th->thisObj = NULL;
     vec_init(&th->v_thisStack);
+    vec_reserve(&th->v_thisStack, FRAMES_MAX);
     vec_init(&th->v_crefStack);
+    vec_reserve(&th->v_crefStack, FRAMES_MAX);
     vec_init(&th->v_blockStack);
+    vec_reserve(&th->v_blockStack, FRAMES_MAX);
     vec_init(&th->stackObjects);
     th->lastValue = NULL;
     th->hadError = false;

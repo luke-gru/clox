@@ -662,19 +662,25 @@ Value peek(unsigned n) {
 
 static inline void setThis(unsigned n) {
     register VMExecContext *ctx = EC;
+    register LxThread *th = vm.curThread;
     if (UNLIKELY((ctx->stackTop-n) <= ctx->stack)) {
         ASSERT(0);
     }
-    vm.curThread->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
-    getFrame()->instance = (ObjInstance*)vm.curThread->thisObj;
-    vec_push(&vm.curThread->v_thisStack, vm.curThread->thisObj);
-    DBG_ASSERT(vm.curThread->thisObj);
+    th->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
+    getFrame()->instance = (ObjInstance*)th->thisObj;
+    vec_push(&th->v_thisStack, th->thisObj);
+    DBG_ASSERT(th->thisObj);
 }
 
 static inline void popThis() {
-    ASSERT(vm.curThread->v_thisStack.length > 0);
-    (void)vec_pop(&vm.curThread->v_thisStack);
-    vm.curThread->thisObj = vec_last(&vm.curThread->v_thisStack);
+    register LxThread *th = vm.curThread;
+    ASSERT(th->v_thisStack.length > 0);
+    (void)vec_pop(&th->v_thisStack);
+    if (th->v_thisStack.length > 0) {
+        th->thisObj = vec_last(&th->v_thisStack);
+     } else {
+        th->thisObj = NULL;
+     }
 }
 
 static inline void pushCref(ObjClass *klass) {
@@ -1186,7 +1192,7 @@ void popFrame(void) {
     }
     EC->frameCount--;
     frame = getFrameOrNull(); // new frame
-    if (frame) {
+    if (LIKELY(frame != NULL)) {
         if (frame->name) {
             tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(frame->name));
         } else {
@@ -1397,7 +1403,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                     VM_DEBUG(2, "native initializer returned");
                     EC->stackTop = getFrame()->slots;
                     popFrame();
-                    ASSERT(LIKELY(IS_INSTANCE_LIKE(val)));
+                    ASSERT(IS_INSTANCE_LIKE(val));
                     push(val);
                     return true;
                 }
@@ -1689,12 +1695,9 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     LxThread *th = vm.curThread;
     int lenBefore = th->stackObjects.length;
     bool ret = doCallCallable(callable, argCount, isMethod, info);
-    int lenAfter = th->stackObjects.length;
 
     // allow collection of new stack-created objects if they're not rooted now
-    for (int i = lenBefore; i < lenAfter; i++) {
-        (void)vec_pop(&th->stackObjects);
-    }
+    th->stackObjects.length = lenBefore;
 
     return ret;
 }
@@ -2429,6 +2432,7 @@ vmLoop:
       CASE_OP(POP_CREF): {
           ASSERT(th->v_crefStack.length > 0);
           ObjClass *oldKlass = vec_pop(&th->v_crefStack);
+          (void)oldKlass;
           DBG_ASSERT(TO_OBJ(oldKlass) == AS_OBJ(peek(0)));
           pop();
           popThis();
