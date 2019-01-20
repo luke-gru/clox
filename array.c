@@ -271,12 +271,12 @@ static Value lxArrayEach(int argCount, Value *args) {
             } else if (errInst->klass == lxContinueBlockErrClass) {
                 if (fn) {
                     Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
-                    fn(1, &el, retVal, getFrame()->callInfo);
+                    fn(1, (Value*)&el, retVal, getFrame()->callInfo);
                 }
             } else if (errInst->klass == lxReturnBlockErrClass) {
                 Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                 if (fn) {
-                    fn(1, &el, retVal, getFrame()->callInfo);
+                    fn(1, (Value*)&el, retVal, getFrame()->callInfo);
                 } else {
                     return retVal;
                 }
@@ -288,7 +288,7 @@ static Value lxArrayEach(int argCount, Value *args) {
 
     VALARRAY_FOREACH_START(ary, el, iterStart, valIdx) {
         iterStart++;
-        yieldFromC(1, &el, blockInstance);
+        yieldFromC(1, (Value*)&el, TO_INSTANCE(blockInstance));
     }
     return *args;
 }

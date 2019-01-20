@@ -64,7 +64,7 @@ static int test_run_example_files(void) {
     struct dirent *ent = NULL;
     int numErrors = 0;
     int numSuccesses = 0;
-    const char *filePrefix = (const char*)malloc(4096);
+    char *filePrefix = malloc(4096);
     memset(filePrefix, 0, 4096);
     char *res = getcwd(filePrefix, 4096);
     if (!res) {

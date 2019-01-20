@@ -214,7 +214,7 @@ static Token identifier() {
 
     if (type == TOKEN_IDENTIFIER && memcmp(current->tokenStart, "__LINE__", length) == 0) {
         Token token = makeToken(TOKEN_NUMBER);
-        char *numBuf = calloc(8, 1);
+        char *numBuf = (char*)calloc(8, 1);
         ASSERT_MEM(numBuf);
         sprintf(numBuf, "%d", current->line);
         token.start = numBuf;
@@ -282,7 +282,7 @@ static Token doubleQuotedString() {
   Token tok = makeToken(TOKEN_STRING_DQUOTE);
 
   // replace \" with "
-  char *newBuf = calloc(tok.length+1, 1);
+  char *newBuf = (char*)calloc(tok.length+1, 1);
   ASSERT_MEM(newBuf);
   strncpy(newBuf, tok.start, tok.length);
   strReplace(newBuf, "\\\"", '"');
@@ -335,7 +335,7 @@ static Token singleQuotedString(bool isStatic) {
     }
 
     // replace \" with "
-    char *newBuf = calloc(tok.length+1, 1);
+    char *newBuf = (char*)calloc(tok.length+1, 1);
     ASSERT_MEM(newBuf);
     strncpy(newBuf, tok.start, tok.length);
     strReplace(newBuf, "\\\'", '\'');
@@ -434,7 +434,7 @@ Token scanToken(void) {
   return errorToken("Unexpected character.");
 }
 
-void initScanner(Scanner *scan, const char *src) {
+void initScanner(Scanner *scan, char *src) {
   scan->source = src;
   scan->tokenStart = src;
   scan->current = src;
@@ -589,7 +589,7 @@ const char *tokTypeStr(TokenType ttype) {
   }
 }
 
-void scanAllPrint(Scanner *scan, const char *src) {
+void scanAllPrint(Scanner *scan, char *src) {
     Scanner *oldCurrent = current;
     initScanner(scan, src);
     int line = -1;
@@ -612,7 +612,7 @@ char *tokStr(Token *tok) {
     if (tok->lexeme != NULL) return tok->lexeme;
     ASSERT(tok->length > 0);
     ASSERT(tok->start);
-    char *buf = calloc(tok->length+1, 1);
+    char *buf = (char*)calloc(tok->length+1, 1);
     ASSERT_MEM(buf);
     memcpy(buf, tok->start, tok->length);
     tok->lexeme = buf;
@@ -644,7 +644,7 @@ Token syntheticToken(const char *lexeme) {
     Token tok;
     tok.start = lexeme;
     tok.length = strlen(lexeme);
-    tok.lexeme = lexeme;
+    tok.lexeme = (char*)lexeme;
     tok.alloced = false;
     return tok;
 }

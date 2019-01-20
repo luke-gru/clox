@@ -98,7 +98,7 @@ NORETURN void repl(void) {
 
     char *lines[50];
     int numLines = 0;
-    const char *line = NULL;
+    char *line = NULL;
 
     while ((line = linenoise(prompt)) != NULL) { // NOTE: chomps newline
         linenoiseHistoryAdd(line);

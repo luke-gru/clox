@@ -73,7 +73,7 @@ static void checkFerror(FILE *f, const char *op, const char *fname) {
     }
 }
 
-static void checkFileExists(const char *fname) {
+static void checkFileExists(char *fname) {
     int err = 0;
     if ((err = fileExists(fname)) != 0) {
         if (err == EACCES) {

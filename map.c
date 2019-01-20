@@ -339,12 +339,12 @@ static Value lxMapEach(int argCount, Value *args) {
             } else if (errInst->klass == lxContinueBlockErrClass) {
                 Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                 if (fn) {
-                    fn(2, yieldArgs, retVal, getFrame()->callInfo);
+                    fn(2, (Value*)yieldArgs, retVal, getFrame()->callInfo);
                 }
             } else if (errInst->klass == lxReturnBlockErrClass) {
                 Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                 if (fn) {
-                    fn(2, yieldArgs, retVal, getFrame()->callInfo);
+                    fn(2, (Value*)yieldArgs, retVal, getFrame()->callInfo);
                 } else {
                     return retVal;
                 }
@@ -359,7 +359,7 @@ static Value lxMapEach(int argCount, Value *args) {
         startIdx++;
         yieldArgs[0] = e.key;
         yieldArgs[1] = e.value;
-        yieldFromC(2, yieldArgs, blockInstance);
+        yieldFromC(2, (Value*)yieldArgs, TO_INSTANCE(blockInstance));
     })
     return self;
 }

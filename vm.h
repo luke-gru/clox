@@ -256,8 +256,8 @@ void initVM(void);
 void freeVM(void);
 InterpretResult interpret(Chunk *chunk, char *filename);
 InterpretResult loadScript(Chunk *chunk, char *filename);
-Value VMEval(const char *src, const char *filename, int lineno);
-Value VMEvalNoThrow(const char *src, const char *filename, int lineno);
+Value VMEval(char *src, char *filename, int lineno);
+Value VMEvalNoThrow(char *src, char *filename, int lineno);
 Value *getLastValue(void);
 
 // script loading
@@ -339,13 +339,13 @@ Value callSuper(int argCount, Value *args, struct CallInfo *cinfo);
 #define SETUP_BLOCK(block, bentry, status, errInf) {\
     ASSERT(block);\
     ErrTagInfo *einfo = addErrInfo(lxErrClass);\
-    bentry = addBlockEntry(block);\
-    einfo->bentry = bentry;\
+    bentry = (volatile BlockStackEntry*)addBlockEntry(TO_OBJ(block));\
+    einfo->bentry = (BlockStackEntry*)bentry;\
     int jmpres = 0;\
     if ((jmpres = setjmp(errInf->jmpBuf)) == JUMP_SET) {\
         status = TAG_NONE;\
     } else if (jmpres == JUMP_PERFORMED) {\
-        popBlockEntryUntil(bentry);\
+        popBlockEntryUntil((BlockStackEntry*)bentry);\
         unwindJumpRecover(errInf);\
         ASSERT(th->errInfo == errInf);\
         errInf->status = TAG_RAISE;\

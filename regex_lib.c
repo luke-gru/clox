@@ -52,7 +52,7 @@ void regex_init_from(Regex *regex, const char *src, RegexOptions *opts) {
 void regex_free(Regex *regex) {
     regex->node = NULL; // TODO: free nodes
     if (regex->ownsSrc) {
-        xfree(regex->src);
+        xfree((void*)regex->src);
     }
     regex->src = NULL;
 }
@@ -403,7 +403,7 @@ static int regex_parse(Regex *regex) {
 
     begOrNode = NULL;
     RNode *prev = NULL;
-    char *src_p = regex->src;
+    char *src_p = (char*)regex->src;
     char **src_pout = &src_p;
     while (*src_p) {
         int err = 0;
@@ -433,11 +433,12 @@ RegexCompileResult regex_compile(Regex *regex) {
     return REGEX_COMPILE_SUCCESS;
 }
 
-static const char *i(int indent) {
-    if (indent == 0) return "";
-    const char *buf = malloc((indent*2)+1);
+static char *i(int indent) {
+    if (indent == 0) return (char*)"";
+    char *buf = malloc((indent*2)+1);
+    ASSERT_MEM(buf);
     memset(buf, ' ', indent*2);
-    ((char*)buf)[indent*2] = '\0';
+    buf[indent*2] = '\0';
     return buf;
 }
 
@@ -640,7 +641,7 @@ bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
             return accepted;
         }
         case NODE_CCLASS: {
-            char *start = node->tok+1;
+            char *start = (char*)node->tok+1;
             int len = node->toklen-1;
             while (len > 0) {
                 char c = **cptr_p;
@@ -746,7 +747,7 @@ MatchData regex_match(Regex *regex, const char *string) {
     if (!regex->node || !regex->src) { // uninitialized regex
         return mres;
     }
-    char *cptr = string;
+    char *cptr = (char*)string;
     char *start = cptr;
     char **cptr_p = &cptr;
     RNode *node = regex->node;

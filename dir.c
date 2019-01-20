@@ -99,10 +99,10 @@ static Value lxDirChdirStatic(int argCount, Value *args) {
     CHECK_ARITY("Dir.chdir", 2, 2, argCount);
     Value newDir = args[1];
     CHECK_ARG_IS_A(newDir, lxStringClass, 1);
-    const char *oldDir = NULL;
-    const char buf[4096];
+    char *oldDir = NULL;
+    char buf[4096];
     oldDir = getcwd(buf, 4096);
-    const char *dirStr = AS_STRING(newDir)->chars;
+    char *dirStr = AS_STRING(newDir)->chars;
     int last = errno;
     int res = chdir(dirStr);
     if (res != 0) {

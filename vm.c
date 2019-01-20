@@ -1359,7 +1359,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
         // Call the initializer, if there is one.
         Value initializer;
-        Obj *init = instanceFindMethod(instance, vm.initString);
+        Obj *init = instanceFindMethod((ObjInstance*)instance, vm.initString);
         isMethod = true;
         if (init) {
             VM_DEBUG(2, "callable is initializer for class %s", klassName);
@@ -1370,7 +1370,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 pushNativeFrame(nativeInit);
                 volatile CallFrame *newFrame = getFrame();
                 DBG_ASSERT(instance);
-                newFrame->instance = instance;
+                newFrame->instance = TO_INSTANCE(instance);
                 vec_push(&th->v_thisStack, TO_OBJ(instance));
                 th->thisObj = TO_OBJ(instance);
                 newFrame->klass = frameClass;
@@ -1418,7 +1418,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     } else if (IS_NATIVE_FUNCTION(callable)) {
 #ifndef NDEBUG
         if (GET_OPTION(debugVMLvl) >= 2) {
-            const char callableNameBuf[200];
+            char callableNameBuf[200];
             fillCallableName(callable, callableNameBuf, 200);
             VM_DEBUG(2, "Calling native %s %s with %d args", isMethod ? "method" : "function", callableNameBuf, argCount);
         }
@@ -1438,20 +1438,20 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         }
         volatile int argci = argCount;
         volatile int argcActuali = argCountActual;
-        pushNativeFrame(native);
+        pushNativeFrame(TO_NATIVE(native));
         volatile CallFrame *newFrame = getFrame();
         volatile VMExecContext *ec = EC;
-        newFrame->instance = instance; // NOTE: can be NULL, if not method
+        newFrame->instance = TO_INSTANCE(instance); // NOTE: can be NULL, if not method
         if (newFrame->instance) {
             th->thisObj = TO_OBJ(instance);
-            vec_push(&th->v_thisStack, instance);
+            vec_push(&th->v_thisStack, TO_INSTANCE(instance));
         }
         newFrame->klass = frameClass;
         if (newFrame->klass) {
             pushCref(newFrame->klass);
         }
         newFrame->callInfo = callInfo;
-        volatile Value val = captureNativeError(native, argci, EC->stackTop-argci, callInfo);
+        volatile Value val = captureNativeError(TO_NATIVE(native), argci, EC->stackTop-argci, callInfo);
         newFrame->slots = ec->stackTop - argcActuali;
         if (THREAD()->returnedFromNativeErr) {
             VM_DEBUG(2, "Returned from native function with error");
@@ -1638,7 +1638,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // add frame
     VM_DEBUG(2, "%s", "Pushing callframe (non-native)");
     CallFrame *frame = pushFrame();
-    frame->instance = instance;
+    frame->instance = TO_INSTANCE(instance);
     if (instance) {
         th->thisObj = TO_OBJ(instance);
         vec_push(&vm.curThread->v_thisStack, TO_OBJ(instance));
@@ -3270,7 +3270,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     }
 }
 
-static Value doVMEval(const char *src, const char *filename, int lineno, bool throwOnErr) {
+static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     CallFrame *oldFrame = getFrame();
     CompileErr err = COMPILE_ERR_NONE;
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
@@ -3334,11 +3334,11 @@ static Value doVMEval(const char *src, const char *filename, int lineno, bool th
     }
 }
 
-Value VMEvalNoThrow(const char *src, const char *filename, int lineno) {
+Value VMEvalNoThrow(char *src, char *filename, int lineno) {
     return doVMEval(src, filename, lineno, false);
 }
 
-Value VMEval(const char *src, const char *filename, int lineno) {
+Value VMEval(char *src, char *filename, int lineno) {
     return doVMEval(src, filename, lineno, true);
 }
 
@@ -3368,10 +3368,6 @@ void unwindJumpRecover(ErrTagInfo *info) {
         VM_DEBUG(2, "freeing Errinfo");
         DBG_ASSERT(th->errInfo);
         ErrTagInfo *prev = th->errInfo->prev;
-        /*if (th->errInfo->bentry) {*/
-            /*fprintf(stderr, "Popping block entry (unwind)\n");*/
-            /*popBlockEntry(th->errInfo->bentry);*/
-        /*}*/
         DBG_ASSERT(prev);
         FREE(ErrTagInfo, th->errInfo);
         th->errInfo = prev;
@@ -3425,12 +3421,12 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
     addErrInfo(errClass);
     volatile ErrTagInfo *errInfo = th->errInfo;
     int jmpres = 0;
-    if ((jmpres = setjmp(errInfo->jmpBuf)) == JUMP_SET) {
+    if ((jmpres = setjmp(((ErrTagInfo*)errInfo)->jmpBuf)) == JUMP_SET) {
         *status = TAG_NONE;
         VM_DEBUG(2, "vm_protect before func");
         void *res = func(arg);
         ErrTagInfo *prev = errInfo->prev;
-        FREE(ErrTagInfo, errInfo);
+        FREE(ErrTagInfo, (ErrTagInfo*)errInfo);
         th->errInfo = prev;
         VM_DEBUG(2, "vm_protect after func");
         return res;
@@ -3438,7 +3434,7 @@ void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status)
         VM_DEBUG(2, "vm_protect got to longjmp");
         th = THREAD();
         ASSERT(errInfo == th->errInfo);
-        unwindJumpRecover(errInfo);
+        unwindJumpRecover((ErrTagInfo*)errInfo);
         errInfo->status = TAG_RAISE;
         errInfo->caughtError = th->lastErrorThrown;
         *status = TAG_RAISE;
@@ -3468,7 +3464,7 @@ void terminateThreads() {
         int numReadyFound = 0;
         volatile ObjInstance *threadInst = NULL; int tidx = 0;
         vec_foreach(&vm.threads, threadInst, tidx) {
-            volatile LxThread *th = (LxThread*)threadInst->internal->data;
+            LxThread *th = (LxThread*)threadInst->internal->data;
             if (th == vm.mainThread || th->status == THREAD_ZOMBIE) continue;
             if (th->tid <= 0) continue;
             if (th->status == THREAD_READY) {

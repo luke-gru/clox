@@ -120,8 +120,8 @@ typedef struct CallInfo {
     ObjFunction *blockFunction; // lox block given as argument to fn
     ObjInstance *blockInstance; // from &blk, turned closure to block instance
     BlockIterFunc blockIterFunc; // lox iterators that work on top of #each
-    Value *blockIterRet; // return value from iterator
-    Value *blockArgsExtra;
+    volatile Value *blockIterRet; // return value from iterator
+    volatile Value *blockArgsExtra;
     int blockArgsNumExtra;
     bool isYield;
 } CallInfo;

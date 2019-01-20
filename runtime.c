@@ -138,7 +138,7 @@ Value lxClock(int argCount, Value *args) {
 Value lxTypeof(int argCount, Value *args) {
     CHECK_ARITY("typeof", 1, 1, argCount);
     const char *strType = typeOfVal(*args);
-    return OBJ_VAL(copyString(strType, strlen(strType), NEWOBJ_FLAG_NONE));
+    return OBJ_VAL(copyString((char*)strType, strlen(strType), NEWOBJ_FLAG_NONE));
 }
 
 Value lxClassof(int argCount, Value *args) {

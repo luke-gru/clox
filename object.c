@@ -159,7 +159,7 @@ bool objStringEquals(ObjString *a, ObjString *b) {
 // NOTE: don't use this function on a ObjString that is already a key
 // for a table, it won't retrieve the value in the table anymore unless
 // it's rehashed.
-void pushCString(ObjString *string, char *chars, int lenToAdd) {
+void pushCString(ObjString *string, const char *chars, int lenToAdd) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     ASSERT(!isFrozen((Obj*)string));
 
@@ -174,7 +174,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     }
     int i = 0;
     for (i = 0; i < lenToAdd; i++) {
-        char *c = chars+i;
+        char *c = (char*)chars+i;
         if (c == NULL) break;
         string->chars[string->length + i] = *c;
     }
@@ -183,7 +183,7 @@ void pushCString(ObjString *string, char *chars, int lenToAdd) {
     string->hash = 0;
 }
 
-void insertCString(ObjString *string, char *chars, int lenToAdd, int at) {
+void insertCString(ObjString *string, const char *chars, int lenToAdd, int at) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     ASSERT(!isFrozen((Obj*)string));
 
@@ -992,10 +992,12 @@ bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
 
 static const char *anonClassName = "(anon)";
 
-const char *instanceClassName(ObjInstance *obj) {
+char *instanceClassName(ObjInstance *obj) {
     DBG_ASSERT(obj);
     ObjClass *klass = obj->klass;
-    if (!klass || !CLASSINFO(klass)->name) return anonClassName;
+    if (!klass || !CLASSINFO(klass)->name) {
+        return (char*)anonClassName;
+    }
     return CLASSINFO(klass)->name->chars;
 }
 

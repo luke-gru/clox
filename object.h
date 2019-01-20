@@ -321,6 +321,8 @@ typedef struct LxFile {
 
 #define TO_OBJ(obj) ((Obj*)(obj))
 #define TO_CLASS(obj) ((ObjClass*)(obj))
+#define TO_INSTANCE(obj) ((ObjInstance*)(obj))
+#define TO_NATIVE(obj) ((ObjNative*)(obj))
 #define IS_T_CLASS(klass) (((Obj*)(klass))->type == OBJ_T_CLASS)
 #define IS_T_MODULE(klass) (((Obj*)(klass))->type == OBJ_T_MODULE)
 
@@ -415,8 +417,8 @@ typedef struct LxFile {
 ObjString *takeString(char *chars, int length, int flags); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
 ObjString *copyString(char *chars, int length, int flags); // copies provided memory. Object lives on lox heap.
 ObjString *hiddenString(char *chars, int length, int flags); // hidden from GC, used in tests mainly.
-#define INTERN(chars) (internedString(chars, strlen(chars), NEWOBJ_FLAG_NONE))
-#define INTERNED(chars, len) (internedString(chars, len, NEWOBJ_FLAG_NONE))
+#define INTERN(chars) (internedString((char*)chars, strlen(chars), NEWOBJ_FLAG_NONE))
+#define INTERNED(chars, len) (internedString((char*)chars, len, NEWOBJ_FLAG_NONE))
 ObjString *internedString(char *chars, int length, int flags);
 bool objStringEquals(ObjString *a, ObjString *b);
 static inline ObjString *dupString(ObjString *string) {
@@ -435,8 +437,8 @@ bool stringEquals(Value a, Value b);
 // NOTE: don't call pushCString on a string value that's a key to a map! The
 // hash value changes and the map won't be able to index it anymore (see
 // Map#rehash())
-void pushCString(ObjString *string, char *chars, int lenToAdd);
-void insertCString(ObjString *a, char *chars, int lenToAdd, int at);
+void pushCString(ObjString *string, const char *chars, int lenToAdd);
+void insertCString(ObjString *a, const char *chars, int lenToAdd, int at);
 void pushCStringFmt(ObjString *string, const char *format, ...);
 void pushCStringVFmt(ObjString *string, const char *format, va_list ap);
 uint32_t hashString(char *key, int length);
@@ -578,7 +580,7 @@ Obj *instanceFindSetter(ObjInstance *obj, ObjString *name);
 Obj *classFindStaticMethod(ObjClass *obj, ObjString *name);
 bool instanceIsA(ObjInstance *inst, ObjClass *klass);
 bool isSubclass(ObjClass *subklass, ObjClass *superklass);
-const char *instanceClassName(ObjInstance *obj);
+char *instanceClassName(ObjInstance *obj);
 
 // metaclasses
 ObjClass *singletonClass(Obj *obj);

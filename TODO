@@ -26,7 +26,7 @@ get/set a different sigil maybe, like @prop.
 * Add defineMethod() function
 * Allow dynamically loading lox extensions, which can be '.so' files.
 * Add Dir static class method 'glob'
-* Make autoloading thread-safe
+* Add guilds, with per-guild VM lock and restricted guild to guild sharing
 
 Improvements
 ------------
@@ -43,6 +43,7 @@ compiled lookup
 * Use alloca where possible to reduce mallocs/frees for data structures like
 ErrTagInfo and BlockStackEntry, used during setjmp/longjmp
 * Change string representation to UTF8
+* Make autoloading thread-safe
 
 Bugs
 ----

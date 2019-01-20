@@ -244,7 +244,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
             }
             if (func->name == NULL) {
                 const char *anon = "<fun (Anon)>";
-                ret = stringConstructor(anon, strlen(anon), flags);
+                ret = stringConstructor((char*)anon, strlen(anon), flags);
             } else {
                 char *buf = calloc(strlen(func->name->chars)+1+6, 1);
                 ASSERT_MEM(buf);
@@ -501,7 +501,7 @@ bool isTruthy(Value val) {
 #endif
 }
 
-void fillCallableName(Value callable, const char *buf, size_t buflen) {
+void fillCallableName(Value callable, char *buf, size_t buflen) {
     memset(buf, 0, buflen);
     ASSERT(isCallable(callable));
     if (IS_CLASS(callable)) {
@@ -526,7 +526,7 @@ void fillCallableName(Value callable, const char *buf, size_t buflen) {
             snprintf(buf, buflen, "%s%c%s", classNm, isStatic ? '.' : '#',
                     func->name->chars);
         } else {
-            snprintf(buf, buflen, "%s", func->name ? func->name->chars : "(anon");
+            snprintf(buf, buflen, "%s", func->name ? func->name->chars : "(anon)");
         }
     } else { // bound method
         snprintf(buf, buflen, "%s", "TODO"); // TODO

@@ -211,8 +211,8 @@ static void t_assert_register_on_fail(t_func_on_fail_cb cb) {
 
 #define T_ASSERT(expr) ((expr) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 #define T_ASSERT_EQ(expr1,expr2) ((expr1==expr2) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
-#define T_ASSERT_STREQ(str1,str2) (t_assert_streq(str1, str2) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
-#define T_ASSERT_VALPRINTEQ(str,value) (t_assert_valprinteq(str, value) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
+#define T_ASSERT_STREQ(str1,str2) (t_assert_streq((char*)str1, (char*)str2) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
+#define T_ASSERT_VALPRINTEQ(str,value) (t_assert_valprinteq((char*)str, value) ? PASS_ASSERT() : FAIL_ASSERT(__FILE__, __LINE__, __func__))
 
 #define REGISTER_T_ASSERT_ON_FAIL(func) t_assert_register_on_fail(func)
 
