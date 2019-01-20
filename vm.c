@@ -1929,14 +1929,14 @@ void printVMStack(FILE *f, LxThread *th) {
         tid = th->tid;
     }
     if (th->ec->stackTop == th->ec->stack && th->v_ecs.length == 1) {
-        fprintf(f, "[DEBUG %d (th=%lu)]: Stack: empty\n", th->vmRunLvl, tid);
+        fprintf(f, "[DEBUG %d (th=%lu)]: Stack: empty\n", th->vmRunLvl, (unsigned long)tid);
         return;
     }
     VMExecContext *ec = NULL; int i = 0;
     int numCallFrames = VMNumCallFrames();
     int numStackFrames = VMNumStackFrames();
     fprintf(f, "[DEBUG %d (th=%lu)]: Stack (%d stack frames, %d call frames):\n", th->vmRunLvl,
-            tid, numStackFrames, numCallFrames);
+            (unsigned long)tid, numStackFrames, numCallFrames);
     // print VM stack values from bottom of stack to top
     fprintf(f, "[DEBUG %d]: ", th->vmRunLvl);
     int callFrameIdx = 0;
