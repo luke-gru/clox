@@ -83,6 +83,7 @@ char *unredefinableGlobals[] = {
     "__FILE__",
     "__DIR__",
     "__LINE__",
+    "__FUNC__",
     NULL
 };
 
@@ -481,7 +482,10 @@ void initVM() {
     vm.exiting = false;
     vm.initString = INTERNED("init", 4);
     vm.fileString = INTERNED("__FILE__", 8);
-    vm.dirString = INTERNED("__DIR__", 7);
+    vm.dirString  = INTERNED("__DIR__", 7);
+    vm.funcString = INTERNED("__FUNC__",  8);
+    vm.mainString = INTERNED("(main)",  6);
+    vm.anonString = INTERNED("(anon)",  6);
 
     pushFrame();
 
@@ -534,6 +538,9 @@ void freeVM(void) {
     vm.initString = NULL;
     vm.fileString = NULL;
     vm.dirString = NULL;
+    vm.funcString = NULL;
+    vm.mainString = NULL;
+    vm.anonString = NULL;
     vm.printBuf = NULL;
     vm.printToStdout = true;
     vec_deinit(&vm.hiddenObjs);
@@ -1180,6 +1187,15 @@ void popFrame(void) {
     EC->frameCount--;
     frame = getFrameOrNull(); // new frame
     if (frame) {
+        if (frame->name) {
+            tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(frame->name));
+        } else {
+            if (EC->frameCount == 1) {
+                tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(vm.mainString));
+            } else {
+                tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(vm.anonString));
+            }
+        }
         if (stackAdjust > 0) {
             if (EC->stackTop-stackAdjust > EC->stack) {
                 EC->stackTop -= stackAdjust;
@@ -1231,6 +1247,7 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->slots = prevFrame->slots;
     newFrame->isCCall = true;
     newFrame->nativeFunc = native;
+    newFrame->name = native->name;
     newFrame->file = EC->filename;
     BlockStackEntry *bentry = vec_last_or(&THREAD()->v_blockStack, NULL);
     if (bentry && bentry->frame == NULL) {
@@ -1641,6 +1658,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         VM_DEBUG(2, "Func offset due to optargs: %d", (int)funcOffset);
     }
     frame->closure = closure;
+    frame->name = closure->function->name;
     frame->ip = closure->function->chunk->code + funcOffset;
     frame->start = parentStart;
     frame->isCCall = false;
@@ -1652,6 +1670,11 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1) -
         (func->numKwargs > 0 ? numKwargsNotGiven+1 : 0);
     // NOTE: the frame is popped on OP_RETURN
+    if (frame->name) {
+        tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(frame->name));
+    } else {
+        tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(vm.anonString));
+    }
     vm_run(); // actually run the function until return
     return true;
 }
@@ -2347,7 +2370,11 @@ vmLoop:
           Value varName = READ_CONSTANT();
           Value val;
           if (tableGet(&EC->roGlobals, varName, &val)) {
-              push(val);
+              if (IS_STRING(val)) {
+                  push(OBJ_VAL(dupString(AS_STRING(val))));
+              } else {
+                  push(val);
+              }
           } else if (tableGet(&vm.globals, varName, &val)) {
               push(val);
           } else if (tableGet(&vm.constants, varName, &val)) {
@@ -3161,6 +3188,8 @@ static void setupPerScriptROGlobals(char *filename) {
     // NOTE: this can trigger GC, so we hide the value first
     tableSet(&EC->roGlobals, OBJ_VAL(vm.fileString), fileString);
     unhideFromGC(AS_OBJ(fileString));
+
+    tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(vm.mainString));
 
     if (filename[0] == pathSeparator) {
         char *lastSep = rindex(filename, pathSeparator);

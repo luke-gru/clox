@@ -1,0 +1,37 @@
+fun a() { return __FUNC__; }
+var anon = fun() { return __FUNC__; };
+
+fun yielder() {
+  print __FUNC__;
+  yield();
+  print __FUNC__;
+}
+
+
+class A {
+  init() {
+    print __FUNC__;
+  }
+}
+
+print a();
+print anon();
+A();
+yielder() -> {
+  print __FUNC__;
+};
+print __FUNC__;
+
+__FUNC__.push("WOOOO");
+print __FUNC__; // new instance
+
+__END__
+-- expect: --
+a
+(anon)
+A#init
+yielder
+(anon)
+yielder
+(main)
+(main)

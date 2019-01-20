@@ -528,8 +528,25 @@ void fillCallableName(Value callable, const char *buf, size_t buflen) {
         } else {
             snprintf(buf, buflen, "%s", func->name ? func->name->chars : "(anon");
         }
-    } else {
+    } else { // bound method
         snprintf(buf, buflen, "%s", "TODO"); // TODO
+    }
+}
+
+ObjString *getCallableFunctionName(Value callable) {
+    ASSERT(isCallable(callable));
+    if (IS_CLASS(callable)) {
+        return vm.initString;
+    } else if (IS_NATIVE_FUNCTION(callable)) {
+        ObjNative *native = AS_NATIVE_FUNCTION(callable);
+        return native->name;
+    } else if (IS_CLOSURE(callable)) {
+        ObjFunction *func = AS_CLOSURE(callable)->function;
+        return func->name;
+    } else if (IS_BOUND_METHOD(callable)) {
+        return getCallableFunctionName(OBJ_VAL(AS_BOUND_METHOD(callable)->callable));
+    } else {
+        UNREACHABLE_RETURN(NULL);
     }
 }
 
