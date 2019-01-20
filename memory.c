@@ -354,6 +354,12 @@ void collectYoungGarbage() {
                 grayValue(*slot);
             }
         }
+        BlockStackEntry *bentry = NULL; int bidx = 0;
+        vec_foreach(&th->v_blockStack, bentry, bidx) {
+            grayObject((Obj*)bentry->callable);
+            grayObject((Obj*)bentry->cachedBlockClosure);
+            grayObject((Obj*)bentry->blockInstance);
+        }
     }
 
     GC_TRACE_DEBUG(2, "Marking per-thread VM C-call stack objects");

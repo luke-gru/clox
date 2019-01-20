@@ -97,6 +97,7 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func) {
 
 void addConstantUnder(const char *name, Value constVal, Value owner) {
     ASSERT(IS_CLASS(owner) || IS_MODULE(owner));
+    OBJ_WRITE(owner, constVal);
     tableSet(CLASSINFO(AS_CLASS(owner))->constants, OBJ_VAL(INTERN(name)), constVal);
 }
 
