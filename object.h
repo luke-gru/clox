@@ -110,6 +110,7 @@ typedef struct ObjFunction {
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM
   Chunk *chunk;
+  Iseq *iseq; // for jitting the function
   struct ObjString *name;
   Obj *klass; // ObjClass* or ObjModule* (if method)
   struct sNode *funcNode;

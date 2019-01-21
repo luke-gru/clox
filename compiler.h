@@ -77,7 +77,7 @@ typedef struct Compiler {
   // scope (global scope)
   int scopeDepth;
 
-  Iseq iseq; // Generated instructions for the function
+  Iseq *iseq; // Generated instructions for the function
   Table constTbl;
 
   vec_void_t v_errMessages;

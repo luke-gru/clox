@@ -124,7 +124,7 @@ static void freeCompiler(Compiler *c, bool freeErrMessages) {
         vec_deinit(&c->v_errMessages);
     }
     freeTable(&c->constTbl);
-    freeIseq(&c->iseq);
+    freeIseq(c->iseq);
 }
 
 static inline Chunk *currentChunk() {
@@ -132,7 +132,7 @@ static inline Chunk *currentChunk() {
 }
 
 static inline Iseq *currentIseq() {
-    return &current->iseq;
+    return current->iseq;
 }
 
 static Insn *emitInsn(Insn in) {
@@ -203,12 +203,12 @@ static void emitReturn(Compiler *compiler) {
         emitOp0(OP_RETURN);
     } else {
         if (breakBlock && compiler->type == FUN_TYPE_BLOCK) {
-            if (compiler->iseq.count == 0) {
+            if (compiler->iseq->count == 0) {
                 emitOp0(OP_NIL);
             }
             emitOp0(OP_BLOCK_CONTINUE); // continue with last evaluated statement
         } else if (compiler->type == FUN_TYPE_BLOCK) {
-            if (compiler->iseq.count == 0) {
+            if (compiler->iseq->count == 0) {
                 emitOp0(OP_NIL);
                 emitOp0(OP_POP);
             }
@@ -766,7 +766,7 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
     COMP_TRACE("/copyIseqToChunk");
 }
 
-static ObjFunction *endCompiler() {
+static ObjFunction *endCompiler(Node *funcNode) {
     COMP_TRACE("endCompiler");
     ASSERT(current);
     if (current->type == FUN_TYPE_TOP_LEVEL) {
@@ -775,7 +775,7 @@ static ObjFunction *endCompiler() {
     ObjFunction *func = current->function;
     copyIseqToChunk(currentIseq(), currentChunk());
     freeTable(&current->constTbl);
-    freeIseq(&current->iseq);
+    func->iseq = current->iseq;
 
     current = current->enclosing;
     COMP_TRACE("/endCompiler");
@@ -1003,8 +1003,9 @@ static void initCompiler(
     compiler->localCount = 0; // NOTE: below, this is increased to 1
     compiler->scopeDepth = scopeDepth;
     compiler->function = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
-    initIseq(&compiler->iseq);
-    compiler->iseq.constants = compiler->function->chunk->constants;
+    compiler->iseq = ALLOCATE(Iseq, 1);
+    initIseq(compiler->iseq);
+    compiler->iseq->constants = compiler->function->chunk->constants;
     hideFromGC(TO_OBJ(compiler->function)); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = ftype;
     compiler->hadError = false;
@@ -1314,7 +1315,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
         breakBlock = oldBreakBlock;
     }
     popScope(COMPILE_SCOPE_FUNCTION);
-    func = endCompiler();
+    func = endCompiler(n);
     ASSERT(func->chunk);
 
     // save the chunk as a constant in the parent (now current) chunk
@@ -2091,7 +2092,10 @@ Chunk *compile_src(char *src, CompileErr *err) {
     top = &mainCompiler;
     initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, NULL);
     emitNode(program);
-    ObjFunction *prog = endCompiler();
+    ObjFunction *prog = endCompiler(NULL);
+    /*fprintf(stderr, "Emitting jitted function\n");*/
+    /*jitEmitIseqFile(prog->iseq, prog->funcNode);*/
+    /*fprintf(stderr, "Done emitting jitted function\n");*/
     if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
         printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
     }
