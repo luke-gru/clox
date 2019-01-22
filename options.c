@@ -27,6 +27,7 @@ char *boolOptNames[] = { // order doesn't matter
     "stressGCFull",
     "parseOnly",
     "compileOnly",
+    "enableJit",
     NULL
 };
 
@@ -66,6 +67,7 @@ void initOptions(int argc, char **argv) {
 
     options.disableGC = false;
     options.profileGC = false;
+    options.enableJit = false;
 #if GEN_GC
     options.stressGCYoung = false;
     options.stressGCBoth = false;
@@ -229,6 +231,10 @@ int parseOption(char **argv, int i) {
     }
     if (strcmp(argv[i], "--profile-GC") == 0) {
         SET_OPTION(profileGC, true);
+        return 1;
+    }
+    if (strcmp(argv[i], "--enable-jit") == 0) {
+        SET_OPTION(enableJit, true);
         return 1;
     }
 #if GEN_GC

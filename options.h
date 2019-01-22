@@ -30,6 +30,7 @@ typedef struct sCloxOptions {
     bool compileOnly;
     bool parseOnly;
     bool profileGC;
+    bool enableJit;
 
     char *initialLoadPath; // COLON-separated load path
     char *initialScript;

@@ -10,6 +10,7 @@
 #include "memory.h"
 #include "compiler.h"
 #include "nodes.h"
+#include "cjit.h"
 
 VM vm;
 
@@ -2704,7 +2705,7 @@ vmLoop:
           }
           Value callInfoVal = READ_CONSTANT();
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
-          if (IS_CLOSURE(callableVal)) {
+          if (OPTION_T(enableJit) && IS_CLOSURE(callableVal)) {
               ObjClosure *closure = AS_CLOSURE(callableVal);
               if (!closure->function->jitNative) {
                   jitFunction(closure->function);
