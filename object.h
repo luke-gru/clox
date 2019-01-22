@@ -105,7 +105,7 @@ typedef struct ObjInternal {
   bool isRealObject; // is allocated in object heap
 } ObjInternal;
 
-typedef Value (*JitNative)(struct LxThread *th, Value **sp, uint8_t **ip, Value *constantSlots);
+typedef Value (*JitNative)(struct LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots);
 
 typedef struct ObjFunction {
   Obj object;

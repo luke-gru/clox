@@ -10,13 +10,21 @@ static int jitEmit_CONSTANT(FILE *f, Insn *insn) {
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_CONSTANT);\n");
     fprintf(f, "  INC_IP(1);\n");
     fprintf(f, "  Value constant = JIT_READ_CONSTANT();\n");
-    fprintf(f, "  printValue(stdout, constant, true, -1);\n");
-    fprintf(f, "  fprintf(stdout, \"\\n\");\n");
+    /*fprintf(f, "  printValue(stdout, constant, true, -1);\n");*/
+    /*fprintf(f, "  fprintf(stdout, \"\\n\");\n");*/
     fprintf(f, "  JIT_PUSH(constant);\n");
     fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_ADD(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_ADD);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value b = JIT_PEEK(0);\n");
+    fprintf(f, "  Value a = JIT_PEEK(1);\n");
+    fprintf(f, "  JIT_POP();\n");
+    fprintf(f, "  JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) + AS_NUMBER(b)));\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_SUBTRACT(FILE *f, Insn *insn) {
@@ -54,9 +62,23 @@ static int jitEmit_NOT(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_GET_LOCAL(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_GET_LOCAL);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  uint8_t slot = JIT_READ_BYTE();\n");
+    fprintf(f, "  (void)JIT_READ_BYTE();\n");
+    fprintf(f, "  JIT_PUSH(slots[slot]);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_SET_LOCAL(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SET_LOCAL);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  uint8_t slot = JIT_READ_BYTE();\n");
+    fprintf(f, "  (void)JIT_READ_BYTE();\n");
+    fprintf(f, "  slots[slot] = JIT_PEEK(0);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_UNPACK_SET_LOCAL(FILE *f, Insn *insn) {
@@ -203,6 +225,8 @@ static int jitEmit_OR(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_POP(FILE *f, Insn *insn) {
+    fprintf(f, "INC_IP(1);\n");
+    fprintf(f, "JIT_POP();\n");
     return 0;
 }
 static int jitEmit_POP_CREF(FILE *f, Insn *insn) {
@@ -309,8 +333,8 @@ static int jitEmitInsn(FILE *f, Insn *insn) {
 
 static int jitEmitFunctionEnter(FILE *f, Iseq *seq, Node *funcNode) {
     fprintf(f, "#include \"cjit_header.h\"\n");
-    fprintf(f, "extern Value jittedFunc(LxThread *th, Value **sp, uint8_t **ip, Value *constantSlots);\n");
-    fprintf(f, "Value jittedFunc(LxThread *th, Value **sp, uint8_t **ip, Value *constantSlots) {\n");
+    fprintf(f, "extern Value jittedFunc(LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots);\n");
+    fprintf(f, "Value jittedFunc(LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots) {\n");
     return 0;
 }
 
