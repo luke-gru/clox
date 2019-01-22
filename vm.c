@@ -2425,8 +2425,8 @@ vmLoop:
       }
       CASE_OP(AND): {
           Value rhs = pop();
-          Value lhs = peek(0);
-          (void)lhs;
+          /*Value lhs = peek(0);*/
+          /*(void)lhs;*/
           // NOTE: we only check truthiness of rhs because lhs is
           // short-circuited (a JUMP_IF_FALSE is output in the bytecode for
           // the lhs).
@@ -2639,14 +2639,14 @@ vmLoop:
       }
       CASE_OP(JUMP): {
           uint8_t ipOffset = READ_BYTE();
-          ASSERT(ipOffset > 0);
+          DBG_ASSERT(ipOffset > 0);
           frame->ip += (ipOffset-1);
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(LOOP): {
           uint8_t ipOffset = READ_BYTE();
-          ASSERT(ipOffset > 0);
+          DBG_ASSERT(ipOffset > 0);
           // add 1 for the instruction we just read, and 1 to go 1 before the
           // instruction we want to execute next.
           frame->ip -= (ipOffset+2);

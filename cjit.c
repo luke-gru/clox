@@ -28,12 +28,36 @@ static int jitEmit_ADD(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_SUBTRACT(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SUBTRACT);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value b = JIT_PEEK(0);\n");
+    fprintf(f, "  Value a = JIT_PEEK(1);\n");
+    fprintf(f, "  JIT_POP();\n");
+    fprintf(f, "  JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) - AS_NUMBER(b)));\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_MULTIPLY(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SUBTRACT);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value b = JIT_PEEK(0);\n");
+    fprintf(f, "  Value a = JIT_PEEK(1);\n");
+    fprintf(f, "  JIT_POP();\n");
+    fprintf(f, "  JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) * AS_NUMBER(b)));\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_DIVIDE(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SUBTRACT);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value b = JIT_PEEK(0);\n");
+    fprintf(f, "  Value a = JIT_PEEK(1);\n");
+    fprintf(f, "  JIT_POP();\n");
+    fprintf(f, "  JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) / AS_NUMBER(b)));\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_MODULO(FILE *f, Insn *insn) {
@@ -206,25 +230,49 @@ static int jitEmit_TO_BLOCK(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_TRUE(FILE *f, Insn *insn) {
+    fprintf(f, "JIT_ASSERT_OPCODE(OP_TRUE);\n");
+    fprintf(f, "INC_IP(1);\n");
+    fprintf(f, "JIT_PUSH(TRUE_VAL);\n");
     return 0;
 }
 static int jitEmit_FALSE(FILE *f, Insn *insn) {
+    fprintf(f, "JIT_ASSERT_OPCODE(OP_FALSE);\n");
+    fprintf(f, "INC_IP(1);\n");
+    fprintf(f, "JIT_PUSH(FALSE_VAL);\n");
     return 0;
 }
 static int jitEmit_NIL(FILE *f, Insn *insn) {
+    fprintf(f, "JIT_ASSERT_OPCODE(OP_NIL);\n");
     fprintf(f, "INC_IP(1);\n");
     fprintf(f, "JIT_PUSH(NIL_VAL);\n");
     return 0;
 }
 
 static int jitEmit_AND(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_AND);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value rhs = JIT_POP();\n");
+    // NOTE: we only check truthiness of rhs because lhs is
+    // short-circuited (a JUMP_IF_FALSE is output in the bytecode for
+    // the lhs).
+    fprintf(f, "  JIT_PUSH_SWAP(isTruthy(rhs) ? rhs : BOOL_VAL(false));\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_OR(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_OR);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value rhs = JIT_POP();\n");
+    fprintf(f, "  Value lhs = JIT_PEEK(0);\n");
+    fprintf(f, "  JIT_PUSH_SWAP(isTruthy(lhs) || isTruthy(rhs) ? rhs : lhs);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 
 static int jitEmit_POP(FILE *f, Insn *insn) {
+    fprintf(f, "JIT_ASSERT_OPCODE(OP_POP);\n");
     fprintf(f, "INC_IP(1);\n");
     fprintf(f, "JIT_POP();\n");
     return 0;
@@ -256,6 +304,14 @@ static int jitEmit_LESS_EQUAL(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_JUMP(FILE *f, Insn *insn) {
+    ASSERT(insn->jumpTo);
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_JUMP);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  uint8_t offset = JIT_READ_BYTE();\n");
+    fprintf(f, "  *ip += (offset-1);\n");
+    fprintf(f, "  goto jumpLabel;");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_JUMP_IF_FALSE(FILE *f, Insn *insn) {
@@ -307,6 +363,7 @@ static int jitEmit_CHECK_KEYWORD(FILE *f, Insn *insn) {
 
 static int jitEmit_LEAVE(FILE *f, Insn *insn) {
     fprintf(f, ""
+    "JIT_ASSERT_OPCODE(OP_LEAVE);\n"
     "INC_IP(1);\n"
     "vm.exited = true;\n"
     "return JIT_NATIVE_SUCCESS;\n"
@@ -318,9 +375,15 @@ static void jitEmitDebug(FILE *f, uint8_t code) {
     fprintf(f, "fprintf(stderr, \"jit running op: %s (%d)\\n\");\n", opName((OpCode)code), code);
 }
 
+static void jitEmitLabel(FILE *f, Insn *insn) {
+    if (insn->isLabel && !insn->jumpTo) {
+        fprintf(f, "jumpLabel:\n");
+    }
+}
+
 
 static int jitEmitInsn(FILE *f, Insn *insn) {
-#define OPCODE(opcode) case OP_##opcode : { jitEmitDebug(f, insn->code); return jitEmit_##opcode(f, insn); }
+#define OPCODE(opcode) case OP_##opcode : { jitEmitDebug(f, insn->code); int res = jitEmit_##opcode(f, insn); jitEmitLabel(f, insn); return res; }
     switch (insn->code) {
 #include "opcodes.h.inc"
     default:

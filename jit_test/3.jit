@@ -1,0 +1,9 @@
+fun a() {
+  if (true) {
+    print 1;
+  } else {
+    print 2;
+  }
+}
+
+a();
