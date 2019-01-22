@@ -726,7 +726,7 @@ static inline bool canCmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
 }
 
 // returns -1, 0, 1, or -2 on error
-static int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
+int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
     if (IS_NUMBER(lhs) && IS_NUMBER(rhs)) {
         double numA = AS_NUMBER(lhs);
         double numB = AS_NUMBER(rhs);

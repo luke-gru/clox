@@ -58,8 +58,13 @@ typedef struct Insn {
     struct Insn *next;
     struct Insn *prev;
     struct Insn *jumpTo; // for jump instructions
+    struct Insn *jumpedFrom; // for labels
     NodeLvl nlvl;
     bool isLabel; // is this a jump target?
+    bool isJumpLabel;
+    bool isLoopLabel; // is this a jump target for OP_LOOP?
+    int jumpNo; // for jump instructions
+    int loopNo; // for loop instructions
 } Insn;
 
 // Instruction sequence for a single function (or top-level).

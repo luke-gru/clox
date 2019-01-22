@@ -869,8 +869,10 @@ static void patchJump(Insn *toPatch, int jumpoffset, Insn *jumpTo) {
         jumpoffset = insnOffset(toPatch, jumpTo)+jumpTo->numOperands;
     }
     toPatch->operands[0] = jumpoffset;
-    toPatch->jumpTo = jumpTo; // FIXME: should be jumpToPrev
+    toPatch->jumpTo = jumpTo; // FIXME: should be called `jumpToPrev`
+    jumpTo->jumpedFrom = toPatch;
     jumpTo->isLabel = true;
+    jumpTo->isJumpLabel = true;
 }
 
 // Emit a jump backwards (loop) instruction from the current code count to offset `loopStart`
@@ -885,6 +887,7 @@ static void emitLoop(int loopStart) {
   loopInsn->jumpTo = insnAtOffset(currentIseq(), loopStart-2);
   ASSERT(loopInsn->jumpTo);
   loopInsn->jumpTo->isLabel = true;
+  loopInsn->jumpTo->isLoopLabel = true;
 }
 
 static inline bool isBreak(Insn *in) {

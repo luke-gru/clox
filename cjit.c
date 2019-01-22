@@ -5,6 +5,9 @@
 #include "vm.h"
 #include "object.h"
 
+static int jumpNo = 0;
+static int loopNo = 0;
+
 static int jitEmit_CONSTANT(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_CONSTANT);\n");
@@ -294,6 +297,18 @@ static int jitEmit_GREATER(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_LESS(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_LESS);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value rhs = JIT_POP();\n");
+    fprintf(f, "  Value lhs = JIT_PEEK(0);\n");
+    fprintf(f, ""
+    "  if (cmpValues(lhs, rhs, %d) == -1) {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(true));\n"
+    "  } else {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(false));\n"
+    "  }\n", insn->code);
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_GREATER_EQUAL(FILE *f, Insn *insn) {
@@ -304,17 +319,33 @@ static int jitEmit_LESS_EQUAL(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_JUMP(FILE *f, Insn *insn) {
+    jumpNo++;
     ASSERT(insn->jumpTo);
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_JUMP);\n");
     fprintf(f, "  INC_IP(1);\n");
     fprintf(f, "  uint8_t offset = JIT_READ_BYTE();\n");
     fprintf(f, "  *ip += (offset-1);\n");
-    fprintf(f, "  goto jumpLabel;");
+    fprintf(f, "  goto jumpLabel%d;\n", jumpNo);
     fprintf(f, "}\n");
+    insn->jumpNo = jumpNo;
     return 0;
 }
 static int jitEmit_JUMP_IF_FALSE(FILE *f, Insn *insn) {
+    jumpNo++;
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_JUMP_IF_FALSE);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value cond = JIT_POP();\n");
+    fprintf(f, "  uint8_t ipOffset = JIT_READ_BYTE();\n");
+    fprintf(f, ""
+    "  if (!isTruthy(cond)) {\n"
+    "     DBG_ASSERT(ipOffset > 0);\n"
+    "     *ip += (ipOffset-1);\n"
+    "     goto jumpLabel%d;"
+    "  }\n", jumpNo);
+    fprintf(f, "}\n");
+    insn->jumpNo = jumpNo;
     return 0;
 }
 static int jitEmit_JUMP_IF_TRUE(FILE *f, Insn *insn) {
@@ -327,6 +358,15 @@ static int jitEmit_JUMP_IF_TRUE_PEEK(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_LOOP(FILE *f, Insn *insn) {
+    ASSERT(insn->jumpTo);
+    ASSERT(insn->jumpTo->loopNo > 0);
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_LOOP);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  uint8_t ipOffset = JIT_READ_BYTE();\n");
+    fprintf(f, "  *ip -= (ipOffset+2);\n");
+    fprintf(f, "  goto loopLabel%d;\n", insn->jumpTo->loopNo);
+    fprintf(f, "}\n");
     return 0;
 }
 
@@ -372,18 +412,36 @@ static int jitEmit_LEAVE(FILE *f, Insn *insn) {
 }
 
 static void jitEmitDebug(FILE *f, uint8_t code) {
+#ifndef NDEBUG
     fprintf(f, "fprintf(stderr, \"jit running op: %s (%d)\\n\");\n", opName((OpCode)code), code);
+#endif
 }
 
-static void jitEmitLabel(FILE *f, Insn *insn) {
-    if (insn->isLabel && !insn->jumpTo) {
-        fprintf(f, "jumpLabel:\n");
+static void jitEmitJumpLabel(FILE *f, Insn *insn) {
+    if (insn->isJumpLabel) {
+        ASSERT(insn->jumpedFrom);
+        fprintf(f, "jumpLabel%d:\n", insn->jumpedFrom->jumpNo);
+    }
+}
+
+static void jitEmitLoopLabel(FILE *f, Insn *insn) {
+    if (insn->isLoopLabel) {
+        loopNo++;
+        insn->loopNo = loopNo;
+        fprintf(f, "loopLabel%d:\n", insn->loopNo);
     }
 }
 
 
 static int jitEmitInsn(FILE *f, Insn *insn) {
-#define OPCODE(opcode) case OP_##opcode : { jitEmitDebug(f, insn->code); int res = jitEmit_##opcode(f, insn); jitEmitLabel(f, insn); return res; }
+#define OPCODE(opcode) case OP_##opcode : {\
+    jitEmitDebug(f, insn->code);\
+    jitEmitLoopLabel(f, insn);\
+    int res = jitEmit_##opcode(f, insn);\
+    jitEmitJumpLabel(f, insn);\
+    return res;\
+}
+
     switch (insn->code) {
 #include "opcodes.h.inc"
     default:
@@ -415,6 +473,8 @@ FILE *jitEmitIseqFile(Iseq *seq, Node *funcNode) {
 
 int jitEmitIseq(FILE *f, Iseq *seq, Node *funcNode) {
     int ret = 0;
+    jumpNo = 0;
+    loopNo = 0;
     jitEmitFunctionEnter(f, seq, funcNode);
     Insn *insn = seq->insns;
     while (insn) {

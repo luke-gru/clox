@@ -202,6 +202,8 @@ void fillCallableName(Value callable, char buf[], size_t buflen);
 struct ObjString;
 struct ObjString *getCallableFunctionName(Value callable);
 
+int cmpValues(Value lhs, Value rhs, uint8_t cmpOp);
+
 #ifdef __cplusplus
 }
 #endif
