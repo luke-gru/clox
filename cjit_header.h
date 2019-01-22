@@ -6,5 +6,7 @@
 #include "vm.h"
 #include "cjit.h"
 #include "vec.h"
+#include "compiler.h"
+#include "runtime.h"
 
 #endif

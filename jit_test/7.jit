@@ -1,0 +1,5 @@
+fun a() {
+  print String("string");
+}
+
+a();

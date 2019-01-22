@@ -141,6 +141,23 @@ static int jitEmit_DEFINE_GLOBAL(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_GET_CONST(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_GET_CONST);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value varName = JIT_READ_CONSTANT();\n");
+    fprintf(f, "  Value val;\n");
+    fprintf(f, "  ObjClass *cref = NULL;\n");
+    fprintf(f, ""
+    "  if (th->v_crefStack.length > 0) {\n"
+    "    cref = TO_CLASS(vec_last(&th->v_crefStack));\n"
+    "  }\n"
+    "  if (findConstantUnder(cref, AS_STRING(varName), &val)) {\n"
+    "    JIT_PUSH(val);\n"
+    "  } else {\n" // TODO: handle constant not found
+    "    ASSERT(0);\n"
+    "  }\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_SET_CONST(FILE *f, Insn *insn) {
@@ -181,6 +198,15 @@ static int jitEmit_SETTER(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_CALL(FILE *f, Insn *insn) {
+    fprintf(f, "{\n"
+    "  JIT_ASSERT_OPCODE(OP_CALL);\n"
+    "  INC_IP(1);\n"
+    "  uint8_t numArgs = JIT_READ_BYTE();\n"
+    "  Value callableVal = JIT_PEEK(numArgs);\n"
+    "  Value callInfoVal = JIT_READ_CONSTANT();\n"
+    "  CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));\n"
+    "  callCallable(callableVal, numArgs, false, callInfo);\n"
+    "}\n");
     return 0;
 }
 static int jitEmit_INVOKE(FILE *f, Insn *insn) {
