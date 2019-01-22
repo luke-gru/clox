@@ -513,14 +513,9 @@ int jitFunction(ObjFunction *func) {
     ASSERT(func->funcNode);
     FILE *f = jitEmitIseqFile(func->iseq, func->funcNode);
     fclose(f);
-    int res = system("gcc -std=c99 -fPIC -Wall -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -O2 -c /tmp/loxjit.c -o /tmp/loxjit.o");
+    int res = system("gcc -std=c99 -fPIC -Wall -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -O2 -shared -o /tmp/loxjit.so /tmp/loxjit.c");
     if (res != 0) {
         fprintf(stderr, "Error during jit gcc:\n");
-        exit(1);
-    }
-    res = system("gcc -shared -o /tmp/loxjit.so /tmp/loxjit.o");
-    if (res != 0) {
-        fprintf(stderr, "Error during jit gcc (shared)\n");
         exit(1);
     }
     void *dlHandle = dlopen("/tmp/loxjit.so", RTLD_NOW|RTLD_LOCAL);
