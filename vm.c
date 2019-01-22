@@ -3109,7 +3109,7 @@ vmLoop:
           uint8_t isStatic = READ_BYTE();
           push(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
-          buf->klass = lxStringClass;
+          /*buf->klass = lxStringClass;*/
           if (UNLIKELY(isStatic)) {
               STRING_SET_STATIC(buf);
               push(OBJ_VAL(buf));

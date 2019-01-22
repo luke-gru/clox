@@ -216,6 +216,16 @@ static int jitEmit_PRINT(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_STRING(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_STRING);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value strLit = JIT_READ_CONSTANT();\n");
+    fprintf(f, "  uint8_t isStatic = JIT_READ_BYTE();\n");
+    fprintf(f, "  (void)isStatic;\n");
+    fprintf(f, "  JIT_PUSH(OBJ_VAL(lxStringClass));\n");
+    fprintf(f, "  JIT_PUSH(strLit);\n");
+    fprintf(f, "  callCallable(JIT_PEEK(1), 1, false, NULL);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_ARRAY(FILE *f, Insn *insn) {
