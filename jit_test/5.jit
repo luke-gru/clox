@@ -1,0 +1,7 @@
+globalVar = 1;
+fun a() {
+  globalVar = 2;
+  print globalVar;
+}
+
+a();

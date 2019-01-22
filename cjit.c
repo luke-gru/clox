@@ -111,10 +111,30 @@ static int jitEmit_SET_LOCAL(FILE *f, Insn *insn) {
 static int jitEmit_UNPACK_SET_LOCAL(FILE *f, Insn *insn) {
     return 0;
 }
-static int jitEmit_GET_GLOBAL(FILE *f, Insn *insn) {
+static int jitEmit_SET_GLOBAL(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SET_GLOBAL);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value val = JIT_PEEK(0);\n");
+    fprintf(f, "  Value varName = JIT_READ_CONSTANT();\n");
+    fprintf(f, "  tableSet(&vm.globals, varName, val);\n");
+    fprintf(f, "}\n");
     return 0;
 }
-static int jitEmit_SET_GLOBAL(FILE *f, Insn *insn) {
+static int jitEmit_GET_GLOBAL(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_GET_GLOBAL);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value varName = JIT_READ_CONSTANT();\n");
+    fprintf(f, "  Value val;\n");
+    fprintf(f, ""
+    "  if (tableGet(&vm.globals, varName, &val)) {\n"
+    "    JIT_PUSH(val);\n"
+    "  } else if (tableGet(&vm.constants, varName, &val)) {\n"
+    "    JIT_PUSH(val);\n"
+    "  } else { ASSERT(0); /* TODO */ }\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_DEFINE_GLOBAL(FILE *f, Insn *insn) {
@@ -342,7 +362,7 @@ static int jitEmit_JUMP_IF_FALSE(FILE *f, Insn *insn) {
     "  if (!isTruthy(cond)) {\n"
     "     DBG_ASSERT(ipOffset > 0);\n"
     "     *ip += (ipOffset-1);\n"
-    "     goto jumpLabel%d;"
+    "     goto jumpLabel%d;\n"
     "  }\n", jumpNo);
     fprintf(f, "}\n");
     insn->jumpNo = jumpNo;
