@@ -105,12 +105,15 @@ typedef struct ObjInternal {
   bool isRealObject; // is allocated in object heap
 } ObjInternal;
 
+typedef Value (*JitNative)(struct LxThread *th, Value **sp, uint8_t **ip, Value *constantSlots);
+
 typedef struct ObjFunction {
   Obj object;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM
   Chunk *chunk;
   Iseq *iseq; // for jitting the function
+  JitNative jitNative;
   struct ObjString *name;
   Obj *klass; // ObjClass* or ObjModule* (if method)
   struct sNode *funcNode;

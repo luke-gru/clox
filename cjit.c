@@ -1,16 +1,17 @@
+#include <dlfcn.h>
+#include <stdlib.h>
+#include <errno.h>
 #include "cjit.h"
 #include "vm.h"
-
-#define JIT_READ_BYTE() ((*ip++))
-#define JIT_READ_CONSTANT() (constantSlots[JIT_READ_BYTE()])
-#define JIT_PUSH(val) push(val)
-#define JIT_POP() pop()
-#define JIT_NATIVE_SUCCESS 1
-#define JIT_NATIVE_ERROR -1
+#include "object.h"
 
 static int jitEmit_CONSTANT(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_CONSTANT);\n");
+    fprintf(f, "  INC_IP(1);\n");
     fprintf(f, "  Value constant = JIT_READ_CONSTANT();\n");
+    fprintf(f, "  printValue(stdout, constant, true, -1);\n");
+    fprintf(f, "  fprintf(stdout, \"\\n\");\n");
     fprintf(f, "  JIT_PUSH(constant);\n");
     fprintf(f, "}\n");
     return 0;
@@ -126,10 +127,18 @@ static int jitEmit_GET_SUPER(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_RETURN(FILE *f, Insn *insn) {
+    fprintf(f, "{\n"
+    "  JIT_ASSERT_OPCODE(OP_RETURN);\n"
+    "  INC_IP(1);\n"
+    "  Value val = NIL_VAL;\n"
+    "  return val;\n"
+    "}\n");
     return 0;
 }
 static int jitEmit_PRINT(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_PRINT);\n");
+    fprintf(f, "  INC_IP(1);\n");
     fprintf(f, "  Value val = JIT_POP();\n");
     fprintf(f, "  printValue(stdout, val, true, -1);\n");
     fprintf(f, "  printf(\"\\n\");\n");
@@ -181,6 +190,8 @@ static int jitEmit_FALSE(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_NIL(FILE *f, Insn *insn) {
+    fprintf(f, "INC_IP(1);\n");
+    fprintf(f, "JIT_PUSH(NIL_VAL);\n");
     return 0;
 }
 
@@ -272,16 +283,20 @@ static int jitEmit_CHECK_KEYWORD(FILE *f, Insn *insn) {
 
 static int jitEmit_LEAVE(FILE *f, Insn *insn) {
     fprintf(f, ""
-    "if (th == vm.mainThread && !isInEval() && !isInLoadedScript()) {\n"
-    "  vm.exited = true;\n"
-    "}\n"
-    "(th->vmRunLvl)--;\n");
+    "INC_IP(1);\n"
+    "vm.exited = true;\n"
+    "return JIT_NATIVE_SUCCESS;\n"
+    );
     return 0;
+}
+
+static void jitEmitDebug(FILE *f, uint8_t code) {
+    fprintf(f, "fprintf(stderr, \"jit running op: %s (%d)\\n\");\n", opName((OpCode)code), code);
 }
 
 
 static int jitEmitInsn(FILE *f, Insn *insn) {
-#define OPCODE(code) case OP_##code : return jitEmit_##code(f, insn);
+#define OPCODE(opcode) case OP_##opcode : { jitEmitDebug(f, insn->code); return jitEmit_##opcode(f, insn); }
     switch (insn->code) {
 #include "opcodes.h.inc"
     default:
@@ -293,7 +308,9 @@ static int jitEmitInsn(FILE *f, Insn *insn) {
 }
 
 static int jitEmitFunctionEnter(FILE *f, Iseq *seq, Node *funcNode) {
-    fprintf(f, "int jittedFunc(LxThread *th, Value **sp, uint8_t **ip, Value *constantSlots) {\n");
+    fprintf(f, "#include \"cjit_header.h\"\n");
+    fprintf(f, "extern Value jittedFunc(LxThread *th, Value **sp, uint8_t **ip, Value *constantSlots);\n");
+    fprintf(f, "Value jittedFunc(LxThread *th, Value **sp, uint8_t **ip, Value *constantSlots) {\n");
     return 0;
 }
 
@@ -306,7 +323,6 @@ static int jitEmitFunctionLeave(FILE *f, Iseq *seq, Node *funcNode) {
 FILE *jitEmitIseqFile(Iseq *seq, Node *funcNode) {
     FILE *f = fopen("/tmp/loxjit.c", "w");
     jitEmitIseq(f, seq, funcNode);
-    fclose(f);
     return f;
 }
 
@@ -322,4 +338,34 @@ int jitEmitIseq(FILE *f, Iseq *seq, Node *funcNode) {
     }
     jitEmitFunctionLeave(f, seq, funcNode);
     return ret;
+}
+
+int jitFunction(ObjFunction *func) {
+    ASSERT(!func->jitNative);
+    ASSERT(func->iseq);
+    ASSERT(func->funcNode);
+    FILE *f = jitEmitIseqFile(func->iseq, func->funcNode);
+    fclose(f);
+    int res = system("gcc -std=c99 -fPIC -Wall -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -O2 -c /tmp/loxjit.c -o /tmp/loxjit.o");
+    if (res != 0) {
+        fprintf(stderr, "Error during jit gcc:\n");
+        exit(1);
+    }
+    res = system("gcc -shared -o /tmp/loxjit.so /tmp/loxjit.o");
+    if (res != 0) {
+        fprintf(stderr, "Error during jit gcc (shared)\n");
+        exit(1);
+    }
+    void *dlHandle = dlopen("/tmp/loxjit.so", RTLD_NOW|RTLD_LOCAL);
+    if (!dlHandle) {
+        fprintf(stderr, "dlopen failed with: %s\n", strerror(errno));
+        exit(1);
+    }
+    void *dlSym = dlsym(dlHandle, "jittedFunc");
+    if (!dlSym) {
+        fprintf(stderr, "dlsym failed with: %s\n", dlerror());
+        exit(1);
+    }
+    func->jitNative = (JitNative)dlSym;
+    return 0;
 }

@@ -1,6 +1,7 @@
 ifeq ($(strip $(CC)),)
 CC=gcc
 endif
+LINK_OPTS=-ldl
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 DEFINES=-D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLX_BUILT_DIR=$(ROOT_DIR)
 GCC_CFLAGS=-std=c99 -Wall -Wno-unused-label -Wno-unused-function -I. -Ivendor -pthread ${DEFINES}
@@ -35,16 +36,16 @@ BUILD_FILE_DEBUG=clox
 # default
 .PHONY: debug
 debug: build
-	${CC} ${CFLAGS} $(SRCS) ${DEBUG_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_DEBUG}
+	${CC} ${CFLAGS} $(SRCS) ${DEBUG_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_DEBUG} ${LINK_OPTS}
 
 # default
 .PHONY: profile
 gprof: build
-	${CC} ${CFLAGS} $(SRCS) ${GPROF_FLAGS} -o ${BUILD_DIR}/gprof
+	${CC} ${CFLAGS} $(SRCS) ${GPROF_FLAGS} -o ${BUILD_DIR}/gprof ${LINK_OPTS}
 
 .PHONY: release
 release: build
-	${CC} ${CFLAGS} $(SRCS) ${RELEASE_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_RELEASE}
+	${CC} ${CFLAGS} $(SRCS) ${RELEASE_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_RELEASE} ${LINK_OPTS}
 
 .PHONY: build
 build:
@@ -57,7 +58,7 @@ clean:
 
 .PHONY: build_test_object
 build_test_object: build
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_object.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_object
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_object.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_object ${LINK_OPTS}
 
 .PHONY: run_test_object
 run_test_object:
@@ -65,7 +66,7 @@ run_test_object:
 
 .PHONY: build_test_nodes
 build_test_nodes: build
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_nodes.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_nodes
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_nodes.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_nodes ${LINK_OPTS}
 
 .PHONY: run_test_nodes
 run_test_nodes:
@@ -74,7 +75,7 @@ run_test_nodes:
 # NOTE: the compiler tests are deprecated, and not maintained
 .PHONY: build_test_compiler
 build_test_compiler: build
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_compiler.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_compiler
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_compiler.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_compiler ${LINK_OPTS}
 
 .PHONY: run_test_compiler
 run_test_compiler:
@@ -82,7 +83,7 @@ run_test_compiler:
 
 .PHONY: build_test_vm
 build_test_vm: build
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_vm.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_vm
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_vm.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_vm ${LINK_OPTS}
 
 .PHONY: run_test_vm
 run_test_vm:
@@ -90,7 +91,7 @@ run_test_vm:
 
 .PHONY: build_test_gc
 build_test_gc: build
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_gc.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_gc
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_gc.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_gc ${LINK_OPTS}
 
 .PHONY: run_test_gc
 run_test_gc:
@@ -98,7 +99,7 @@ run_test_gc:
 
 .PHONY: build_test_examples
 build_test_examples: build
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_examples.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_examples
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_examples.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_examples ${LINK_OPTS}
 
 .PHONY: run_test_examples
 run_test_examples:
@@ -106,7 +107,7 @@ run_test_examples:
 
 .PHONY: build_test_regex
 build_test_regex: build
-	${CC} ${CFLAGS} $(TEST_SRCS) test/test_regex.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_regex
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_regex.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_regex ${LINK_OPTS}
 
 .PHONY: run_test_regex
 run_test_regex:

@@ -1686,7 +1686,12 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     } else {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(vm.anonString));
     }
-    vm_run(); // actually run the function until return
+    if (func->jitNative) {
+        Value val = func->jitNative(th, &EC->stackTop, &frame->ip, currentChunk()->constants->values);
+        push(val);
+    } else {
+        vm_run(); // actually run the function until return
+    }
     return true;
 }
 
@@ -2699,6 +2704,12 @@ vmLoop:
           }
           Value callInfoVal = READ_CONSTANT();
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
+          if (IS_CLOSURE(callableVal)) {
+              ObjClosure *closure = AS_CLOSURE(callableVal);
+              if (!closure->function->jitNative) {
+                  jitFunction(closure->function);
+              }
+          }
           callCallable(callableVal, numArgs, false, callInfo);
           ASSERT_VALID_STACK();
           DISPATCH_BOTTOM();

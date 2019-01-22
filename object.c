@@ -280,6 +280,8 @@ ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, int flags) {
         initChunk(chunk);
     }
     function->chunk = chunk;
+    function->iseq = NULL; // set in compile.c
+    function->jitNative = NULL;
     GC_PROMOTE(function, GC_GEN_YOUNG_MAX);
     return function;
 }

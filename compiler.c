@@ -2093,9 +2093,6 @@ Chunk *compile_src(char *src, CompileErr *err) {
     initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, NULL);
     emitNode(program);
     ObjFunction *prog = endCompiler(NULL);
-    /*fprintf(stderr, "Emitting jitted function\n");*/
-    /*jitEmitIseqFile(prog->iseq, prog->funcNode);*/
-    /*fprintf(stderr, "Done emitting jitted function\n");*/
     if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
         printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
     }
