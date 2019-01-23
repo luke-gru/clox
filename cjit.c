@@ -8,6 +8,7 @@
 static int jumpNo = 0;
 static int loopNo = 0;
 
+
 static int jitEmit_CONSTANT(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_CONSTANT);\n");
@@ -23,10 +24,7 @@ static int jitEmit_ADD(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_ADD);\n");
     fprintf(f, "  INC_IP(1);\n");
-    fprintf(f, "  Value b = JIT_PEEK(0);\n");
-    fprintf(f, "  Value a = JIT_PEEK(1);\n");
-    fprintf(f, "  JIT_POP();\n");
-    fprintf(f, "  JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) + AS_NUMBER(b)));\n");
+    fprintf(f, "  JIT_BINARY_OP(+, OP_ADD, double);\n");
     fprintf(f, "}\n");
     return 0;
 }
@@ -34,23 +32,7 @@ static int jitEmit_SUBTRACT(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_SUBTRACT);\n");
     fprintf(f, "  INC_IP(1);\n");
-    fprintf(f, "  Value b = JIT_PEEK(0);\n");
-    fprintf(f, "  Value a = JIT_PEEK(1);\n");
-    fprintf(f, ""
-    "  if (IS_NUMBER(a) && IS_NUMBER(b)) {\n"
-    "    JIT_POP();\n"
-    "    JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) - AS_NUMBER(b)));\n"
-    "  } else if (IS_INSTANCE_LIKE(a)) {\n"
-    "    ObjInstance *inst = AS_INSTANCE(a);\n"
-    "    ObjString *methodName = methodNameForBinop(%d);\n"
-    "    Obj *callable = NULL;\n"
-    "    if (methodName) {\n"
-    "      callable = instanceFindMethod(inst, methodName);\n"
-    "     }\n"
-    "    callCallable(OBJ_VAL(callable), 1, true, NULL);\n"
-    "  }\n",
-    insn->code
-    );
+    fprintf(f, "  JIT_BINARY_OP(-, OP_SUBTRACT, double);\n");
     fprintf(f, "}\n");
     return 0;
 }
@@ -58,10 +40,7 @@ static int jitEmit_MULTIPLY(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_SUBTRACT);\n");
     fprintf(f, "  INC_IP(1);\n");
-    fprintf(f, "  Value b = JIT_PEEK(0);\n");
-    fprintf(f, "  Value a = JIT_PEEK(1);\n");
-    fprintf(f, "  JIT_POP();\n");
-    fprintf(f, "  JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) * AS_NUMBER(b)));\n");
+    fprintf(f, "  JIT_BINARY_OP(*, OP_MULTIPLY, double);\n");
     fprintf(f, "}\n");
     return 0;
 }
@@ -69,35 +48,78 @@ static int jitEmit_DIVIDE(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_SUBTRACT);\n");
     fprintf(f, "  INC_IP(1);\n");
-    fprintf(f, "  Value b = JIT_PEEK(0);\n");
-    fprintf(f, "  Value a = JIT_PEEK(1);\n");
-    fprintf(f, "  JIT_POP();\n");
-    fprintf(f, "  JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) / AS_NUMBER(b)));\n");
+    fprintf(f, "  JIT_BINARY_OP(/, OP_DIVIDE, double);\n");
     fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_MODULO(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_MODULO);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  JIT_BINARY_OP(%%, OP_MODULO, double);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_BITOR(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_BITOR);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  JIT_BINARY_OP(|, OP_BITOR, int);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_BITAND(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_BITAND);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  JIT_BINARY_OP(&, OP_BITAND, int);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_BITXOR(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_BITXOR);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  JIT_BINARY_OP(^, OP_BITXOR, int);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_SHOVEL_L(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SHOVEL_L);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  JIT_BINARY_OP(<<, OP_SHOVEL_L, int);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_SHOVEL_R(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SHOVEL_R);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  JIT_BINARY_OP(>>, OP_SHOVEL_R, int);\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_NEGATE(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_NEGATE);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value val = JIT_PEEK(0);\n"
+    "  JIT_PUSH_SWAP(NUMBER_VAL(-AS_NUMBER(val)));\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_NOT(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_NOT);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value val = JIT_PEEK(0);\n"
+    "  JIT_PUSH_SWAP(BOOL_VAL(!isTruthy(val)));\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 

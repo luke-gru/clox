@@ -13,6 +13,27 @@
 extern "C" {
 #endif
 
+#define JIT_BINARY_OP(op, opcode, type) \
+    do { \
+      Value b = JIT_PEEK(0);\
+      Value a = JIT_PEEK(1);\
+      if (IS_NUMBER(a) && IS_NUMBER(b)) {\
+          if (UNLIKELY(((opcode == OP_DIVIDE || opcode == OP_MODULO) && AS_NUMBER(b) == 0.00))) {\
+              throwErrorFmt(lxErrClass, "Can't divide by 0");\
+          }\
+          JIT_POP();\
+          JIT_PUSH_SWAP(NUMBER_VAL((type)AS_NUMBER(a) op (type)AS_NUMBER(b)));\
+      } else if (IS_INSTANCE_LIKE(a)) {\
+          ObjInstance *inst = AS_INSTANCE(a);\
+          ObjString *methodName = methodNameForBinop(opcode);\
+          Obj *callable = NULL;\
+          if (methodName) {\
+            callable = instanceFindMethod(inst, methodName);\
+          }\
+          callCallable(OBJ_VAL(callable), 1, true, NULL);\
+      }\
+    } while (0)
+
 static inline Value jit_pop(Value **sp) {
     (*sp)--;
     return **sp;
