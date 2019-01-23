@@ -1,0 +1,10 @@
+{
+  var upval = 1;
+
+  fun a() {
+    print upval;
+  }
+
+  a();
+}
+
