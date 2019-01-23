@@ -161,6 +161,20 @@ static int jitEmit_GET_CONST(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_SET_CONST(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SET_CONST);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value constName = JIT_READ_CONSTANT();\n"
+    "  Value val = JIT_PEEK(0);\n"
+    "  if (th->v_crefStack.length > 0) {\n"
+    "    Value ownerKlass = OBJ_VAL(vec_last(&th->v_crefStack));\n"
+    "    addConstantUnder(AS_STRING(constName)->chars, val, ownerKlass);\n"
+    "  } else {\n"
+    "    tableSet(&vm.constants, constName, val);\n"
+    "  }"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_GET_CONST_UNDER(FILE *f, Insn *insn) {
