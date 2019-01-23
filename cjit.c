@@ -611,6 +611,16 @@ static int jitEmit_GET_THROWN(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_INDEX_GET(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_INDEX_GET);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value lval = JIT_PEEK(1);\n"
+    "  ObjInstance *instance = AS_INSTANCE(lval);\n"
+    "  Obj *method = instanceFindMethodOrRaise(instance, INTERNED(\"opIndexGet\", 10));\n"
+    "  callCallable(OBJ_VAL(method), 1, true, NULL);\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_INDEX_SET(FILE *f, Insn *insn) {

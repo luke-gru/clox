@@ -1,0 +1,6 @@
+fun a() {
+  var ary = [1];
+  print ary[0];
+}
+
+a();
