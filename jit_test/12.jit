@@ -1,0 +1,6 @@
+fun a() {
+  var m = %{String(): true};
+  print m;
+}
+
+a();

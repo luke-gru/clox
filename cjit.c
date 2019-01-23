@@ -305,6 +305,24 @@ static int jitEmit_DUPMAP(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_MAP(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, ""
+    "  JIT_ASSERT_OPCODE(OP_MAP);\n"
+    "  INC_IP(1);\n"
+    "  uint8_t numKeyVals = JIT_READ_BYTE();\n"
+    "  Value mapVal = newMap();\n"
+    "  hideFromGC(AS_OBJ(mapVal));\n"
+    "  Table *map = AS_MAP(mapVal)->table;\n"
+    "  for (int i = 0; i < numKeyVals; i+=2) {\n"
+    "    Value key = JIT_POP();\n"
+    "    Value val = JIT_POP();\n"
+    "    tableSet(map, key, val);\n"
+    "    OBJ_WRITE(mapVal, key);\n"
+    "    OBJ_WRITE(mapVal, val);\n"
+    "  }\n"
+    "  JIT_PUSH(mapVal);\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_REGEX(FILE *f, Insn *insn) {
