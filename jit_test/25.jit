@@ -1,0 +1,5 @@
+fun a(kwarg: true) {
+  print kwarg;
+}
+
+a();

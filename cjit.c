@@ -800,6 +800,22 @@ static int jitEmit_INDEX_SET(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_CHECK_KEYWORD(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_CHECK_KEYWORD);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value kwMap = JIT_PEEK(0);\n"
+    "  ASSERT(IS_T_MAP(kwMap));\n"
+    "  uint8_t kwSlot = JIT_READ_BYTE();\n"
+    "  uint8_t mapSlot = JIT_READ_BYTE();\n"
+    "  (void)mapSlot;\n"
+    "  if (IS_UNDEF(getFrame()->slots[kwSlot])) {\n"
+    "    JIT_PUSH(BOOL_VAL(false));\n"
+    "  } else {\n"
+    "    JIT_PUSH(BOOL_VAL(true));\n"
+    "  }\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 
