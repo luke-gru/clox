@@ -35,7 +35,6 @@ static inline void jit_push_swap(Value val, Value **sp) {
     *(*sp-1) = val;
 }
 
-//fprintf(stderr, "old ip: %p, new ip: %p\n", *ip, ((*ip)+n));
 #define INC_IP(n) \
     (*ip)+=n
 

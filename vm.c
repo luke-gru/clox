@@ -2011,7 +2011,7 @@ static Value unpackValue(Value val, uint8_t idx) {
     }
 }
 
-static ObjString *methodNameForBinop(OpCode code) {
+ObjString *methodNameForBinop(OpCode code) {
     switch (code) {
     case OP_ADD:
         return INTERNED("opAdd", 5);

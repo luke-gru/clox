@@ -386,6 +386,10 @@ void runAtExitHooks(void);
 NORETURN void stopVM(int status);
 NORETURN void _stopVM(int status);
 
+// exported for JIT
+ObjString *methodNameForBinop(OpCode code);
+
+
 #ifdef __cplusplus
 }
 #endif

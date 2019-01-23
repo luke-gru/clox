@@ -36,8 +36,21 @@ static int jitEmit_SUBTRACT(FILE *f, Insn *insn) {
     fprintf(f, "  INC_IP(1);\n");
     fprintf(f, "  Value b = JIT_PEEK(0);\n");
     fprintf(f, "  Value a = JIT_PEEK(1);\n");
-    fprintf(f, "  JIT_POP();\n");
-    fprintf(f, "  JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) - AS_NUMBER(b)));\n");
+    fprintf(f, ""
+    "  if (IS_NUMBER(a) && IS_NUMBER(b)) {\n"
+    "    JIT_POP();\n"
+    "    JIT_PUSH_SWAP(NUMBER_VAL(AS_NUMBER(a) - AS_NUMBER(b)));\n"
+    "  } else if (IS_INSTANCE_LIKE(a)) {\n"
+    "    ObjInstance *inst = AS_INSTANCE(a);\n"
+    "    ObjString *methodName = methodNameForBinop(%d);\n"
+    "    Obj *callable = NULL;\n"
+    "    if (methodName) {\n"
+    "      callable = instanceFindMethod(inst, methodName);\n"
+    "     }\n"
+    "    callCallable(OBJ_VAL(callable), 1, true, NULL);\n"
+    "  }\n",
+    insn->code
+    );
     fprintf(f, "}\n");
     return 0;
 }
@@ -652,9 +665,9 @@ static int jitEmit_LEAVE(FILE *f, Insn *insn) {
 }
 
 static void jitEmitDebug(FILE *f, uint8_t code) {
-#ifndef NDEBUG
-    fprintf(f, "fprintf(stderr, \"jit running op: %s (%d)\\n\");\n", opName((OpCode)code), code);
-#endif
+/*#ifndef NDEBUG*/
+    /*fprintf(f, "fprintf(stderr, \"jit running op: %s (%d)\\n\");\n", opName((OpCode)code), code);*/
+/*#endif*/
 }
 
 static void jitEmitJumpLabel(FILE *f, Insn *insn) {

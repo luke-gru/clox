@@ -1,0 +1,9 @@
+fun a() {
+  var t1 = Timer();
+  for (var i = 0; i < 1000000; i+=1) {
+  }
+  var t2 = Timer();
+  print t2-t1;
+}
+
+a();
