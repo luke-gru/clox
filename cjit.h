@@ -17,6 +17,11 @@ static inline Value jit_pop(Value **sp) {
     return **sp;
 }
 
+static inline Value jit_popn(Value **sp, int n) {
+    (*sp)-=n;
+    return **sp;
+}
+
 static inline void jit_push(Value val, Value **sp) {
     **sp = val;
     (*sp)++;
@@ -45,6 +50,7 @@ static inline void jit_push_swap(Value val, Value **sp) {
 #define JIT_PUSH(val) jit_push(val, sp)
 #define JIT_PUSH_SWAP(val) jit_push_swap(val, sp)
 #define JIT_POP() jit_pop(sp)
+#define JIT_POPN(n) jit_popn(sp, n)
 #define JIT_NATIVE_SUCCESS ((Value)1)
 #define JIT_NATIVE_ERROR ((Value)0)
 #define JIT_PEEK(n) jit_peek(n, sp)

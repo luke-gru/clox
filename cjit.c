@@ -268,6 +268,23 @@ static int jitEmit_STRING(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_ARRAY(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_ARRAY);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  uint8_t numEls = JIT_READ_BYTE();\n"
+    "  Value aryVal = newArray();\n"
+    "  hideFromGC(AS_OBJ(aryVal));\n"
+    "  ValueArray *ary = &AS_ARRAY(aryVal)->valAry;\n"
+    "  for (int i = 0; i < numEls; i++) {\n"
+    "    Value el = JIT_POP();\n"
+    "    writeValueArrayEnd(ary, el);\n"
+    "    OBJ_WRITE(aryVal, el);\n"
+    "  }\n"
+    "  JIT_PUSH(aryVal);\n"
+    "  unhideFromGC(AS_OBJ(aryVal));\n"
+    "}\n"
+    "");
     return 0;
 }
 static int jitEmit_DUPARRAY(FILE *f, Insn *insn) {
@@ -359,6 +376,9 @@ static int jitEmit_POP_CREF(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_POP_N(FILE *f, Insn *insn) {
+    fprintf(f, "JIT_ASSERT_OPCODE(OP_POP_N);\n");
+    fprintf(f, "INC_IP(1);\n");
+    fprintf(f, "JIT_POPN(JIT_READ_BYTE());\n");
     return 0;
 }
 

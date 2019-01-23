@@ -1,0 +1,7 @@
+fun a() {
+  var s = String("hi");
+  var ary = [s];
+  print ary;
+}
+
+a();
