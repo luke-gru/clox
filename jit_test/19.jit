@@ -1,0 +1,9 @@
+fun a() {
+  throw Error("err");
+}
+
+try {
+  a();
+} catch (Error e) {
+  print e;
+}

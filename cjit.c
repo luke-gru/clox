@@ -639,6 +639,22 @@ static int jitEmit_IN(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_THROW(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_THROW);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value throwable = JIT_POP();\n"
+    "  if (IS_STRING(throwable)) {\n"
+          "Value msg = throwable;\n"
+          "throwable = newError(lxErrClass, msg);\n"
+    "  }\n"
+    "  if (UNLIKELY(!IS_AN_ERROR(throwable))) {\n"
+          "throwErrorFmt(lxTypeErrClass, \"Tried to throw unthrowable value, must be a subclass of Error. \"\n"
+              "\"Type found: %%s\", typeOfVal(throwable));\n"
+    "  }\n"
+    "  throwError(throwable);\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_GET_THROWN(FILE *f, Insn *insn) {
