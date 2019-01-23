@@ -2521,7 +2521,7 @@ vmLoop:
               } else {
                   throwErrorFmt(lxNameErrClass, "Undefined constant '%s::%s'.", className(AS_CLASS(klass)), AS_STRING(varName)->chars);
               }
-        }
+          }
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_CONST): {

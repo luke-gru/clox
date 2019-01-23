@@ -213,6 +213,31 @@ static int jitEmit_SET_CONST(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_GET_CONST_UNDER(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_GET_CONST_UNDER);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value klass = JIT_POP();\n"
+    "  Value varName = JIT_READ_CONSTANT();\n"
+    "  Value val;\n"
+    "  if (IS_NIL(klass)) {\n"
+    "    if (tableGet(&vm.constants, varName, &val)) {\n"
+    "      JIT_PUSH(val);\n"
+    "    } else {\n"
+    "      throwErrorFmt(lxNameErrClass, \"Undefined constant '%%s'.\", AS_STRING(varName)->chars);\n"
+    "    }\n"
+    "  } else {\n"
+    "    if (!IS_CLASS(klass) && !IS_MODULE(klass)) {\n"
+    "    throwErrorFmt(lxTypeErrClass, \"Constants must be defined under classes/modules\");\n"
+    "    }\n"
+    "    if (tableGet(CLASSINFO(AS_CLASS(klass))->constants, varName, &val)) {\n"
+    "      JIT_PUSH(val);\n"
+    "    } else {\n"
+    "      throwErrorFmt(lxNameErrClass, \"Undefined constant '%%s::%%s'.\", className(AS_CLASS(klass)), AS_STRING(varName)->chars);\n"
+    "    }\n"
+    "  }\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_CLOSURE(FILE *f, Insn *insn) {
