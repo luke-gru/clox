@@ -407,6 +407,22 @@ static int jitEmit_BLOCK_BREAK(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_BLOCK_CONTINUE(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_BLOCK_CONTINUE);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value ret;\n"
+    "  ObjString *key = INTERN(\"ret\");\n"
+    "  if (th->lastValue) {\n"
+          "ret = *th->lastValue;\n"
+    "  } else {\n"
+          "ret = NIL_VAL;\n"
+    "  }\n"
+    "  Value err = newError(lxContinueBlockErrClass, NIL_VAL);\n"
+    "  setProp(err, key, ret);\n"
+    "  throwError(err);\n" // blocks catch this, not propagated
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_BLOCK_RETURN(FILE *f, Insn *insn) {
