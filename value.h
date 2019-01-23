@@ -197,6 +197,7 @@ struct ObjString *valueToString(Value value, newStringFunc fn, int flags);
 const char *typeOfVal(Value val);
 uint32_t valHash(Value val);
 bool valEqual(Value a, Value b);
+bool isValueOpEqual(Value lhs, Value rhs);
 bool isTruthy(Value a);
 void fillCallableName(Value callable, char buf[], size_t buflen);
 struct ObjString;

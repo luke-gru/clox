@@ -440,6 +440,19 @@ static int jitEmit_POP_N(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_EQUAL(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_EQUAL);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value rhs = JIT_POP();\n"
+    "  Value lhs = JIT_PEEK(0);\n"
+    "  if (isValueOpEqual(lhs, rhs)) {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(true));\n"
+    "  } else {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(false));\n"
+    "  }\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_NOT_EQUAL(FILE *f, Insn *insn) {

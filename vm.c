@@ -747,49 +747,6 @@ int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
     UNREACHABLE_RETURN(-2);
 }
 
-static bool isValueOpEqual(Value lhs, Value rhs) {
-#ifdef NAN_TAGGING
-#else
-    if (lhs.type != rhs.type) {
-        return false;
-    }
-#endif
-    if (IS_OBJ(lhs)) {
-        if (IS_INSTANCE_LIKE(lhs)) {
-            ObjString *opEquals = INTERNED("opEquals", 8);
-            ObjInstance *self = AS_INSTANCE(lhs);
-            Obj *methodOpEq = instanceFindMethod(self, opEquals);
-            if (methodOpEq) {
-                Value ret = callVMMethod(self, OBJ_VAL(methodOpEq), 1, &rhs, NULL);
-                pop();
-                return isTruthy(ret);
-            }
-        }
-        // 2 objects, same pointers to Obj are equal
-        return AS_OBJ(lhs) == AS_OBJ(rhs);
-    } else if (IS_NUMBER(lhs)) { // 2 numbers, same values are equal
-#ifdef NAN_TAGGING
-        return lhs == rhs;
-#else
-        return AS_NUMBER(lhs) == AS_NUMBER(rhs);
-#endif
-    } else if (IS_NIL(lhs)) { // 2 nils, are equal
-        return IS_NIL(rhs);
-    } else if (IS_BOOL(lhs)) {
-#ifdef NAN_TAGGING
-        return lhs == rhs;
-#else
-        return AS_BOOL(lhs) == AS_BOOL(rhs);
-#endif
-    } else {
-#ifdef NAN_TAGGING
-        return lhs == rhs;
-#else
-        return false; // type check was made way above, so false here
-#endif
-    }
-}
-
 void debugFrame(CallFrame *frame) {
     const char *fnName = frame->isCCall ? frame->nativeFunc->name->chars :
         (frame->closure->function->name ? frame->closure->function->name->chars : "(anon)");
