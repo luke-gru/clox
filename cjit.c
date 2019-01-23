@@ -456,6 +456,19 @@ static int jitEmit_EQUAL(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_NOT_EQUAL(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_NOT_EQUAL);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value rhs = JIT_POP();\n"
+    "  Value lhs = JIT_PEEK(0);\n"
+    "  if (isValueOpEqual(lhs, rhs)) {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(false));\n"
+    "  } else {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(true));\n"
+    "  }\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_GREATER(FILE *f, Insn *insn) {
@@ -514,12 +527,54 @@ static int jitEmit_JUMP_IF_FALSE(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_JUMP_IF_TRUE(FILE *f, Insn *insn) {
+    jumpNo++;
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_JUMP_IF_TRUE);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value cond = JIT_POP();\n");
+    fprintf(f, "  uint8_t ipOffset = JIT_READ_BYTE();\n");
+    fprintf(f, ""
+    "  if (isTruthy(cond)) {\n"
+    "     DBG_ASSERT(ipOffset > 0);\n"
+    "     *ip += (ipOffset-1);\n"
+    "     goto jumpLabel%d;\n"
+    "  }\n", jumpNo);
+    fprintf(f, "}\n");
+    insn->jumpNo = jumpNo;
     return 0;
 }
 static int jitEmit_JUMP_IF_FALSE_PEEK(FILE *f, Insn *insn) {
+    jumpNo++;
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_JUMP_IF_FALSE_PEEK);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value cond = JIT_PEEK(0);\n");
+    fprintf(f, "  uint8_t ipOffset = JIT_READ_BYTE();\n");
+    fprintf(f, ""
+    "  if (!isTruthy(cond)) {\n"
+    "     DBG_ASSERT(ipOffset > 0);\n"
+    "     *ip += (ipOffset-1);\n"
+    "     goto jumpLabel%d;\n"
+    "  }\n", jumpNo);
+    fprintf(f, "}\n");
+    insn->jumpNo = jumpNo;
     return 0;
 }
 static int jitEmit_JUMP_IF_TRUE_PEEK(FILE *f, Insn *insn) {
+    jumpNo++;
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_JUMP_IF_FALSE_PEEK);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value cond = JIT_PEEK(0);\n");
+    fprintf(f, "  uint8_t ipOffset = JIT_READ_BYTE();\n");
+    fprintf(f, ""
+    "  if (isTruthy(cond)) {\n"
+    "     DBG_ASSERT(ipOffset > 0);\n"
+    "     *ip += (ipOffset-1);\n"
+    "     goto jumpLabel%d;\n"
+    "  }\n", jumpNo);
+    fprintf(f, "}\n");
+    insn->jumpNo = jumpNo;
     return 0;
 }
 static int jitEmit_LOOP(FILE *f, Insn *insn) {
