@@ -1,0 +1,6 @@
+fun a() {
+  var printer = fun(n) { print n; };
+  [1,2,3].each(&printer);
+}
+
+a();

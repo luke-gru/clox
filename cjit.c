@@ -216,6 +216,28 @@ static int jitEmit_GET_CONST_UNDER(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_CLOSURE(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_CLOSURE);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "Value funcVal = JIT_READ_CONSTANT();\n"
+    "ASSERT(IS_FUNCTION(funcVal));\n"
+    "ObjFunction *func = AS_FUNCTION(funcVal);\n"
+    "ObjClosure *closure = newClosure(func, NEWOBJ_FLAG_NONE);\n"
+    "JIT_PUSH(OBJ_VAL(closure));\n"
+    "for (int i = 0; i < closure->upvalueCount; i++) {\n"
+        "uint8_t isLocal = JIT_READ_BYTE();\n"
+        "uint8_t index = JIT_READ_BYTE();\n"
+        "if (isLocal) {\n"
+            // Make an new upvalue to close over the parent's local variable.
+            "closure->upvalues[i] = captureUpvalue(getFrame()->slots + index);\n"
+        "} else {\n"
+            // Use the same upvalue as the current call frame.
+            "closure->upvalues[i] = getFrame()->closure->upvalues[index];\n"
+        "}\n"
+    "}\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_GET_UPVALUE(FILE *f, Insn *insn) {
@@ -307,7 +329,23 @@ static int jitEmit_RETURN(FILE *f, Insn *insn) {
     fprintf(f, "{\n"
     "  JIT_ASSERT_OPCODE(OP_RETURN);\n"
     "  INC_IP(1);\n"
-    "  Value val = NIL_VAL;\n"
+    );
+    fprintf(f, ""
+    "  if (th->v_blockStack.length > 0) {\n"
+    "    ObjString *key = INTERN(\"ret\");\n"
+    "    JIT_POP();\n"
+    "    Value ret;\n"
+    "    if (th->lastValue) {\n"
+    "      ret = *th->lastValue;\n"
+    "    } else {\n"
+    "      ret = NIL_VAL;\n"
+    "    }\n"
+    "    Value err = newError(lxContinueBlockErrClass, NIL_VAL);\n"
+    "    setProp(err, key, ret);\n"
+    "    throwError(err);\n"
+    "  }\n"
+    );
+    fprintf(f, "  Value val = NIL_VAL;\n"
     "  return val;\n"
     "}\n");
     return 0;
@@ -429,6 +467,18 @@ static int jitEmit_BLOCK_RETURN(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_TO_BLOCK(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_TO_BLOCK);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value func = JIT_PEEK(0);\n"
+    "  if (UNLIKELY(!isCallable(func))) {\n"
+    "    JIT_POP();\n"
+    "    throwErrorFmt(lxTypeErrClass, \"Cannot use '&' operator on a non-function\");\n"
+    "  }\n"
+    "  JIT_PUSH_SWAP(newBlock(AS_OBJ(func)));\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 
