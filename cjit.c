@@ -210,6 +210,19 @@ static int jitEmit_CALL(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_INVOKE(FILE *f, Insn *insn) {
+    fprintf(f, "{\n"
+    "  JIT_ASSERT_OPCODE(OP_INVOKE);\n"
+    "  INC_IP(1);\n"
+    "  Value methodName = JIT_READ_CONSTANT();\n"
+    "  ObjString *mname = AS_STRING(methodName);\n"
+    "  uint8_t numArgs = JIT_READ_BYTE();\n"
+    "  Value callInfoVal = JIT_READ_CONSTANT();\n"
+    "  CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));\n"
+    "  Value instanceVal = peek(numArgs);\n"
+    "  ObjInstance *inst = AS_INSTANCE(instanceVal);\n"
+    "  Obj *callable = instanceFindMethod(inst, mname);\n"
+    "  callCallable(OBJ_VAL(callable), numArgs, true, callInfo);\n"
+    "}\n");
     return 0;
 }
 static int jitEmit_SPLAT_ARRAY(FILE *f, Insn *insn) {

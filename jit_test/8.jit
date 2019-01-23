@@ -1,0 +1,9 @@
+class A {
+  a() { print "a"; }
+}
+
+fun a() {
+  A().a();
+}
+
+a();
