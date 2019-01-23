@@ -442,6 +442,14 @@ static int jitEmit_ITER_NEXT(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_BLOCK_BREAK(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_BLOCK_BREAK);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value err = newError(lxBreakBlockErrClass, NIL_VAL);\n"
+    "  throwError(err);\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_BLOCK_CONTINUE(FILE *f, Insn *insn) {
@@ -464,6 +472,17 @@ static int jitEmit_BLOCK_CONTINUE(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_BLOCK_RETURN(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_BLOCK_RETURN);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  ObjString *key = INTERN(\"ret\");\n"
+    "  Value ret = JIT_PEEK(0);\n"
+    "  Value err = newError(lxReturnBlockErrClass, NIL_VAL);\n"
+    "  setProp(err, key, ret);\n"
+    "  JIT_POP();\n"
+    "  throwError(err);\n"
+    );
     return 0;
 }
 static int jitEmit_TO_BLOCK(FILE *f, Insn *insn) {

@@ -1,0 +1,5 @@
+fun a() {
+  [1,2,3].each() -> (n) { print n; return; };
+}
+
+a();
