@@ -297,6 +297,11 @@ static int jitEmit_DUPARRAY(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_DUPMAP(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_DUPMAP);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  JIT_PUSH(mapDup(JIT_READ_CONSTANT()));\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_MAP(FILE *f, Insn *insn) {

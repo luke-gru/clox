@@ -374,7 +374,8 @@ static int printMapInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
 }
 
 static int printDupMapInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
-    // TODO
+    fprintf(f, "%-16s", op);
+    fprintf(f, "\n");
     return i+2;
 }
 

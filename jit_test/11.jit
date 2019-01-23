@@ -1,0 +1,6 @@
+fun a() {
+  var m = %{};
+  print m;
+}
+
+a();
