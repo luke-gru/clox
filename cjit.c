@@ -271,6 +271,12 @@ static int jitEmit_ARRAY(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_DUPARRAY(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_DUPARRAY);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, "  Value ary = JIT_READ_CONSTANT();\n");
+    fprintf(f, "  JIT_PUSH(arrayDup(ary));\n");
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_DUPMAP(FILE *f, Insn *insn) {
