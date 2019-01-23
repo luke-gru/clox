@@ -746,14 +746,15 @@ int jitFunction(ObjFunction *func) {
     ASSERT(func->funcNode);
     FILE *f = jitEmitIseqFile(func->iseq, func->funcNode);
     fclose(f);
-    int res = system("gcc -std=c99 -fPIC -Wall -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -O2 -shared -o /tmp/loxjit.so /tmp/loxjit.c");
+    // TODO: use same C compiler that compiled clox, with same defines
+    int res = system("gcc -std=c99 -fPIC -Wall -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLOX_JIT=1 -O2 -shared -o /tmp/loxjit.so /tmp/loxjit.c");
     if (res != 0) {
         fprintf(stderr, "Error during jit gcc:\n");
         exit(1);
     }
     void *dlHandle = dlopen("/tmp/loxjit.so", RTLD_NOW|RTLD_LOCAL);
     if (!dlHandle) {
-        fprintf(stderr, "dlopen failed with: %s\n", strerror(errno));
+        fprintf(stderr, "dlopen failed with: %s\n", dlerror());
         exit(1);
     }
     void *dlSym = dlsym(dlHandle, "jittedFunc");

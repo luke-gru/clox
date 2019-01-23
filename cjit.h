@@ -7,6 +7,7 @@
 #include "nodes.h"
 #include "value.h"
 #include "object.h"
+#include "runtime.h"
 
 #ifdef __cplusplus
 extern "C" {
