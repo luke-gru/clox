@@ -318,18 +318,18 @@ static void defineGlobalVariables(void) {
     hideFromGC(TO_OBJ(lxLoadPath));
 }
 
-static bool isIterableType(Value val) {
+bool isIterableType(Value val) {
     if (IS_AN_ARRAY(val) || IS_A_MAP(val) || IS_INSTANCE(val)) {
         return true;
     };
     return false;
 }
 
-static bool isIterator(Value val) {
+bool isIterator(Value val) {
     return IS_A(val, lxIteratorClass);
 }
 
-static Value iteratorNext(Value iterator) {
+Value iteratorNext(Value iterator) {
     return lxIteratorNext(1, &iterator);
 }
 

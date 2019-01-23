@@ -388,6 +388,9 @@ NORETURN void _stopVM(int status);
 
 // exported for JIT
 ObjString *methodNameForBinop(OpCode code);
+bool isIterableType(Value val);
+bool isIterator(Value val);
+Value iteratorNext(Value iterator);
 
 
 #ifdef __cplusplus

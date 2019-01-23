@@ -436,9 +436,35 @@ static int jitEmit_REGEX(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_ITER(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_ITER);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value iterable = JIT_PEEK(0);\n"
+    "  if (UNLIKELY(!isIterableType(iterable))) {\n"
+    "    throwErrorFmt(lxTypeErrClass, \"Non-iterable value given to 'foreach' statement. Type found: %%s\",\n"
+    "    typeOfVal(iterable));\n"
+    "  }\n"
+    "  Value iterator = createIterator(iterable);\n"
+    "  DBG_ASSERT(isIterator(iterator));\n"
+    "  DBG_ASSERT(isIterableType(peek(0)));\n"
+    "  JIT_PUSH_SWAP(iterator);\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_ITER_NEXT(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_ITER_NEXT);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value iterator = JIT_PEEK(0);\n"
+    "  ASSERT(isIterator(iterator));\n"
+    "  Value next = iteratorNext(iterator);\n"
+    "  ASSERT(!IS_UNDEF(next));\n"
+    "  JIT_PUSH(next);\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_BLOCK_BREAK(FILE *f, Insn *insn) {
