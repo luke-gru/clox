@@ -1,0 +1,9 @@
+class MyClass {
+  method() { print "method"; }
+}
+
+fun a() {
+  MyClass().method();
+}
+
+a();

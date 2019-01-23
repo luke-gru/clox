@@ -985,6 +985,12 @@ static void defineMethod(ObjString *name) {
     } else {
         UNREACHABLE("class type: %s", typeOfVal(classOrMod));
     }
+    if (OPTION_T(enableJit)) {
+        ObjClosure *closure = AS_CLOSURE(method);
+        if (!closure->function->jitNative) {
+            jitFunction(closure->function);
+        }
+    }
     pop(); // function
 }
 
@@ -2707,7 +2713,8 @@ vmLoop:
                   const char *classStr = className->chars ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, mname->chars);
               }
-              callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
+              Value callableVal = OBJ_VAL(callable);
+              callCallable(callableVal, numArgs, true, callInfo);
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);

@@ -334,7 +334,7 @@ static int jitEmit_INVOKE(FILE *f, Insn *insn) {
     "  uint8_t numArgs = JIT_READ_BYTE();\n"
     "  Value callInfoVal = JIT_READ_CONSTANT();\n"
     "  CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));\n"
-    "  Value instanceVal = peek(numArgs);\n"
+    "  Value instanceVal = JIT_PEEK(numArgs);\n"
     "  ObjInstance *inst = AS_INSTANCE(instanceVal);\n"
     "  Obj *callable = instanceFindMethod(inst, mname);\n"
     "  callCallable(OBJ_VAL(callable), numArgs, true, callInfo);\n"
@@ -345,6 +345,13 @@ static int jitEmit_SPLAT_ARRAY(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_GET_THIS(FILE *f, Insn *insn) {
+    fprintf(f, "{\n"
+    "  JIT_ASSERT_OPCODE(OP_GET_THIS);\n"
+    "  INC_IP(1);\n"
+    "  ASSERT(th->thisObj);\n"
+    "  JIT_PUSH(OBJ_VAL(th->thisObj));\n"
+    "}\n"
+    );
     return 0;
 }
 static int jitEmit_GET_SUPER(FILE *f, Insn *insn) {
@@ -556,18 +563,21 @@ static int jitEmit_TRUE(FILE *f, Insn *insn) {
     fprintf(f, "JIT_ASSERT_OPCODE(OP_TRUE);\n");
     fprintf(f, "INC_IP(1);\n");
     fprintf(f, "JIT_PUSH(TRUE_VAL);\n");
+    fprintf(f, "/* /OP_TRUE */\n");
     return 0;
 }
 static int jitEmit_FALSE(FILE *f, Insn *insn) {
     fprintf(f, "JIT_ASSERT_OPCODE(OP_FALSE);\n");
     fprintf(f, "INC_IP(1);\n");
     fprintf(f, "JIT_PUSH(FALSE_VAL);\n");
+    fprintf(f, "/* /OP_FALSE */\n");
     return 0;
 }
 static int jitEmit_NIL(FILE *f, Insn *insn) {
     fprintf(f, "JIT_ASSERT_OPCODE(OP_NIL);\n");
     fprintf(f, "INC_IP(1);\n");
     fprintf(f, "JIT_PUSH(NIL_VAL);\n");
+    fprintf(f, "/* /OP_NIL */\n");
     return 0;
 }
 
@@ -598,6 +608,7 @@ static int jitEmit_POP(FILE *f, Insn *insn) {
     fprintf(f, "JIT_ASSERT_OPCODE(OP_POP);\n");
     fprintf(f, "INC_IP(1);\n");
     fprintf(f, "JIT_POP();\n");
+    fprintf(f, "/* /OP_POP */\n");
     return 0;
 }
 static int jitEmit_POP_CREF(FILE *f, Insn *insn) {
@@ -607,6 +618,7 @@ static int jitEmit_POP_N(FILE *f, Insn *insn) {
     fprintf(f, "JIT_ASSERT_OPCODE(OP_POP_N);\n");
     fprintf(f, "INC_IP(1);\n");
     fprintf(f, "JIT_POPN(JIT_READ_BYTE());\n");
+    fprintf(f, "/* /OP_POP_N*/\n");
     return 0;
 }
 
