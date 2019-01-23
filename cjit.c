@@ -183,6 +183,16 @@ static int jitEmit_GET_UPVALUE(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_SET_UPVALUE(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SET_UPVALUE);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  uint8_t slot = JIT_READ_BYTE();\n"
+    "  uint8_t varName = JIT_READ_BYTE();\n"
+    "  *getFrame()->closure->upvalues[slot]->value = JIT_PEEK(0);\n"
+    "  (void)varName;\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_CLOSE_UPVALUE(FILE *f, Insn *insn) {
