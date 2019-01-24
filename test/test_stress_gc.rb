@@ -65,7 +65,7 @@ unless skips.empty?
   PP.pp skips
 end
 if fails.empty? && timeouts.empty?
-  puts "None"
+  puts "Success"
 else
   puts "Failures:"
   PP.pp fails

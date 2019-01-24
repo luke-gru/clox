@@ -7,7 +7,7 @@
 
 static int jumpNo = 0;
 static int loopNo = 0;
-
+static int isJitting = 0;
 
 static int jitEmit_CONSTANT(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
@@ -975,10 +975,13 @@ int jitEmitIseq(FILE *f, Iseq *seq, Node *funcNode) {
 }
 
 int jitFunction(ObjFunction *func) {
+    ASSERT(isJitting == 0);
     ASSERT(!func->jitNative);
     ASSERT(func->iseq);
     ASSERT(func->funcNode);
+    isJitting++;
     FILE *f = jitEmitIseqFile(func->iseq, func->funcNode);
+    isJitting--;
     fclose(f);
     // TODO: use same C compiler that compiled clox, with same defines
     int res = system("gcc -std=c99 -fPIC -Wall -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLOX_JIT=1 -O2 -shared -o /tmp/loxjit.so /tmp/loxjit.c");
