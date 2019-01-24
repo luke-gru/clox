@@ -8,6 +8,7 @@
 static int jumpNo = 0;
 static int loopNo = 0;
 static int isJitting = 0;
+static Iseq *curIseq = NULL;
 
 static int jitEmit_CONSTANT(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
@@ -806,7 +807,7 @@ static int jitEmit_THROW(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_GET_THROWN(FILE *f, Insn *insn) {
-    fprintf(f, "catchLabel11:\n"); // FIXME: make dynamic
+    fprintf(f, "catchLabel%d:\n", (int)iseqInsnByteDiff(curIseq->insns, insn));
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_GET_THROWN);\n");
     fprintf(f, "  INC_IP(1);\n");
@@ -925,19 +926,28 @@ static int jitEmitInsn(FILE *f, Insn *insn) {
 
 static void jitEmitCatchTable(FILE *f, Iseq *seq) {
     fprintf(f, ""
+    "Chunk *ch = getFrame()->closure->function->chunk;"
     "int jumpRes = setjmp(getFrame()->jmpBuf);\n"
     "if (jumpRes == JUMP_SET) {\n"
     "  getFrame()->jmpBufSet = true;\n"
     "} else {\n"
     "  *ip = getFrame()->ip;\n"
-    "  goto catchLabel11;\n" // FIXME: make dynamic
+    /*"  fprintf(stderr, \"catch ip diff: %%ld\\n\", *ip-ch->code);\n"*/
+    "  switch (*ip-ch->code) {\n");
+    CatchTable *curCatchTbl = seq->catchTbl;
+    while (curCatchTbl) {
+        fprintf(f, "    case %d: goto catchLabel%d;\n", curCatchTbl->itarget, curCatchTbl->itarget);
+        curCatchTbl = curCatchTbl->next;
+    }
+    fprintf(f, "    default: ASSERT(0);\n");
+    fprintf(f, "  }\n"
     "}\n"
     );
 }
 
 static int jitEmitFunctionEnter(FILE *f, Iseq *seq, Node *funcNode) {
-    fprintf(f, "#include \"cjit_header.h\"\n");
-    fprintf(f, "extern Value jittedFunc(LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots);\n");
+    fprintf(f, "#include \"cjit_header.h\"\n\n");
+    fprintf(f, "extern Value jittedFunc(LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots);\n\n");
     fprintf(f, "Value jittedFunc(LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots) {\n");
 
     if (seq->catchTbl) {
@@ -976,12 +986,15 @@ int jitEmitIseq(FILE *f, Iseq *seq, Node *funcNode) {
 
 int jitFunction(ObjFunction *func) {
     ASSERT(isJitting == 0);
+    ASSERT(curIseq == NULL);
     ASSERT(!func->jitNative);
     ASSERT(func->iseq);
     ASSERT(func->funcNode);
+    curIseq = func->iseq;
     isJitting++;
     FILE *f = jitEmitIseqFile(func->iseq, func->funcNode);
     isJitting--;
+    curIseq = NULL;
     fclose(f);
     // TODO: use same C compiler that compiled clox, with same defines
     int res = system("gcc -std=c99 -fPIC -Wall -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLOX_JIT=1 -O2 -shared -o /tmp/loxjit.so /tmp/loxjit.c");

@@ -985,12 +985,6 @@ static void defineMethod(ObjString *name) {
     } else {
         UNREACHABLE("class type: %s", typeOfVal(classOrMod));
     }
-    /*if (OPTION_T(enableJit)) {*/
-        /*ObjClosure *closure = AS_CLOSURE(method);*/
-        /*if (!closure->function->jitNative) {*/
-            /*jitFunction(closure->function);*/
-        /*}*/
-    /*}*/
     pop(); // function
 }
 
