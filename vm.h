@@ -393,6 +393,32 @@ bool isIterator(Value val);
 Value iteratorNext(Value iterator);
 CatchTable *getCatchTableRow(int idx);
 
+static inline void setThis(unsigned n) {
+    register VMExecContext *ctx = EC;
+    register LxThread *th = vm.curThread;
+    if (UNLIKELY((ctx->stackTop-n) <= ctx->stack)) {
+        ASSERT(0);
+    }
+    th->thisObj = AS_OBJ(*(ctx->stackTop-1-n));
+    getFrame()->instance = (ObjInstance*)th->thisObj;
+    vec_push(&th->v_thisStack, th->thisObj);
+    DBG_ASSERT(th->thisObj);
+}
+static inline void popThis() {
+    register LxThread *th = vm.curThread;
+    ASSERT(th->v_thisStack.length > 0);
+    (void)vec_pop(&th->v_thisStack);
+    if (th->v_thisStack.length > 0) {
+        th->thisObj = vec_last(&th->v_thisStack);
+     } else {
+        th->thisObj = NULL;
+     }
+    getFrame()->instance = (ObjInstance*)th->thisObj;
+}
+static inline void pushCref(ObjClass *klass) {
+    vec_push(&vm.curThread->v_crefStack, klass);
+}
+
 
 #ifdef __cplusplus
 }

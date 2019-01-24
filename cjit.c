@@ -631,6 +631,18 @@ static int jitEmit_POP(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_POP_CREF(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_POP_CREF);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  ASSERT(th->v_crefStack.length > 0);\n"
+    "  ObjClass *oldKlass = vec_pop(&th->v_crefStack);\n"
+    "  (void)oldKlass;\n"
+    "  DBG_ASSERT(TO_OBJ(oldKlass) == AS_OBJ(peek(0)));\n"
+    "  JIT_POP();\n"
+    "  popThis();\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_POP_N(FILE *f, Insn *insn) {
@@ -857,6 +869,41 @@ static int jitEmit_LOOP(FILE *f, Insn *insn) {
 }
 
 static int jitEmit_CLASS(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_CLASS);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value classNm = JIT_READ_CONSTANT();\n"
+    "  Value existingClass;\n"
+    "  Value ownerClass = NIL_VAL;\n"
+    "  Table *constantTbl = &vm.constants;\n"
+    "  if (th->v_crefStack.length > 0) {\n"
+    "    ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));\n"
+    "    constantTbl = CLASSINFO(AS_CLASS(ownerClass))->constants;\n"
+    "  }\n"
+    "  if (tableGet(constantTbl, classNm, &existingClass)) {\n"
+    "    if (IS_CLASS(existingClass)) { // re-open class\n"
+    "      JIT_PUSH(existingClass);\n"
+    "      setThis(0);\n"
+    "      pushCref(AS_CLASS(existingClass));\n"
+    "    } else if (UNLIKELY(IS_MODULE(existingClass))) {\n"
+    "      const char *classStr = AS_CSTRING(classNm);\n"
+    "      throwErrorFmt(lxTypeErrClass, \"Tried to define class %%s, but it's a module\",\n"
+    "        classStr);\n"
+    "    }\n"
+    "  }\n"
+    "  ObjClass *klass = newClass(AS_STRING(classNm), lxObjClass, NEWOBJ_FLAG_OLD);\n"
+    "  JIT_PUSH(OBJ_VAL(klass));\n"
+    "  setThis(0);\n"
+    "  if (th->v_crefStack.length > 0) {\n"
+    "    addConstantUnder(className(klass), OBJ_VAL(klass), ownerClass);\n"
+    "    CLASSINFO(klass)->under = AS_OBJ(ownerClass);\n"
+    "  } else {\n"
+    "    tableSet(&vm.constants, classNm, OBJ_VAL(klass));\n"
+    "  }\n"
+    "  pushCref(klass);\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 static int jitEmit_SUBCLASS(FILE *f, Insn *insn) {

@@ -1,3 +1,5 @@
+fun f() {
+  var t1 = Timer();
 var a = Array.fill(100, nil);
 for (var i = 0 ; i < 1000; i += 1) {
   a.each() -> (num) { break; };
@@ -14,6 +16,10 @@ for (var i = 0 ; i < 1000; i += 1) {
 for (var i = 0 ; i < 1000; i += 1) {
   a.each() -> (num) { return num; };
 }
+  var t2 = Timer();
+  print t2-t1;
+}
+f();
 
 __END__
 -- noexpect: --
