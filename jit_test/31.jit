@@ -1,0 +1,6 @@
+fun a() {
+  var re = %"123";
+  print re;
+}
+
+a();

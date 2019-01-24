@@ -466,6 +466,24 @@ static int jitEmit_MAP(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_REGEX(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_REGEX);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value reStr = JIT_READ_CONSTANT();\n"
+    "  DBG_ASSERT(IS_STRING(reStr));\n"
+    "  Value re;\n"
+    "  if (tableGet(&vm.regexLiterals, reStr, &re)) {\n"
+    "    JIT_PUSH(re);\n"
+    "  } else {\n"
+    "    re = compileRegex(AS_STRING(reStr));\n"
+    "    GC_OLD(AS_OBJ(re));\n"
+    "    objFreeze(AS_OBJ(re));\n"
+    "    tableSet(&vm.regexLiterals, reStr, re);\n"
+    "    JIT_PUSH(re);\n"
+    "  }\n"
+    "}\n"
+    );
     return 0;
 }
 static int jitEmit_ITER(FILE *f, Insn *insn) {
@@ -656,21 +674,47 @@ static int jitEmit_NOT_EQUAL(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_GREATER(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_GREATER);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value rhs = JIT_POP();\n"
+    "  Value lhs = JIT_PEEK(0);\n"
+    "  if (UNLIKELY(!canCmpValues(lhs, rhs, OP_GREATER))) {\n"
+    "    JIT_POP();\n"
+    "    throwErrorFmt(lxTypeErrClass,\n"
+    "      \"Can only compare 2 numbers or 2 strings with '>', lhs=%%s, rhs=%%s\",\n"
+    "      typeOfVal(lhs), typeOfVal(rhs));\n"
+    "  }\n"
+    "  if (cmpValues(lhs, rhs, OP_GREATER) == 1) {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(true));\n"
+    "  } else {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(false));\n"
+    "  }\n"
+    "}\n"
+    );
     return 0;
 }
 static int jitEmit_LESS(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_LESS);\n");
     fprintf(f, "  INC_IP(1);\n");
-    fprintf(f, "  Value rhs = JIT_POP();\n");
-    fprintf(f, "  Value lhs = JIT_PEEK(0);\n");
     fprintf(f, ""
-    "  if (cmpValues(lhs, rhs, %d) == -1) {\n"
+    "  Value rhs = JIT_POP();\n"
+    "  Value lhs = JIT_PEEK(0);\n"
+    "  if (UNLIKELY(!canCmpValues(lhs, rhs, OP_LESS))) {\n"
+    "    JIT_POP();\n"
+    "    throwErrorFmt(lxTypeErrClass,\n"
+    "      \"Can only compare 2 numbers or 2 strings with '>', lhs=%%s, rhs=%%s\",\n"
+    "      typeOfVal(lhs), typeOfVal(rhs));\n"
+    "  }\n"
+    "  if (cmpValues(lhs, rhs, OP_LESS) == -1) {\n"
     "    JIT_PUSH_SWAP(BOOL_VAL(true));\n"
     "  } else {\n"
     "    JIT_PUSH_SWAP(BOOL_VAL(false));\n"
-    "  }\n", insn->code);
-    fprintf(f, "}\n");
+    "  }\n"
+    "}\n"
+    );
     return 0;
 }
 static int jitEmit_GREATER_EQUAL(FILE *f, Insn *insn) {
