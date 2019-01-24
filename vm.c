@@ -686,6 +686,7 @@ static inline void popThis() {
      } else {
         th->thisObj = NULL;
      }
+    getFrame()->instance = TO_INSTANCE(th->thisObj);
 }
 
 static inline void pushCref(ObjClass *klass) {
