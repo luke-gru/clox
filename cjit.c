@@ -39,7 +39,7 @@ static int jitEmit_SUBTRACT(FILE *f, Insn *insn) {
 }
 static int jitEmit_MULTIPLY(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
-    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SUBTRACT);\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_MULTIPLY);\n");
     fprintf(f, "  INC_IP(1);\n");
     fprintf(f, "  JIT_BINARY_OP(*, OP_MULTIPLY, double);\n");
     fprintf(f, "}\n");
@@ -47,7 +47,7 @@ static int jitEmit_MULTIPLY(FILE *f, Insn *insn) {
 }
 static int jitEmit_DIVIDE(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
-    fprintf(f, "  JIT_ASSERT_OPCODE(OP_SUBTRACT);\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_DIVIDE);\n");
     fprintf(f, "  INC_IP(1);\n");
     fprintf(f, "  JIT_BINARY_OP(/, OP_DIVIDE, double);\n");
     fprintf(f, "}\n");
@@ -57,7 +57,7 @@ static int jitEmit_MODULO(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_MODULO);\n");
     fprintf(f, "  INC_IP(1);\n");
-    fprintf(f, "  JIT_BINARY_OP(%%, OP_MODULO, double);\n");
+    fprintf(f, "  JIT_BINARY_OP(%%, OP_MODULO, int);\n");
     fprintf(f, "}\n");
     return 0;
 }
@@ -403,8 +403,16 @@ static int jitEmit_RETURN(FILE *f, Insn *insn) {
     "    throwError(err);\n"
     "  }\n"
     );
-    fprintf(f, "  Value val = NIL_VAL;\n"
-    "  return val;\n"
+    fprintf(f, ""
+    "  Value result = JIT_POP();\n"
+    "  ASSERT(!getFrame()->isCCall);\n"
+    "  Value *newTop = getFrame()->slots;\n"
+    "  closeUpvalues(getFrame()->slots);\n"
+    "  popFrame();\n"
+    "  *sp = newTop;\n"
+    "  JIT_PUSH(result);\n"
+    "  (th->vmRunLvl)--;\n"
+    "  return result;\n"
     "}\n");
     return 0;
 }
@@ -1182,7 +1190,41 @@ int jitEmitIseq(FILE *f, Iseq *seq, Node *funcNode) {
     return ret;
 }
 
+static bool cannotJitInstruction(Insn *insn) {
+    switch (insn->code) {
+    OP_DEFINE_GLOBAL:
+    OP_METHOD:
+    OP_CLASS_METHOD:
+    OP_GETTER:
+    OP_SETTER:
+    OP_PROP_GET:
+    OP_PROP_SET:
+    OP_GET_SUPER:
+    OP_IN:
+    OP_SUBCLASS:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool canJitFunction(ObjFunction *func) {
+    if (func->cannotJit) {
+        return false;
+    }
+    Insn *insn = func->iseq->insns;
+    while (insn) {
+        if (cannotJitInstruction(insn)) {
+            func->cannotJit = true;
+            return false;
+        }
+        insn = insn->next;
+    }
+    return true;
+}
+
 int jitFunction(ObjFunction *func) {
+    ASSERT(!func->cannotJit);
     ASSERT(isJitting == 0);
     ASSERT(curIseq == NULL);
     ASSERT(!func->jitNative);

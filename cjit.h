@@ -78,6 +78,7 @@ static inline void jit_push_swap(Value val, Value **sp) {
 #define JIT_PEEK(n) jit_peek(n, sp)
 
 int jitFunction(ObjFunction *func);
+bool canJitFunction(ObjFunction *func);
 FILE *jitEmitIseqFile(Iseq *seq, Node *funcNode);
 int jitEmitIseq(FILE *f, Iseq *seq, Node *funcNode);
 

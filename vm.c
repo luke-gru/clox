@@ -2632,7 +2632,7 @@ vmLoop:
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           if (OPTION_T(enableJit) && IS_CLOSURE(callableVal)) {
               ObjClosure *closure = AS_CLOSURE(callableVal);
-              if (!closure->function->jitNative) {
+              if (!closure->function->jitNative && canJitFunction(closure->function)) {
                   jitFunction(closure->function);
               }
           }

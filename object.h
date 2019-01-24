@@ -126,6 +126,7 @@ typedef struct ObjFunction {
   bool hasRestArg;
   bool hasBlockArg;
   bool isBlock;
+  bool cannotJit;
 } ObjFunction;
 
 typedef struct ObjUpvalue {
