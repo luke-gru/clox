@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <dlfcn.h>
 
 #include "common.h"
 #include "memory.h"
@@ -926,6 +927,11 @@ void freeObject(Obj *obj) {
             // double free errors.
             /*freeChunk(&func->chunk);*/
             GC_TRACE_DEBUG(5, "Freeing ObjFunction: p=%p", obj);
+            if (func->jitNative) {
+                dlclose(func->jitHandle);
+                func->jitNative = NULL;
+                func->jitHandle = NULL;
+            }
             obj->type = OBJ_T_NONE;
             break;
         }

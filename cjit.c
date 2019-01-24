@@ -9,6 +9,7 @@ static int jumpNo = 0;
 static int loopNo = 0;
 static int isJitting = 0;
 static Iseq *curIseq = NULL;
+static long jitNumber = 0;
 
 static int jitEmit_CONSTANT(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
@@ -164,11 +165,19 @@ static int jitEmit_GET_GLOBAL(FILE *f, Insn *insn) {
     fprintf(f, "  Value varName = JIT_READ_CONSTANT();\n");
     fprintf(f, "  Value val;\n");
     fprintf(f, ""
-    "  if (tableGet(&vm.globals, varName, &val)) {\n"
+    "  if (tableGet(&EC->roGlobals, varName, &val)) {\n"
+    "    if (IS_STRING(val)) {\n"
+    "      JIT_PUSH(OBJ_VAL(dupString(AS_STRING(val))));\n"
+    "    } else {\n"
+    "      JIT_PUSH(val);\n"
+    "    }\n"
+    "  } else if (tableGet(&vm.globals, varName, &val)) {\n"
     "    JIT_PUSH(val);\n"
     "  } else if (tableGet(&vm.constants, varName, &val)) {\n"
     "    JIT_PUSH(val);\n"
-    "  } else { ASSERT(0); /* TODO */ }\n"
+    "  } else {\n"
+    "    throwErrorFmt(lxNameErrClass, \"Undefined global variable '%%s'.\", AS_STRING(varName)->chars);\n"
+    "  }\n"
     );
     fprintf(f, "}\n");
     return 0;
@@ -331,6 +340,12 @@ static int jitEmit_CALL(FILE *f, Insn *insn) {
     "    th->lastSplatNumArgs = -1;\n"
     "  }\n"
     "  Value callableVal = JIT_PEEK(numArgs);\n"
+    "  if (UNLIKELY(!isCallable(callableVal))) {\n"
+    "    for (int i = 0; i < numArgs; i++) {\n"
+    "      JIT_POP();\n"
+    "    }\n"
+    "    throwErrorFmt(lxTypeErrClass, \"Tried to call uncallable object (type=%%s)\", typeOfVal(callableVal));\n"
+    "  }\n"
     "  Value callInfoVal = JIT_READ_CONSTANT();\n"
     "  CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));\n"
     "  callCallable(callableVal, numArgs, false, callInfo);\n"
@@ -346,6 +361,10 @@ static int jitEmit_INVOKE(FILE *f, Insn *insn) {
     "  uint8_t numArgs = JIT_READ_BYTE();\n"
     "  Value callInfoVal = JIT_READ_CONSTANT();\n"
     "  CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));\n"
+    "  if (th->lastSplatNumArgs > 0) {\n"
+    "    numArgs += (th->lastSplatNumArgs-1);\n"
+    "    th->lastSplatNumArgs = -1;\n"
+    "  }\n"
     "  Value instanceVal = JIT_PEEK(numArgs);\n"
     "  ObjInstance *inst = AS_INSTANCE(instanceVal);\n"
     "  Obj *callable = instanceFindMethod(inst, mname);\n"
@@ -411,7 +430,6 @@ static int jitEmit_RETURN(FILE *f, Insn *insn) {
     "  popFrame();\n"
     "  *sp = newTop;\n"
     "  JIT_PUSH(result);\n"
-    "  (th->vmRunLvl)--;\n"
     "  return result;\n"
     "}\n");
     return 0;
@@ -421,8 +439,19 @@ static int jitEmit_PRINT(FILE *f, Insn *insn) {
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_PRINT);\n");
     fprintf(f, "  INC_IP(1);\n");
     fprintf(f, "  Value val = JIT_POP();\n");
-    fprintf(f, "  printValue(stdout, val, true, -1);\n");
-    fprintf(f, "  printf(\"\\n\");\n");
+    fprintf(f, "  if (!vm.printBuf || vm.printToStdout) {\n");
+    fprintf(f, "    printValue(stdout, val, true, -1);\n");
+    fprintf(f, "    printf(\"\\n\");\n");
+    fprintf(f, "  }\n");
+    fprintf(f, ""
+    "  if (vm.printBuf) {\n"
+    "    ObjString *out = valueToString(val, hiddenString, NEWOBJ_FLAG_NONE);\n"
+    "    ASSERT(out);\n"
+    "    pushCString(vm.printBuf, out->chars, strlen(out->chars));\n"
+    "    pushCString(vm.printBuf, \"\\n\", 1);\n"
+    "    unhideFromGC(TO_OBJ(out));\n"
+    "  }\n"
+    );
     fprintf(f, "}\n");
     return 0;
 }
@@ -1148,6 +1177,7 @@ static void jitEmitCatchTable(FILE *f, Iseq *seq) {
 
 static int jitEmitFunctionEnter(FILE *f, Iseq *seq, Node *funcNode) {
     fprintf(f, "#include \"cjit_header.h\"\n\n");
+    fprintf(f, "/* function: '%s' */\n", tokStr(&funcNode->tok));
     fprintf(f, "extern Value jittedFunc(LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots);\n\n");
     fprintf(f, "Value jittedFunc(LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots) {\n");
 
@@ -1163,8 +1193,10 @@ static int jitEmitFunctionLeave(FILE *f, Iseq *seq, Node *funcNode) {
     return 0;
 }
 
-FILE *jitEmitIseqFile(Iseq *seq, Node *funcNode) {
-    FILE *f = fopen("/tmp/loxjit.c", "w");
+FILE *jitEmitIseqFile(Iseq *seq, Node *funcNode, long funcNum) {
+    char buf[4096];
+    snprintf(buf, 4096, "/tmp/loxjit%lu.c", funcNum);
+    FILE *f = fopen(buf, "w");
     jitEmitIseq(f, seq, funcNode);
     return f;
 }
@@ -1192,16 +1224,16 @@ int jitEmitIseq(FILE *f, Iseq *seq, Node *funcNode) {
 
 static bool cannotJitInstruction(Insn *insn) {
     switch (insn->code) {
-    OP_DEFINE_GLOBAL:
-    OP_METHOD:
-    OP_CLASS_METHOD:
-    OP_GETTER:
-    OP_SETTER:
-    OP_PROP_GET:
-    OP_PROP_SET:
-    OP_GET_SUPER:
-    OP_IN:
-    OP_SUBCLASS:
+    case OP_DEFINE_GLOBAL:
+    case OP_METHOD:
+    case OP_CLASS_METHOD:
+    case OP_GETTER:
+    case OP_SETTER:
+    case OP_PROP_GET:
+    case OP_PROP_SET:
+    case OP_GET_SUPER:
+    case OP_IN:
+    case OP_SUBCLASS:
         return true;
     default:
         return false;
@@ -1228,21 +1260,27 @@ int jitFunction(ObjFunction *func) {
     ASSERT(isJitting == 0);
     ASSERT(curIseq == NULL);
     ASSERT(!func->jitNative);
+    ASSERT(!func->jitHandle);
     ASSERT(func->iseq);
     ASSERT(func->funcNode);
     curIseq = func->iseq;
     isJitting++;
-    FILE *f = jitEmitIseqFile(func->iseq, func->funcNode);
+    long funcNum = jitNumber;
+    jitNumber++;
+    FILE *f = jitEmitIseqFile(func->iseq, func->funcNode, funcNum);
     isJitting--;
     curIseq = NULL;
     fclose(f);
     // TODO: use same C compiler that compiled clox, with same defines
-    int res = system("gcc -std=c99 -fPIC -Wall -Wno-unused-label -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLOX_JIT=1 -O2 -shared -o /tmp/loxjit.so /tmp/loxjit.c");
+    char cmdBuf[4096];
+    snprintf(cmdBuf, 4096, "gcc -std=c99 -fPIC -Wall -Wno-unused-label -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLOX_JIT=1 -O2 -shared -o /tmp/loxjit%lu.so /tmp/loxjit%lu.c", funcNum, funcNum);
+    int res = system(cmdBuf);
     if (res != 0) {
         fprintf(stderr, "Error during jit gcc:\n");
         exit(1);
     }
-    void *dlHandle = dlopen("/tmp/loxjit.so", RTLD_NOW|RTLD_LOCAL);
+    snprintf(cmdBuf, 4096, "/tmp/loxjit%lu.so", funcNum);
+    void *dlHandle = dlopen(cmdBuf, RTLD_NOW|RTLD_LOCAL);
     if (!dlHandle) {
         fprintf(stderr, "dlopen failed with: %s\n", dlerror());
         exit(1);
@@ -1253,5 +1291,6 @@ int jitFunction(ObjFunction *func) {
         exit(1);
     }
     func->jitNative = (JitNative)dlSym;
+    func->jitHandle = dlHandle;
     return 0;
 }

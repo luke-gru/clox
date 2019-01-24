@@ -79,7 +79,7 @@ static inline void jit_push_swap(Value val, Value **sp) {
 
 int jitFunction(ObjFunction *func);
 bool canJitFunction(ObjFunction *func);
-FILE *jitEmitIseqFile(Iseq *seq, Node *funcNode);
+FILE *jitEmitIseqFile(Iseq *seq, Node *funcNode, long funcNum);
 int jitEmitIseq(FILE *f, Iseq *seq, Node *funcNode);
 
 #ifdef __cplusplus

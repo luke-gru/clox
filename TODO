@@ -68,4 +68,3 @@ Optimizations
 * different GC strategies, maybe support copying GC (but then need to change
 Value representation, no more tagging, need to use struct).
 * optimize method lookup with a polymorphic inline cache and benchmark the lookup results
-* Improve cref pushing/popping, a lot of time same cref is pushed to stack back-to-back

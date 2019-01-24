@@ -114,6 +114,7 @@ typedef struct ObjFunction {
   Chunk *chunk;
   Iseq *iseq; // for jitting the function
   JitNative jitNative;
+  void *jitHandle;
   struct ObjString *name;
   Obj *klass; // ObjClass* or ObjModule* (if method)
   struct sNode *funcNode;
