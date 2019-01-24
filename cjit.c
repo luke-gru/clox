@@ -793,12 +793,12 @@ static int jitEmit_THROW(FILE *f, Insn *insn) {
     fprintf(f, ""
     "  Value throwable = JIT_POP();\n"
     "  if (IS_STRING(throwable)) {\n"
-          "Value msg = throwable;\n"
-          "throwable = newError(lxErrClass, msg);\n"
+    "    Value msg = throwable;\n"
+    "    throwable = newError(lxErrClass, msg);\n"
     "  }\n"
     "  if (UNLIKELY(!IS_AN_ERROR(throwable))) {\n"
-          "throwErrorFmt(lxTypeErrClass, \"Tried to throw unthrowable value, must be a subclass of Error. \"\n"
-              "\"Type found: %%s\", typeOfVal(throwable));\n"
+    "    throwErrorFmt(lxTypeErrClass, \"Tried to throw unthrowable value, must be a subclass of Error. \"\n"
+    "      \"Type found: %%s\", typeOfVal(throwable));\n"
     "  }\n"
     "  throwError(throwable);\n"
     );
@@ -806,6 +806,22 @@ static int jitEmit_THROW(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_GET_THROWN(FILE *f, Insn *insn) {
+    fprintf(f, "catchLabel11:\n"); // FIXME: make dynamic
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_GET_THROWN);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value catchTblIdx = JIT_READ_CONSTANT();\n"
+    "  ASSERT(IS_NUMBER(catchTblIdx));\n"
+    "  double idx = AS_NUMBER(catchTblIdx);\n"
+    "  CatchTable *tblRow = getCatchTableRow((int)idx);\n"
+    "  if (UNLIKELY(!IS_AN_ERROR(tblRow->lastThrownValue))) { // bug\n"
+    "    fprintf(stderr, \"Non-throwable found (BUG): %%s\\n\", typeOfVal(tblRow->lastThrownValue));\n"
+    "    ASSERT(0);\n"
+    "  }\n"
+    "  JIT_PUSH(tblRow->lastThrownValue);\n"
+    );
+    fprintf(f, "}\n");
     return 0;
 }
 
@@ -907,10 +923,26 @@ static int jitEmitInsn(FILE *f, Insn *insn) {
 #undef OPCODE
 }
 
+static void jitEmitCatchTable(FILE *f, Iseq *seq) {
+    fprintf(f, ""
+    "int jumpRes = setjmp(getFrame()->jmpBuf);\n"
+    "if (jumpRes == JUMP_SET) {\n"
+    "  getFrame()->jmpBufSet = true;\n"
+    "} else {\n"
+    "  *ip = getFrame()->ip;\n"
+    "  goto catchLabel11;\n" // FIXME: make dynamic
+    "}\n"
+    );
+}
+
 static int jitEmitFunctionEnter(FILE *f, Iseq *seq, Node *funcNode) {
     fprintf(f, "#include \"cjit_header.h\"\n");
     fprintf(f, "extern Value jittedFunc(LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots);\n");
     fprintf(f, "Value jittedFunc(LxThread *th, Value **sp, Value *slots, uint8_t **ip, Value *constantSlots) {\n");
+
+    if (seq->catchTbl) {
+        jitEmitCatchTable(f, seq);
+    }
     return 0;
 }
 

@@ -2,4 +2,4 @@ class MyClass {
   method() { print this; }
 }
 
-  MyClass().method();
+MyClass().method();

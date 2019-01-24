@@ -1795,7 +1795,7 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
     return false;
 }
 
-static CatchTable *getCatchTableRow(int idx) {
+CatchTable *getCatchTableRow(int idx) {
     CatchTable *tbl = currentChunk()->catchTbl;
     CatchTable *row = tbl;
     int i = 0;

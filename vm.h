@@ -391,6 +391,7 @@ ObjString *methodNameForBinop(OpCode code);
 bool isIterableType(Value val);
 bool isIterator(Value val);
 Value iteratorNext(Value iterator);
+CatchTable *getCatchTableRow(int idx);
 
 
 #ifdef __cplusplus

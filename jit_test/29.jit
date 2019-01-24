@@ -1,0 +1,9 @@
+fun a() {
+  try {
+    throw Error("MY BAD");
+  } catch (Error e) {
+    print e;
+  }
+}
+
+a();
