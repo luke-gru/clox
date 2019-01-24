@@ -159,7 +159,7 @@ static void LxThreadSetup(LxThread *th) {
 }
 
 static void LxThreadCleanup(LxThread *th) {
-    /*vec_deinit(&th->v_ecs);*/
+    vec_deinit(&th->v_ecs);
     vec_deinit(&th->v_thisStack);
     vec_deinit(&th->v_crefStack);
     vec_deinit(&th->v_blockStack);

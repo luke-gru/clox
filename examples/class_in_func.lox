@@ -1,11 +1,9 @@
 fun a() {
   class A {}
   module M {}
-  print A;
 }
 
 a();
 
 __END__
--- expect: --
-<instance Class>
+-- noexpect: --

@@ -21,13 +21,13 @@ Added features
 * Basic multi-threading with libpthread and a global VM lock. Threads can run
   concurrently for IO and other blocking operations, but cannot run
   concurrently in the VM itself.
-* try/catch blocks
+* try/catch exception handling
 * Iterators and foreach() statement
 * String interpolation
 * Map (hash/dict) literals
 * Object finalizers
 * Regular expressions
-* Signal handling: registering signal handlers
+* Signal handling: registering signal handlers, sending signals
 
 Some internal differences
 -------------------------
