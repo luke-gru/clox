@@ -1,0 +1,11 @@
+fun other(a,b,c) {
+  print a;
+  print b;
+  print c;
+}
+
+fun a() {
+  other(*[1,2,3]);
+}
+
+a();

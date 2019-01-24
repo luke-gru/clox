@@ -319,6 +319,10 @@ static int jitEmit_CALL(FILE *f, Insn *insn) {
     "  JIT_ASSERT_OPCODE(OP_CALL);\n"
     "  INC_IP(1);\n"
     "  uint8_t numArgs = JIT_READ_BYTE();\n"
+    "  if (th->lastSplatNumArgs > 0) {\n"
+    "    numArgs += (th->lastSplatNumArgs-1);\n"
+    "    th->lastSplatNumArgs = -1;\n"
+    "  }\n"
     "  Value callableVal = JIT_PEEK(numArgs);\n"
     "  Value callInfoVal = JIT_READ_CONSTANT();\n"
     "  CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));\n"
@@ -343,6 +347,20 @@ static int jitEmit_INVOKE(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_SPLAT_ARRAY(FILE *f, Insn *insn) {
+    fprintf(f, "{\n"
+    "  JIT_ASSERT_OPCODE(OP_SPLAT_ARRAY);\n"
+    "  INC_IP(1);\n"
+    "  Value ary = JIT_POP();\n"
+    "  if (UNLIKELY(!IS_AN_ARRAY(ary))) {\n"
+    "    throwErrorFmt(lxTypeErrClass, \"Splatted expression must evaluate to an Array (type=%%s)\",\n"
+    "      typeOfVal(ary));\n"
+    "  }\n"
+    "  th->lastSplatNumArgs = ARRAY_SIZE(ary);\n"
+    "  for (int i = 0; i < th->lastSplatNumArgs; i++) {\n"
+    "    JIT_PUSH(ARRAY_GET(ary, i));\n"
+    "  }\n"
+    "}\n"
+    );
     return 0;
 }
 static int jitEmit_GET_THIS(FILE *f, Insn *insn) {
