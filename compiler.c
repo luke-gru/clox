@@ -1278,6 +1278,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             paramNodeInfo->defaultArgIPOffset = codeDiff;
             ASSERT(param->data == NULL);
             param->data = paramNodeInfo;
+            insnAfter->isEndOfOptionalArgument = true;
         } else if (param->type.kind == PARAM_NODE_SPLAT) {
             uint8_t localSlot = declareVariable(&param->tok);
             defineVariable(localSlot, true);

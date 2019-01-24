@@ -10,6 +10,7 @@ static int loopNo = 0;
 static int isJitting = 0;
 static Iseq *curIseq = NULL;
 static long jitNumber = 0;
+ObjFunction *curFunc = NULL;
 
 static int jitEmit_CONSTANT(FILE *f, Insn *insn) {
     fprintf(f, "{\n");
@@ -1124,6 +1125,12 @@ static void jitEmitJumpLabel(FILE *f, Insn *insn) {
         ASSERT(insn->jumpedFrom);
         fprintf(f, "jumpLabel%d:\n", insn->jumpedFrom->jumpNo);
     }
+    if (insn->isEndOfOptionalArgument) {
+        Insn *next = insn->next;
+        ASSERT(next);
+        int ipOffset = (int)iseqInsnByteDiff(curIseq->insns, next);
+        fprintf(f, "defaultLabel%d:\n", ipOffset);
+    }
 }
 
 static void jitEmitLoopLabel(FILE *f, Insn *insn) {
@@ -1175,6 +1182,49 @@ static void jitEmitCatchTable(FILE *f, Iseq *seq) {
     );
 }
 
+static Insn *getInsnAfterDefault(Iseq *seq, int defaultNum) {
+    Insn *cur = seq->insns;
+    int i = 0;
+    while (cur) {
+        if (cur->isEndOfOptionalArgument) {
+            if (i == defaultNum) {
+                return cur->next;
+            } else {
+                ASSERT(i < defaultNum);
+                i++;
+            }
+        }
+        cur = cur->next;
+    }
+    UNREACHABLE_RETURN(NULL);
+}
+
+static void jitEmitDefaultArgsSkip(FILE *f, Iseq *seq, int numDefaultArgs) {
+    int numEmitted = 0;
+    fprintf(f, ""
+    "if (*ip > getFrame()->closure->function->chunk->code) {\n"
+    "  fprintf(stderr, \"ip diff: %%lu\\n\", *ip-getFrame()->closure->function->chunk->code);\n"
+    "  switch (*ip-getFrame()->closure->function->chunk->code) {\n"
+    );
+    while (numEmitted < numDefaultArgs) {
+        Insn *insn = getInsnAfterDefault(seq, numEmitted);
+        int insnOffset = (int)iseqInsnByteDiff(seq->insns, insn);
+        fprintf(f, ""
+            "  case %d: goto defaultLabel%d;\n"
+            "  case %d: goto defaultLabel%d;\n", // FIXME: this shouldn't be needed, it's a hack
+            insnOffset, insnOffset,
+            insnOffset-1,insnOffset
+        );
+        numEmitted++;
+    }
+    ASSERT(numEmitted == numDefaultArgs);
+    fprintf(f, ""
+    "  default: ASSERT(0);\n"
+    "  }\n"
+    "}\n"
+    );
+}
+
 static int jitEmitFunctionEnter(FILE *f, Iseq *seq, Node *funcNode) {
     fprintf(f, "#include \"cjit_header.h\"\n\n");
     fprintf(f, "/* function: '%s' */\n", tokStr(&funcNode->tok));
@@ -1183,6 +1233,10 @@ static int jitEmitFunctionEnter(FILE *f, Iseq *seq, Node *funcNode) {
 
     if (seq->catchTbl) {
         jitEmitCatchTable(f, seq);
+    }
+
+    if (curFunc->numDefaultArgs > 0) {
+        jitEmitDefaultArgsSkip(f, seq, (int)curFunc->numDefaultArgs);
     }
     return 0;
 }
@@ -1259,17 +1313,20 @@ int jitFunction(ObjFunction *func) {
     ASSERT(!func->cannotJit);
     ASSERT(isJitting == 0);
     ASSERT(curIseq == NULL);
+    ASSERT(curFunc == NULL);
     ASSERT(!func->jitNative);
     ASSERT(!func->jitHandle);
     ASSERT(func->iseq);
     ASSERT(func->funcNode);
     curIseq = func->iseq;
+    curFunc = func;
     isJitting++;
     long funcNum = jitNumber;
     jitNumber++;
     FILE *f = jitEmitIseqFile(func->iseq, func->funcNode, funcNum);
     isJitting--;
     curIseq = NULL;
+    curFunc = NULL;
     fclose(f);
     // TODO: use same C compiler that compiled clox, with same defines
     char cmdBuf[4096];

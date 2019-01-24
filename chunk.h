@@ -64,6 +64,7 @@ typedef struct Insn {
     bool isJumpLabel;
     bool isLoopLabel; // is this a jump target for OP_LOOP?
     bool isPseudo; // pseudo-instruction
+    bool isEndOfOptionalArgument;
     int jumpNo; // for jump instructions
     int loopNo; // for loop instructions
 } Insn;
