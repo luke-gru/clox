@@ -1332,8 +1332,10 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     ASSERT_MEM(func->upvaluesInfo);
     for (int i = 0; i < func->upvalueCount; i++) {
         if (ftype != FUN_TYPE_BLOCK) {
-            emitOp0(fCompiler.upvalues[i].isLocal ? 1 : 0);
-            emitOp0(fCompiler.upvalues[i].index);
+            Insn *insn = emitOp0(fCompiler.upvalues[i].isLocal ? 1 : 0);
+            insn->isPseudo = true;
+            insn = emitOp0(fCompiler.upvalues[i].index);
+            insn->isPseudo = true;
         }
         func->upvaluesInfo[i] = fCompiler.upvalues[i]; // copy upvalue info
     }

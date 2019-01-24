@@ -246,22 +246,22 @@ static int jitEmit_CLOSURE(FILE *f, Insn *insn) {
     fprintf(f, "  JIT_ASSERT_OPCODE(OP_CLOSURE);\n");
     fprintf(f, "  INC_IP(1);\n");
     fprintf(f, ""
-    "Value funcVal = JIT_READ_CONSTANT();\n"
-    "ASSERT(IS_FUNCTION(funcVal));\n"
-    "ObjFunction *func = AS_FUNCTION(funcVal);\n"
-    "ObjClosure *closure = newClosure(func, NEWOBJ_FLAG_NONE);\n"
-    "JIT_PUSH(OBJ_VAL(closure));\n"
-    "for (int i = 0; i < closure->upvalueCount; i++) {\n"
-        "uint8_t isLocal = JIT_READ_BYTE();\n"
-        "uint8_t index = JIT_READ_BYTE();\n"
-        "if (isLocal) {\n"
-            // Make an new upvalue to close over the parent's local variable.
-            "closure->upvalues[i] = captureUpvalue(getFrame()->slots + index);\n"
-        "} else {\n"
-            // Use the same upvalue as the current call frame.
-            "closure->upvalues[i] = getFrame()->closure->upvalues[index];\n"
-        "}\n"
-    "}\n"
+    "  Value funcVal = JIT_READ_CONSTANT();\n"
+    "  ASSERT(IS_FUNCTION(funcVal));\n"
+    "  ObjFunction *func = AS_FUNCTION(funcVal);\n"
+    "  ObjClosure *closure = newClosure(func, NEWOBJ_FLAG_NONE);\n"
+    "  JIT_PUSH(OBJ_VAL(closure));\n"
+    "  for (int i = 0; i < closure->upvalueCount; i++) {\n"
+    "    uint8_t isLocal = JIT_READ_BYTE();\n"
+    "    uint8_t index = JIT_READ_BYTE();\n"
+    "    if (isLocal) {\n"
+              // Make an new upvalue to close over the parent's local variable.
+    "      closure->upvalues[i] = captureUpvalue(getFrame()->slots + index);\n"
+    "    } else {\n"
+              // Use the same upvalue as the current call frame.
+    "      closure->upvalues[i] = getFrame()->closure->upvalues[index];\n"
+    "    }\n"
+    "  }\n"
     );
     fprintf(f, "}\n");
     return 0;
@@ -293,6 +293,13 @@ static int jitEmit_SET_UPVALUE(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_CLOSE_UPVALUE(FILE *f, Insn *insn) {
+    fprintf(f, "{\n"
+    "  JIT_ASSERT_OPCODE(OP_CLOSE_UPVALUE);\n"
+    "  INC_IP(1);\n"
+    "  closeUpvalues(*sp - 1);\n"
+    "  JIT_POP();\n"
+    "}\n"
+    );
     return 0;
 }
 static int jitEmit_PROP_GET(FILE *f, Insn *insn) {
@@ -1122,6 +1129,11 @@ int jitEmitIseq(FILE *f, Iseq *seq, Node *funcNode) {
     jitEmitFunctionEnter(f, seq, funcNode);
     Insn *insn = seq->insns;
     while (insn) {
+        // skip upvalue pseudo-instructions after closure
+        if (insn->isPseudo) {
+            insn = insn->next;
+            continue;
+        }
         if ((ret = jitEmitInsn(f, insn)) != 0) {
             return ret;
         }

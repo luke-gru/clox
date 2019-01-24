@@ -1953,7 +1953,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
     return createdUpvalue;
 }
 
-static void closeUpvalues(Value *last) {
+void closeUpvalues(Value *last) {
     LxThread *th = vm.curThread;
     while (th->openUpvalues != NULL && th->openUpvalues->value >= last) {
         ObjUpvalue *upvalue = th->openUpvalues;

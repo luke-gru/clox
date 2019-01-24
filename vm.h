@@ -392,6 +392,7 @@ bool isIterableType(Value val);
 bool isIterator(Value val);
 Value iteratorNext(Value iterator);
 CatchTable *getCatchTableRow(int idx);
+void closeUpvalues(Value *last);
 
 static inline void setThis(unsigned n) {
     register VMExecContext *ctx = EC;
