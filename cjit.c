@@ -1126,7 +1126,7 @@ int jitFunction(ObjFunction *func) {
     curIseq = NULL;
     fclose(f);
     // TODO: use same C compiler that compiled clox, with same defines
-    int res = system("gcc -std=c99 -fPIC -Wall -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLOX_JIT=1 -O2 -shared -o /tmp/loxjit.so /tmp/loxjit.c");
+    int res = system("gcc -std=c99 -fPIC -Wall -Wno-unused-label -I. -I./vendor -D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLOX_JIT=1 -O2 -shared -o /tmp/loxjit.so /tmp/loxjit.c");
     if (res != 0) {
         fprintf(stderr, "Error during jit gcc:\n");
         exit(1);
