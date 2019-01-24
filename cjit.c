@@ -935,6 +935,45 @@ static int jitEmit_SUBCLASS(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_MODULE(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_MODULE);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value modName = JIT_READ_CONSTANT();\n"
+    "  Value existingMod;\n"
+    "  Value ownerClass = NIL_VAL;\n"
+    "  Table *constantTbl = &vm.constants;\n"
+    "  bool existing = false;\n"
+    "  if (th->v_crefStack.length > 0) {\n"
+    "    ownerClass = OBJ_VAL(vec_last(&th->v_crefStack));\n"
+    "    constantTbl = CLASSINFO(AS_CLASS(ownerClass))->constants;\n"
+    "  }\n"
+    "  if (tableGet(constantTbl, modName, &existingMod)) {\n"
+    "    if (IS_MODULE(existingMod)) {\n"
+    "      JIT_PUSH(existingMod); // re-open the module\n"
+    "      setThis(0);\n"
+    "      pushCref(AS_CLASS(existingMod));\n"
+    "      existing = true;\n"
+    "    } else if (UNLIKELY(IS_CLASS(existingMod))) {\n"
+    "      const char *modStr = AS_CSTRING(modName);\n"
+    "      throwErrorFmt(lxTypeErrClass, \"Tried to define module %%s, but it's a class\",\n"
+    "        modStr);\n"
+    "    }\n"
+    "  }\n"
+    "  if (!existing) {\n"
+    "    ObjModule *mod = newModule(AS_STRING(modName), NEWOBJ_FLAG_OLD);\n"
+    "    JIT_PUSH(OBJ_VAL(mod));\n"
+    "    setThis(0);\n"
+    "    if (th->v_crefStack.length > 0) {\n"
+    "      addConstantUnder(className(TO_CLASS(mod)), OBJ_VAL(mod), ownerClass);\n"
+    "      CLASSINFO(mod)->under = AS_OBJ(ownerClass);\n"
+    "    } else {\n"
+    "      tableSet(&vm.constants, modName, OBJ_VAL(mod));\n"
+    "    }\n"
+    "    pushCref(TO_CLASS(mod));\n"
+    "  }\n"
+    "}\n"
+    );
     return 0;
 }
 static int jitEmit_IN(FILE *f, Insn *insn) {
