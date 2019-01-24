@@ -674,9 +674,47 @@ static int jitEmit_LESS(FILE *f, Insn *insn) {
     return 0;
 }
 static int jitEmit_GREATER_EQUAL(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_GREATER_EQUAL);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value rhs = JIT_POP();\n"
+    "  Value lhs = JIT_PEEK(0);\n"
+    "  if (UNLIKELY(!canCmpValues(lhs, rhs, OP_GREATER_EQUAL))) {\n"
+    "    JIT_POP();\n"
+    "    throwErrorFmt(lxTypeErrClass,\n"
+    "      \"Can only compare 2 numbers or 2 strings with '>=', lhs=%%s, rhs=%%s\",\n"
+    "      typeOfVal(lhs), typeOfVal(rhs));\n"
+    "  }\n"
+    "  if (cmpValues(lhs, rhs, OP_GREATER_EQUAL) != -1) {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(true));\n"
+    "  } else {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(false));\n"
+    "  }\n"
+    "}\n"
+    );
     return 0;
 }
 static int jitEmit_LESS_EQUAL(FILE *f, Insn *insn) {
+    fprintf(f, "{\n");
+    fprintf(f, "  JIT_ASSERT_OPCODE(OP_LESS_EQUAL);\n");
+    fprintf(f, "  INC_IP(1);\n");
+    fprintf(f, ""
+    "  Value rhs = JIT_POP();\n"
+    "  Value lhs = JIT_PEEK(0);\n"
+    "  if (UNLIKELY(!canCmpValues(lhs, rhs, OP_LESS_EQUAL))) {\n"
+    "    JIT_POP();\n"
+    "    throwErrorFmt(lxTypeErrClass,\n"
+    "      \"Can only compare 2 numbers or 2 strings with '<=', lhs=%%s, rhs=%%s\",\n"
+    "      typeOfVal(lhs), typeOfVal(rhs));\n"
+    "  }\n"
+    "  if (cmpValues(lhs, rhs, OP_LESS_EQUAL) != 1) {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(true));\n"
+    "  } else {\n"
+    "    JIT_PUSH_SWAP(BOOL_VAL(false));\n"
+    "  }\n"
+    "}\n"
+    );
     return 0;
 }
 
@@ -926,7 +964,7 @@ static int jitEmitInsn(FILE *f, Insn *insn) {
 
 static void jitEmitCatchTable(FILE *f, Iseq *seq) {
     fprintf(f, ""
-    "Chunk *ch = getFrame()->closure->function->chunk;"
+    "Chunk *ch = getFrame()->closure->function->chunk;\n"
     "int jumpRes = setjmp(getFrame()->jmpBuf);\n"
     "if (jumpRes == JUMP_SET) {\n"
     "  getFrame()->jmpBufSet = true;\n"

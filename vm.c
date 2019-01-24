@@ -721,11 +721,6 @@ static inline Value falseValue() {
 #endif
 }
 
-static inline bool canCmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
-    return (IS_NUMBER(lhs) && IS_NUMBER(rhs)) ||
-        (IS_STRING(lhs) && IS_STRING(rhs));
-}
-
 // returns -1, 0, 1, or -2 on error
 int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
     if (IS_NUMBER(lhs) && IS_NUMBER(rhs)) {

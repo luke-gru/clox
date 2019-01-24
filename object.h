@@ -649,6 +649,12 @@ extern ObjClass *lxBreakBlockErrClass;
 extern ObjClass *lxContinueBlockErrClass;
 extern ObjClass *lxReturnBlockErrClass;
 
+
+static inline bool canCmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
+    return (IS_NUMBER(lhs) && IS_NUMBER(rhs)) ||
+        (IS_STRING(lhs) && IS_STRING(rhs));
+}
+
 #ifdef __cplusplus
 }
 #endif
