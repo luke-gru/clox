@@ -12,6 +12,7 @@ typedef enum RNodeType {
     NODE_OR, // |
     NODE_REPEAT, // +
     NODE_REPEAT_Z, // *
+    NODE_MAYBE, // ?
     NODE_REPEAT_N, // {n[,m]}
     NODE_CCLASS, // [aeiou]
     NODE_ECLASS, // \d,\w,\s

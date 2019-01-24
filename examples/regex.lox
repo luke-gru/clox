@@ -1,7 +1,7 @@
 var re = Regex("abc");
 print re.match("dabc0");
 
-print %"\d{3}\.\d{1,3}\.\d{1,3}".match("--127.0.0.1--");
+print %"\d{3}\.\d{1,3}\.\d{1,3}\.\d{1,3}".match("--127.0.0.1--");
 
 var err = nil;
 try {
@@ -11,8 +11,17 @@ try {
 }
 print err != nil;
 
+print %".*".match("abc");
+print %".*?".match("abc");
+print %"ab?c".match("abc");
+print %"ab?c".match("ac");
+
 __END__
 -- expect: --
 1
 2
 true
+0
+0
+0
+0

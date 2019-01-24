@@ -267,6 +267,21 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
             prev->prev = NULL;
             node_add_child(repeat, prev);
             return repeat;
+        } else if (c == '?') {
+            if (!prev) {
+                parse_error(c, *src_p, "Need atom before '?'");
+                *err = -1;
+                return NULL;
+            }
+            (*src_p)++;
+            RNode *maybe = new_node(NODE_MAYBE, *src_p, 1, parent, prev->prev);
+            if (prev->prev == NULL) {
+                parent->children = maybe;
+            }
+            prev->next = NULL;
+            prev->prev = NULL;
+            node_add_child(maybe, prev);
+            return maybe;
         } else if (c == '{') {
             regex_debug(2, "parsing repeat-n");
             if (!prev) {
@@ -473,6 +488,16 @@ static void regex_output_ast_node(RNode *node, int indent) {
             fprintf(stderr, "%s)\n", i(indent));
             break;
         }
+        case NODE_MAYBE: {
+            fprintf(stderr, "%s(maybe\n", i(indent));
+            RNode *child = node->children;
+            while (child) {
+                regex_output_ast_node(child, indent+1);
+                child = child->next;
+            }
+            fprintf(stderr, "%s)\n", i(indent));
+            break;
+        }
         case NODE_GROUP: {
             fprintf(stderr, "%s(group\n", i(indent));
             RNode *child = node->children;
@@ -528,6 +553,11 @@ void regex_output_ast(Regex *regex) {
 }
 
 bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
+    DBG_ASSERT(node);
+    DBG_ASSERT(*cptr_p);
+    if (**cptr_p == '\0') {
+        return false;
+    }
     switch (node->type) {
         case NODE_PROGRAM:
         case NODE_GROUP:
@@ -605,7 +635,7 @@ bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
                 count += 1;
             }
             if (count >= 1) {
-                *nnext = parent->next;
+                *nnext = node->next;
                 return true;
             }
             return false;
@@ -613,9 +643,15 @@ bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
         case NODE_REPEAT_Z: {
             RNode *child = node->children;
             RNode *parent = node;
+            RNode *next = NULL;
+            if (node->next) {
+                next = node->next;
+            } else {
+                next = node->parent->next;
+            }
             while (node_accepts_ch(child, parent, cptr_p, nnext)) {
             }
-            *nnext = parent->next;
+            *nnext = next;
             return true;
         }
         case NODE_REPEAT_N: {
@@ -634,11 +670,23 @@ bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
                 }
             }
             if (accepted) {
-                *nnext = parent->next;
+                *nnext = node->next;
             } else {
                 *cptr_p = start;
             }
             return accepted;
+        }
+        case NODE_MAYBE: {
+            RNode *child = node->children;
+            RNode *parent = node;
+            if (node_accepts_ch(child, parent, cptr_p, nnext)) {
+            }
+            if (node->next) {
+                *nnext = node->next;
+            } else {
+                *nnext = node->parent->next;
+            }
+            return true;
         }
         case NODE_CCLASS: {
             char *start = (char*)node->tok+1;
@@ -727,6 +775,11 @@ bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
             }
         }
         case NODE_DOT: {
+            if (node->next) {
+                *nnext = node->next;
+            } else {
+                *nnext = parent->next;
+            }
             (*cptr_p)++;
             return true;
         }

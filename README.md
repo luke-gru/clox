@@ -33,9 +33,7 @@ Some internal differences
 -------------------------
 * creation of AST before compilation phase (separate parser/compiler)
 * bytecode optimization passes (including constant folding)
-* Easy way to create objects in C functions without having to hide
-  them from GC, even if they're not pushed to operand stack (aka rooted).
-* Faster generational M&S garbage collector with managed heaps
+* Generational M&S garbage collector with managed heaps
 
 Future features
 ---------------
@@ -44,6 +42,7 @@ Future features
 * Add constants (no redefinitions, will given compiler or runtime error)
 * Improve managed heaps memory waste
 * See TODO for more info
+* Add JIT compiler, either method or tracing
 
 OS/compiler support
 -------------------
