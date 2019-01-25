@@ -41,17 +41,27 @@ extern "C" {
     } while (0)
 
 static inline Value jit_pop(Value **sp) {
+    VMExecContext *ctx = EC;
     (*sp)--;
+    ctx->lastValue = *sp;
+    vm.curThread->lastValue = ctx->lastValue;
     return **sp;
 }
 
 static inline Value jit_popn(Value **sp, int n) {
+    VMExecContext *ctx = EC;
     (*sp)-=n;
+    ctx->lastValue = *sp;
+    vm.curThread->lastValue = ctx->lastValue;
     return **sp;
 }
 
 static inline void jit_push(Value val, Value **sp) {
     **sp = val;
+    if (IS_OBJ(val)) {
+        DBG_ASSERT(AS_OBJ(val)->type != OBJ_T_NONE);
+        OBJ_SET_PUSHED_VM_STACK(AS_OBJ(val)); // for gen gc
+    }
     (*sp)++;
 }
 
@@ -60,6 +70,10 @@ static inline Value jit_peek(int n, Value **sp) {
 }
 
 static inline void jit_push_swap(Value val, Value **sp) {
+    if (IS_OBJ(val)) {
+        DBG_ASSERT(AS_OBJ(val)->type != OBJ_T_NONE);
+        OBJ_SET_PUSHED_VM_STACK(AS_OBJ(val)); // for gen gc
+    }
     *(*sp-1) = val;
 }
 
