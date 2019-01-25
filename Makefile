@@ -97,6 +97,10 @@ build_test_gc: build
 run_test_gc:
 	@ ./bin/test_gc
 
+.PHONY: run_test_jit
+run_test_jit: build_test_examples
+	@ ./bin/test_examples --enable-jit
+
 .PHONY: build_test_examples
 build_test_examples: build
 	${CC} ${CFLAGS} $(TEST_SRCS) test/test_examples.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_examples ${LINK_OPTS}
