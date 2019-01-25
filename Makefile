@@ -7,7 +7,7 @@ GCC_CFLAGS=-std=c99 -Wall -Wextra -Wno-shadow -Wno-clobbered -Wno-unused-paramet
 GPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
 # NOTE: clang++ doesn't compile yet, too many C++ type errors
 CLANGPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
-CLANG_CFLAGS=-std=c99 -Wall -I. -Ivendor -Wno-unused-label -Wno-unused-function -pthread ${DEFINES}
+CLANG_CFLAGS=-std=c99 -Wall -Wextra -I. -Ivendor -Wno-unused-parameter -Wno-unused-label -Wno-unused-function -pthread ${DEFINES}
 ifneq (,$(findstring clang,$(CC)))
 	ifneq (,$(findstring clang++,$(CC)))
 		CFLAGS=${CLANGPP_CFLAGS}
