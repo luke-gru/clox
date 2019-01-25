@@ -366,6 +366,7 @@ static int jitEmit_INVOKE(FILE *f, Insn *insn) {
     "    numArgs += (th->lastSplatNumArgs-1);\n"
     "    th->lastSplatNumArgs = -1;\n"
     "  }\n"
+    "  Value instanceVal = JIT_PEEK(numArgs);\n"
     "  if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal) || IS_MAP(instanceVal) || IS_REGEX(instanceVal)) {\n"
     "    ObjInstance *inst = AS_INSTANCE(instanceVal);\n"
     "    Obj *callable = instanceFindMethod(inst, mname);\n"
