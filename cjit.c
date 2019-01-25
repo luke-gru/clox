@@ -239,7 +239,7 @@ static int jitEmit_GET_CONST_UNDER(FILE *f, Insn *insn) {
     "    }\n"
     "  } else {\n"
     "    if (!IS_CLASS(klass) && !IS_MODULE(klass)) {\n"
-    "    throwErrorFmt(lxTypeErrClass, \"Constants must be defined under classes/modules\");\n"
+    "      throwErrorFmt(lxTypeErrClass, \"Constants must be defined under classes/modules\");\n"
     "    }\n"
     "    if (tableGet(CLASSINFO(AS_CLASS(klass))->constants, varName, &val)) {\n"
     "      JIT_PUSH(val);\n"
@@ -1152,9 +1152,9 @@ static int jitEmit_LEAVE(FILE *f, Insn *insn) {
 }
 
 static void jitEmitDebug(FILE *f, uint8_t code) {
-#ifndef NDEBUG
-    fprintf(f, "fprintf(stderr, \"jit running op: %s (%d)\\n\");\n", opName((OpCode)code), code);
-#endif
+/*#ifndef NDEBUG*/
+    /*fprintf(f, "fprintf(stderr, \"jit running op: %s (%d)\\n\");\n", opName((OpCode)code), code);*/
+/*#endif*/
 }
 
 static void jitEmitJumpLabel(FILE *f, Insn *insn) {
