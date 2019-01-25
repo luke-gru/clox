@@ -145,6 +145,7 @@ typedef struct LxThread {
     int interruptFlags;
     int opsRemaining;
     int exitStatus;
+    int lastOp; // for debugging
     bool joined;
     bool detached;
     vec_void_t lockedMutexes; // main thread unlocks these when terminating, if necessary
@@ -208,7 +209,6 @@ typedef struct VM {
     vec_void_t threads; // list of current thread ObjInstance pointers
     int numDetachedThreads;
     volatile int numLivingThreads;
-    int lastOp; // for debugging when error
 } VM; // singleton
 
 extern VM vm;

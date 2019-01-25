@@ -155,6 +155,7 @@ static void LxThreadSetup(LxThread *th) {
     th->exitStatus = 0;
     th->joined = false;
     th->detached = false;
+    th->lastOp = -1;
     vec_init(&th->lockedMutexes);
 }
 

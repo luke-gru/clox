@@ -453,7 +453,6 @@ void initVM() {
     vm.grayCount = 0;
     vm.grayCapacity = 0;
     vm.grayStack = NULL;
-    vm.lastOp = -1;
 
     initTable(&vm.globals);
     initTable(&vm.strings); // interned strings
@@ -566,7 +565,6 @@ void freeVM(void) {
     vm.curThread = NULL;
     vm.mainThread = NULL;
     vec_deinit(&vm.threads);
-    vm.lastOp = -1;
 
     nativeObjectInit = NULL;
     nativeStringInit = NULL;
@@ -692,7 +690,7 @@ static inline Value vm_pop(register LxThread *th, register VMExecContext *ctx) {
 
 static Value popN(int n) {
     VMExecContext *ctx = EC;
-    ASSERT(LIKELY((ctx->stackTop-n) >= ctx->stack));
+    ASSERT((ctx->stackTop-n) >= ctx->stack);
     ctx->stackTop-=n;
     ctx->lastValue = ctx->stackTop;
     vm.curThread->lastValue = ctx->lastValue;
@@ -709,7 +707,7 @@ static inline Value vm_popN(register LxThread *th, register VMExecContext *ctx, 
 
 Value peek(unsigned n) {
     VMExecContext *ctx = EC;
-    ASSERT(LIKELY((ctx->stackTop-n) > ctx->stack));
+    ASSERT((ctx->stackTop-n) > ctx->stack);
     return *(ctx->stackTop-1-n);
 }
 
@@ -2158,11 +2156,11 @@ static InterpretResult vm_run() {
             VM_DEBUG(2, "VM set catch table for call frame (vm_run lvl %d)", th->vmRunLvl-1);
         } else {
             VM_DEBUG(2, "VM caught error for call frame (vm_run lvl %d)", th->vmRunLvl-1);
-            th = THREAD();
+            th = THREAD(); // clobbered
             th->hadError = false;
-            ch = currentChunk();
-            constantSlots = ch->constants->values;
-            frame = getFrame();
+            ch = currentChunk(); // clobbered
+            constantSlots = ch->constants->values; // clobbered
+            frame = getFrame(); // clobbered
             // stack is already unwound to proper frame
         }
     }
@@ -2236,7 +2234,7 @@ vmLoop:
 
 #ifndef NDEBUG
     if (CLOX_OPTION_T(traceVMExecution)) {
-        printVMStack(stderr, THREAD());
+        printVMStack(stderr, th);
         printDisassembledInstruction(stderr, ch, (int)(frame->ip - ch->code), NULL);
     }
 #endif
@@ -2279,7 +2277,7 @@ vmLoop:
 
     uint8_t instruction = READ_BYTE();
 #ifndef NDEBUG
-    vm.lastOp = instruction;
+    th->lastOp = instruction;
 #endif
 
 #ifdef COMPUTED_GOTO
