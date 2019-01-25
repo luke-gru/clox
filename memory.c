@@ -275,23 +275,23 @@ void addHeap() {
 // TODO: we shouldn't free all heaps right away, we should leave one
 // empty heap and mark it as empty, then we don't need to iterate over
 // it during GC, and we return it on next call to addHeap().
-static void freeHeap(ObjAny *heap) {
-    int i = 0;
-    ObjAny *curHeap = NULL;
-    int heapIdx = -1;
-    for (i = 0; i < heapsUsed; i++) {
-        curHeap = heapList[i];
-        if (curHeap && curHeap == heap) {
-            heapIdx = i;
-        }
-    }
-    ASSERT(heapIdx != -1);
-    memmove(heapList+heapIdx, heapList+heapIdx+1, heapListSize-heapIdx-1);
-    xfree(heap);
-    heapsUsed--;
-    GCStats.totalAllocated -= (sizeof(ObjAny)*HEAP_SLOTS);
-    GCStats.heapSize -= (sizeof(ObjAny)*HEAP_SLOTS);
-}
+/*static void freeHeap(ObjAny *heap) {*/
+    /*int i = 0;*/
+    /*ObjAny *curHeap = NULL;*/
+    /*int heapIdx = -1;*/
+    /*for (i = 0; i < heapsUsed; i++) {*/
+        /*curHeap = heapList[i];*/
+        /*if (curHeap && curHeap == heap) {*/
+            /*heapIdx = i;*/
+        /*}*/
+    /*}*/
+    /*ASSERT(heapIdx != -1);*/
+    /*memmove(heapList+heapIdx, heapList+heapIdx+1, heapListSize-heapIdx-1);*/
+    /*xfree(heap);*/
+    /*heapsUsed--;*/
+    /*GCStats.totalAllocated -= (sizeof(ObjAny)*HEAP_SLOTS);*/
+    /*GCStats.heapSize -= (sizeof(ObjAny)*HEAP_SLOTS);*/
+/*}*/
 
 static inline void pushYoungObject(Obj *obj) {
     DBG_ASSERT(youngStackSz < YOUNG_MARK_STACK_MAX);
@@ -649,13 +649,13 @@ void grayValue(Value val) {
     TRACE_GC_FUNC_END(4, "grayValue");
 }
 
-static void grayArray(ValueArray *ary) {
-    TRACE_GC_FUNC_START(5, "grayArray");
-    for (int i = 0; i < ary->count; i++) {
-        grayValue(ary->values[i]);
-    }
-    TRACE_GC_FUNC_END(5, "grayArray");
-}
+/*static void grayArray(ValueArray *ary) {*/
+    /*TRACE_GC_FUNC_START(5, "grayArray");*/
+    /*for (int i = 0; i < ary->count; i++) {*/
+        /*grayValue(ary->values[i]);*/
+    /*}*/
+    /*TRACE_GC_FUNC_END(5, "grayArray");*/
+/*}*/
 
 // recursively gray an object's references
 void blackenObject(Obj *obj) {

@@ -340,7 +340,7 @@ const char *typeOfVal(Value val) {
 }
 
 // Taken from wren lang
-static inline uint32_t hashBits(DoubleBits bits) {
+/*static inline uint32_t hashBits(DoubleBits bits) {
     uint32_t result = bits.bits32[0] ^ bits.bits32[1];
 
     // Slosh the bits around some. Due to the way doubles are represented, small
@@ -357,7 +357,7 @@ static inline uint32_t hashBits(DoubleBits bits) {
     result ^= (result >> 20) ^ (result >> 12);
     result ^= (result >> 7) ^ (result >> 4);
     return result;
-}
+}*/
 
 uint32_t valHash(Value val) {
     if (IS_OBJ(val)) {

@@ -17,6 +17,8 @@ extern "C" {
 #define xstr(a) #a
 #define QUOTE(x) xstr(x)
 
+#define MAYBE_UNUSED __attribute__((unused))
+
 // generational GC, on by default
 #ifndef GEN_GC
 #define GEN_GC 1

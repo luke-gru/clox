@@ -245,10 +245,6 @@ static void popScope(CompileScopeType stype) {
     current->scopeDepth--;
 }
 
-static inline Insn *emitBytes(uint8_t code, uint8_t op) {
-    return emitOp1(code, op);
-}
-
 static inline void emitNil() {
     emitOp0(OP_NIL);
 }
@@ -439,10 +435,6 @@ static bool isLoop(Insn *in) {
 
 static inline bool isJumpNextInsn(Insn *in) {
     return in->operands[0] == 0;
-}
-
-static inline bool isJumpOrLoop(Insn *in) {
-    return isJump(in) || isLoop(in);
 }
 
 static void patchJumpInsnWithOffset(Insn *jump, int offset) {

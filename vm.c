@@ -654,15 +654,6 @@ static inline void vm_push(register LxThread *th, register VMExecContext *ctx, V
 }
 
 // NOTE: doesn't perform checks to see if there's at least 1 item on the op stack
-static inline void pushSwap(Value value) {
-    if (IS_OBJ(value)) {
-        DBG_ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
-        OBJ_SET_PUSHED_VM_STACK(AS_OBJ(value)); // for gen gc
-    }
-    *(EC->stackTop-1) = value;
-}
-
-// NOTE: doesn't perform checks to see if there's at least 1 item on the op stack
 static inline void vm_pushSwap(register LxThread *th, register VMExecContext *ctx, Value value) {
     if (IS_OBJ(value)) {
         DBG_ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
@@ -686,15 +677,6 @@ static inline Value vm_pop(register LxThread *th, register VMExecContext *ctx) {
     ctx->lastValue = ctx->stackTop;
     th->lastValue = ctx->lastValue;
     return *(th->lastValue);
-}
-
-static Value popN(int n) {
-    VMExecContext *ctx = EC;
-    ASSERT((ctx->stackTop-n) >= ctx->stack);
-    ctx->stackTop-=n;
-    ctx->lastValue = ctx->stackTop;
-    vm.curThread->lastValue = ctx->lastValue;
-    return *(vm.curThread->lastValue);
 }
 
 static inline Value vm_popN(register LxThread *th, register VMExecContext *ctx, int n) {

@@ -83,7 +83,7 @@ static inline void FAIL_ASSERT(const char *file, int line, const char *func) {
     LOG_ERR("%s", KNRM);
     assertions_failed++;
     if (jmpset) {
-        longjmp(jmploc, 1); // skip next assertions in function, jump to next test
+        longjmp(jmploc, JUMP_PERFORMED); // skip next assertions in function, jump to next test
     }
 }
 
@@ -132,7 +132,7 @@ static inline void _RUN_TEST(int (*test_fn)(void), const char *fnname) {
     int jmpres = setjmp(jmploc);
     jmpset = true;
     int testres;
-    if (jmpres == 0) { // jump was set
+    if (jmpres == JUMP_SET) { // jump was set
         testres = test_fn();
         if (testres == 0 && old_failed == assertions_failed) {
             tests_passed++;
@@ -205,7 +205,7 @@ static inline bool t_assert_valprinteq(char *expected, Value val) {
     return t_assert_streq(expected, valOut->chars);
 }
 
-static void t_assert_register_on_fail(t_func_on_fail_cb cb) {
+static void MAYBE_UNUSED t_assert_register_on_fail(t_func_on_fail_cb cb) {
     assertion_failure_cb = cb;
 }
 
