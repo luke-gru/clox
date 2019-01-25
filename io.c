@@ -80,7 +80,7 @@ static void NORETURN throwIOSyserr(int err, int last, const char *desc) {
 ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
     ObjString *retBuf = copyString("", 0, NEWOBJ_FLAG_NONE);
     size_t nread = 0;
-    size_t justRead = 0;
+    ssize_t justRead = 0;
     char fileReadBuf[READBUF_SZ];
     size_t maxRead = untilEOF ? READBUF_SZ-1 : (numBytes > (READBUF_SZ-1) ? (READBUF_SZ-1) : numBytes);
     int last = errno;

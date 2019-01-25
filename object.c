@@ -86,12 +86,12 @@ void objUnfreeze(Obj *obj) {
     OBJ_UNSET_FROZEN(obj);
 }
 
-uint32_t hashString(char *key, int length) {
+uint32_t hashString(char *key, size_t length) {
     // FNV-1a hash. See: http://www.isthe.com/chongo/tech/comp/fnv/
     uint32_t hash = 2166136261u;
 
     // This is O(n) on the length of the string, but we only call this lazily.
-    for (int i = 0; i < length; i++) {
+    for (size_t i = 0; i < length; i++) {
         hash ^= key[i];
         hash *= 16777619;
     }
@@ -102,14 +102,14 @@ uint32_t hashString(char *key, int length) {
 // use `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
 // XXX: Do not pass a static string here, it'll break when GC tries to free it.
-ObjString *takeString(char *chars, int length, int flags) {
+ObjString *takeString(char *chars, size_t length, int flags) {
     DBG_ASSERT(strlen(chars) == length);
     return allocateString(chars, length, lxStringClass, flags);
 }
 
 // use copy of `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
-ObjString *copyString(char *chars, int length, int flags) {
+ObjString *copyString(char *chars, size_t length, int flags) {
     DBG_ASSERT(strlen(chars) >= length);
 
     char *heapChars = ALLOCATE(char, length + 1);
@@ -119,14 +119,14 @@ ObjString *copyString(char *chars, int length, int flags) {
     return allocateString(heapChars, length, lxStringClass, flags);
 }
 
-ObjString *hiddenString(char *chars, int len, int flags) {
+ObjString *hiddenString(char *chars, size_t len, int flags) {
     DBG_ASSERT(strlen(chars) >= len);
     ObjString *string = copyString(chars, len, flags|NEWOBJ_FLAG_HIDDEN);
     hideFromGC((Obj*)string);
     return string;
 }
 
-ObjString *internedString(char *chars, int length, int flags) {
+ObjString *internedString(char *chars, size_t length, int flags) {
     DBG_ASSERT(strlen(chars) >= length);
     uint32_t hash = hashString(chars, length);
     ObjString *interned = tableFindString(&vm.strings, chars, length, hash);
@@ -159,7 +159,7 @@ bool objStringEquals(ObjString *a, ObjString *b) {
 // NOTE: don't use this function on a ObjString that is already a key
 // for a table, it won't retrieve the value in the table anymore unless
 // it's rehashed.
-void pushCString(ObjString *string, const char *chars, int lenToAdd) {
+void pushCString(ObjString *string, const char *chars, size_t lenToAdd) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     ASSERT(!isFrozen((Obj*)string));
 
@@ -172,7 +172,7 @@ void pushCString(ObjString *string, const char *chars, int lenToAdd) {
         string->chars = GROW_ARRAY(string->chars, char, string->capacity+1, newSz+1);
         string->capacity = newSz;
     }
-    int i = 0;
+    size_t i = 0;
     for (i = 0; i < lenToAdd; i++) {
         char *c = (char*)chars+i;
         if (c == NULL) break;
@@ -183,7 +183,7 @@ void pushCString(ObjString *string, const char *chars, int lenToAdd) {
     string->hash = 0;
 }
 
-void insertCString(ObjString *string, const char *chars, int lenToAdd, int at) {
+void insertCString(ObjString *string, const char *chars, size_t lenToAdd, size_t at) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     ASSERT(!isFrozen((Obj*)string));
 
@@ -206,7 +206,7 @@ void insertCString(ObjString *string, const char *chars, int lenToAdd, int at) {
     char *src = string->chars+at;
     int charsToMove = string->length-at;
     memmove(dest, src, sizeof(char)*charsToMove);
-    for (int i = 0; i < lenToAdd; i++) {
+    for (size_t i = 0; i < lenToAdd; i++) {
         string->chars[at+i] = chars[i];
     }
     string->length += lenToAdd;
@@ -240,7 +240,7 @@ void pushCStringVFmt(ObjString *string, const char *format, va_list ap) {
         string->capacity = newSz;
     }
 
-    int i = 0;
+    size_t i = 0;
     for (i = 0; i < buflen; i++) {
         char *c = sbuf+i;
         string->chars[string->length + i] = *c;
@@ -724,7 +724,7 @@ void clearString(Value string) {
     clearObjString(buf);
 }
 
-void stringInsertAt(Value self, Value insert, int at) {
+void stringInsertAt(Value self, Value insert, size_t at) {
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
@@ -733,19 +733,19 @@ void stringInsertAt(Value self, Value insert, int at) {
     insertObjString(selfBuf, insertBuf, at);
 }
 
-Value stringSubstr(Value self, int startIdx, int len) {
-    if (startIdx < 0) {
-        throwArgErrorFmt("%s", "start index must be positive, is: %d", startIdx);
-    }
+Value stringSubstr(Value self, size_t startIdx, size_t len) {
+    /*if (startIdx < 0) {*/
+        /*throwArgErrorFmt("%s", "start index must be positive, is: %d", startIdx);*/
+    /*}*/
     ObjString *buf = AS_STRING(self);
     ObjString *substr = NULL;
     if (startIdx >= buf->length) {
         substr = copyString("", 0, NEWOBJ_FLAG_NONE);
     } else {
-        int maxlen = buf->length-startIdx; // "abc"
+        size_t maxlen = buf->length-startIdx; // "abc"
         // TODO: support negative len, like `-2` also,
         // to mean up to 2nd to last char
-        if (len > maxlen || len < 0) {
+        if (len > maxlen) {
             len = maxlen;
         }
         substr = copyString(buf->chars+startIdx, len, NEWOBJ_FLAG_NONE);
@@ -754,26 +754,26 @@ Value stringSubstr(Value self, int startIdx, int len) {
     return OBJ_VAL(substr);
 }
 
-Value stringIndexGet(Value self, int index) {
+Value stringIndexGet(Value self, size_t index) {
     ObjString *buf = AS_STRING(self);
     if (index >= buf->length) {
         return OBJ_VAL(copyString("", 0, NEWOBJ_FLAG_NONE));
-    } else if (index < 0) { // TODO: make it works from end of str?
-        throwArgErrorFmt("%s", "index cannot be negative");
+    /*} else if (index < 0) { // TODO: make it works from end of str?*/
+        /*throwArgErrorFmt("%s", "index cannot be negative");*/
     } else {
         return OBJ_VAL(copyString(buf->chars+index, 1, NEWOBJ_FLAG_NONE));
     }
 }
 
-Value stringIndexSet(Value self, int index, char c) {
+Value stringIndexSet(Value self, size_t index, char c) {
     ObjString *buf = AS_STRING(self);
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
     if (index >= buf->length) {
         throwArgErrorFmt("%s", "index too big");
-    } else if (index < 0) { // TODO: make it work from end of str?
-        throwArgErrorFmt("%s", "index cannot be negative");
+    /*} else if (index < 0) { // TODO: make it work from end of str?*/
+        /*throwArgErrorFmt("%s", "index cannot be negative");*/
     } else {
         char oldC = buf->chars[index];
         buf->chars[index] = c;

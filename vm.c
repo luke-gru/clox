@@ -2456,7 +2456,6 @@ vmLoop:
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          ASSERT(slot >= 0);
           frame->slots[slot] = peek(0); // locals are popped at end of scope by VM
           DISPATCH_BOTTOM();
       }
@@ -2465,7 +2464,6 @@ vmLoop:
           uint8_t unpackIdx = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          ASSERT(slot >= 0);
           // make sure we don't clobber the unpack array with the setting of
           // this variable
           int peekIdx = 0;
@@ -2480,7 +2478,6 @@ vmLoop:
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          ASSERT(slot >= 0);
           push(frame->slots[slot]);
           DISPATCH_BOTTOM();
       }

@@ -241,10 +241,10 @@ typedef struct ObjString {
     ObjClass *singletonKlass;
     Obj *finalizerFunc; // ObjClosure* or ObjNative*
     Table *fields;
-    int length; // doesn't include NULL byte
+    size_t length; // doesn't include NULL byte
     char *chars;
     uint32_t hash;
-    int capacity;
+    size_t capacity;
 } ObjString;
 
 #define ARRAY_FLAG_SHARED OBJ_FLAG_USER1
@@ -414,12 +414,12 @@ typedef struct LxFile {
 #define NEWOBJ_FLAG_HIDDEN (4)
 
 // Strings as ObjString
-ObjString *takeString(char *chars, int length, int flags); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
-ObjString *copyString(char *chars, int length, int flags); // copies provided memory. Object lives on lox heap.
-ObjString *hiddenString(char *chars, int length, int flags); // hidden from GC, used in tests mainly.
+ObjString *takeString(char *chars, size_t length, int flags); // uses provided memory as internal buffer, must be heap memory or will error when GC'ing the object
+ObjString *copyString(char *chars, size_t length, int flags); // copies provided memory. Object lives on lox heap.
+ObjString *hiddenString(char *chars, size_t length, int flags); // hidden from GC, used in tests mainly.
 #define INTERN(chars) (internedString((char*)chars, strlen(chars), NEWOBJ_FLAG_NONE))
 #define INTERNED(chars, len) (internedString((char*)chars, len, NEWOBJ_FLAG_NONE))
-ObjString *internedString(char *chars, int length, int flags);
+ObjString *internedString(char *chars, size_t length, int flags);
 bool objStringEquals(ObjString *a, ObjString *b);
 static inline ObjString *dupString(ObjString *string) {
     return copyString(string->chars, string->length, NEWOBJ_FLAG_NONE);
@@ -428,25 +428,25 @@ static inline ObjString *dupString(ObjString *string) {
 // strings as values
 void clearString(Value self);
 void pushString(Value self, Value pushed);
-void stringInsertAt(Value self, Value insert, int at);
-Value stringSubstr(Value self, int startIdx, int len);
-Value stringIndexGet(Value self, int index);
-Value stringIndexSet(Value self, int index, char c);
+void stringInsertAt(Value self, Value insert, size_t at);
+Value stringSubstr(Value self, size_t startIdx, size_t len);
+Value stringIndexGet(Value self, size_t index);
+Value stringIndexSet(Value self, size_t index, char c);
 bool stringEquals(Value a, Value b);
 
 // NOTE: don't call pushCString on a string value that's a key to a map! The
 // hash value changes and the map won't be able to index it anymore (see
 // Map#rehash())
-void pushCString(ObjString *string, const char *chars, int lenToAdd);
-void insertCString(ObjString *a, const char *chars, int lenToAdd, int at);
+void pushCString(ObjString *string, const char *chars, size_t lenToAdd);
+void insertCString(ObjString *a, const char *chars, size_t lenToAdd, size_t at);
 void pushCStringFmt(ObjString *string, const char *format, ...);
 void pushCStringVFmt(ObjString *string, const char *format, va_list ap);
-uint32_t hashString(char *key, int length);
+uint32_t hashString(char *key, size_t length);
 
 static inline void pushObjString(ObjString *a, ObjString *b) {
     pushCString(a, b->chars, b->length);
 }
-static inline void insertObjString(ObjString *a, ObjString *b, int at) {
+static inline void insertObjString(ObjString *a, ObjString *b, size_t at) {
     insertCString(a, b->chars, b->length, at);
 }
 

@@ -191,7 +191,7 @@ bool is_nil_p(Value);
 bool is_number_p(Value);
 bool is_obj_p(Value);
 
-typedef struct ObjString *(*newStringFunc)(char *chars, int length, int flags);
+typedef struct ObjString *(*newStringFunc)(char *chars, size_t length, int flags);
 struct ObjString *valueToString(Value value, newStringFunc fn, int flags);
 
 const char *typeOfVal(Value val);

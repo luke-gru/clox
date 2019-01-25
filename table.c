@@ -190,7 +190,7 @@ void tableAddAll(Table *from, Table *to) {
     }
 }
 
-ObjString *tableFindString(Table *table, const char* chars, int length,
+ObjString *tableFindString(Table *table, const char* chars, size_t length,
         uint32_t hash) {
     // If the table is empty, we definitely won't find it.
     if (table->entries == NULL) return NULL;

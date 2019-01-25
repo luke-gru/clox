@@ -1232,7 +1232,7 @@ void collectGarbage(void) {
             if (ctx->lastValue) {
                 grayValue(*ctx->lastValue);
             }
-            for (int i = 0; i < ctx->frameCount; i++) {
+            for (unsigned i = 0; i < ctx->frameCount; i++) {
                 // TODO: gray native function if exists
                 // XXX: is this necessary, they must be on the stack??
                 grayObject((Obj*)ctx->frames[i].closure);
