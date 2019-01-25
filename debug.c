@@ -35,7 +35,10 @@ NORETURN void diePrintCBacktrace(const char *fmt, ...) {
     } else {
         fprintf(stderr, "VM initialized: NO\n");
     }
-    if (vm.lastOp != -1) {
+    if (THREAD()->inJittedFunction > 0) {
+        fprintf(stderr, "In jitted function: YES (lvl=%d)\n", THREAD()->inJittedFunction);
+    }
+    if (vm.lastOp != -1) { // TODO: lastOp should be per-thread
         fprintf(stderr, "Last VM operation: %s\n", opName((OpCode)vm.lastOp));
     }
     vfprintf(stderr, fmt, ap);

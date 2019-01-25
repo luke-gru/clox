@@ -366,10 +366,46 @@ static int jitEmit_INVOKE(FILE *f, Insn *insn) {
     "    numArgs += (th->lastSplatNumArgs-1);\n"
     "    th->lastSplatNumArgs = -1;\n"
     "  }\n"
-    "  Value instanceVal = JIT_PEEK(numArgs);\n"
-    "  ObjInstance *inst = AS_INSTANCE(instanceVal);\n"
-    "  Obj *callable = instanceFindMethod(inst, mname);\n"
-    "  callCallable(OBJ_VAL(callable), numArgs, true, callInfo);\n"
+    "  if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal) || IS_MAP(instanceVal) || IS_REGEX(instanceVal)) {\n"
+    "    ObjInstance *inst = AS_INSTANCE(instanceVal);\n"
+    "    Obj *callable = instanceFindMethod(inst, mname);\n"
+    "    if (!callable && numArgs == 0) {\n"
+    "      callable = instanceFindGetter(inst, mname);\n"
+    "    }\n"
+    "    if (UNLIKELY(!callable)) {\n"
+    "      ObjString *className = CLASSINFO(inst->klass)->name;\n"
+    "      const char *classStr = className->chars ? className->chars : \"(anon)\";\n"
+    "      throwErrorFmt(lxErrClass, \"instance method '%%s#%%s' not found\", classStr, mname->chars);\n"
+    "    }\n"
+    "    Value callableVal = OBJ_VAL(callable);\n"
+    "    callCallable(callableVal, numArgs, true, callInfo);\n"
+    "  } else if (IS_CLASS(instanceVal)) {\n"
+    "    ObjClass *klass = AS_CLASS(instanceVal);\n"
+    "    Obj *callable = classFindStaticMethod(klass, mname);\n"
+    /*if (!callable && numArgs == 0) {*/
+        /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
+    /*}*/
+    "    if (UNLIKELY(!callable)) {\n"
+    "      ObjString *className = CLASSINFO(klass)->name;\n"
+    "      const char *classStr = className ? className->chars : \"(anon)\";\n"
+    "      throwErrorFmt(lxErrClass, \"class method '%%s.%%s' not found\", classStr, mname->chars);\n"
+    "    }\n"
+    "    EC->stackTop[-numArgs-1] = instanceVal;\n"
+    "    callCallable(OBJ_VAL(callable), numArgs, true, callInfo);\n"
+    "  } else if (IS_MODULE(instanceVal)) {\n"
+    "    ObjModule *mod = AS_MODULE(instanceVal);\n"
+    "    Obj *callable = classFindStaticMethod((ObjClass*)mod, mname);\n"
+    /*if (!callable && numArgs == 0) {*/
+        /*callable = instanceFindGetter((ObjInstance*)mod, mname);*/
+    /*}*/
+    "    if (UNLIKELY(!callable)) {\n"
+    "      ObjString *modName = CLASSINFO(mod)->name;\n"
+    "      const char *modStr = modName ? modName->chars : \"(anon)\"\n;"
+    "      throwErrorFmt(lxErrClass, \"module method '%%s.%%s' not found\", modStr, mname->chars);\n"
+    "    }\n"
+    "    EC->stackTop[-numArgs-1] = instanceVal;\n"
+    "    callCallable(OBJ_VAL(callable), numArgs, true, callInfo);\n"
+    "  }\n"
     "}\n");
     return 0;
 }
@@ -1115,9 +1151,9 @@ static int jitEmit_LEAVE(FILE *f, Insn *insn) {
 }
 
 static void jitEmitDebug(FILE *f, uint8_t code) {
-/*#ifndef NDEBUG*/
-    /*fprintf(f, "fprintf(stderr, \"jit running op: %s (%d)\\n\");\n", opName((OpCode)code), code);*/
-/*#endif*/
+#ifndef NDEBUG
+    fprintf(f, "fprintf(stderr, \"jit running op: %s (%d)\\n\");\n", opName((OpCode)code), code);
+#endif
 }
 
 static void jitEmitJumpLabel(FILE *f, Insn *insn) {

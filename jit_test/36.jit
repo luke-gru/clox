@@ -1,0 +1,6 @@
+fun a() {
+  var local = 1;
+  return local;
+}
+
+print a();

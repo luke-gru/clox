@@ -1613,8 +1613,9 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(vm.anonString));
     }
     if (func->jitNative) {
-        Value val = func->jitNative(th, &EC->stackTop, frame->slots, &frame->ip, currentChunk()->constants->values);
-        push(val);
+        th->inJittedFunction++;
+        func->jitNative(th, &EC->stackTop, frame->slots, &frame->ip, closure->function->chunk->constants->values);
+        th->inJittedFunction--;
     } else {
         vm_run(); // actually run the function until return
     }
@@ -2519,6 +2520,11 @@ vmLoop:
               } else {
                   // Use the same upvalue as the current call frame.
                   closure->upvalues[i] = getFrame()->closure->upvalues[index];
+              }
+          }
+          if (OPTION_T(enableJit)) {
+              if (!closure->function->jitNative && canJitFunction(closure->function)) {
+                  jitFunction(closure->function);
               }
           }
           DISPATCH_BOTTOM();

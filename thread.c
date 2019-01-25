@@ -206,6 +206,7 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
     th->lastValue = NULL;
     th->errInfo = NULL;
     th->inCCall = 0;
+    th->inJittedFunction = 0;
     th->cCallJumpBufSet = false;
     th->cCallThrew = false;
     th->returnedFromNativeErr = false;

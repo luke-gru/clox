@@ -31,7 +31,12 @@ extern "C" {
           if (methodName) {\
             callable = instanceFindMethod(inst, methodName);\
           }\
+          if (UNLIKELY(!callable)) {\
+              throwErrorFmt(lxNameErrClass, "Method %s#%s not found for operation '%s'", className(inst->klass), methodName->chars, #op);\
+          }\
           callCallable(OBJ_VAL(callable), 1, true, NULL);\
+      } else {\
+          throwErrorFmt(lxTypeErrClass, "Binary operation type error, op=%s, lhs=%s, rhs=%s", #op, typeOfVal(a), typeOfVal(b));\
       }\
     } while (0)
 

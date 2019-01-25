@@ -127,6 +127,7 @@ typedef struct LxThread {
     volatile Value lastErrorThrown; // TODO: change to Obj pointer
     volatile Value errorToThrow; // error raised by other thread
     int inCCall;
+    int inJittedFunction;
     bool cCallThrew;
     bool returnedFromNativeErr;
     jmp_buf cCallJumpBuf;
