@@ -614,11 +614,11 @@ static inline bool isOpStackEmpty(void) {
     return EC->stackTop == EC->stack;
 }
 
-#define VM_PUSH(val) push(val)
-#define VM_POP() pop()
-#define VM_POPN(n) popN(n)
-#define VM_PEEK(n) peek(n)
-#define VM_PUSHSWAP(val) pushSwap(val)
+#define VM_PUSH(val) vm_push(th, ctx, val)
+#define VM_POP() vm_pop(th, ctx)
+#define VM_POPN(n) vm_popN(th, ctx, n)
+#define VM_PEEK(n) vm_peek(th, ctx, n)
+#define VM_PUSHSWAP(val) vm_pushSwap(th, ctx, val)
 
 void push(Value value) {
     ASSERT_VALID_STACK();
@@ -627,6 +627,23 @@ void push(Value value) {
         errorPrintScriptBacktrace("Stack overflow.");
         int status = 1;
         vm.curThread->status = THREAD_ZOMBIE;
+        vm.numLivingThreads--;
+        pthread_exit(&status);
+    }
+    if (IS_OBJ(value)) {
+        DBG_ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
+        OBJ_SET_PUSHED_VM_STACK(AS_OBJ(value)); // for gen gc
+    }
+    *ctx->stackTop = value;
+    ctx->stackTop++;
+}
+
+static inline void vm_push(register LxThread *th, register VMExecContext *ctx, Value value) {
+    ASSERT_VALID_STACK();
+    if (UNLIKELY(ctx->stackTop >= ctx->stack + STACK_MAX)) {
+        errorPrintScriptBacktrace("Stack overflow.");
+        int status = 1;
+        th->status = THREAD_ZOMBIE;
         vm.numLivingThreads--;
         pthread_exit(&status);
     }
@@ -647,13 +664,30 @@ static inline void pushSwap(Value value) {
     *(EC->stackTop-1) = value;
 }
 
+// NOTE: doesn't perform checks to see if there's at least 1 item on the op stack
+static inline void vm_pushSwap(register LxThread *th, register VMExecContext *ctx, Value value) {
+    if (IS_OBJ(value)) {
+        DBG_ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
+        OBJ_SET_PUSHED_VM_STACK(AS_OBJ(value)); // for gen gc
+    }
+    *(ctx->stackTop-1) = value;
+}
+
 Value pop(void) {
     VMExecContext *ctx = EC;
-    ASSERT(LIKELY(ctx->stackTop > ctx->stack));
+    ASSERT(ctx->stackTop > ctx->stack);
     ctx->stackTop--;
     ctx->lastValue = ctx->stackTop;
     vm.curThread->lastValue = ctx->lastValue;
     return *(vm.curThread->lastValue);
+}
+
+static inline Value vm_pop(register LxThread *th, register VMExecContext *ctx) {
+    ASSERT(ctx->stackTop > ctx->stack);
+    ctx->stackTop--;
+    ctx->lastValue = ctx->stackTop;
+    th->lastValue = ctx->lastValue;
+    return *(th->lastValue);
 }
 
 static Value popN(int n) {
@@ -665,9 +699,22 @@ static Value popN(int n) {
     return *(vm.curThread->lastValue);
 }
 
+static inline Value vm_popN(register LxThread *th, register VMExecContext *ctx, int n) {
+    ASSERT((ctx->stackTop-n) >= ctx->stack);
+    ctx->stackTop-=n;
+    ctx->lastValue = ctx->stackTop;
+    th->lastValue = ctx->lastValue;
+    return *(th->lastValue);
+}
+
 Value peek(unsigned n) {
     VMExecContext *ctx = EC;
     ASSERT(LIKELY((ctx->stackTop-n) > ctx->stack));
+    return *(ctx->stackTop-1-n);
+}
+
+static inline Value vm_peek(register LxThread *th, register VMExecContext *ctx, unsigned n) {
+    ASSERT((ctx->stackTop-n) > ctx->stack);
     return *(ctx->stackTop-1-n);
 }
 
@@ -2099,10 +2146,11 @@ static InterpretResult vm_run0() {
  */
 static InterpretResult vm_run() {
     register LxThread *th = vm.curThread;
-    th->vmRunLvl++;
     register Chunk *ch = currentChunk();
     register Value *constantSlots = ch->constants->values;
     register CallFrame *frame = getFrame();
+    register VMExecContext *ctx = EC;
+    th->vmRunLvl++;
     if (ch->catchTbl != NULL) {
         int jumpRes = setjmp(frame->jmpBuf);
         if (jumpRes == JUMP_SET) {
