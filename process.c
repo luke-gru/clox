@@ -162,7 +162,7 @@ static Value lxSystemStatic(int argCount, Value *args) {
     return BOOL_VAL(true);
 }
 
-Value lxProcessPidStatic(int argCount, Value *args) {
+static Value lxProcessPidStatic(int argCount, Value *args) {
     CHECK_ARITY("Process.pid", 1, 1, argCount);
     return getPid();
 }

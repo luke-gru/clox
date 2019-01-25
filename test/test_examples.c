@@ -20,7 +20,7 @@ static void _freeVM() {
     vm.numLivingThreads = 0;
 }
 
-DIR *getDir(const char *name) {
+static DIR *getDir(const char *name) {
     DIR *dir = opendir(name);
     return dir; // can be NULL
 }

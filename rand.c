@@ -9,7 +9,7 @@
 
 unsigned randSeed = 1;
 
-Value lxRandom(int argCount, Value *args) {
+static Value lxRandom(int argCount, Value *args) {
     CHECK_ARITY("random", 0, 1, argCount);
     long res = random();
     if (argCount == 1) {

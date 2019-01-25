@@ -1367,7 +1367,7 @@ static void pushVarSlots() {
     addFakeLocal();
 }
 
-void emitBinaryOp(Token tok) {
+static void emitBinaryOp(Token tok) {
     if (tok.type == TOKEN_PLUS) {
         emitOp0(OP_ADD);
     } else if (tok.type == TOKEN_MINUS) {

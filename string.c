@@ -10,7 +10,7 @@ ObjNative *nativeStringInit = NULL;
 
 // ex: var s = "string";
 // ex: var s2 = String("string");
-Value lxStringInit(int argCount, Value *args) {
+static Value lxStringInit(int argCount, Value *args) {
     CHECK_ARITY("String#init", 1, 2, argCount);
     if (vm.inited) callSuper(0, NULL, NULL);
     Value self = *args;

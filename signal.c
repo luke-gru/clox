@@ -21,7 +21,7 @@ void enqueueSignal(int signo) {
     sigbuf.size++;
 }
 
-void dequeueSignal(int signo) {
+static inline void dequeueSignal(int signo) {
     sigbuf.cnt[signo]--;
     sigbuf.size--;
 }
@@ -30,8 +30,7 @@ int getSignal() {
     if (sigbuf.size == 0) return -1;
     for (int i = 0; i < NSIG; i++) {
         if (sigbuf.cnt[i] > 0) {
-            sigbuf.cnt[i]--;
-            sigbuf.size--;
+            dequeueSignal(i);
             return i;
         }
     }

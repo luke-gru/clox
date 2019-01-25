@@ -480,7 +480,7 @@ typedef struct LxMutex {
     int waiting;
 } LxMutex;
 
-void setupMutex(LxMutex *mutex) {
+static void setupMutex(LxMutex *mutex) {
     mutex->owner = NULL;
     mutex->waiting = 0;
     pthread_mutex_init(&mutex->lock, NULL);
@@ -499,7 +499,7 @@ static void lockFunc(LxMutex *mutex, LxThread *th) {
     pthread_mutex_unlock(&mutex->lock); // can block
 }
 
-void lockMutex(LxMutex *mutex) {
+static void lockMutex(LxMutex *mutex) {
     pthread_mutex_lock(&mutex->lock); // can block
     LxThread *th = vm.curThread;
     if (mutex->owner == NULL) {
@@ -545,7 +545,7 @@ void threadForceUnlockMutex(LxThread *th, LxMutex *mutex) {
     pthread_mutex_unlock(&mutex->lock);
 }
 
-void unlockMutex(LxMutex *mutex) {
+static void unlockMutex(LxMutex *mutex) {
     pthread_mutex_lock(&mutex->lock);
     LxThread *th = vm.curThread;
     ASSERT(mutex->owner == th); // TODO: throw error

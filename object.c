@@ -435,7 +435,7 @@ ObjArray *allocateArray(ObjClass *klass, int flags) {
     return ary;
 }
 
-ObjMap *allocateMap(ObjClass *klass, int flags) {
+static ObjMap *allocateMap(ObjClass *klass, int flags) {
     ObjMap *map = ALLOCATE_OBJ(
         ObjMap, OBJ_T_MAP, flags
     );

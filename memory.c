@@ -275,7 +275,7 @@ void addHeap() {
 // TODO: we shouldn't free all heaps right away, we should leave one
 // empty heap and mark it as empty, then we don't need to iterate over
 // it during GC, and we return it on next call to addHeap().
-void freeHeap(ObjAny *heap) {
+static void freeHeap(ObjAny *heap) {
     int i = 0;
     ObjAny *curHeap = NULL;
     int heapIdx = -1;
@@ -1449,17 +1449,6 @@ freeLoop:
     inFullGC = false;
     vm.grayCount = 0;
 }
-
-bool isInternedStringObj(Obj *obj) {
-    if (obj->type != OBJ_T_STRING) return false;
-    return STRING_IS_INTERNED(obj);
-}
-
-bool isThreadObj(Obj *obj) {
-    if (obj->type != OBJ_T_INSTANCE) return false;
-    return ((ObjInstance*)obj)->klass == lxThreadClass;
-}
-
 
 // Force free all objects, regardless of noGC field on the object.
 // Happens during VM shutdown.

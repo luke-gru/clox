@@ -214,7 +214,8 @@ typedef struct VM {
 extern VM vm;
 
 #define EC (vm.curThread->ec)
-LxThread *THREAD();
+
+LxThread *THREAD(void);
 LxThread *FIND_THREAD(pthread_t tid);
 ObjInstance *FIND_THREAD_INSTANCE(pthread_t tid);
 
@@ -309,7 +310,7 @@ static inline ErrTagInfo *addErrInfo(ObjClass *errClass) {
 BlockStackEntry *addBlockEntry(Obj *closureOrNative);
 void popBlockEntryUntil(BlockStackEntry *bentry);
 void popBlockEntry(BlockStackEntry *bentry);
-bool blockGiven();
+bool blockGiven(void);
 Value yieldBlock(int argCount, Value *args);
 Value yieldBlockCatch(int argCount, Value *args, Value *err);
 

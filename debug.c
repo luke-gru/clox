@@ -231,7 +231,7 @@ static void addFunc(vec_funcp_t *funcs, ObjFunction *func) {
     }
 }
 
-void printCatchTbl(CatchTable *tbl) {
+static void printCatchTbl(CatchTable *tbl) {
     CatchTable *row = tbl;
     printf("-- catch table --\n");
     int idx = 0;
@@ -246,7 +246,7 @@ void printCatchTbl(CatchTable *tbl) {
     printf("-- /catch table --\n");
 }
 
-void disassembleCatchTbl(ObjString *buf, CatchTable *tbl) {
+static void disassembleCatchTbl(ObjString *buf, CatchTable *tbl) {
     CatchTable *row = tbl;
     pushCString(buf, "-- catch table --\n", 18);
     int idx = 0;

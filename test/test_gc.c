@@ -15,7 +15,7 @@ static void fullGC(void) {
     collectGarbage();
 }
 
-int test_string_collected(void) {
+static int test_string_collected(void) {
     initVM();
     ObjString *string = copyString("", 0, NEWOBJ_FLAG_NONE);
     T_ASSERT(isLinkedObject((Obj*)string));
@@ -26,7 +26,7 @@ cleanup:
     return 0;
 }
 
-int test_hiding_keeps_gc_from_reclaiming(void) {
+static int test_hiding_keeps_gc_from_reclaiming(void) {
     initVM();
     ObjString *string = copyString("hidden", 6, NEWOBJ_FLAG_NONE);
     hideFromGC((Obj*)string);

@@ -650,7 +650,7 @@ Value pop(void) {
     return *(vm.curThread->lastValue);
 }
 
-Value popN(int n) {
+static Value popN(int n) {
     VMExecContext *ctx = EC;
     ASSERT(LIKELY((ctx->stackTop-n) >= ctx->stack));
     ctx->stackTop-=n;
@@ -845,7 +845,7 @@ void errorPrintScriptBacktrace(const char *format, ...) {
     resetStack();
 }
 
-void showUncaughtError(Value err) {
+static void showUncaughtError(Value err) {
     ObjString *classNameObj = CLASSINFO(AS_INSTANCE(err)->klass)->name;
     char *className = NULL;
     if (classNameObj) {
@@ -1841,7 +1841,7 @@ static CatchTable *getCatchTableRow(int idx) {
     return row;
 }
 
-ErrTagInfo *findErrTag(ObjClass *klass) {
+static ErrTagInfo *findErrTag(ObjClass *klass) {
     ASSERT(klass);
     ErrTagInfo *cur = vm.curThread->errInfo;
     while (cur) {

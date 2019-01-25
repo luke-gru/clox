@@ -552,7 +552,7 @@ void regex_output_ast(Regex *regex) {
     regex_output_ast_node(regex->node, 0);
 }
 
-bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
+static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
     DBG_ASSERT(node);
     DBG_ASSERT(*cptr_p);
     if (**cptr_p == '\0') {

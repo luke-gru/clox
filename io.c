@@ -102,7 +102,7 @@ ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
     return retBuf;
 }
 
-ObjString *IOReadlineFd(int fd, size_t maxLen) {
+static ObjString *IOReadlineFd(int fd, size_t maxLen) {
     ObjString *retBuf = NULL;
     if (maxLen == 0) maxLen = READBUF_SZ;
     if (maxLen > READBUF_SZ) maxLen = READBUF_SZ;
@@ -133,7 +133,7 @@ ObjString *IORead(Value io, size_t numBytes, bool untilEOF) {
     return IOReadFd(f->fd, numBytes, untilEOF);
 }
 
-ObjString *IOReadline(Value io, size_t maxBytes) {
+static ObjString *IOReadline(Value io, size_t maxBytes) {
     // TODO: checks
     LxFile *f = FILE_GETHIDDEN(io);
     return IOReadlineFd(f->fd, maxBytes);
@@ -165,7 +165,7 @@ size_t IOWrite(Value io, const void *buf, size_t count) {
     return written;
 }
 
-int IOFcntl(Value io, int cmd, int arg) {
+static int IOFcntl(Value io, int cmd, int arg) {
     int fd = FILE_GETHIDDEN(io)->fd;
     int last = errno;
     int res = fcntl(fd, cmd, arg);
@@ -177,7 +177,7 @@ int IOFcntl(Value io, int cmd, int arg) {
     return res;
 }
 
-Value lxIORead(int argCount, Value *args) {
+static Value lxIORead(int argCount, Value *args) {
     CHECK_ARITY("IO#read", 1, 2, argCount);
     Value self = args[0];
     bool untilEOF = false;
@@ -200,7 +200,7 @@ Value lxIORead(int argCount, Value *args) {
     return OBJ_VAL(buf);
 }
 
-Value lxIOGetline(int argCount, Value *args) {
+static Value lxIOGetline(int argCount, Value *args) {
     CHECK_ARITY("IO#getline", 1, 2, argCount);
     Value self = args[0];
     size_t maxBytes = 0;
@@ -220,7 +220,7 @@ Value lxIOGetline(int argCount, Value *args) {
  * var reader = pipes[0];
  * var writer = pipes[1];
  */
-Value lxIOPipeStatic(int argCount, Value *args) {
+static Value lxIOPipeStatic(int argCount, Value *args) {
     // TODO: allow flags
     CHECK_ARITY("IO.pipe", 1, 1, argCount);
     int fds[2];
@@ -246,7 +246,7 @@ Value lxIOPipeStatic(int argCount, Value *args) {
 }
 
 // IO.select(rds, wrs, errs, [timeout]);
-Value lxIOSelectStatic(int argCount, Value *args) {
+static Value lxIOSelectStatic(int argCount, Value *args) {
     CHECK_ARITY("IO.select", 4, 5, argCount);
     fd_set fds[3];
     FD_ZERO(&fds[0]);
@@ -323,7 +323,7 @@ Value lxIOSelectStatic(int argCount, Value *args) {
     return ret;
 }
 
-Value lxIOWriteStatic(int argCount, Value *args) {
+static Value lxIOWriteStatic(int argCount, Value *args) {
     CHECK_ARITY("IO.write", 3, 3, argCount);
     Value ioVal = args[1];
     CHECK_ARG_IS_A(ioVal, lxIOClass, 1);
@@ -334,7 +334,7 @@ Value lxIOWriteStatic(int argCount, Value *args) {
     return NUMBER_VAL(written);
 }
 
-Value lxIOReadStatic(int argCount, Value *args) {
+static Value lxIOReadStatic(int argCount, Value *args) {
     CHECK_ARITY("IO.read", 2, 3, argCount);
     Value ioVal = args[1];
     CHECK_ARG_IS_A(ioVal, lxIOClass, 1);
@@ -357,7 +357,7 @@ Value lxIOReadStatic(int argCount, Value *args) {
     return OBJ_VAL(buf);
 }
 
-Value lxIOCloseStatic(int argCount, Value *args) {
+static Value lxIOCloseStatic(int argCount, Value *args) {
     CHECK_ARITY("IO.close", 2, 2, argCount);
     Value ioVal = args[1];
     CHECK_ARG_IS_A(ioVal, lxIOClass, 1);
@@ -365,7 +365,7 @@ Value lxIOCloseStatic(int argCount, Value *args) {
     return NIL_VAL;
 }
 
-Value lxIOWrite(int argCount, Value *args) {
+static Value lxIOWrite(int argCount, Value *args) {
     CHECK_ARITY("IO#read", 2, 2, argCount);
     CHECK_ARG_IS_A(args[1], lxStringClass, 1);
     Value self = *args;
@@ -373,7 +373,7 @@ Value lxIOWrite(int argCount, Value *args) {
     return NUMBER_VAL(IOWrite(self, buf, strlen(buf)));
 }
 
-Value lxIOPuts(int argCount, Value *args) {
+static Value lxIOPuts(int argCount, Value *args) {
     CHECK_ARITY("IO#puts", 2, 2, argCount);
     CHECK_ARG_IS_A(args[1], lxStringClass, 1);
     Value self = *args;
@@ -383,14 +383,14 @@ Value lxIOPuts(int argCount, Value *args) {
     return NIL_VAL;
 }
 
-Value lxIOClose(int argCount, Value *args) {
+static Value lxIOClose(int argCount, Value *args) {
     CHECK_ARITY("IO#close", 1, 1, argCount);
     IOClose(*args);
     return NIL_VAL;
 }
 
 // FIXME: only supports 2 arguments (cmd + arg1)
-Value lxIOFcntl(int argCount, Value *args) {
+static Value lxIOFcntl(int argCount, Value *args) {
     CHECK_ARITY("IO#fcntl", 2, 3, argCount);
     int cmd = 0;
     int arg = 0;
