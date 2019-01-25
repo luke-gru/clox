@@ -607,12 +607,18 @@ bool VMLoadedScript(char *fname) {
     return false;
 }
 
-#define ASSERT_VALID_STACK() DBG_ASSERT(LIKELY(EC->stackTop >= EC->stack))
+#define ASSERT_VALID_STACK() DBG_ASSERT(EC->stackTop >= EC->stack)
 
 static inline bool isOpStackEmpty(void) {
     ASSERT_VALID_STACK();
     return EC->stackTop == EC->stack;
 }
+
+#define VM_PUSH(val) push(val)
+#define VM_POP() pop()
+#define VM_POPN(n) popN(n)
+#define VM_PEEK(n) peek(n)
+#define VM_PUSHSWAP(val) pushSwap(val)
 
 void push(Value value) {
     ASSERT_VALID_STACK();
@@ -1560,7 +1566,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 arrayPush(restAry, arg);
                 argCountWithRestAry--;
             }
-            for (int i = numRestArgs; i > 0; i--) pop();
+            for (int i = numRestArgs; i > 0; i--) { pop(); }
             push(restAry);
             argCountWithRestAry++;
         }
@@ -2116,14 +2122,14 @@ static InterpretResult vm_run() {
 #define READ_CONSTANT() (constantSlots[READ_BYTE()])
 #define BINARY_OP(op, opcode, type) \
     do { \
-      Value b = peek(0);\
-      Value a = peek(1);\
+      Value b = VM_PEEK(0);\
+      Value a = VM_PEEK(1);\
       if (IS_NUMBER(a) && IS_NUMBER(b)) {\
           if (UNLIKELY(((opcode == OP_DIVIDE || opcode == OP_MODULO) && AS_NUMBER(b) == 0.00))) {\
               throwErrorFmt(lxErrClass, "Can't divide by 0");\
           }\
-          pop();\
-          pushSwap(NUMBER_VAL((type)AS_NUMBER(a) op (type)AS_NUMBER(b)));\
+          VM_POP();\
+          VM_PUSHSWAP(NUMBER_VAL((type)AS_NUMBER(a) op (type)AS_NUMBER(b)));\
       } else if (IS_INSTANCE_LIKE(a)) {\
           ObjInstance *inst = AS_INSTANCE(a);\
           ObjString *methodName = methodNameForBinop(opcode);\
@@ -2235,7 +2241,7 @@ vmLoop:
 #endif
       CASE_OP(CONSTANT): { // numbers, code chunks (ObjFunction)
           Value constant = READ_CONSTANT();
-          push(constant);
+          VM_PUSH(constant);
           DISPATCH_BOTTOM();
       }
       CASE_OP(ADD):      BINARY_OP(+,OP_ADD, double); DISPATCH_BOTTOM();
@@ -2249,105 +2255,105 @@ vmLoop:
       CASE_OP(SHOVEL_L): BINARY_OP(<<,OP_SHOVEL_L,int); DISPATCH_BOTTOM();
       CASE_OP(SHOVEL_R): BINARY_OP(>>,OP_SHOVEL_R,int); DISPATCH_BOTTOM();
       CASE_OP(NEGATE): {
-          Value val = peek(0);
+          Value val = VM_PEEK(0);
           if (UNLIKELY(!IS_NUMBER(val))) {
-              pop();
+              VM_POP();
               throwErrorFmt(lxTypeErrClass, "Can only negate numbers, type=%s", typeOfVal(val));
           }
-          pushSwap(NUMBER_VAL(-AS_NUMBER(val)));
+          VM_PUSHSWAP(NUMBER_VAL(-AS_NUMBER(val)));
           DISPATCH_BOTTOM();
       }
       CASE_OP(LESS): {
-          Value rhs = pop(); // rhs
-          Value lhs = peek(0); // lhs
+          Value rhs = VM_POP(); // rhs
+          Value lhs = VM_PEEK(0); // lhs
           if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
-              pop();
+              VM_POP();
               throwErrorFmt(lxTypeErrClass,
                       "Can only compare 2 numbers or 2 strings with '<', lhs=%s, rhs=%s",
                       typeOfVal(lhs), typeOfVal(rhs));
           }
           if (cmpValues(lhs, rhs, instruction) == -1) {
-              pushSwap(trueValue());
+              VM_PUSHSWAP(trueValue());
           } else {
-              pushSwap(falseValue());
+              VM_PUSHSWAP(falseValue());
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(GREATER): {
-        Value rhs = pop();
-        Value lhs = peek(0);
+        Value rhs = VM_POP();
+        Value lhs = VM_PEEK(0);
         if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
-            pop();
+            VM_POP();
             throwErrorFmt(lxTypeErrClass,
                 "Can only compare 2 numbers or 2 strings with '>', lhs=%s, rhs=%s",
                 typeOfVal(lhs), typeOfVal(rhs));
         }
         if (cmpValues(lhs, rhs, instruction) == 1) {
-            pushSwap(trueValue());
+            VM_PUSHSWAP(trueValue());
         } else {
-            pushSwap(falseValue());
+            VM_PUSHSWAP(falseValue());
         }
         DISPATCH_BOTTOM();
       }
       CASE_OP(EQUAL): {
-          Value rhs = pop();
-          Value lhs = peek(0);
+          Value rhs = VM_POP();
+          Value lhs = VM_PEEK(0);
           if (isValueOpEqual(lhs, rhs)) {
-              pushSwap(trueValue());
+              VM_PUSHSWAP(trueValue());
           } else {
-              pushSwap(falseValue());
+              VM_PUSHSWAP(falseValue());
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(NOT_EQUAL): {
-          Value rhs = pop();
-          Value lhs = peek(0);
+          Value rhs = VM_POP();
+          Value lhs = VM_PEEK(0);
           if (isValueOpEqual(lhs, rhs)) {
-              pushSwap(falseValue());
+              VM_PUSHSWAP(falseValue());
           } else {
-              pushSwap(trueValue());
+              VM_PUSHSWAP(trueValue());
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(NOT): {
-          Value val = peek(0);
-          pushSwap(BOOL_VAL(!isTruthy(val)));
+          Value val = VM_PEEK(0);
+          VM_PUSHSWAP(BOOL_VAL(!isTruthy(val)));
           DISPATCH_BOTTOM();
       }
       CASE_OP(GREATER_EQUAL): {
-          Value rhs = pop();
-          Value lhs = peek(0);
+          Value rhs = VM_POP();
+          Value lhs = VM_PEEK(0);
           if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
-              pop();
+              VM_POP();
               throwErrorFmt(lxTypeErrClass,
                   "Can only compare 2 numbers or 2 strings with '>=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
           }
           if (cmpValues(lhs, rhs, instruction) != -1) {
-              pushSwap(trueValue());
+              VM_PUSHSWAP(trueValue());
           } else {
-              pushSwap(falseValue());
+              VM_PUSHSWAP(falseValue());
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(LESS_EQUAL): {
-          Value rhs = pop();
-          Value lhs = peek(0);
+          Value rhs = VM_POP();
+          Value lhs = VM_PEEK(0);
           if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
-              pop();
+              VM_POP();
               throwErrorFmt(lxTypeErrClass,
                   "Can only compare 2 numbers or 2 strings with '<=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
           }
           if (cmpValues(lhs, rhs, instruction) != 1) {
-              pushSwap(trueValue());
+              VM_PUSHSWAP(trueValue());
           } else {
-              pushSwap(falseValue());
+              VM_PUSHSWAP(falseValue());
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(PRINT): {
-          Value val = pop();
+          Value val = VM_POP();
           if (!vm.printBuf || vm.printToStdout) {
               printValue(stdout, val, true, -1);
               printf("\n");
@@ -2371,12 +2377,12 @@ vmLoop:
           Value varName = READ_CONSTANT();
           char *name = AS_CSTRING(varName);
           if (UNLIKELY(isUnredefinableGlobal(name))) {
-              pop();
+              VM_POP();
               throwErrorFmt(lxNameErrClass, "Can't redefine global variable '%s'", name);
           }
-          Value val = peek(0);
+          Value val = VM_PEEK(0);
           tableSet(&vm.globals, varName, val);
-          pop();
+          VM_POP();
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_GLOBAL): {
@@ -2384,21 +2390,21 @@ vmLoop:
           Value val;
           if (tableGet(&EC->roGlobals, varName, &val)) {
               if (IS_STRING(val)) {
-                  push(OBJ_VAL(dupString(AS_STRING(val))));
+                  VM_PUSH(OBJ_VAL(dupString(AS_STRING(val))));
               } else {
-                  push(val);
+                  VM_PUSH(val);
               }
           } else if (tableGet(&vm.globals, varName, &val)) {
-              push(val);
+              VM_PUSH(val);
           } else if (tableGet(&vm.constants, varName, &val)) {
-              push(val);
+              VM_PUSH(val);
           } else {
               throwErrorFmt(lxNameErrClass, "Undefined global variable '%s'.", AS_STRING(varName)->chars);
           }
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_GLOBAL): {
-          Value val = peek(0);
+          Value val = VM_PEEK(0);
           Value varName = READ_CONSTANT();
           char *name = AS_CSTRING(varName);
           if (UNLIKELY(isUnredefinableGlobal(name))) {
@@ -2408,35 +2414,35 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(NIL): {
-          push(nilValue());
+          VM_PUSH(nilValue());
           DISPATCH_BOTTOM();
       }
       CASE_OP(TRUE): {
-          push(BOOL_VAL(true));
+          VM_PUSH(BOOL_VAL(true));
           DISPATCH_BOTTOM();
       }
       CASE_OP(FALSE): {
-          push(BOOL_VAL(false));
+          VM_PUSH(BOOL_VAL(false));
           DISPATCH_BOTTOM();
       }
       CASE_OP(AND): {
-          Value rhs = pop();
-          Value lhs = peek(0);
+          Value rhs = VM_POP();
+          Value lhs = VM_PEEK(0);
           (void)lhs;
           // NOTE: we only check truthiness of rhs because lhs is
           // short-circuited (a JUMP_IF_FALSE is output in the bytecode for
           // the lhs).
-          pushSwap(isTruthy(rhs) ? rhs : BOOL_VAL(false));
+          VM_PUSHSWAP(isTruthy(rhs) ? rhs : BOOL_VAL(false));
           DISPATCH_BOTTOM();
       }
       CASE_OP(OR): {
-          Value rhs = pop();
-          Value lhs = peek(0);
-          pushSwap(isTruthy(lhs) || isTruthy(rhs) ? rhs : lhs);
+          Value rhs = VM_POP();
+          Value lhs = VM_PEEK(0);
+          VM_PUSHSWAP(isTruthy(lhs) || isTruthy(rhs) ? rhs : lhs);
           DISPATCH_BOTTOM();
       }
       CASE_OP(POP): {
-          pop();
+          VM_POP();
           DISPATCH_BOTTOM();
       }
       CASE_OP(POP_CREF): {
@@ -2444,19 +2450,19 @@ vmLoop:
           ObjClass *oldKlass = vec_pop(&th->v_crefStack);
           (void)oldKlass;
           DBG_ASSERT(TO_OBJ(oldKlass) == AS_OBJ(peek(0)));
-          pop();
+          VM_POP();
           popThis();
           DISPATCH_BOTTOM();
       }
       CASE_OP(POP_N): {
-          popN((int)READ_BYTE());
+          VM_POPN((int)READ_BYTE());
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_LOCAL): {
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          frame->slots[slot] = peek(0); // locals are popped at end of scope by VM
+          frame->slots[slot] = VM_PEEK(0); // locals are popped at end of scope by VM
           DISPATCH_BOTTOM();
       }
       CASE_OP(UNPACK_SET_LOCAL): {
@@ -2468,7 +2474,7 @@ vmLoop:
           // this variable
           int peekIdx = 0;
           while (frame->slots+slot > EC->stackTop-1) {
-              push(NIL_VAL);
+              VM_PUSH(NIL_VAL);
               peekIdx++;
           }
           frame->slots[slot] = unpackValue(peek(peekIdx+unpackIdx), unpackIdx); // locals are popped at end of scope by VM
@@ -2478,14 +2484,14 @@ vmLoop:
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          push(frame->slots[slot]);
+          VM_PUSH(frame->slots[slot]);
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_UPVALUE): {
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          push(*frame->closure->upvalues[slot]->value);
+          VM_PUSH(*frame->closure->upvalues[slot]->value);
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_UPVALUE): {
@@ -2497,7 +2503,7 @@ vmLoop:
       }
       CASE_OP(CLOSE_UPVALUE): {
           closeUpvalues(EC->stackTop - 1);
-          pop(); // pop the variable from the stack frame
+          VM_POP(); // pop the variable from the stack frame
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_CONST): {
@@ -2509,14 +2515,14 @@ vmLoop:
               cref = TO_CLASS(vec_last(&th->v_crefStack));
               ASSERT(cref);
               if (findConstantUnder(cref, AS_STRING(varName), &val)) {
-                  push(val);
+                  VM_PUSH(val);
                   DISPATCH_BOTTOM();
               } else {
                   notFound = true;
               }
           }
           if (!notFound && tableGet(&vm.constants, varName, &val)) {
-              push(val);
+              VM_PUSH(val);
           } else {
               // not found, try to autoload it
               Value autoloadPath;
@@ -2538,12 +2544,12 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_CONST_UNDER): {
-          Value klass = pop();
+          Value klass = VM_POP();
           Value varName = READ_CONSTANT();
           Value val;
           if (IS_NIL(klass)) {
               if (tableGet(&vm.constants, varName, &val)) {
-                  push(val);
+                  VM_PUSH(val);
               } else {
                   throwErrorFmt(lxNameErrClass, "Undefined constant '%s'.", AS_STRING(varName)->chars);
               }
@@ -2552,7 +2558,7 @@ vmLoop:
                   throwErrorFmt(lxTypeErrClass, "Constants must be defined under classes/modules");
               }
               if (tableGet(CLASSINFO(AS_CLASS(klass))->constants, varName, &val)) {
-                  push(val);
+                  VM_PUSH(val);
               } else {
                   throwErrorFmt(lxNameErrClass, "Undefined constant '%s::%s'.", className(AS_CLASS(klass)), AS_STRING(varName)->chars);
               }
@@ -2561,7 +2567,7 @@ vmLoop:
       }
       CASE_OP(SET_CONST): {
           Value constName = READ_CONSTANT();
-          Value val = peek(0);
+          Value val = VM_PEEK(0);
           if (th->v_crefStack.length > 0) {
               Value ownerKlass = OBJ_VAL(vec_last(&th->v_crefStack));
               addConstantUnder(AS_STRING(constName)->chars, val, ownerKlass);
@@ -2575,7 +2581,7 @@ vmLoop:
           ASSERT(IS_FUNCTION(funcVal));
           ObjFunction *func = AS_FUNCTION(funcVal);
           ObjClosure *closure = newClosure(func, NEWOBJ_FLAG_NONE);
-          push(OBJ_VAL(closure));
+          VM_PUSH(OBJ_VAL(closure));
 
           for (int i = 0; i < closure->upvalueCount; i++) {
               uint8_t isLocal = READ_BYTE();
@@ -2591,7 +2597,7 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_FALSE): {
-          Value cond = pop();
+          Value cond = VM_POP();
           uint8_t ipOffset = READ_BYTE();
           if (!isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
@@ -2601,7 +2607,7 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_TRUE): {
-          Value cond = pop();
+          Value cond = VM_POP();
           uint8_t ipOffset = READ_BYTE();
           if (isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
@@ -2611,7 +2617,7 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_FALSE_PEEK): {
-          Value cond = peek(0);
+          Value cond = VM_PEEK(0);
           uint8_t ipOffset = READ_BYTE();
           if (!isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
@@ -2621,7 +2627,7 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_TRUE_PEEK): {
-          Value cond = peek(0);
+          Value cond = VM_PEEK(0);
           uint8_t ipOffset = READ_BYTE();
           if (isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
@@ -2666,20 +2672,20 @@ vmLoop:
       }
       CASE_OP(BLOCK_RETURN): {
           ObjString *key = INTERN("ret");
-          Value ret = peek(0);
+          Value ret = VM_PEEK(0);
           Value err = newError(lxReturnBlockErrClass, NIL_VAL);
           setProp(err, key, ret);
-          pop();
+          VM_POP();
           throwError(err); // blocks catch this, not propagated
           DISPATCH_BOTTOM();
       }
       CASE_OP(TO_BLOCK): {
-          Value func = peek(0);
+          Value func = VM_PEEK(0);
           if (UNLIKELY(!isCallable(func))) {
-              pop();
+              VM_POP();
               throwErrorFmt(lxTypeErrClass, "Cannot use '&' operator on a non-function");
           }
-          pushSwap(newBlock(AS_OBJ(func)));
+          VM_PUSHSWAP(newBlock(AS_OBJ(func)));
           DISPATCH_BOTTOM();
       }
       CASE_OP(CALL): {
@@ -2691,7 +2697,7 @@ vmLoop:
           Value callableVal = peek(numArgs);
           if (UNLIKELY(!isCallable(callableVal))) {
               for (int i = 0; i < numArgs; i++) {
-                  pop();
+                  VM_POP();
               }
               throwErrorFmt(lxTypeErrClass, "Tried to call uncallable object (type=%s)", typeOfVal(callableVal));
           }
@@ -2702,15 +2708,15 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(CHECK_KEYWORD): {
-          Value kwMap = peek(0);
+          Value kwMap = VM_PEEK(0);
           ASSERT(IS_T_MAP(kwMap));
           uint8_t kwSlot = READ_BYTE();
           uint8_t mapSlot = READ_BYTE();
           (void)mapSlot; // unused
           if (IS_UNDEF(getFrame()->slots[kwSlot])) {
-              push(BOOL_VAL(false));
+              VM_PUSH(BOOL_VAL(false));
           } else {
-              push(BOOL_VAL(true));
+              VM_PUSH(BOOL_VAL(true));
           }
           DISPATCH_BOTTOM();
       }
@@ -2771,18 +2777,18 @@ vmLoop:
       }
       CASE_OP(GET_THIS): {
           ASSERT(th->thisObj);
-          push(OBJ_VAL(th->thisObj));
+          VM_PUSH(OBJ_VAL(th->thisObj));
           DISPATCH_BOTTOM();
       }
       CASE_OP(SPLAT_ARRAY): {
-          Value ary = pop();
+          Value ary = VM_POP();
           if (UNLIKELY(!IS_AN_ARRAY(ary))) {
               throwErrorFmt(lxTypeErrClass, "Splatted expression must evaluate to an Array (type=%s)",
                       typeOfVal(ary));
           }
           th->lastSplatNumArgs = ARRAY_SIZE(ary);
           for (int i = 0; i < th->lastSplatNumArgs; i++) {
-              push(ARRAY_GET(ary, i));
+              VM_PUSH(ARRAY_GET(ary, i));
           }
           DISPATCH_BOTTOM();
       }
@@ -2819,7 +2825,7 @@ vmLoop:
                       AS_CSTRING(methodName));
           }
           ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method), NEWOBJ_FLAG_NONE);
-          push(OBJ_VAL(bmethod));
+          VM_PUSH(OBJ_VAL(bmethod));
           DISPATCH_BOTTOM();
       }
       // return from function/method, and close all upvalues in the callframe frame
@@ -2828,7 +2834,7 @@ vmLoop:
           // (explicitly or implicitly)
           if (th->v_blockStack.length > 0) {
               ObjString *key = INTERN("ret");
-              pop();
+              VM_POP();
               Value ret;
               if (th->lastValue) {
                   ret = *th->lastValue;
@@ -2840,34 +2846,34 @@ vmLoop:
               throwError(err); // blocks catch this, not propagated
               // not reached
           }
-          Value result = pop(); // pop from caller's frame
+          Value result = VM_POP(); // pop from caller's frame
           ASSERT(!getFrame()->isCCall);
           Value *newTop = getFrame()->slots;
           closeUpvalues(getFrame()->slots);
           popFrame();
           EC->stackTop = newTop;
-          push(result);
+          VM_PUSH(result);
           (th->vmRunLvl)--;
           return INTERPRET_OK;
       }
       CASE_OP(ITER): {
-          Value iterable = peek(0);
+          Value iterable = VM_PEEK(0);
           if (UNLIKELY(!isIterableType(iterable))) {
               throwErrorFmt(lxTypeErrClass, "Non-iterable value given to 'foreach' statement. Type found: %s",
                       typeOfVal(iterable));
           }
           Value iterator = createIterator(iterable);
           DBG_ASSERT(isIterator(iterator));
-          DBG_ASSERT(isIterableType(peek(0)));
-          pushSwap(iterator);
+          DBG_ASSERT(isIterableType(VM_PEEK(0)));
+          VM_PUSHSWAP(iterator);
           DISPATCH_BOTTOM();
       }
       CASE_OP(ITER_NEXT): {
-          Value iterator = peek(0);
+          Value iterator = VM_PEEK(0);
           ASSERT(isIterator(iterator));
           Value next = iteratorNext(iterator);
           ASSERT(!IS_UNDEF(next));
-          push(next);
+          VM_PUSH(next);
           DISPATCH_BOTTOM();
       }
       CASE_OP(CLASS): { // add or re-open class
@@ -2882,7 +2888,7 @@ vmLoop:
 
           if (tableGet(constantTbl, classNm, &existingClass)) {
               if (IS_CLASS(existingClass)) { // re-open class
-                  push(existingClass);
+                  VM_PUSH(existingClass);
                   setThis(0);
                   pushCref(AS_CLASS(existingClass));
                   DISPATCH_BOTTOM();
@@ -2893,7 +2899,7 @@ vmLoop:
               }
           }
           ObjClass *klass = newClass(AS_STRING(classNm), lxObjClass, NEWOBJ_FLAG_OLD);
-          push(OBJ_VAL(klass));
+          VM_PUSH(OBJ_VAL(klass));
           setThis(0);
           if (th->v_crefStack.length > 0) {
               addConstantUnder(className(klass), OBJ_VAL(klass), ownerClass);
@@ -2915,7 +2921,7 @@ vmLoop:
           }
           if (tableGet(constantTbl, modName, &existingMod)) {
               if (IS_MODULE(existingMod)) {
-                push(existingMod); // re-open the module
+                VM_PUSH(existingMod); // re-open the module
                 setThis(0);
                 pushCref(AS_CLASS(existingMod));
                 DISPATCH_BOTTOM();
@@ -2926,7 +2932,7 @@ vmLoop:
               }
           }
           ObjModule *mod = newModule(AS_STRING(modName), NEWOBJ_FLAG_OLD);
-          push(OBJ_VAL(mod));
+          VM_PUSH(OBJ_VAL(mod));
           setThis(0);
           if (th->v_crefStack.length > 0) {
               addConstantUnder(className(TO_CLASS(mod)), OBJ_VAL(mod), ownerClass);
@@ -2939,7 +2945,7 @@ vmLoop:
       }
       CASE_OP(SUBCLASS): { // add new class inheriting from an existing class
           Value classNm = READ_CONSTANT();
-          Value superclass =  pop();
+          Value superclass =  VM_POP();
           Value ownerClass = NIL_VAL;
           Table *constantTbl = &vm.constants;
           if (th->v_crefStack.length > 0) {
@@ -2973,22 +2979,22 @@ vmLoop:
           } else {
               tableSet(&vm.constants, classNm, OBJ_VAL(klass));
           }
-          push(OBJ_VAL(klass));
+          VM_PUSH(OBJ_VAL(klass));
           setThis(0);
           pushCref(klass);
           DISPATCH_BOTTOM();
       }
       CASE_OP(IN): {
-          Value classOrInst = pop();
+          Value classOrInst = VM_POP();
           if (IS_CLASS(classOrInst) || IS_MODULE(classOrInst)) {
-              push(classOrInst);
+              VM_PUSH(classOrInst);
           } else {
               if (!IS_INSTANCE(classOrInst)) {
                   throwErrorFmt(lxTypeErrClass, "Expression given to 'in' statement "
                           "must evaluate to a class/module/instance (type=%s)", typeOfVal(classOrInst));
               }
               ObjClass *klass = instanceSingletonClass(AS_INSTANCE(classOrInst));
-              push(OBJ_VAL(klass));
+              VM_PUSH(OBJ_VAL(klass));
           }
           setThis(0);
           DISPATCH_BOTTOM();
@@ -3021,31 +3027,31 @@ vmLoop:
           Value propName = READ_CONSTANT();
           ObjString *propStr = AS_STRING(propName);
           ASSERT(propStr && propStr->chars);
-          Value instance = peek(0);
+          Value instance = VM_PEEK(0);
           if (UNLIKELY(!IS_INSTANCE_LIKE(instance))) {
-              pop();
+              VM_POP();
               throwErrorFmt(lxTypeErrClass, "Tried to access property '%s' of non-instance (type: %s)", propStr->chars, typeOfVal(instance));
           }
           Value val = propertyGet(AS_INSTANCE(instance), propStr);
-          pushSwap(val);
+          VM_PUSHSWAP(val);
           DISPATCH_BOTTOM();
       }
       CASE_OP(PROP_SET): {
           Value propName = READ_CONSTANT();
           ObjString *propStr = AS_STRING(propName);
-          Value rval = peek(0);
-          Value instance = peek(1);
+          Value rval = VM_PEEK(0);
+          Value instance = VM_PEEK(1);
           if (UNLIKELY(!IS_INSTANCE_LIKE(instance))) {
-              pop(); pop();
+              VM_POP(); VM_POP();
               throwErrorFmt(lxTypeErrClass, "Tried to set property '%s' of non-instance", propStr->chars);
           }
           propertySet(AS_INSTANCE(instance), propStr, rval); // TODO: check frozenness of object
-          pop(); // leave rval on stack
-          pushSwap(rval);
+          VM_POP(); // leave rval on stack
+          VM_PUSHSWAP(rval);
           DISPATCH_BOTTOM();
       }
       CASE_OP(INDEX_GET): {
-          Value lval = peek(1); // ex: Array/String/instance object
+          Value lval = VM_PEEK(1); // ex: Array/String/instance object
           if (UNLIKELY(!IS_INSTANCE_LIKE(lval))) {
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
           }
@@ -3065,7 +3071,7 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(THROW): {
-          Value throwable = pop();
+          Value throwable = VM_POP();
           if (IS_STRING(throwable)) {
               Value msg = throwable;
               throwable = newError(lxErrClass, msg);
@@ -3087,21 +3093,21 @@ vmLoop:
               fprintf(stderr, "Non-throwable found (BUG): %s\n", typeOfVal(tblRow->lastThrownValue));
               ASSERT(0);
           }
-          push(tblRow->lastThrownValue);
+          VM_PUSH(tblRow->lastThrownValue);
           DISPATCH_BOTTOM();
       }
       CASE_OP(STRING): {
           Value strLit = READ_CONSTANT();
           DBG_ASSERT(IS_STRING(strLit));
           uint8_t isStatic = READ_BYTE();
-          push(OBJ_VAL(lxStringClass));
+          VM_PUSH(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
           buf->klass = lxStringClass;
           if (UNLIKELY(isStatic)) {
               STRING_SET_STATIC(buf);
-              push(OBJ_VAL(buf));
+              VM_PUSH(OBJ_VAL(buf));
           } else {
-              push(OBJ_VAL(buf));
+              VM_PUSH(OBJ_VAL(buf));
           }
           callCallable(peek(1), 1, false, NULL);
           if (UNLIKELY(isStatic == 1)) {
@@ -3116,11 +3122,11 @@ vmLoop:
           hideFromGC(AS_OBJ(aryVal));
           ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
           for (int i = 0; i < numEls; i++) {
-              Value el = pop();
+              Value el = VM_POP();
               writeValueArrayEnd(ary, el);
               OBJ_WRITE(aryVal, el);
           }
-          push(aryVal);
+          VM_PUSH(aryVal);
           unhideFromGC(AS_OBJ(aryVal));
           DISPATCH_BOTTOM();
       }
@@ -3128,7 +3134,7 @@ vmLoop:
           Value ary = READ_CONSTANT();
           AS_ARRAY(ary)->klass = lxAryClass; // NOTE: this is actually needed
           DBG_ASSERT(IS_AN_ARRAY(ary));
-          push(arrayDup(ary));
+          VM_PUSH(arrayDup(ary));
           DISPATCH_BOTTOM();
       }
       CASE_OP(MAP): {
@@ -3138,20 +3144,20 @@ vmLoop:
           hideFromGC(AS_OBJ(mapVal));
           Table *map = AS_MAP(mapVal)->table;
           for (int i = 0; i < numKeyVals; i+=2) {
-              Value key = pop();
-              Value val = pop();
+              Value key = VM_POP();
+              Value val = VM_POP();
               tableSet(map, key, val);
               OBJ_WRITE(mapVal, key);
               OBJ_WRITE(mapVal, val);
           }
-          push(mapVal);
+          VM_PUSH(mapVal);
           unhideFromGC(AS_OBJ(mapVal));
           DISPATCH_BOTTOM();
       }
       CASE_OP(DUPMAP): {
           Value map = READ_CONSTANT();
           DBG_ASSERT(IS_A_MAP(map));
-          push(mapDup(map));
+          VM_PUSH(mapDup(map));
           DISPATCH_BOTTOM();
       }
       CASE_OP(REGEX): {
@@ -3159,13 +3165,13 @@ vmLoop:
           DBG_ASSERT(IS_STRING(reStr));
           Value re;
           if (tableGet(&vm.regexLiterals, reStr, &re)) {
-              push(re);
+              VM_PUSH(re);
           } else {
               re = compileRegex(AS_STRING(reStr));
               GC_OLD(AS_OBJ(re));
               objFreeze(AS_OBJ(re));
               tableSet(&vm.regexLiterals, reStr, re);
-              push(re);
+              VM_PUSH(re);
           }
           DISPATCH_BOTTOM();
       }
