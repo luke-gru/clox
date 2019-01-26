@@ -1259,6 +1259,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             Insn *insnBefore = currentIseq()->tail;
             emitNode(vec_first(param->children)); // default arg
             emitOp2(OP_SET_LOCAL, (uint8_t)localSlot, identifierConstant(&param->tok));
+            emitOp0(OP_POP);
             Insn *insnAfter = currentIseq()->tail;
             size_t codeDiff = iseqInsnByteDiff(insnBefore, insnAfter);
             ParamNodeInfo *paramNodeInfo = calloc(sizeof(ParamNodeInfo), 1);

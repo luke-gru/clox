@@ -195,6 +195,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(classClass, "constGet", lxClassConstGet);
     addNativeMethod(classClass, "constants", lxClassConstants);
     addNativeMethod(classClass, "ancestors", lxClassAncestors);
+    addNativeMethod(classClass, "isA", lxClassIsA);
     addNativeMethod(classClass, "include", lxClassInclude);
     addNativeGetter(classClass, "superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
@@ -1593,7 +1594,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     if (numDefaultArgsUsed < 0) numDefaultArgsUsed = 0;
     int numDefaultArgsUnused = func->numDefaultArgs - numDefaultArgsUsed;
 
-    for (int i = numDefaultArgsUsed; i > 0; i--) {
+    for (int i = 0; i < numDefaultArgsUsed; i++) {
         push(NIL_VAL);
     }
 
@@ -2095,6 +2096,7 @@ static Value unpackValue(Value val, uint8_t idx) {
             return NIL_VAL;
         }
     } else {
+        fprintf(stderr, "[BUG]: type: %s\n", typeOfVal(val));
         UNREACHABLE("type: %s", typeOfVal(val)); // FIXME: throw typeerror
     }
 }

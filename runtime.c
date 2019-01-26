@@ -830,6 +830,19 @@ Value lxClassConstants(int argCount, Value *args) {
     return ret;
 }
 
+Value lxClassIsA(int argCount, Value *args) {
+    CHECK_ARITY("Class#isA", 2, 2, argCount);
+    Value klassTestVal = args[1];
+    CHECK_ARG_BUILTIN_TYPE(klassTestVal, IS_CLASS_FUNC, "class", 1);
+    ObjClass *klassSelf = AS_CLASS(args[0]);
+    ObjClass *klassTest = AS_CLASS(klassTestVal);
+    while (klassSelf) {
+        if (klassSelf == klassTest) { return BOOL_VAL(true); }
+        klassSelf = TO_CLASS(CLASS_SUPER(klassSelf));
+    }
+    return BOOL_VAL(false);
+}
+
 Value lxClassAncestors(int argCount, Value *args) {
     CHECK_ARITY("Class#ancestors", 1, 1, argCount);
     Value self = *args;
@@ -936,6 +949,7 @@ Value lxIteratorNext(int argCount, Value *args) {
                 arrayPush(ary, e.value);
                 return ary;
             } else {
+                UNREACHABLE("bug");
                 return NIL_VAL; // shouldn't reach here
             }
         }

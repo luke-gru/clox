@@ -1,0 +1,57 @@
+// Pretty-printer
+module PP {
+  class ppi(indent) {
+    var buf = "";
+    for (var i = 0; i < indent; i+=1) {
+      buf << "  ";
+    }
+    return buf;
+  }
+
+  // FIXME: if array or map elements hold the array/map (recursively), then it
+  // overflows the stack (infinite loop). Need to keep track of elements
+  // found.
+  class pp(obj, indent = 0) {
+    var buf = "";
+    if (classof(obj) == nil) { // non-object
+      return this.ppi(indent) + String(obj);
+    } else {
+      if (obj.class.isA(Array)) {
+        buf << this.ppi(indent) << "[\n";
+        indent+=1;
+        for (var i = 0; i < obj.size; i+=1) {
+          buf << this.pp(obj[i], indent);
+          buf << ",\n";
+        }
+        indent-=1;
+        buf << this.ppi(indent) << "]";
+        return buf;
+      }
+      if (obj.class.isA(Map)) {
+        buf << this.ppi(indent) << "{\n";
+        indent+=1;
+        foreach (key, val in obj) {
+          buf << this.pp(key, indent);
+          buf << ":\n";
+          buf << this.pp(val, indent) << ",\n";
+        }
+        indent-=1;
+        buf << this.ppi(indent) << "}";
+        return buf;
+      }
+      if (obj.class.isA(String)) {
+        buf << this.ppi(indent) << '"';
+        buf << obj;
+        buf << '"';
+        return buf;
+      }
+      buf << this.ppi(indent);
+      buf << String(obj);
+      return buf;
+    }
+  }
+}
+
+fun pp(obj) {
+  print PP.pp(obj);
+}

@@ -1,0 +1,17 @@
+requireScript("pp");
+pp(%{1:"2", 2: [1,2,3], 3: %"regex"});
+
+__END__
+-- expect: --
+{
+  1:
+  "2",
+  2:
+  [
+    1,
+    2,
+    3,
+  ],
+  3:
+  <instance Regex>,
+}
