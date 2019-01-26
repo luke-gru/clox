@@ -68,12 +68,6 @@ void freeValueArray(ValueArray *array) {
     initValueArray(array);
 }
 
-/**
- *  0  *1*  2   3
- * [1,  2,  3,  4]
- * [1,  3]
- *
- */
 // NOTE: assumes index is within bounds
 bool removeValueArray(ValueArray *array, int idx) {
     ASSERT(idx < array->count);
@@ -502,6 +496,7 @@ bool isTruthy(Value val) {
 #endif
 }
 
+// NOTE: used only for debugging
 void fillCallableName(Value callable, char *buf, size_t buflen) {
     memset(buf, 0, buflen);
     ASSERT(isCallable(callable));

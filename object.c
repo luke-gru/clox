@@ -464,10 +464,10 @@ ObjInstance *newInstance(ObjClass *klass, int flags) {
     // modules/classes when given Module() or Class() constructors
     if (LIKELY(vm.inited)) {
         DBG_ASSERT(klass);
-        if (IS_SUBCLASS(klass, lxAryClass)) {
-            return (ObjInstance*)allocateArray(klass, flags);
-        } else if (IS_SUBCLASS(klass, lxStringClass)) {
+        if (IS_SUBCLASS(klass, lxStringClass)) {
             return (ObjInstance*)allocateString(NULL, 0, klass, flags);
+        } else if (IS_SUBCLASS(klass, lxAryClass)) {
+            return (ObjInstance*)allocateArray(klass, flags);
         } else if (IS_SUBCLASS(klass, lxMapClass)) {
             return (ObjInstance*)allocateMap(klass, flags);
         } else if (nativeRegexInit && IS_SUBCLASS(klass, lxRegexClass)) {
