@@ -981,14 +981,7 @@ Value newError(ObjClass *errClass, Value msg) {
 
 bool isSubclass(ObjClass *subklass, ObjClass *superklass) {
     DBG_ASSERT(subklass);
-    if (superklass == NULL) {
-        fprintf(stderr, "subclass: %s\n", className(subklass));
-        ASSERT(!vm.inited);
-        return false;
-    }
-    if (vm.inited) {
-        DBG_ASSERT(superklass);
-    }
+    DBG_ASSERT(superklass);
     if (subklass == superklass) { return true; }
     Obj *subLookup = (Obj*)subklass;
     while (subLookup != NULL && subLookup != (Obj*)superklass) {
