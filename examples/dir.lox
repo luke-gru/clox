@@ -15,6 +15,7 @@ try {
 
 Dir.chdir("lib") -> { };
 Dir.chdir("lib", &fun() { });
+print Dir.glob("*.md");
 
 __END__
 -- noexpect: --

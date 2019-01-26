@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <dirent.h>
+#include <glob.h>
 #include "object.h"
 #include "vm.h"
 #include "runtime.h"
@@ -84,7 +85,7 @@ static Value lxDirRewind(int argCount, Value *args) {
 
 static Value lxDirPwdStatic(int argCount, Value *args) {
     CHECK_ARITY("Dir.pwd", 1, 1, argCount);
-    char buf[4096] = { '\0' };
+    char buf[4096];
     int last = errno;
     char *res = getcwd(buf, 4096);
     if (!res) {
@@ -93,6 +94,33 @@ static Value lxDirPwdStatic(int argCount, Value *args) {
         throwErrorFmt(sysErrClass(err), "Couldn't get current directory: %s", strerror(err));
     }
     return OBJ_VAL(copyString(buf, strlen(buf), NEWOBJ_FLAG_NONE));
+}
+
+static Value lxDirGlobStatic(int argCount, Value *args) {
+    CHECK_ARITY("Dir.glob", 2, 2, argCount);
+    Value globStrVal = args[1];
+    CHECK_ARG_IS_A(globStrVal, lxStringClass, 1);
+    char *globCStr = AS_STRING(globStrVal)->chars;
+
+    glob_t globBuf;
+
+    Value ary = newArray();
+    int res = glob((const char *)globCStr, GLOB_BRACE, NULL, &globBuf);
+    if (res == GLOB_NOMATCH) {
+        return ary;
+    } else if (res != 0) {
+        // TODO: raise?
+        return ary;
+    }
+    int i = 0;
+    char *path = NULL;
+    while ((path = globBuf.gl_pathv[i])) {
+        Value pathVal = OBJ_VAL(copyString(path, strlen(path), NEWOBJ_FLAG_NONE));
+        arrayPush(ary, pathVal);
+        i++;
+    }
+    globfree(&globBuf);
+    return ary;
 }
 
 static Value lxDirChdirStatic(int argCount, Value *args) {
@@ -140,4 +168,5 @@ void Init_DirClass() {
     ObjClass *dirStatic = classSingletonClass(lxDirClass);
     addNativeMethod(dirStatic, "pwd", lxDirPwdStatic);
     addNativeMethod(dirStatic, "chdir", lxDirChdirStatic);
+    addNativeMethod(dirStatic, "glob", lxDirGlobStatic);
 }

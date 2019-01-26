@@ -1,0 +1,6 @@
+var o = Object();
+o.myprop = 0;
+for (var i = 0; i < 1000000; i+=1) {
+  o.myprop;
+  o.myprop += 1;
+}
