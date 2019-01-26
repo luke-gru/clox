@@ -46,6 +46,7 @@ struct Upvalue;
 #define OBJ_FLAG_NOGC (1 << 3)
 #define OBJ_FLAG_PUSHED_VM_STACK (1 << 4)
 #define OBJ_FLAG_SINGLETON (1 << 5)
+#define OBJ_FLAG_INSTANCE_LIKE (1 << 6)
 // flags that may or may not be used by certain types
 #define OBJ_FLAG_USER1 (1 << 10)
 #define OBJ_FLAG_USER2 (1 << 11)
@@ -72,6 +73,8 @@ struct Upvalue;
 #define OBJ_UNSET_PUSHED_VM_STACK(obj) OBJ_UNSET_FLAG(obj, PUSHED_VM_STACK)
 #define OBJ_IS_SINGLETON(obj) OBJ_HAS_FLAG(obj, SINGLETON)
 #define OBJ_SET_SINGLETON(obj) OBJ_SET_FLAG(obj, SINGLETON)
+#define OBJ_IS_INSTANCE_LIKE(obj) OBJ_HAS_FLAG(obj, INSTANCE_LIKE)
+#define OBJ_SET_INSTANCE_LIKE(obj) OBJ_SET_FLAG(obj, INSTANCE_LIKE)
 
 #define OBJ_HAS_USER1_FLAG(obj) OBJ_HAS_FLAG(obj, USER1)
 #define OBJ_SET_USER1_FLAG(obj) OBJ_SET_FLAG(obj, USER1)
@@ -337,8 +340,8 @@ typedef struct LxFile {
 #define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
 #define IS_MODULE(value)        (isObjType(value, OBJ_T_MODULE))
 #define IS_INSTANCE(value)      (isObjType(value, OBJ_T_INSTANCE))
-// TODO: add `instanceLike` flag in obj->flags to reduce checks
-#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_STRING(value) || IS_ARRAY(value) || IS_MAP(value) || IS_REGEX(value) || IS_CLASS(value) || IS_MODULE(value))
+//#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_STRING(value) || IS_ARRAY(value) || IS_MAP(value) || IS_REGEX(value) || IS_CLASS(value) || IS_MODULE(value))
+#define IS_INSTANCE_LIKE(value) (IS_OBJ(value) && OBJ_IS_INSTANCE_LIKE(AS_OBJ(value)))
 #define IS_UPVALUE(value)       (isObjType(value, OBJ_T_UPVALUE))
 #define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
 #define IS_INTERNAL(value)      (isObjType(value, OBJ_T_INTERNAL))
@@ -350,7 +353,7 @@ typedef struct LxFile {
 #define IS_INSTANCE_OF_FUNC (is_value_instance_of_p)
 #define IS_A_FUNC (is_value_a_p)
 
-#define IS_A(value, klass)      ((IS_INSTANCE(value) || IS_ARRAY(value) || IS_STRING(value) || IS_MAP(value) || IS_REGEX(value)) && instanceIsA(AS_INSTANCE(value), klass))
+#define IS_A(value, klass)      (IS_INSTANCE_LIKE(value) && instanceIsA(AS_INSTANCE(value), klass))
 
 #define IS_A_MODULE(value)      (IS_A(value, lxModuleClass))
 #define IS_AN_ARRAY(value)      (IS_A(value, lxAryClass))

@@ -56,6 +56,7 @@ static ObjString *allocateString(char *chars, int length, ObjClass *klass, int f
     string->capacity = length;
     string->chars = chars;
     string->hash = 0; // lazily computed
+    OBJ_SET_INSTANCE_LIKE(TO_OBJ(string));
     return string;
 }
 
@@ -67,6 +68,7 @@ static ObjRegex *allocateRegex(ObjClass *klass, int flags) {
     void *tablesMem = (void*)ALLOCATE(Table, 1);
     reObj->fields = (Table*)tablesMem;
     initTable(reObj->fields);
+    OBJ_SET_INSTANCE_LIKE(TO_OBJ(reObj));
     return reObj;
 }
 
@@ -363,6 +365,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass, int flags) {
     if (superclass) {
         OBJ_WRITE(OBJ_VAL(klass), OBJ_VAL(superclass));
     }
+    OBJ_SET_INSTANCE_LIKE(TO_OBJ(klass));
     // during initial class hierarchy setup this is NULL
     if (nativeClassInit && isClassHierarchyCreated) {
         callVMMethod((ObjInstance*)klass, OBJ_VAL(nativeClassInit), 0, NULL, NULL);
@@ -387,6 +390,7 @@ ObjModule *newModule(ObjString *name, int flags) {
     if (name) {
         OBJ_WRITE(OBJ_VAL(mod), OBJ_VAL(name));
     }
+    OBJ_SET_INSTANCE_LIKE(TO_OBJ(mod));
     // during initial class hierarchy setup this is NULL
     if (nativeModuleInit && isClassHierarchyCreated) {
         callVMMethod((ObjInstance*)mod, OBJ_VAL(nativeModuleInit), 0, NULL, NULL);
@@ -432,6 +436,7 @@ ObjArray *allocateArray(ObjClass *klass, int flags) {
     initTable(ary->fields);
     initValueArray(&ary->valAry);
     ary->valAry.count = 0;
+    OBJ_SET_INSTANCE_LIKE(TO_OBJ(ary));
     return ary;
 }
 
@@ -448,6 +453,7 @@ static ObjMap *allocateMap(ObjClass *klass, int flags) {
     map->table = ALLOCATE(Table, 1);
     initTable(map->fields);
     initTable(map->table);
+    OBJ_SET_INSTANCE_LIKE(TO_OBJ(map));
     return map;
 }
 
@@ -482,6 +488,7 @@ ObjInstance *newInstance(ObjClass *klass, int flags) {
     obj->fields = (Table*)tablesMem;
     initTable(obj->fields);
     obj->internal = NULL;
+    OBJ_SET_INSTANCE_LIKE(TO_OBJ(obj));
     return obj;
 }
 
