@@ -11,8 +11,5 @@ for (var i = 0; i < 10; i+=1) {
   });
   threads << t;
 }
-/*threads.each() (t) -> { joinThread(t); };*/
-for (var i = 0; i < 10; i+=1) {
-  joinThread(threads[i]);
-}
+threads.each() -> (t) { joinThread(t); };
 print "done second";

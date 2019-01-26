@@ -587,7 +587,7 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
         GC_TRACE_DEBUG(1, "REALLOC FAILED, trying GC");
         collectGarbage(); // NOTE: GCOn could be false here if set by user
         // try again after potentially freeing memory
-        void *ret = realloc(previous, newSize);
+        ret = realloc(previous, newSize);
         if (UNLIKELY(!ret)) {
             fprintf(stderr, "Out of memory!\n");
             _exit(1);
