@@ -226,11 +226,10 @@ void pushCStringFmt(ObjString *string, const char *format, ...) {
 void pushCStringVFmt(ObjString *string, const char *format, va_list ap) {
     ASSERT(!isFrozen((Obj*)string));
 
-    char sbuf[201] = {'\0'};
+    char sbuf[200];
     vsnprintf(sbuf, 200, format, ap);
 
     size_t buflen = strlen(sbuf);
-    sbuf[buflen] = '\0';
 
     if (buflen == 0) return;
 

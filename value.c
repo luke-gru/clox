@@ -217,14 +217,10 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
     } else if (IS_NIL(value)) {
         ret = stringConstructor("nil", 3, flags);
     } else if (IS_NUMBER(value)) {
-        char buftemp[50] = { '\0' };
+        char buftemp[50];
         double d = AS_NUMBER(value);
         snprintf(buftemp, 50, "%g", d); // ex: "1.2"
-        char *buf = calloc(strlen(buftemp)+1, 1);
-        ASSERT_MEM(buf);
-        strcpy(buf, buftemp);
-        ret = stringConstructor(buf, strlen(buf), flags);
-        xfree(buf);
+        ret = stringConstructor(buftemp, strlen(buftemp), flags);
     } else if (IS_OBJ(value)) {
         if (OBJ_TYPE(value) == OBJ_T_STRING) {
             char *cstring = AS_CSTRING(value);
