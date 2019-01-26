@@ -340,7 +340,6 @@ typedef struct LxFile {
 #define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
 #define IS_MODULE(value)        (isObjType(value, OBJ_T_MODULE))
 #define IS_INSTANCE(value)      (isObjType(value, OBJ_T_INSTANCE))
-//#define IS_INSTANCE_LIKE(value) (IS_INSTANCE(value) || IS_STRING(value) || IS_ARRAY(value) || IS_MAP(value) || IS_REGEX(value) || IS_CLASS(value) || IS_MODULE(value))
 #define IS_INSTANCE_LIKE(value) (IS_OBJ(value) && OBJ_IS_INSTANCE_LIKE(AS_OBJ(value)))
 #define IS_UPVALUE(value)       (isObjType(value, OBJ_T_UPVALUE))
 #define IS_BOUND_METHOD(value)  (isObjType(value, OBJ_T_BOUND_METHOD))
@@ -365,11 +364,10 @@ typedef struct LxFile {
 #define IS_A_STRING(value)      (IS_STRING(value))
 #define IS_A_BLOCK(value)       (IS_INSTANCE(value) && IS_A(value, lxBlockClass))
 
-#define IS_SUBCLASS(subklass,superklass) (isSubclass(subklass,superklass))
+#define IS_SUBCLASS(subklass,superklass) ((subklass == superklass) || isSubclass(subklass,superklass))
 
 #define AS_STRING(value)        ((ObjString*)AS_OBJ(value))
-#define AS_CSTRING(value)       (((ObjString*)AS_OBJ(value))->chars)
-#define INSTANCE_AS_CSTRING(value) (AS_STRING(value)->chars)
+#define AS_CSTRING(value)       (AS_STRING(value)->chars)
 #define VAL_TO_STRING(value)    (AS_STRING(value))
 #define AS_FUNCTION(value)      ((ObjFunction*)AS_OBJ(value))
 #define AS_CLOSURE(value)       ((ObjClosure*)AS_OBJ(value))

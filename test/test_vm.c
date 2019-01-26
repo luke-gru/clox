@@ -171,7 +171,7 @@ static int test_global_vars1(void) {
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
     T_ASSERT(IS_A_STRING(*val));
-    T_ASSERT_STREQ("howdy", INSTANCE_AS_CSTRING(*val));
+    T_ASSERT_STREQ("howdy", AS_CSTRING(*val));
 cleanup:
     freeVM();
     return 0;
@@ -207,7 +207,7 @@ static int test_simple_if(void) {
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
     T_ASSERT(IS_A_STRING(*val));
-    T_ASSERT_STREQ("jumped", INSTANCE_AS_CSTRING(*val));
+    T_ASSERT_STREQ("jumped", AS_CSTRING(*val));
 cleanup:
     freeVM();
     return 0;
@@ -219,7 +219,7 @@ static int test_vardecls_in_block_not_global(void) {
     Value *val = getLastValue();
     T_ASSERT(val != NULL);
     T_ASSERT(IS_A_STRING(*val));
-    T_ASSERT_STREQ("in block", INSTANCE_AS_CSTRING(*val));
+    T_ASSERT_STREQ("in block", AS_CSTRING(*val));
 cleanup:
     freeVM();
     return 0;
@@ -244,7 +244,7 @@ static int test_simple_function(void) {
     T_ASSERT(val != NULL);
     /*fprintf(stderr, "typeof: %s", typeOfVal(*val));*/
     T_ASSERT(IS_A_STRING(*val));
-    T_ASSERT_STREQ("FUN", INSTANCE_AS_CSTRING(*val));
+    T_ASSERT_STREQ("FUN", AS_CSTRING(*val));
 cleanup:
     freeVM();
     return 0;
@@ -463,7 +463,7 @@ static int test_get_set_arbitrary_property() {
     Value *val = getLastValue();
     printValue(stderr, *val, false, -1);
     T_ASSERT(IS_A_STRING(*val));
-    T_ASSERT_STREQ("Gracie", INSTANCE_AS_CSTRING(*val));
+    T_ASSERT_STREQ("Gracie", AS_CSTRING(*val));
 cleanup:
     freeVM();
     return 0;
