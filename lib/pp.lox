@@ -19,8 +19,8 @@ module PP {
       if (obj.class.isA(Array)) {
         buf << this.ppi(indent) << "[\n";
         indent+=1;
-        for (var i = 0; i < obj.size; i+=1) {
-          buf << this.pp(obj[i], indent);
+        foreach(el in obj) {
+          buf << this.pp(el, indent);
           buf << ",\n";
         }
         indent-=1;

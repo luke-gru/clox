@@ -1711,8 +1711,9 @@ static void emitNode(Node *n) {
         vec_init(&v_slots);
         int numVars = n->children->length - 2;
         pushVarSlots(); // don't overwrite the iterator with the variables
-        if (numVars > 1)
+        if (numVars > 1) {
             pushVarSlots(); // the iterator value
+        }
         int i = 0;
         for (i = 0; i < numVars; i++) {
             Token varName = n->children->data[i]->tok;
@@ -1739,10 +1740,10 @@ static void emitNode(Node *n) {
                 emitOp3(setOp, slotNum, (uint8_t)slotIdx, nameIdx);
             }
         }
+        emitNode(n->children->data[i]); // foreach block
         if (numVars == 1) {
             emitOp0(OP_POP); // pop the iterator value
         }
-        emitNode(n->children->data[i]); // foreach block
         if (numVars > 1) {
             for (int j = 0; j < numVars; j++) {
                 emitOp0(OP_POP); // pop the iterator values
