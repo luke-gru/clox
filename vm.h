@@ -178,6 +178,15 @@ typedef struct VM {
     ObjString *funcString;
     ObjString *mainString;
     ObjString *anonString;
+    ObjString *opAddString;
+    ObjString *opDiffString;
+    ObjString *opMulString;
+    ObjString *opDivString;
+    ObjString *opShovelLString;
+    ObjString *opShovelRString;
+    ObjString *opIndexGetString;
+    ObjString *opIndexSetString;
+    ObjString *opEqualsString;
     ObjString *printBuf;
     bool printToStdout;
 

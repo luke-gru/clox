@@ -444,7 +444,7 @@ bool valEqual(Value a, Value b) {
                 return aStr->length == bStr->length && strcmp(aStr->chars, bStr->chars) == 0;
             }
             if (IS_INSTANCE_LIKE(a)) {
-                return AS_BOOL(callMethod(AS_OBJ(a), INTERNED("opEquals", 8), 1, &b, NULL));
+                return AS_BOOL(callMethod(AS_OBJ(a), vm.opEqualsString, 1, &b, NULL));
             }
             return a == b;
         }
@@ -465,7 +465,7 @@ bool valEqual(Value a, Value b) {
                         VAL_TO_STRING(b)->chars) == 0;
             }
             if (IS_INSTANCE_LIKE(a)) {
-                return AS_BOOL(callMethod(AS_OBJ(a), INTERNED("opEquals", 8), 1, &b, NULL));
+                return AS_BOOL(callMethod(AS_OBJ(a), vm.opEqualsString, 1, &b, NULL));
             }
             UNREACHABLE_RETURN(false);
         }

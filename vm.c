@@ -486,9 +486,17 @@ void initVM() {
     vm.funcString = INTERNED("__FUNC__",  8);
     vm.mainString = INTERNED("(main)",  6);
     vm.anonString = INTERNED("(anon)",  6);
+    vm.opAddString = INTERNED("opAdd", 5);
+    vm.opDiffString = INTERNED("opDiff", 6);
+    vm.opMulString = INTERNED("opMul", 5);
+    vm.opDivString = INTERNED("opDiv", 5);
+    vm.opShovelLString = INTERNED("opShovelLeft", 12);
+    vm.opShovelRString = INTERNED("opShovelRight", 13);
+    vm.opIndexGetString = INTERNED("opIndexGet", 10);
+    vm.opIndexSetString = INTERNED("opIndexSet", 10);
+    vm.opEqualsString = INTERNED("opEquals", 8);
 
     pushFrame();
-
 
     defineNativeFunctions();
     defineNativeClasses();
@@ -541,6 +549,15 @@ void freeVM(void) {
     vm.funcString = NULL;
     vm.mainString = NULL;
     vm.anonString = NULL;
+    vm.opAddString = NULL;
+    vm.opDiffString = NULL;
+    vm.opMulString = NULL;
+    vm.opDivString = NULL;
+    vm.opShovelLString = NULL;
+    vm.opShovelRString = NULL;
+    vm.opIndexGetString = NULL;
+    vm.opIndexSetString = NULL;
+    vm.opEqualsString = NULL;
     vm.printBuf = NULL;
     vm.printToStdout = true;
     vec_deinit(&vm.hiddenObjs);
@@ -789,7 +806,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
 #endif
     if (IS_OBJ(lhs)) {
         if (IS_INSTANCE_LIKE(lhs)) {
-            ObjString *opEquals = INTERNED("opEquals", 8);
+            ObjString *opEquals = vm.opEqualsString;
             ObjInstance *self = AS_INSTANCE(lhs);
             Obj *methodOpEq = instanceFindMethod(self, opEquals);
             if (methodOpEq) {
@@ -1271,7 +1288,7 @@ CallFrame *pushFrame(void) {
 }
 
 const char *callFrameName(CallFrame *frame) {
-    DBG_ASSERT(frame);
+    DBG_ASSERT(frame && frame->closure);
     ObjString *fnName = frame->closure->function->name;
     return fnName ? fnName->chars : "<main>";
 }
@@ -2085,17 +2102,17 @@ static Value unpackValue(Value val, uint8_t idx) {
 static ObjString *methodNameForBinop(OpCode code) {
     switch (code) {
     case OP_ADD:
-        return INTERNED("opAdd", 5);
+        return vm.opAddString;
     case OP_SUBTRACT:
-        return INTERNED("opDiff", 6);
+        return vm.opDiffString;
     case OP_MULTIPLY:
-        return INTERNED("opMul", 5);
+        return vm.opMulString;
     case OP_DIVIDE:
-        return INTERNED("opDiv", 5);
+        return vm.opDivString;
     case OP_SHOVEL_L:
-        return INTERNED("opShovelLeft", 12);
+        return vm.opShovelLString;
     case OP_SHOVEL_R:
-        return INTERNED("opShovelRight", 13);
+        return vm.opShovelRString;
     default:
         return NULL;
     }
@@ -2722,7 +2739,7 @@ vmLoop:
               numArgs += (th->lastSplatNumArgs-1);
               th->lastSplatNumArgs = -1;
           }
-          Value callableVal = peek(numArgs);
+          Value callableVal = VM_PEEK(numArgs);
           if (UNLIKELY(!isCallable(callableVal))) {
               for (int i = 0; i < numArgs; i++) {
                   VM_POP();
@@ -3054,7 +3071,6 @@ vmLoop:
       CASE_OP(PROP_GET): {
           Value propName = READ_CONSTANT();
           ObjString *propStr = AS_STRING(propName);
-          ASSERT(propStr && propStr->chars);
           Value instance = VM_PEEK(0);
           if (UNLIKELY(!IS_INSTANCE_LIKE(instance))) {
               VM_POP();
@@ -3070,7 +3086,7 @@ vmLoop:
           Value rval = VM_PEEK(0);
           Value instance = VM_PEEK(1);
           if (UNLIKELY(!IS_INSTANCE_LIKE(instance))) {
-              VM_POP(); VM_POP();
+              VM_POPN(2);
               throwErrorFmt(lxTypeErrClass, "Tried to set property '%s' of non-instance", propStr->chars);
           }
           propertySet(AS_INSTANCE(instance), propStr, rval); // TODO: check frozenness of object
@@ -3084,7 +3100,7 @@ vmLoop:
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, INTERNED("opIndexGet", 10));
+          Obj *method = instanceFindMethodOrRaise(instance, vm.opIndexGetString);
           callCallable(OBJ_VAL(method), 1, true, NULL);
           DISPATCH_BOTTOM();
       }
@@ -3094,7 +3110,7 @@ vmLoop:
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexSet ('[]=') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, INTERNED("opIndexSet", 10));
+          Obj *method = instanceFindMethodOrRaise(instance, vm.opIndexSetString);
           callCallable(OBJ_VAL(method), 2, true, NULL);
           DISPATCH_BOTTOM();
       }
