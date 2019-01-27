@@ -260,9 +260,6 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
     return ret;
 }
 
-#define ITER_FLAG_NONE 0
-#define ITER_FLAG_STOP 1
-
 static Value lxArrayEach(int argCount, Value *args) {
     CHECK_ARITY("Array#each", 1, 1, argCount); // 2nd could be block arg (&arg)
     ObjArray *self = AS_ARRAY(*args);
@@ -417,8 +414,8 @@ static Value lxArrayFind(int argCount, Value *args) {
     Value self = *args;
 
     ObjFunction *block = getFrame()->callInfo->blockFunction;
-    CallInfo cinfo;
     volatile Value ret = UNDEF_VAL;
+    CallInfo cinfo;
     memset(&cinfo, 0, sizeof(cinfo));
     cinfo.blockIterFunc = findIter;
     cinfo.blockIterRet = &ret;

@@ -102,6 +102,8 @@ typedef enum {
 } CompileScopeType;
 
 struct CallInfo; // fwd decl
+#define ITER_FLAG_NONE 0
+#define ITER_FLAG_STOP 1
 typedef void (*BlockIterFunc)(int blkArgCount, Value *blkArgs, Value blkRet, struct CallInfo *cinfo, int *iterFlags);
 
 #ifdef NAN_TAGGING

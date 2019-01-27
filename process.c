@@ -128,16 +128,18 @@ static Value lxProcessWTERMSIGStatic(int argCount, Value *args) {
 static Value lxExecStatic(int argCount, Value *args) {
     CHECK_ARITY("Process.exec", 2, -1, argCount);
 
-    char const *argv[argCount+2]; // XXX: only c99
-    memset(argv, 0, sizeof(char*)*(argCount+1));
+    char const **argv = malloc(sizeof(char*)*(argCount+2)); // XXX: only c99
+    ASSERT_MEM(argv);
+    memset(argv, 0, sizeof(char*)*(argCount+2));
     for (int i = 1; i < argCount; i++) {
         CHECK_ARG_IS_A(args[i], lxStringClass, i+1);
-        ASSERT(argv[i] == NULL);
-        argv[i] = VAL_TO_STRING(args[i])->chars;
+        ASSERT(argv[i-1] == NULL);
+        argv[i-1] = VAL_TO_STRING(args[i])->chars;
     }
-    ASSERT(argv[argCount+2] == NULL);
-    execvp(argv[1], (char *const *)argv);
+    ASSERT(argv[argCount+1] == NULL);
+    execvp(argv[0], (char *const *)argv);
     fprintf(stderr, "Error during exec: %s\n", strerror(errno));
+    xfree(argv);
     // got here, error execing. TODO: throw error?
     return NUMBER_VAL(-1);
 }

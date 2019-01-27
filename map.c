@@ -341,11 +341,17 @@ static Value lxMapEach(int argCount, Value *args) {
                 Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                 if (fn) {
                     fn(2, (Value*)yieldArgs, retVal, getFrame()->callInfo, &iterFlags);
+                    if (iterFlags & ITER_FLAG_STOP) {
+                        return NIL_VAL;
+                    }
                 }
             } else if (errInst->klass == lxReturnBlockErrClass) {
                 Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                 if (fn) {
                     fn(2, (Value*)yieldArgs, retVal, getFrame()->callInfo, &iterFlags);
+                    if (iterFlags & ITER_FLAG_STOP) {
+                        return NIL_VAL;
+                    }
                 } else {
                     return retVal;
                 }
