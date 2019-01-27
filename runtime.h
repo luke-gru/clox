@@ -65,6 +65,7 @@ Value lxObjectDup(int argCount, Value *args);
 Value lxObjectExtend(int argCount, Value *args);
 Value lxObjectHashKey(int argCount, Value *args);
 Value lxObjectOpEquals(int argCount, Value *args);
+Value lxObjectIsSame(int argCount, Value *args);
 Value lxObjectSend(int argCount, Value *args);
 Value lxObjectGetClass(int argCount, Value *args);
 Value lxObjectGetSingletonClass(int argCount, Value *args);

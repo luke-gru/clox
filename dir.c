@@ -107,8 +107,10 @@ static Value lxDirGlobStatic(int argCount, Value *args) {
     Value ary = newArray();
     int res = glob((const char *)globCStr, GLOB_BRACE, NULL, &globBuf);
     if (res == GLOB_NOMATCH) {
+        globfree(&globBuf);
         return ary;
     } else if (res != 0) {
+        globfree(&globBuf);
         // TODO: raise?
         return ary;
     }

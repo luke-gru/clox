@@ -163,6 +163,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(objClass, "extend", lxObjectExtend);
     addNativeMethod(objClass, "hashKey", lxObjectHashKey);
     addNativeMethod(objClass, "opEquals", lxObjectOpEquals);
+    addNativeMethod(objClass, "isSame", lxObjectIsSame);
     addNativeMethod(objClass, "freeze", lxObjectFreeze);
     addNativeMethod(objClass, "unfreeze", lxObjectUnfreeze);
     addNativeMethod(objClass, "isFrozen", lxObjectIsFrozen);

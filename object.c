@@ -880,6 +880,7 @@ bool arrayEquals(Value self, Value other) {
     if (!IS_AN_ARRAY(other)) return false;
     ValueArray *buf1 = &AS_ARRAY(self)->valAry;
     ValueArray *buf2 = &AS_ARRAY(other)->valAry;
+    if (buf1 == buf2) return true; // pointer equality, same object
     if (buf1->count != buf2->count) return false;
     for (int i = 0; i < buf1->count; i++) {
         if (!valEqual(buf1->values[i], buf2->values[i])) {
@@ -918,6 +919,7 @@ bool mapEquals(Value self, Value other) {
     if (!IS_A_MAP(other)) return false;
     Table *map1 = AS_MAP(self)->table;
     Table *map2 = AS_MAP(other)->table;
+    if (map1 == map2) return true; // pointer equality, same object
     if (map1->count != map2->count) return false;
     Entry e; int idx = 0;
     Value val2;

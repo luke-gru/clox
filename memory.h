@@ -41,6 +41,8 @@ extern "C" {
 #define GC_HEAP_GROW_FACTOR 2
 
 #define xfree free
+#define  xmalloc malloc
+#define  xcalloc calloc
 
 struct sGCProfile {
     struct timeval totalGCYoungTime;

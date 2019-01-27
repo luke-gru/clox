@@ -677,6 +677,17 @@ Value lxObjectHashKey(int argCount, Value *args) {
 
 Value lxObjectOpEquals(int argCount, Value *args) {
     CHECK_ARITY("Object#opEquals", 2, 2, argCount);
+    if (!IS_OBJ(args[1])) {
+        return BOOL_VAL(false);
+    }
+    return BOOL_VAL(AS_OBJ(args[0]) == AS_OBJ(args[1])); // pointer equality
+}
+
+Value lxObjectIsSame(int argCount, Value *args) {
+    CHECK_ARITY("Object#isSame", 2, 2, argCount);
+    if (!IS_OBJ(args[1])) {
+        return BOOL_VAL(false);
+    }
     return BOOL_VAL(AS_OBJ(args[0]) == AS_OBJ(args[1])); // pointer equality
 }
 

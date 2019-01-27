@@ -1,5 +1,22 @@
 // Pretty-printer
 module PP {
+  // TODO: once valHash() can deal with mutually recursive data structures,
+  // use a hash for seenSet instead of array
+  class SeenSet {
+    init(set = []) {
+      this.set = set;
+    }
+    add(obj) {
+      var ret = this.set.dup();
+      if (classof(obj) == nil) { return SeenSet(ret); }
+      ret.push(obj);
+      return SeenSet(ret);
+    }
+    containsSame(obj) {
+      if (classof(obj) == nil) { return false; }
+      return this.set.find() -> (el) { obj.isSame(el); };
+    }
+  }
   class ppi(indent) {
     var buf = "";
     for (var i = 0; i < indent; i+=1) {
@@ -8,19 +25,20 @@ module PP {
     return buf;
   }
 
-  // FIXME: if array or map elements hold the array/map (recursively), then it
-  // overflows the stack (infinite loop). Need to keep track of elements
-  // found.
-  class pp(obj, indent = 0) {
+  class pp(obj, indent, seenSet) {
     var buf = "";
-    if (classof(obj) == nil) { // non-object
+    if (classof(obj) == nil) { // non-object (number literal, true/false/nil)
       return this.ppi(indent) + String(obj);
     } else {
       if (obj.class.isA(Array)) {
         buf << this.ppi(indent) << "[\n";
         indent+=1;
         foreach(el in obj) {
-          buf << this.pp(el, indent);
+          if (seenSet.containsSame(el)) {
+            buf << this.ppi(indent) << "[...]";
+          } else {
+            buf << this.pp(el, indent, seenSet.add(el));
+          }
           buf << ",\n";
         }
         indent-=1;
@@ -31,9 +49,17 @@ module PP {
         buf << this.ppi(indent) << "{\n";
         indent+=1;
         foreach (key, val in obj) {
-          buf << this.pp(key, indent);
+          if (seenSet.containsSame(key)) {
+            buf << this.ppi(indent) << "{...}";
+          } else {
+            buf << this.pp(key, indent, seenSet.add(key));
+          }
           buf << ":\n";
-          buf << this.pp(val, indent) << ",\n";
+          if (seenSet.containsSame(val)) {
+            buf << this.ppi(indent) << "{...},\n";
+          } else {
+            buf << this.pp(val, indent, seenSet.add(val)) << ",\n";
+          }
         }
         indent-=1;
         buf << this.ppi(indent) << "}";
@@ -53,5 +79,5 @@ module PP {
 }
 
 fun pp(obj) {
-  print PP.pp(obj);
+  print PP.pp(obj, 0, PP::SeenSet());
 }

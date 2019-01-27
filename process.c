@@ -7,6 +7,7 @@
 #include "vm.h"
 #include "runtime.h"
 #include "table.h"
+#include "memory.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -128,7 +129,7 @@ static Value lxProcessWTERMSIGStatic(int argCount, Value *args) {
 static Value lxExecStatic(int argCount, Value *args) {
     CHECK_ARITY("Process.exec", 2, -1, argCount);
 
-    char const **argv = malloc(sizeof(char*)*(argCount+2)); // XXX: only c99
+    char const **argv = xmalloc(sizeof(char*)*(argCount+2));
     ASSERT_MEM(argv);
     memset(argv, 0, sizeof(char*)*(argCount+2));
     for (int i = 1; i < argCount; i++) {
