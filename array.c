@@ -106,6 +106,32 @@ static Value lxArrayClear(int argCount, Value *args) {
     return self;
 }
 
+static Value lxArrayJoin(int argCount, Value *args) {
+    CHECK_ARITY("Array#join", 2, 2, argCount);
+    Value self = args[0];
+    ValueArray *valAry = &AS_ARRAY(self)->valAry;
+    Value joinVal = args[1];
+    CHECK_ARG_IS_A(joinVal, lxStringClass, 1);
+    ObjString *joinStr = AS_STRING(joinVal);
+    size_t joinStrLen = strlen(joinStr->chars);
+    ObjString *buf = copyString("", 0, NEWOBJ_FLAG_NONE);
+    Value el; int elIdx = 0;
+    int count = valAry->count;
+    VALARRAY_FOREACH(valAry, el, elIdx) {
+        ObjString *elStr = NULL;
+        if (IS_A_STRING(el)) {
+            elStr = AS_STRING(el);
+        } else {
+            elStr = valueToString(el, copyString, NEWOBJ_FLAG_NONE);
+        }
+        pushCString(buf, (const char*)elStr->chars, strlen(elStr->chars));
+        if (elIdx+1 < count) {
+            pushCString(buf, (const char*)joinStr->chars, joinStrLen);
+        }
+    }
+    return OBJ_VAL(buf);
+}
+
 // ex:
 //   print a;
 // OR
@@ -453,6 +479,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "toString", lxArrayToString);
     addNativeMethod(arrayClass, "iter", lxArrayIter);
     addNativeMethod(arrayClass, "clear", lxArrayClear);
+    addNativeMethod(arrayClass, "join", lxArrayJoin);
     addNativeMethod(arrayClass, "hashKey", lxArrayHashKey);
     addNativeMethod(arrayClass, "each", lxArrayEach);
     addNativeMethod(arrayClass, "map", lxArrayMap);
