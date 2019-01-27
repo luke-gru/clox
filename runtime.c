@@ -560,8 +560,10 @@ readableCheck:
     CompileErr err = COMPILE_ERR_NONE;
     Chunk *chunk = compile_file(pathbuf, &err);
     if (!chunk || err != COMPILE_ERR_NONE) {
-        freeChunk(chunk);
-        FREE(Chunk, chunk);
+        if (chunk) {
+            freeChunk(chunk);
+            FREE(Chunk, chunk);
+        }
         // TODO: throw syntax error
         return BOOL_VAL(false);
     }
