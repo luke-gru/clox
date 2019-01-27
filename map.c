@@ -332,6 +332,7 @@ static Value lxMapEach(int argCount, Value *args) {
         if (status == TAG_NONE) {
             break;
         } else if (status == TAG_RAISE) {
+            int iterFlags = 0;
             ObjInstance *errInst = AS_INSTANCE(th->lastErrorThrown);
             ASSERT(errInst);
             if (errInst->klass == lxBreakBlockErrClass) {
@@ -339,12 +340,12 @@ static Value lxMapEach(int argCount, Value *args) {
             } else if (errInst->klass == lxContinueBlockErrClass) {
                 Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                 if (fn) {
-                    fn(2, (Value*)yieldArgs, retVal, getFrame()->callInfo);
+                    fn(2, (Value*)yieldArgs, retVal, getFrame()->callInfo, &iterFlags);
                 }
             } else if (errInst->klass == lxReturnBlockErrClass) {
                 Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                 if (fn) {
-                    fn(2, (Value*)yieldArgs, retVal, getFrame()->callInfo);
+                    fn(2, (Value*)yieldArgs, retVal, getFrame()->callInfo, &iterFlags);
                 } else {
                     return retVal;
                 }
@@ -364,7 +365,7 @@ static Value lxMapEach(int argCount, Value *args) {
     return self;
 }
 
-static void mapIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+static void mapIter(int argCount, Value *args, Value ret, CallInfo *cinfo, int *iterFlags) {
     arrayPush(*cinfo->blockIterRet, ret);
 }
 

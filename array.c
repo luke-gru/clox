@@ -260,6 +260,9 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
     return ret;
 }
 
+#define ITER_FLAG_NONE 0
+#define ITER_FLAG_STOP 1
+
 static Value lxArrayEach(int argCount, Value *args) {
     CHECK_ARITY("Array#each", 1, 1, argCount); // 2nd could be block arg (&arg)
     ObjArray *self = AS_ARRAY(*args);
@@ -290,6 +293,7 @@ static Value lxArrayEach(int argCount, Value *args) {
         if (status == TAG_NONE) {
             break;
         } else if (status == TAG_RAISE) {
+            int iterFlags = 0;
             ObjInstance *errInst = AS_INSTANCE(th->lastErrorThrown);
             ASSERT(errInst);
             if (errInst->klass == lxBreakBlockErrClass) {
@@ -297,12 +301,18 @@ static Value lxArrayEach(int argCount, Value *args) {
             } else if (errInst->klass == lxContinueBlockErrClass) {
                 if (fn) {
                     Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
-                    fn(1, (Value*)&el, retVal, getFrame()->callInfo);
+                    fn(1, (Value*)&el, retVal, getFrame()->callInfo, &iterFlags);
+                    if (iterFlags & ITER_FLAG_STOP) {
+                        return NIL_VAL;
+                    }
                 }
             } else if (errInst->klass == lxReturnBlockErrClass) {
                 Value retVal = getProp(th->lastErrorThrown, INTERN("ret"));
                 if (fn) {
-                    fn(1, (Value*)&el, retVal, getFrame()->callInfo);
+                    fn(1, (Value*)&el, retVal, getFrame()->callInfo, &iterFlags);
+                    if (iterFlags & ITER_FLAG_STOP) {
+                        return NIL_VAL;
+                    }
                 } else {
                     return retVal;
                 }
@@ -319,7 +329,7 @@ static Value lxArrayEach(int argCount, Value *args) {
     return *args;
 }
 
-static void mapIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+static void mapIter(int argCount, Value *args, Value ret, CallInfo *cinfo, int *iterFlags) {
     DBG_ASSERT(cinfo->blockIterRet);
     arrayPush(*cinfo->blockIterRet, ret);
 }
@@ -343,7 +353,7 @@ static Value lxArrayMap(int argCount, Value *args) {
     }
 }
 
-static void selectIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+static void selectIter(int argCount, Value *args, Value ret, CallInfo *cinfo, int *iterFlags) {
     if (isTruthy(ret)) {
         arrayPush(*cinfo->blockIterRet, *args);
     }
@@ -369,7 +379,7 @@ static Value lxArraySelect(int argCount, Value *args) {
     }
 }
 
-static void rejectIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+static void rejectIter(int argCount, Value *args, Value ret, CallInfo *cinfo, int *iterFlags) {
     if (!isTruthy(ret)) {
         arrayPush(*cinfo->blockIterRet, *args);
     }
@@ -395,7 +405,34 @@ static Value lxArrayReject(int argCount, Value *args) {
     }
 }
 
-static void reduceIter(int argCount, Value *args, Value ret, CallInfo *cinfo) {
+static void findIter(int argCount, Value *args, Value ret, CallInfo *cinfo, int *iterFlags) {
+    if (isTruthy(ret)) {
+        *cinfo->blockIterRet = *args;
+        *iterFlags |= ITER_FLAG_STOP;
+    }
+}
+
+static Value lxArrayFind(int argCount, Value *args) {
+    CHECK_ARITY("Array#find", 1, 1, argCount);
+    Value self = *args;
+
+    ObjFunction *block = getFrame()->callInfo->blockFunction;
+    CallInfo cinfo;
+    volatile Value ret = UNDEF_VAL;
+    memset(&cinfo, 0, sizeof(cinfo));
+    cinfo.blockIterFunc = findIter;
+    cinfo.blockIterRet = &ret;
+    cinfo.blockFunction = block;
+    cinfo.blockInstance = getBlockArg(getFrame());
+    (void)callMethod(AS_OBJ(self), INTERN("each"), 0, NULL, &cinfo);
+    if (IS_UNDEF(ret)) {
+        return NIL_VAL;
+    } else {
+        return ret;
+    }
+}
+
+static void reduceIter(int argCount, Value *args, Value ret, CallInfo *cinfo, int *iterFlags) {
     if (!IS_NUMBER(*args)) {
         throwErrorFmt(lxTypeErrClass, "Return value from reduce() must be a number");
     }
@@ -485,6 +522,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "map", lxArrayMap);
     addNativeMethod(arrayClass, "select", lxArraySelect);
     addNativeMethod(arrayClass, "reject", lxArrayReject);
+    addNativeMethod(arrayClass, "find", lxArrayFind);
     addNativeMethod(arrayClass, "reduce", lxArrayReduce);
     addNativeMethod(arrayClass, "sum", lxArraySum);
 
