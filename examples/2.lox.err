@@ -1,1 +1,0 @@
-requireScript(__DIR__ + "/syntax_err.lox.err");

@@ -3347,6 +3347,10 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
     if (err != COMPILE_ERR_NONE || !chunk) {
+        if (chunk) {
+            freeChunk(chunk);
+            FREE(Chunk, chunk);
+        }
         VM_DEBUG(1, "compile error in eval");
         pop_EC();
         ASSERT(getFrame() == oldFrame);

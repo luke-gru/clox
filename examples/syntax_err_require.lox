@@ -1,0 +1,11 @@
+var err = nil;
+try {
+  requireScript(__DIR__ + "/syntax_err.lox.err");
+} catch (SyntaxError e) {
+  err = e;
+}
+print typeof(err);
+
+__END__
+-- expect: --
+instance

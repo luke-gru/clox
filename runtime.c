@@ -564,8 +564,7 @@ readableCheck:
             freeChunk(chunk);
             FREE(Chunk, chunk);
         }
-        // TODO: throw syntax error
-        return BOOL_VAL(false);
+        throwErrorFmt(lxSyntaxErrClass, "%s", "Syntax error");
     }
     ObjString *fpath = copyString(pathbuf, strlen(pathbuf), NEWOBJ_FLAG_OLD);
     if (checkLoaded) {
