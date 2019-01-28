@@ -208,10 +208,18 @@ static Value lxIOGetline(int argCount, Value *args) {
         CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
         double maxd = AS_NUMBER(args[1]);
         if (maxd > 0) {
-            maxBytes = (size_t)maxd;
+            maxBytes = (size_t)maxd+1;
         }
     }
     ObjString *buf = IOReadline(self, maxBytes);
+    return OBJ_VAL(buf);
+}
+
+static Value lxIOGetchar(int argCount, Value *args) {
+    CHECK_ARITY("IO#getchar", 1, 1, argCount);
+    Value self = args[0];
+    size_t maxBytes = 1;
+    ObjString *buf = IOReadline(self, maxBytes+1);
     return OBJ_VAL(buf);
 }
 
@@ -417,6 +425,7 @@ void Init_IOClass(void) {
 
     addNativeMethod(ioClass, "read", lxIORead);
     addNativeMethod(ioClass, "getline", lxIOGetline);
+    addNativeMethod(ioClass, "getchar", lxIOGetchar);
     addNativeMethod(ioClass, "write", lxIOWrite);
     addNativeMethod(ioClass, "puts", lxIOPuts);
     addNativeMethod(ioClass, "close", lxIOClose);
