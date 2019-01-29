@@ -157,6 +157,7 @@ static void LxThreadSetup(LxThread *th) {
     th->detached = false;
     th->lastOp = -1;
     vec_init(&th->lockedMutexes);
+    vec_init(&th->recurseSet);
 }
 
 static void LxThreadCleanup(LxThread *th) {
@@ -166,6 +167,7 @@ static void LxThreadCleanup(LxThread *th) {
     vec_deinit(&th->v_blockStack);
     vec_deinit(&th->stackObjects);
     vec_deinit(&th->lockedMutexes);
+    vec_deinit(&th->recurseSet);
     pthread_mutex_destroy(&th->sleepMutex);
     pthread_cond_destroy(&th->sleepCond);
 }
@@ -596,6 +598,67 @@ static Value lxMutexUnlock(int argCount, Value *args) {
     LxMutex *m = mutexGetHidden(self);
     unlockMutex(m);
     return self;
+}
+
+struct exec_recursive_params {
+    stopRecursionFn func;
+    Value obj;
+    Value arg;
+    vec_void_t *seenSet;
+};
+
+static vec_void_t *getRecursiveList(void) {
+    return &vm.curThread->recurseSet;
+}
+
+static void addSeenSet(vec_void_t *seenSet, Obj *obj) {
+    int found = -1;
+    vec_find(seenSet, obj, found);
+    if (found == -1) {
+        vec_push(seenSet, obj);
+    }
+}
+
+static bool hasSeen(vec_void_t *seenSet, Obj *obj) {
+    int found = -1;
+    vec_find(seenSet, obj, found);
+    return found != -1;
+}
+
+static void removeSeenSet(vec_void_t *seenSet, Obj *obj) {
+    vec_remove(seenSet, obj);
+}
+
+static void *execStopRecursionIter(void *data) {
+    struct exec_recursive_params *p = (void *)data;
+    return (void*)(*p->func)(p->obj, p->arg, 0);
+}
+
+Value execStopRecursion(stopRecursionFn fn, Value obj, Value arg) {
+    volatile struct exec_recursive_params p;
+    p.func = fn;
+    p.obj = obj;
+    p.arg = arg;
+    p.seenSet = getRecursiveList();
+
+    if (IS_OBJ(p.obj)) {
+        if (hasSeen(p.seenSet, AS_OBJ(p.obj))) {
+            Value recurseErr = newError(lxRecursionErrClass, NIL_VAL);
+            throwError(recurseErr);
+        }
+        addSeenSet(p.seenSet, AS_OBJ(p.obj));
+    }
+    ErrTag status = TAG_NONE;
+    Value result = (Value)vm_protect(execStopRecursionIter, (void*)&p, NULL, &status);
+    if (IS_OBJ(p.obj)) {
+        removeSeenSet(p.seenSet, AS_OBJ(p.obj));
+    }
+    if (status != TAG_NONE) {
+        popErrInfo();
+        return result;
+    } else {
+        return result;
+    }
 }
 
 void Init_ThreadClass() {

@@ -1,7 +1,7 @@
 // Pretty-printer
 module PP {
   // TODO: once valHash() can deal with mutually recursive data structures,
-  // use a hash for seenSet instead of array
+  // use a hash for seenSet instead
   class SeenSet {
     init(set = []) {
       this.set = set;

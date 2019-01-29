@@ -349,6 +349,12 @@ const char *typeOfVal(Value val) {
     return result;
 }*/
 
+static Value valHashRecursive(Value obj, Value arg, int recurse) {
+    (void)arg;
+    if (recurse) return NUMBER_VAL(0);
+    return callMethod(AS_OBJ(obj), INTERNED("hashKey", 7), 0, NULL, NULL);
+}
+
 uint32_t valHash(Value val) {
     if (IS_OBJ(val)) {
         if (LIKELY(IS_STRING(val))) {
@@ -366,7 +372,7 @@ uint32_t valHash(Value val) {
                     fprintf(stderr, "val type: %s\n", typeOfVal(val));
                     ASSERT(0);
                 }
-                Value hashKey = callMethod(AS_OBJ(val), INTERNED("hashKey", 7), 0, NULL, NULL);
+                Value hashKey = execStopRecursion(valHashRecursive, val, NIL_VAL);
                 if (UNLIKELY(!IS_NUMBER(hashKey))) {
                     throwErrorFmt(lxTypeErrClass, "%s", "return of hashKey() method must be a number!");
                 }

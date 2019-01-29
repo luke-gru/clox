@@ -140,6 +140,7 @@ ObjClass *lxBlockIterErrClass;
 ObjClass *lxBreakBlockErrClass;
 ObjClass *lxContinueBlockErrClass;
 ObjClass *lxReturnBlockErrClass;
+ObjClass *lxRecursionErrClass;
 
 ObjArray *lxLoadPath; // load path for loadScript/requireScript (-L flag)
 ObjArray *lxArgv;
@@ -252,6 +253,8 @@ static void defineNativeClasses(void) {
     lxBlockIterErrClass = blockIterErr;
     lxContinueBlockErrClass = continueBlockErr;
     lxReturnBlockErrClass = returnBlockErr;
+
+    lxRecursionErrClass = newClass(INTERN("RecursionError"), errClass, NEWOBJ_FLAG_OLD|NEWOBJ_FLAG_HIDDEN);
 
     // module GC
     ObjModule *GCModule = addGlobalModule("GC");

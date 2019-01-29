@@ -1,0 +1,9 @@
+m = %{};
+m[1] = [m];
+print m.hashKey(); // shouldn't recurse forever
+a = Array();
+a << [[a]];
+print a.hashKey(); // shouldn't recurse forever
+
+__END__
+-- noexpect: --

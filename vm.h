@@ -149,6 +149,7 @@ typedef struct LxThread {
     bool joined;
     bool detached;
     vec_void_t lockedMutexes; // main thread unlocks these when terminating, if necessary
+    vec_void_t recurseSet;
 } LxThread;
 
 // threads
@@ -381,6 +382,9 @@ void threadDetach(LxThread *th);
 void exitingThread(LxThread *th);
 void terminateThreads(void);
 const char *threadStatusName(ThreadStatus status);
+
+typedef Value (*stopRecursionFn)(Value obj, Value arg, int recurse);
+Value execStopRecursion(stopRecursionFn, Value obj, Value arg);
 
 // debug
 void printVMStack(FILE *f, LxThread *th);

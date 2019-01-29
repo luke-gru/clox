@@ -526,11 +526,17 @@ static inline void mapSet(Value mapVal, Value key, Value val) {
     tableSet(map, key, val);
 }
 
+static inline void mapDelete(Value mapVal, Value key) {
+    Table *map = AS_MAP(mapVal)->table;
+    tableDelete(map, key);
+}
+
 // number of key-value pairs
 static inline Value mapSize(Value mapVal) {
     Table *map = AS_MAP(mapVal)->table;
     return NUMBER_VAL(map->count);
 }
+
 
 // NOTE: doesn't check frozenness or type of `mapVal`
 static inline void mapClear(Value mapVal) {
@@ -645,6 +651,7 @@ extern ObjClass *lxBlockIterErrClass;
 extern ObjClass *lxBreakBlockErrClass;
 extern ObjClass *lxContinueBlockErrClass;
 extern ObjClass *lxReturnBlockErrClass;
+extern ObjClass *lxRecursionErrClass;
 
 #ifdef __cplusplus
 }
