@@ -121,7 +121,7 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             }
         } else if (IS_INSTANCE_LIKE(value)) {
             ObjInstance *inst = AS_INSTANCE(value);
-            Obj *callable = instanceFindMethod(inst, INTERNED("toString", 8));
+            Obj *callable = instanceFindMethod(inst, INTERNED("toString", 8), NULL);
             if (callable && vm.inited && canCallMethods) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL, NULL);
                 if (!IS_A_STRING(stringVal)) {
@@ -245,7 +245,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
             }
         } else if (OBJ_TYPE(value) == OBJ_T_INSTANCE || OBJ_TYPE(value) == OBJ_T_ARRAY || OBJ_TYPE(value) == OBJ_T_STRING || OBJ_TYPE(value) == OBJ_T_MAP || OBJ_TYPE(value) == OBJ_T_REGEX) {
             ObjInstance *inst = AS_INSTANCE(value);
-            Obj *toString = instanceFindMethod(inst, INTERN("toString"));
+            Obj *toString = instanceFindMethod(inst, INTERN("toString"), NULL);
             if (toString && vm.inited) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(toString), 0, NULL, NULL);
                 if (!IS_A_STRING(stringVal)) {

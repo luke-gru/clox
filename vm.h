@@ -400,6 +400,22 @@ void runAtExitHooks(void);
 NORETURN void stopVM(int status);
 NORETURN void _stopVM(int status);
 
+#define POLYMORPHIC_CALL_CACHE_NUM 5
+// call cache
+typedef unsigned long CallcacheId;
+extern CallcacheId globalCallcacheId;
+extern CallcacheId globalClassId;
+typedef struct MethodCallCacheEntry {
+    CallcacheId classId;
+    CallcacheId methodId;
+    Obj *method;
+} MethodCallCacheEntry;
+typedef struct MethodCallCache {
+    MethodCallCacheEntry entries[POLYMORPHIC_CALL_CACHE_NUM];
+} MethodCallCache;
+CallcacheId methodCacheId(Value method);
+void debugCallCache(MethodCallCache *cc);
+
 #ifdef __cplusplus
 }
 #endif

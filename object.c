@@ -305,6 +305,7 @@ ObjClosure *newClosure(ObjFunction *func, int flags) {
     closure->upvalues = upvalues;
     closure->upvalueCount = func->upvalueCount;
     closure->isBlock = false;
+    closure->callcacheId = 0;
     GC_PROMOTE(closure, GC_GEN_YOUNG_MAX);
     return closure;
 }
@@ -351,6 +352,7 @@ ObjClass *newClass(ObjString *name, ObjClass *superclass, int flags) {
         ObjClass, OBJ_T_CLASS, flags|NEWOBJ_FLAG_OLD
     );
     klass->klass = lxClassClass; // this is NULL when creating object hierarchy in initVM
+    klass->id = ++globalClassId;
     klass->singletonKlass = NULL;
     klass->finalizerFunc = NULL;
     klass->classInfo = newClassInfo(name);
@@ -380,6 +382,7 @@ ObjModule *newModule(ObjString *name, int flags) {
     );
     ASSERT(lxModuleClass);
     mod->klass = lxModuleClass;
+    mod->id = ++globalClassId;
     mod->singletonKlass = NULL;
     mod->finalizerFunc = NULL;
     void *tablesMem = ALLOCATE(Table, 1);
@@ -502,6 +505,7 @@ ObjNative *newNative(ObjString *name, NativeFn function, int flags) {
         OBJ_WRITE(OBJ_VAL(native), OBJ_VAL(name));
     }
     native->klass = NULL;
+    native->callcacheId = 0;
     native->isStatic = false;
     GC_OLD(native);
     return native;
@@ -541,13 +545,30 @@ ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCM
     return obj;
 }
 
-Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
-    Obj *klass = (Obj*)obj->klass;
-    // interned strings that are created before lxStringClass exists have no class
-    if (UNLIKELY(!klass && ((Obj*) obj)->type == OBJ_T_STRING)) {
-        klass = (Obj*)lxStringClass;
-        obj->klass = (ObjClass*)klass;
+Obj *instanceFindMethod(ObjInstance *obj, ObjString *name, MethodCallCache *cc) {
+    MethodCallCacheEntry *mentry = NULL;
+    int i = 0;
+    if (cc) {
+        CallcacheId classId = obj->klass->id;
+        CallcacheId classIdFound = 0;
+        for (i = 0; i < POLYMORPHIC_CALL_CACHE_NUM; i++) {
+            if ((classIdFound = cc->entries[i].classId) > 0) {
+                if (classIdFound == classId) {
+                    mentry = &cc->entries[i];
+                    Obj *method = cc->entries[i].method;
+                    if (methodCacheId(OBJ_VAL(method)) == cc->entries[i].methodId) {
+                        /*fprintf(stderr, "method found!\n");*/
+                        return method;
+                    } else {
+                        break; // method changed
+                    }
+                }
+            } else {
+                break;
+            }
+        }
     }
+    Obj *klass = (Obj*)obj->klass;
     if (obj->singletonKlass) {
         klass = (Obj*)obj->singletonKlass;
     }
@@ -556,6 +577,16 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     while (klass) {
         Table *mtable = CLASS_METHOD_TBL(klass);
         if (tableGet(mtable, nameVal, &method)) {
+            if (cc) {
+                if (!mentry && i < POLYMORPHIC_CALL_CACHE_NUM) {
+                    mentry = &cc->entries[i];
+                }
+                if (mentry) {
+                    mentry->methodId = methodCacheId(method);
+                    mentry->method = AS_OBJ(method);
+                    mentry->classId = obj->klass->id;
+                }
+            }
             return AS_OBJ(method);
         }
         klass = CLASS_SUPER(klass);
@@ -563,7 +594,8 @@ Obj *instanceFindMethod(ObjInstance *obj, ObjString *name) {
     return NULL;
 }
 
-Obj *instanceFindGetter(ObjInstance *obj, ObjString *name) {
+Obj *instanceFindGetter(ObjInstance *obj, ObjString *name, MethodCallCache *cc) {
+    (void)cc;
     Obj *klass = (Obj*)obj->klass;
     if (obj->singletonKlass) {
         klass = (Obj*)obj->singletonKlass;
@@ -584,7 +616,8 @@ Obj *instanceFindGetter(ObjInstance *obj, ObjString *name) {
     return NULL;
 }
 
-Obj *instanceFindSetter(ObjInstance *obj, ObjString *name) {
+Obj *instanceFindSetter(ObjInstance *obj, ObjString *name, MethodCallCache *cc) {
+    (void)cc;
     Obj *klass = (Obj*)obj->klass;
     if (obj->singletonKlass) {
         klass = (Obj*)obj->singletonKlass;
@@ -601,8 +634,8 @@ Obj *instanceFindSetter(ObjInstance *obj, ObjString *name) {
     return NULL;
 }
 
-Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name) {
-    Obj *method = instanceFindMethod(obj, name);
+Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name, MethodCallCache *cc) {
+    Obj *method = instanceFindMethod(obj, name, cc);
     if (UNLIKELY(!method)) {
         throwErrorFmt(lxNameErrClass,
             "Undefined instance method '%s' for class %s",
@@ -612,7 +645,8 @@ Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name) {
     return method;
 }
 
-Obj *classFindStaticMethod(ObjClass *obj, ObjString *name) {
+Obj *classFindStaticMethod(ObjClass *obj, ObjString *name, MethodCallCache *cc) {
+    (void)cc;
     Value method;
     Obj *klass = (Obj*)obj;
     ObjClass *lookupClass = NULL;

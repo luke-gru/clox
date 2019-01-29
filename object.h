@@ -31,6 +31,10 @@ typedef enum ObjType {
   OBJ_T_LAST, // should never happen
 } ObjType;
 
+#define FIRST_INSTANCE_LIKE_TYPE OBJ_T_STRING
+#define LAST_INSTANCE_LIKE_TYPE OBJ_T_MODULE
+#define NUM_INSTANCE_LIKE_TYPES (LAST_INSTANCE_LIKE_TYPE - FIRST_INSTANCE_LIKE_TYPE)
+
 struct ObjAny; // fwd decls
 struct ObjString;
 struct CallFrame;
@@ -148,6 +152,7 @@ typedef struct ObjClosure {
   ObjUpvalue **upvalues;
   int upvalueCount; // always same as function->upvalueCount
   bool isBlock;
+  unsigned long callcacheId; // TODO: move to a MethodEntry struct
 } ObjClosure;
 
 typedef Value (*NativeFn)(int argCount, Value *args);
@@ -157,6 +162,7 @@ typedef struct ObjNative {
   NativeFn function;
   struct ObjString *name;
   Obj *klass; // class or module, if a method
+  unsigned long callcacheId; // TODO: move to a MethodEntry struct
   bool isStatic; // if static method
 } ObjNative;
 
@@ -185,6 +191,7 @@ typedef struct ObjClass {
   Table *fields;
 
   ClassInfo *classInfo;
+  unsigned long id;
 } ObjClass;
 
 typedef struct ObjModule {
@@ -198,6 +205,7 @@ typedef struct ObjModule {
   Table *fields;
 
   ClassInfo *classInfo;
+  unsigned long id;
 } ObjModule;
 
 #define CLASS_SUPER(klass)      (((Obj*)klass)->type == OBJ_T_CLASS ? CLASSINFO((klass))->superclass : ((ObjIClass*) (klass))->superklass)
@@ -579,12 +587,13 @@ ObjUpvalue *newUpvalue(Value *slot, int flags);
 // Object destruction functions
 void freeClassInfo(ClassInfo *cinfo);
 
+struct MethodCallCache;
 // methods/classes
-Obj *instanceFindMethod(ObjInstance *obj, ObjString *name);
-Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name);
-Obj *instanceFindGetter(ObjInstance *obj, ObjString *name);
-Obj *instanceFindSetter(ObjInstance *obj, ObjString *name);
-Obj *classFindStaticMethod(ObjClass *obj, ObjString *name);
+Obj *instanceFindMethod(ObjInstance *obj, ObjString *name, struct MethodCallCache *cc);
+Obj *instanceFindMethodOrRaise(ObjInstance *obj, ObjString *name, struct MethodCallCache *cc);
+Obj *instanceFindGetter(ObjInstance *obj, ObjString *name, struct MethodCallCache *cc);
+Obj *instanceFindSetter(ObjInstance *obj, ObjString *name, struct MethodCallCache *cc);
+Obj *classFindStaticMethod(ObjClass *obj, ObjString *name, struct MethodCallCache *cc);
 bool instanceIsA(ObjInstance *inst, ObjClass *klass);
 bool isSubclass(ObjClass *subklass, ObjClass *superklass);
 char *instanceClassName(ObjInstance *obj);

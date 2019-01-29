@@ -12,8 +12,9 @@
 #include "nodes.h"
 
 VM vm;
-
 volatile pthread_t GVLOwner;
+CallcacheId globalCallcacheId = 0;
+CallcacheId globalClassId = 0;
 
 #ifndef NDEBUG
 #define VM_DEBUG(lvl, ...) vm_debug(lvl, __VA_ARGS__)
@@ -347,14 +348,14 @@ Value createIterator(Value iterable) {
     } else if (IS_INSTANCE(iterable)) {
         ObjString *iterId = INTERNED("iter", 4);
         ObjInstance *instance = AS_INSTANCE(iterable);
-        Obj *iterMethod = instanceFindMethod(instance, iterId);
+        Obj *iterMethod = instanceFindMethod(instance, iterId, NULL);
         Value ret;
         if (iterMethod) { // called iter(), it should return an iterator or an array/map
             callVMMethod(instance, OBJ_VAL(iterMethod), 0, NULL, NULL);
             ret = pop();
         } else {
             ObjString *iterNextId = INTERNED("iterNext", 8);
-            Obj *iterNextMethod = instanceFindMethodOrRaise(instance, iterNextId);
+            Obj *iterNextMethod = instanceFindMethodOrRaise(instance, iterNextId, NULL);
             (void)iterNextMethod; // just check for existence of iterNext method
             ObjInstance *iterObj = newInstance(lxIteratorClass, NEWOBJ_FLAG_NONE);
             callVMMethod(iterObj, OBJ_VAL(nativeIteratorInit), 1, &iterable, NULL);
@@ -813,7 +814,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
         if (IS_INSTANCE_LIKE(lhs)) {
             ObjString *opEquals = vm.opEqualsString;
             ObjInstance *self = AS_INSTANCE(lhs);
-            Obj *methodOpEq = instanceFindMethod(self, opEquals);
+            Obj *methodOpEq = instanceFindMethod(self, opEquals, NULL);
             if (methodOpEq) {
                 Value ret = callVMMethod(self, OBJ_VAL(methodOpEq), 1, &rhs, NULL);
                 pop();
@@ -1021,7 +1022,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     if (tableGet(obj->fields, OBJ_VAL(propName), &ret)) {
         VM_DEBUG(3, "field found (propertyGet)");
         return ret;
-    } else if ((getter = instanceFindGetter(obj, propName))) {
+    } else if ((getter = instanceFindGetter(obj, propName, NULL))) {
         VM_DEBUG(3, "getter found (propertyGet)");
         callVMMethod(obj, OBJ_VAL(getter), 0, NULL, NULL);
         if (THREAD()->hadError) {
@@ -1029,7 +1030,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
         } else {
             return pop();
         }
-    } else if ((method = instanceFindMethod(obj, propName))) {
+    } else if ((method = instanceFindMethod(obj, propName, NULL))) {
         VM_DEBUG(3, "method found [bound] (propertyGet)");
         ObjBoundMethod *bmethod = newBoundMethod(obj, method, NEWOBJ_FLAG_NONE);
         return OBJ_VAL(bmethod);
@@ -1043,7 +1044,7 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
         throwErrorFmt(lxErrClass, "Tried to set property on frozen object");
     }
     Obj *setter = NULL;
-    if ((setter = instanceFindSetter(obj, propName))) {
+    if ((setter = instanceFindSetter(obj, propName, NULL))) {
         VM_DEBUG(3, "setter found");
         callVMMethod(obj, OBJ_VAL(setter), 1, &rval, NULL);
         pop();
@@ -1052,6 +1053,39 @@ static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
         if (IS_OBJ(rval)) {
             OBJ_WRITE(OBJ_VAL(obj), rval);
         }
+    }
+}
+
+static CallcacheId newCallcacheId(Obj *klass) {
+    (void)klass;
+    globalCallcacheId++;
+    return globalCallcacheId;
+}
+
+CallcacheId methodCacheId(Value method) {
+    if (IS_CLOSURE(method)) {
+        return AS_CLOSURE(method)->callcacheId;
+    } else if (IS_NATIVE_FUNCTION(method)) {
+        return AS_NATIVE_FUNCTION(method)->callcacheId;
+    } else {
+        UNREACHABLE_RETURN(0);
+    }
+}
+
+void debugCallCache(MethodCallCache *cc) {
+    fprintf(stderr, "callcache:\n");
+    int entries = 0;
+    int i = 0;
+    for (i = 0; i < POLYMORPHIC_CALL_CACHE_NUM; i++) {
+        if (cc->entries[i].classId > 0) {
+            entries++;
+            fprintf(stderr, "%lu: %lu\n", cc->entries[i].classId, cc->entries[i].methodId);
+        } else {
+            break;
+        }
+    }
+    if (entries == 0) {
+        fprintf(stderr, "  (empty)\n");
     }
 }
 
@@ -1070,6 +1104,7 @@ static void defineMethod(ObjString *name) {
         tableSet(CLASSINFO(klass)->methods, OBJ_VAL(name), method);
         OBJ_WRITE(OBJ_VAL(klass), method);
         GC_OLD(AS_OBJ(method));
+        AS_CLOSURE(method)->callcacheId = newCallcacheId(TO_OBJ(klass));
         Value methodName = OBJ_VAL(name);
         callMethod(AS_OBJ(classOrMod), INTERN("methodAdded"), 1, &methodName, NULL);
     } else if (IS_MODULE(classOrMod)) {
@@ -1078,6 +1113,7 @@ static void defineMethod(ObjString *name) {
         (void)modName;
         VM_DEBUG(2, "defining method '%s' in module '%s'", name->chars, modName);
         tableSet(CLASSINFO(mod)->methods, OBJ_VAL(name), method);
+        AS_CLOSURE(method)->callcacheId = newCallcacheId(TO_OBJ(mod));
         OBJ_WRITE(OBJ_VAL(mod), method);
         GC_OLD(AS_OBJ(method));
     } else {
@@ -1162,9 +1198,9 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
 Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, CallInfo *cinfo) {
     if (obj->type == OBJ_T_INSTANCE || obj->type == OBJ_T_ARRAY || obj->type == OBJ_T_STRING || obj->type == OBJ_T_MAP) {
         ObjInstance *instance = (ObjInstance*)obj;
-        Obj *callable = instanceFindMethod(instance, methodName);
+        Obj *callable = instanceFindMethod(instance, methodName, NULL);
         if (!callable && argCount == 0) {
-            callable = instanceFindGetter(instance, methodName);
+            callable = instanceFindGetter(instance, methodName, NULL);
         }
         if (UNLIKELY(!callable)) {
             ObjString *className = CLASSINFO(instance->klass)->name;
@@ -1175,7 +1211,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, Cal
         return pop();
     } else if (obj->type == OBJ_T_CLASS) {
         ObjClass *klass = (ObjClass*)obj;
-        Obj *callable = classFindStaticMethod(klass, methodName);
+        Obj *callable = classFindStaticMethod(klass, methodName, NULL);
         /*if (!callable && numArgs == 0) {*/
         /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
         /*}*/
@@ -1188,7 +1224,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, Cal
         return pop();
     } else if (obj->type == OBJ_T_MODULE) {
         ObjModule *mod = (ObjModule*)obj;
-        Obj *callable = classFindStaticMethod((ObjClass*)mod, methodName);
+        Obj *callable = classFindStaticMethod((ObjClass*)mod, methodName, NULL);
         if (UNLIKELY(!callable)) {
             ObjString *modName = CLASSINFO(mod)->name;
             const char *modStr = modName ? modName->chars : "(anon)";
@@ -1426,7 +1462,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         EC->stackTop[-argCount - 1] = instanceVal; // first argument is instance, replaces class object
         // Call the initializer, if there is one.
         Value initializer;
-        Obj *init = instanceFindMethod((ObjInstance*)instance, vm.initString);
+        Obj *init = instanceFindMethod((ObjInstance*)instance, vm.initString, NULL);
         isMethod = true;
         if (init) {
             VM_DEBUG(2, "callable is initializer for class %s", klassName);
@@ -2186,7 +2222,7 @@ static InterpretResult vm_run() {
           ObjString *methodName = methodNameForBinop(opcode);\
           Obj *callable = NULL;\
           if (methodName) {\
-            callable = instanceFindMethod(inst, methodName);\
+            callable = instanceFindMethod(inst, methodName, NULL);\
           }\
           if (UNLIKELY(!callable)) {\
               throwErrorFmt(lxNameErrClass, "Method %s#%s not found for operation '%s'", className(inst->klass), methodName->chars, #op);\
@@ -2774,19 +2810,26 @@ vmLoop:
       CASE_OP(INVOKE): { // invoke methods (includes static methods)
           Value methodName = READ_CONSTANT();
           ObjString *mname = AS_STRING(methodName);
-          uint8_t numArgs = READ_BYTE();
           Value callInfoVal = READ_CONSTANT();
+          Value callCacheVal = READ_CONSTANT();
+          DBG_ASSERT(IS_INTERNAL(callInfoVal));
+          DBG_ASSERT(IS_INTERNAL(callCacheVal));
+
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
+          MethodCallCache *cc = internalGetData(AS_INTERNAL(callCacheVal));
+          /*debugCallCache(cc);*/
+          int numArgs = (callInfo->argc + callInfo->numKwargs)-1;
+          ASSERT(numArgs >= 0);
           if (th->lastSplatNumArgs > 0) {
               numArgs += (th->lastSplatNumArgs-1);
               th->lastSplatNumArgs = -1;
           }
           Value instanceVal = peek(numArgs);
-          if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal) || IS_MAP(instanceVal) || IS_REGEX(instanceVal)) {
+          if (IS_INSTANCE_LIKE(instanceVal) && (!IS_CLASS(instanceVal) && (!IS_MODULE(instanceVal)))) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
-              Obj *callable = instanceFindMethod(inst, mname);
+              Obj *callable = instanceFindMethod(inst, mname, cc);
               if (!callable && numArgs == 0) {
-                  callable = instanceFindGetter(inst, mname);
+                  callable = instanceFindGetter(inst, mname, cc);
               }
               if (UNLIKELY(!callable)) {
                   ObjString *className = CLASSINFO(inst->klass)->name;
@@ -2796,7 +2839,7 @@ vmLoop:
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
           } else if (IS_CLASS(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
-              Obj *callable = classFindStaticMethod(klass, mname);
+              Obj *callable = classFindStaticMethod(klass, mname, cc);
               /*if (!callable && numArgs == 0) {*/
                   /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
               /*}*/
@@ -2809,7 +2852,7 @@ vmLoop:
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
           } else if (IS_MODULE(instanceVal)) {
               ObjModule *mod = AS_MODULE(instanceVal);
-              Obj *callable = classFindStaticMethod((ObjClass*)mod, mname);
+              Obj *callable = classFindStaticMethod((ObjClass*)mod, mname, cc);
               /*if (!callable && numArgs == 0) {*/
                   /*callable = instanceFindGetter((ObjInstance*)mod, mname);*/
               /*}*/
@@ -3106,7 +3149,7 @@ vmLoop:
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexGet ('[]') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, vm.opIndexGetString);
+          Obj *method = instanceFindMethodOrRaise(instance, vm.opIndexGetString, NULL);
           callCallable(OBJ_VAL(method), 1, true, NULL);
           DISPATCH_BOTTOM();
       }
@@ -3116,7 +3159,7 @@ vmLoop:
               throwErrorFmt(lxTypeErrClass, "Cannot call opIndexSet ('[]=') on a non-instance, found a: %s", typeOfVal(lval));
           }
           ObjInstance *instance = AS_INSTANCE(lval);
-          Obj *method = instanceFindMethodOrRaise(instance, vm.opIndexSetString);
+          Obj *method = instanceFindMethodOrRaise(instance, vm.opIndexSetString, NULL);
           callCallable(OBJ_VAL(method), 2, true, NULL);
           DISPATCH_BOTTOM();
       }

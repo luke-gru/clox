@@ -60,7 +60,8 @@ typedef enum {
     CONST_T_ARYLIT,
     CONST_T_MAPLIT,
     CONST_T_CODE,
-    CONST_T_CALLINFO
+    CONST_T_CALLINFO,
+    CONST_T_CALLCACHE,
 } ConstType;
 
 static void compiler_trace_debug(const char *fmt, ...) {
@@ -1179,7 +1180,6 @@ static CallInfo *emitCall(Node *n) {
             emitNode(arg);
         }
         callInfoData = ALLOCATE(CallInfo, 1);
-        ASSERT_MEM(callInfoData);
         memset(callInfoData, 0, sizeof(CallInfo));
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;
@@ -1194,7 +1194,12 @@ static CallInfo *emitCall(Node *n) {
         ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_OLD);
         hideFromGC(TO_OBJ(callInfoObj));
         uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
-        emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
+        MethodCallCache *callCacheData = ALLOCATE(MethodCallCache, 1);
+        memset(callCacheData, 0, sizeof(MethodCallCache));
+        ObjInternal *callCacheObj = newInternalObject(true, callCacheData, sizeof(MethodCallCache), NULL, NULL, NEWOBJ_FLAG_OLD);
+        hideFromGC(TO_OBJ(callCacheObj));
+        uint8_t callCacheConstSlot = makeConstant(OBJ_VAL(callCacheObj), CONST_T_CALLCACHE);
+        emitOp3(OP_INVOKE, methodNameArg, callInfoConstSlot, callCacheConstSlot);
     } else {
         emitNode(lhs); // the function itself
         i = 0;
