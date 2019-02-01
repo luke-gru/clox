@@ -743,6 +743,8 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
     COMP_TRACE("copyIseqToChunk (%d insns, bytecount: %d)", iseq->count, iseq->byteCount);
     chunk->catchTbl = iseq->catchTbl;
     chunk->constants = iseq->constants;
+    chunk->iseq = ALLOCATE(Iseq, 1);
+    memcpy(chunk->iseq, iseq, sizeof(Iseq));
     ASSERT(chunk->constants);
     Insn *in = iseq->insns;
     int idx = 0;
@@ -767,7 +769,7 @@ static ObjFunction *endCompiler() {
     ObjFunction *func = current->function;
     copyIseqToChunk(currentIseq(), currentChunk());
     freeTable(&current->constTbl);
-    freeIseq(&current->iseq);
+    /*freeIseq(&current->iseq);*/
 
     current = current->enclosing;
     COMP_TRACE("/endCompiler");

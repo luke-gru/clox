@@ -26,6 +26,7 @@ typedef struct CatchTable {
  * as chunks are unique per source code function context, including the
  * top-level (main) function.
  */
+struct Iseq; // fwd decl
 typedef struct Chunk {
     int count; // number of bytes written to chunk
     int capacity;
@@ -37,6 +38,7 @@ typedef struct Chunk {
     int *nwidths; // node width level ...
     ValueArray *constants;
     CatchTable *catchTbl;
+    struct Iseq *iseq;
 } Chunk;
 
 typedef struct NodeLvl {

@@ -22,7 +22,7 @@ else
   endif
 endif
 SRCS = main.c debug.c memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c signal.c io.c file.c dir.c thread.c block.c rand.c time.c repl.c debugger.c regex_lib.c regex.c vendor/linenoise.c
-TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c signal.c io.c file.c dir.c thread.c block.c rand.c time.c debugger.c regex_lib.c regex.c
+TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.c string.c array.c map.c options.c vendor/vec.c nodes.c parser.c table.c runtime.c process.c signal.c io.c file.c dir.c thread.c block.c rand.c time.c debugger.c regex_lib.c regex.c mir.c
 TEST_FILES = test/test_object.c test/test_nodes.c test/test_compiler.c test/test_vm.c test/test_gc.c test/test_examples.c test/test_regex.c
 DEBUG_FLAGS=-O2 -g -rdynamic
 GPROF_FLAGS=-O3 -pg -DNDEBUG
@@ -111,6 +111,10 @@ build_test_regex: build
 .PHONY: run_test_regex
 run_test_regex:
 	@ ./bin/test_regex
+
+.PHONY: build_test_mir
+build_test_mir: build
+	${CC} ${CFLAGS} $(TEST_SRCS) test/test_mir.c ${TEST_FLAGS} -o ${BUILD_DIR}/test_mir
 
 .PHONY: build_tests
 build_tests: build build_test_object build_test_nodes build_test_compiler build_test_vm build_test_gc build_test_examples

@@ -12,6 +12,7 @@ void initChunk(Chunk *chunk) {
     chunk->nwidths = NULL;
     chunk->catchTbl = NULL;
     chunk->constants = ALLOCATE(ValueArray, 1);
+    chunk->iseq = NULL;
     initValueArray(chunk->constants);
 }
 
