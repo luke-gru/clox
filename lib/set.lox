@@ -1,0 +1,29 @@
+class Set {
+  init(initial = []) {
+    this._set = %{};
+    foreach (el in initial) {
+      this._set[el] = true;
+    }
+  }
+  add(el) {
+    this._set[el] = true;
+    return this;
+  }
+  delete(el) {
+    this._set.delete(el);
+    return this;
+  }
+  clear() {
+    this._set.clear();
+  }
+  contains(el) {
+    return this._set.hasKey(el);
+  }
+  iter() {
+    return this._set.keys();
+  }
+
+  size {
+    return this._set.size;
+  }
+}

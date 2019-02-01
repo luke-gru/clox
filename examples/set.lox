@@ -1,0 +1,23 @@
+requireScript("set");
+var s = Set([1, 2]);
+s.add(3);
+s.add(2);
+foreach (el in s) {
+  print el;
+}
+
+print s.size;
+s.delete(2);
+print s.size;
+s.clear();
+print s.size;
+
+
+__END__
+-- expect: --
+1
+2
+3
+3
+2
+0
