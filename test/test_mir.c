@@ -21,6 +21,7 @@ static int test_mir_compiles(void) {
     Iseq *iseq = chunk->iseq;
     ASSERT(iseq);
     Mir mir = genMir(iseq);
+    emitMir(mir);
 cleanup:
     return 0;
 }

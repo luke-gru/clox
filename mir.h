@@ -45,6 +45,7 @@ typedef enum MirNodeType {
 struct BasicBlock;
 
 typedef struct MirNode {
+    MirNodeType ty;
     MirOp opcode;
     struct MirNode *op1;
     struct MirNode *op2;
@@ -59,11 +60,14 @@ typedef struct BasicBlock {
 } BasicBlock;
 
 typedef struct Mir {
-    vec_void_t v_nodes;
-    vec_void_t v_stack;
+    vec_void_t v_nodes; // list of nodes
+    vec_void_t v_stack; // op stack
+    vec_void_t v_locals; // locals stack
 } Mir;
 
 Mir genMir(Iseq *iseq);
+
+void emitMir(Mir m);
 
 #ifdef __cplusplus
 }
