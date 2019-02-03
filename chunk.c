@@ -104,6 +104,7 @@ bool iseqRmInsn(Iseq *seq, Insn *toRm) {
 }
 
 size_t iseqInsnByteDiff(Insn *prev, Insn *after) {
+    ASSERT(prev);
     ASSERT(after);
     if (prev == after) return 0;
     size_t diff = 0;
