@@ -73,13 +73,14 @@ static MirNode *createNode(MirNodeType ty) {
 static void nodeAddOperand(MirNode *node, MirNode *op) {
     if (node->numOps == 0) {
         node->op1 = op;
-        node->numOps = 1;
     } else if (node->numOps == 1) {
         node->op2 = op;
-        node->numOps = 2;
+    } else if (node->numOps == 2) {
+        node->op3 = op;
     } else {
         ASSERT(0);
     }
+    node->numOps++;
 }
 
 static void nodePushLabel(Mir *mir, MirNode *label) {
@@ -144,6 +145,52 @@ static void genMir_PRINT(Mir *mir, Insn *insn) {
     MirNode *val = mirPeekStack(mir, 0);
     nodeAddOperand(def, val);
     mirAddNode(mir, def);
+    mirPopStack(mir);
+}
+
+static void genMir_ADD(Mir *mir, Insn *insn) {
+    MirNode *bin = createNode(MTY_INSTRUCTION);
+    bin->insn = insn;
+    bin->opcode = MOP_ADD;
+    MirNode *binReg = createNode(MTY_DEFINITION);
+    binReg->insn = insn;
+    nodeAddOperand(bin, binReg);
+    MirNode *val1 = mirPeekStack(mir, 1);
+    MirNode *val2 = mirPeekStack(mir, 0);
+    nodeAddOperand(bin, val1);
+    nodeAddOperand(bin, val2);
+
+    mirAddNode(mir, bin);
+    mirPopStack(mir);
+    mirPopStack(mir);
+    mirPushStack(mir, binReg);
+}
+
+static void genMir_SUBTRACT(Mir *mir, Insn *insn) {
+    MirNode *bin = createNode(MTY_INSTRUCTION);
+    bin->insn = insn;
+    bin->opcode = MOP_SUBTRACT;
+    MirNode *binReg = createNode(MTY_DEFINITION);
+    binReg->insn = insn;
+    nodeAddOperand(bin, binReg);
+    MirNode *val1 = mirPeekStack(mir, 1);
+    MirNode *val2 = mirPeekStack(mir, 0);
+    nodeAddOperand(bin, val1);
+    nodeAddOperand(bin, val2);
+
+    mirAddNode(mir, bin);
+    mirPopStack(mir);
+    mirPopStack(mir);
+    mirPushStack(mir, binReg);
+}
+
+static void genMir_RETURN(Mir *mir, Insn *insn) {
+    MirNode *ret = createNode(MTY_INSTRUCTION);
+    ret->insn = insn;
+    ret->opcode = MOP_RETURN;
+    MirNode *val = mirPeekStack(mir, 0);
+    nodeAddOperand(ret, val);
+    mirAddNode(mir, ret);
     mirPopStack(mir);
 }
 
@@ -222,6 +269,14 @@ static void genMirInsn(Mir *mir, Insn *insn) {
         MIR_DEBUG(1, "gen print");
         genMir_PRINT(mir, insn);
         break;
+    case OP_ADD:
+        MIR_DEBUG(1, "gen add");
+        genMir_ADD(mir, insn);
+        break;
+    case OP_SUBTRACT:
+        MIR_DEBUG(1, "gen subtract");
+        genMir_SUBTRACT(mir, insn);
+        break;
     case OP_JUMP_IF_FALSE:
         MIR_DEBUG(1, "gen jump_if_false");
         genMir_JUMP_IF_FALSE(mir, insn);
@@ -233,6 +288,10 @@ static void genMirInsn(Mir *mir, Insn *insn) {
     case OP_POP:
         MIR_DEBUG(1, "gen pop");
         genMir_POP(mir, insn);
+        break;
+    case OP_RETURN:
+        MIR_DEBUG(1, "gen return");
+        genMir_RETURN(mir, insn);
         break;
     case OP_LEAVE:
         MIR_DEBUG(1, "gen leave");
@@ -293,6 +352,22 @@ static void dumpPrintNode(FILE *f, MirNode *n) {
     fprintf(f, "print v%d\n", fromNode->varNum);
 }
 
+static void dumpAddNode(FILE *f, MirNode *n) {
+    MirNode *storeReg = n->op1;
+    MirNode *val1Reg = n->op2;
+    MirNode *val2Reg = n->op3;
+    fprintf(f, "add v%d, v%d, v%d\n", storeReg->varNum,
+            val1Reg->varNum, val2Reg->varNum);
+}
+
+static void dumpSubtractNode(FILE *f, MirNode *n) {
+    MirNode *storeReg = n->op1;
+    MirNode *val1Reg = n->op2;
+    MirNode *val2Reg = n->op3;
+    fprintf(f, "sub v%d, v%d, v%d\n", storeReg->varNum,
+            val1Reg->varNum, val2Reg->varNum);
+}
+
 static void dumpJumpFalseNode(FILE *f, MirNode *n) {
     MirNode *testReg = n->op1;
     MirNode *label = n->op2;
@@ -303,6 +378,10 @@ static void dumpJumpFalseNode(FILE *f, MirNode *n) {
 static void dumpJumpNode(FILE *f, MirNode *n) {
     MirNode *label = n->op1;
     fprintf(f, "jump label%d\n", label->labelNum);
+}
+
+static void dumpReturnNode(FILE *f, MirNode *n) {
+    fprintf(f, "return v%d\n", n->op1->varNum);
 }
 
 static void dumpLeaveNode(FILE *f, MirNode *n) {
@@ -324,11 +403,20 @@ static void dumpMirNode(FILE *f, Mir *mir, MirNode *n) {
     case MOP_PRINT:
         dumpPrintNode(f, n);
         break;
+    case MOP_ADD:
+        dumpAddNode(f, n);
+        break;
+    case MOP_SUBTRACT:
+        dumpSubtractNode(f, n);
+        break;
     case MOP_JUMP_FALSE:
         dumpJumpFalseNode(f, n);
         break;
     case MOP_JUMP:
         dumpJumpNode(f, n);
+        break;
+    case MOP_RETURN:
+        dumpReturnNode(f, n);
         break;
     case MOP_LEAVE:
         dumpLeaveNode(f, n);

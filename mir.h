@@ -60,7 +60,6 @@ extern "C" {
  * print v5
  * label2:
  * leave
- *
  */
 
 typedef enum MirOp {
@@ -68,10 +67,15 @@ typedef enum MirOp {
     MOP_STORE,
     MOP_LOAD,
     MOP_PRINT,
+    MOP_ADD,
+    MOP_SUBTRACT,
+    MOP_DIVIDE,
+    MOP_MODULO,
     MOP_JUMP_FALSE,
     MOP_JUMP,
     MOP_LEAVE,
     MOP_LABEL,
+    MOP_RETURN,
 } MirOp;
 
 typedef enum MirNodeType {
@@ -89,6 +93,7 @@ typedef struct MirNode {
     MirOp opcode;
     struct MirNode *op1;
     struct MirNode *op2;
+    struct MirNode *op3;
     struct BasicBlock *block;
     Value value;
     uint16_t varNum;
