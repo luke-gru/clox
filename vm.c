@@ -814,7 +814,7 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
             ObjString *opEquals = vm.opEqualsString;
             ObjInstance *self = AS_INSTANCE(lhs);
             Obj *methodOpEq = instanceFindMethod(self, opEquals);
-            if (methodOpEq) {
+            if (LIKELY(methodOpEq != NULL)) {
                 Value ret = callVMMethod(self, OBJ_VAL(methodOpEq), 1, &rhs, NULL);
                 pop();
                 return isTruthy(ret);
@@ -1950,6 +1950,7 @@ NORETURN void throwError(Value self) {
 }
 
 void popErrInfo(void) {
+    DBG_ASSERT(vm.curThread->errInfo);
     vm.curThread->errInfo = vm.curThread->errInfo->prev;
 }
 
@@ -1968,7 +1969,7 @@ NORETURN void rethrowErrInfo(ErrTagInfo *info) {
 }
 
 NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
-    char sbuf[250] = {'\0'};
+    char sbuf[250];
     va_list args;
     va_start(args, format);
     vsnprintf(sbuf, 250, format, args);
@@ -2447,7 +2448,7 @@ vmLoop:
               }
           } else if (tableGet(&vm.globals, varName, &val)) {
               VM_PUSH(val);
-          } else if (tableGet(&vm.constants, varName, &val)) {
+          } else if (tableGet(&vm.constants, varName, &val)) { // for try/catch
               VM_PUSH(val);
           } else {
               throwErrorFmt(lxNameErrClass, "Undefined global variable '%s'.", AS_STRING(varName)->chars);
@@ -2561,36 +2562,28 @@ vmLoop:
           Value varName = READ_CONSTANT();
           Value val;
           ObjClass *cref = NULL;
-          bool notFound = false;
           if (th->v_crefStack.length > 0) {
               cref = TO_CLASS(vec_last(&th->v_crefStack));
-              ASSERT(cref);
+          }
+          if (findConstantUnder(cref, AS_STRING(varName), &val)) {
+              VM_PUSH(val);
+              DISPATCH_BOTTOM();
+          }
+          // not found, try to autoload it
+          Value autoloadPath;
+          if (tableGet(&vm.autoloadTbl, varName, &autoloadPath)) {
+              Value requireScriptFn = NIL_VAL;
+              tableGet(&vm.globals, OBJ_VAL(INTERN("requireScript")), &requireScriptFn);
+              callFunctionValue(requireScriptFn, 1, &autoloadPath);
               if (findConstantUnder(cref, AS_STRING(varName), &val)) {
                   VM_PUSH(val);
                   DISPATCH_BOTTOM();
-              } else {
-                  notFound = true;
               }
           }
-          if (!notFound && tableGet(&vm.constants, varName, &val)) {
-              VM_PUSH(val);
+          if (cref) {
+              throwErrorFmt(lxNameErrClass, "Undefined constant '%s::%s'.", className(cref), AS_STRING(varName)->chars);
           } else {
-              // not found, try to autoload it
-              Value autoloadPath;
-              if (tableGet(&vm.autoloadTbl, varName, &autoloadPath)) {
-                  Value requireScriptFn = NIL_VAL;
-                  tableGet(&vm.globals, OBJ_VAL(INTERN("requireScript")), &requireScriptFn);
-                  callFunctionValue(requireScriptFn, 1, &autoloadPath);
-                  if (findConstantUnder(cref, AS_STRING(varName), &val)) {
-                      push(val);
-                      DISPATCH_BOTTOM();
-                  }
-              }
-              if (cref) {
-                  throwErrorFmt(lxNameErrClass, "Undefined constant '%s::%s'.", className(cref), AS_STRING(varName)->chars);
-              } else {
-                  throwErrorFmt(lxNameErrClass, "Undefined constant '%s'.", AS_STRING(varName)->chars);
-              }
+              throwErrorFmt(lxNameErrClass, "Undefined constant '%s'.", AS_STRING(varName)->chars);
           }
           DISPATCH_BOTTOM();
       }

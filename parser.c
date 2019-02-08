@@ -489,7 +489,7 @@ static Node *statement() {
                 .kind = CATCH_STMT,
             };
             Node *catchStmt = createNode(catchT, catchTok, NULL);
-            nodeAddChild(catchStmt, catchExpr); // class or string or instance, etc.
+            nodeAddChild(catchStmt, catchExpr);
             if (foundIdentToken) {
                 node_type_t varT = {
                     .type = NODE_EXPR,
