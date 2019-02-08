@@ -1,0 +1,9 @@
+class Mine {
+  class Err < Error {}
+}
+
+try {
+  throw Mine::Err("msg");
+} catch (Mine::Err err) {
+  print err;
+}

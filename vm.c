@@ -627,7 +627,7 @@ bool VMLoadedScript(char *fname) {
     return false;
 }
 
-#define ASSERT_VALID_STACK() DBG_ASSERT(EC->stackTop >= EC->stack)
+#define ASSERT_VALID_STACK() DBG_ASSERT(EC->stackTop >= EC->stack && EC->stackTop < EC->stack + STACK_MAX)
 
 static inline bool isOpStackEmpty(void) {
     ASSERT_VALID_STACK();
@@ -936,8 +936,6 @@ static inline bool isBlockControlFlow(Value err) {
 }
 
 void setBacktrace(Value err) {
-    // waste of time to set backtrace on an error which is just part of
-    // internal control flow (break/continue/return in blocks)
     if (isBlockControlFlow(err)) {
         return;
     }
@@ -1736,12 +1734,12 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // +1 to include either the called function (for non-methods) or the receiver (for methods)
     frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1) -
         (func->numKwargs > 0 ? numKwargsNotGiven+1 : 0);
-    // NOTE: the frame is popped on OP_RETURN
     if (frame->name) {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(frame->name));
     } else {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(vm.anonString));
     }
+    // NOTE: the frame is popped on OP_RETURN
     vm_run(); // actually run the function until return
     return true;
 }
@@ -1821,7 +1819,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
  * the proper class to catch.
  */
 static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowFound) {
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     CatchTable *tbl = currentChunk()->catchTbl;
     CatchTable *row = tbl;
     int currentIpOff = (int)(getFrame()->ip - currentChunk()->code);
