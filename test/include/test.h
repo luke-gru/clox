@@ -159,10 +159,10 @@ static inline void parseTestOptions(int argc, char *argv[]) {
     initOptions(argc, argv);
     int i = 0;
     int incrOpt = 0;
-    vec_str_t *onlies = calloc(sizeof(vec_str_t), 1);
+    vec_str_t *onlies = calloc(1, sizeof(vec_str_t));
     ASSERT_MEM(onlies);
     vec_init(onlies);
-    vec_str_t *skips = calloc(sizeof(vec_str_t), 1);
+    vec_str_t *skips = calloc(1, sizeof(vec_str_t));
     ASSERT_MEM(skips);
     vec_init(skips);
     while (argv[i] != NULL) {

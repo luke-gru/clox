@@ -1343,9 +1343,9 @@ static Node *primary() {
         while ((interpBegin = strstr(beg, "${"))) {
             end = index(interpBegin, '}'); // FIXME: what if this is inside a single or double-quoted string?
             if (end == NULL) break;
-            char *contents = calloc((end-interpBegin)+1, 1);
+            char *contents = calloc(1, (end-interpBegin)+1);
             ASSERT_MEM(contents);
-            char *before = calloc((interpBegin-beg)+3, 1); // add room to surround with double-quotes
+            char *before = calloc(1, (interpBegin-beg)+3); // add room to surround with double-quotes
             ASSERT_MEM(before);
             strncpy(before+1, beg, (interpBegin-beg));
             before[0] = '"';
@@ -1406,7 +1406,7 @@ static Node *primary() {
         if (vnodes.length > 0) {
             char *restStart = end+1;
             int restLen = (str+strlen(str))-end;
-            char *rest = calloc(restLen+1+2, 1);
+            char *rest = calloc(1, restLen+1+2);
             ASSERT_MEM(rest);
             rest[0] = '"';
             strncpy(rest+1, restStart, restLen);

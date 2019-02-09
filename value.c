@@ -237,7 +237,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
                 const char *anon = "<fun (Anon)>";
                 ret = stringConstructor((char*)anon, strlen(anon), flags);
             } else {
-                char *buf = calloc(strlen(func->name->chars)+1+6, 1);
+                char *buf = calloc(1, strlen(func->name->chars)+1+6);
                 ASSERT_MEM(buf);
                 sprintf(buf, "<fun %s>", func->name->chars);
                 ret = stringConstructor(buf, strlen(buf), flags);
@@ -259,7 +259,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
             } else {
                 ObjClass *klass = inst->klass;
                 char *klassName = CLASSINFO(klass)->name->chars;
-                char *cbuf = calloc(strlen(klassName)+1+11, 1);
+                char *cbuf = calloc(1, strlen(klassName)+1+11);
                 ASSERT_MEM(cbuf);
                 sprintf(cbuf, "<instance %s>", klassName);
                 ret = stringConstructor(cbuf, strlen(cbuf), flags);
@@ -268,7 +268,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
             char *klassName = CLASSINFO(klass)->name->chars;
-            char *cbuf = calloc(strlen(klassName)+1+8, 1);
+            char *cbuf = calloc(1, strlen(klassName)+1+8);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<class %s>", klassName);
             ret = stringConstructor(cbuf, strlen(cbuf), flags);
@@ -276,7 +276,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
         } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
             ObjModule *mod = AS_MODULE(value);
             char *modName = CLASSINFO(mod)->name->chars;
-            char *cbuf = calloc(strlen(modName)+1+9, 1);
+            char *cbuf = calloc(1, strlen(modName)+1+9);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<module %s>", modName);
             ret = stringConstructor(cbuf, strlen(cbuf), flags);
@@ -285,7 +285,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
             ObjNative *native = AS_NATIVE_FUNCTION(value);
             ObjString *name = native->name;
             char *nameStr = name->chars;
-            char *cbuf = calloc(strlen(nameStr)+1+14, 1);
+            char *cbuf = calloc(1, strlen(nameStr)+1+14);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<fn %s (native)>", nameStr);
             ret = stringConstructor(cbuf, strlen(cbuf), flags);
@@ -302,7 +302,7 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
                 UNREACHABLE("error");
             }
             char *nameStr = name->chars;
-            char *cbuf = calloc(strlen(nameStr)+1+9, 1);
+            char *cbuf = calloc(1, strlen(nameStr)+1+9);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<method %s>", nameStr);
             ret = stringConstructor(cbuf, strlen(cbuf), flags);

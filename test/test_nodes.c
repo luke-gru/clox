@@ -10,7 +10,7 @@ static Parser parser;
 // to diff 2 strings. Replace spaces, tabs and newlines
 static char *stringReplaceBlanks(char *str, char replacement) {
     int len = strlen(str);
-    char *buf = calloc(len+1, 1);
+    char *buf = calloc(1, len+1);
     strcpy(buf, str);
     str = buf; // allow `str` to be a static string, so we copy it in this case
     int numNewlines = 0;
@@ -25,7 +25,7 @@ static char *stringReplaceBlanks(char *str, char replacement) {
         }
     }
     int newlen = len+(numNewlines*2)+(numTabs*2);
-    char *newbuf = calloc(newlen+1, 1);
+    char *newbuf = calloc(1, newlen+1);
     memcpy(newbuf, str, len+1);
     for (int i = 0; i < newlen; i++) {
         if (newbuf[i] == '\n') {

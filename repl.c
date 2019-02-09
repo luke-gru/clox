@@ -74,7 +74,7 @@ static void scannerAddSrc(char *src) {
     ASSERT(src);
     ASSERT(scanner.source);
     size_t newsz = strlen(scanner.source)+1+strlen(src);
-    char *buf = calloc(newsz, 1);
+    char *buf = calloc(1, newsz);
     ASSERT_MEM(buf);
     strcpy(buf, scanner.source);
     strcat(buf, src);

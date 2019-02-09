@@ -128,7 +128,8 @@ static void freeCompiler(Compiler *c, bool freeErrMessages) {
 }
 
 static inline Chunk *currentChunk() {
-  return current->function->chunk;
+    DBG_ASSERT(current->function && current->function->chunk);
+    return current->function->chunk;
 }
 
 static inline Iseq *currentIseq() {
@@ -140,15 +141,16 @@ static Insn *emitInsn(Insn in) {
     in.lineno = curTok ? curTok->line : 0;
     in.nlvl.depth = nodeDepth;
     in.nlvl.width = nodeWidth;
-    Insn *inHeap = calloc(sizeof(in), 1);
-    memcpy(inHeap, &in, sizeof(in));
+    Insn *inHeap = xcalloc(1, sizeof(Insn));
+    ASSERT_MEM(inHeap);
+    memcpy(inHeap, &in, sizeof(Insn));
     iseqAddInsn(currentIseq(), inHeap);
     return inHeap;
 }
 
 static Insn *emitOp0(uint8_t code) {
     Insn in;
-    memset(&in, 0, sizeof(in));
+    memset(&in, 0, sizeof(Insn));
     in.code = code;
     in.numOperands = 0;
     in.flags = 0;
@@ -156,7 +158,7 @@ static Insn *emitOp0(uint8_t code) {
 }
 static Insn *emitOp1(uint8_t code, uint8_t op1) {
     Insn in;
-    memset(&in, 0, sizeof(in));
+    memset(&in, 0, sizeof(Insn));
     in.code = code;
     in.operands[0] = op1;
     in.numOperands = 1;
@@ -165,7 +167,7 @@ static Insn *emitOp1(uint8_t code, uint8_t op1) {
 }
 static Insn *emitOp2(uint8_t code, uint8_t op1, uint8_t op2) {
     Insn in;
-    memset(&in, 0, sizeof(in));
+    memset(&in, 0, sizeof(Insn));
     in.code = code;
     in.operands[0] = op1;
     in.operands[1] = op2;
@@ -175,7 +177,7 @@ static Insn *emitOp2(uint8_t code, uint8_t op1, uint8_t op2) {
 }
 static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
     Insn in;
-    memset(&in, 0, sizeof(in));
+    memset(&in, 0, sizeof(Insn));
     in.code = code;
     in.operands[0] = op1;
     in.operands[1] = op2;
@@ -585,11 +587,6 @@ static void addInsnOperand(Iseq *seq, Insn *insn, uint8_t operand) {
     seq->byteCount += 1;
     int insnIdx = iseqInsnIndex(seq, insn);
     ASSERT(insnIdx >= 0);
-    if (insnIdx == 0) {
-        OPT_DEBUG(2, "addInsnOperand insnIdx == 0");
-        iseqRmInsn(seq, insn);
-        return;
-    }
     Insn *in = seq->insns;
     int idx = 0;
     while (in) {
@@ -1024,7 +1021,7 @@ static void initCompiler(
         }
         char *funcName = tokStr(fTok);
         size_t methodNameBuflen = strlen(className)+1+strlen(funcName)+1; // +1 for '.' in between
-        char *methodNameBuf = calloc(methodNameBuflen, 1);
+        char *methodNameBuf = xcalloc(1, methodNameBuflen);
         ASSERT_MEM(methodNameBuf);
         strcpy(methodNameBuf, className);
         char *sep = "#";
@@ -1235,6 +1232,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
 
     pushScope(COMPILE_SCOPE_FUNCTION); // this scope holds the local variable parameters
     ObjFunction *func = fCompiler.function;
+    ASSERT(func);
     func->funcNode = n;
 
     vec_nodep_t *params = (vec_nodep_t*)nodeGetData(n);
@@ -1247,22 +1245,22 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             func->arity++;
         }
     }
-    i = 0;
     // optional arguments gets pushed in order so we can skip the local var set code when necessary
     // (when the argument is given during the call).
     int numParams = params->length;
+    param = NULL; i = 0;
     vec_foreach(params, param, i) {
         if (param->type.kind == PARAM_NODE_DEFAULT_ARG) {
             uint8_t localSlot = declareVariable(&param->tok);
             defineVariable(localSlot, true);
             func->numDefaultArgs++;
-            Insn *insnBefore = currentIseq()->tail;
+            Insn *insnBefore = currentIseq()->tail; // NOTE: can be NULL
             emitNode(vec_first(param->children)); // default arg
             emitOp2(OP_SET_LOCAL, (uint8_t)localSlot, identifierConstant(&param->tok));
             emitOp0(OP_POP);
             Insn *insnAfter = currentIseq()->tail;
             size_t codeDiff = iseqInsnByteDiff(insnBefore, insnAfter);
-            ParamNodeInfo *paramNodeInfo = calloc(sizeof(ParamNodeInfo), 1);
+            ParamNodeInfo *paramNodeInfo = xcalloc(1, sizeof(ParamNodeInfo));
             ASSERT_MEM(paramNodeInfo);
             paramNodeInfo->defaultArgIPOffset = codeDiff;
             ASSERT(param->data == NULL);
@@ -1291,7 +1289,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             defineVariable(localSlot, true);
             func->hasBlockArg = true;
         } else if (param->type.kind == PARAM_NODE_REGULAR) {
-            // default with first, above
+            // handled above in first loop
         } else {
             UNREACHABLE("Unknown parameter type (kind): %d", param->type.kind);
         }
@@ -1317,7 +1315,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     }
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
-    func->upvaluesInfo = malloc(sizeof(Upvalue)*LX_MAX_UPVALUES);
+    func->upvaluesInfo = xmalloc(sizeof(Upvalue)*LX_MAX_UPVALUES);
     ASSERT_MEM(func->upvaluesInfo);
     for (int i = 0; i < func->upvalueCount; i++) {
         if (ftype != FUN_TYPE_BLOCK) {
@@ -2113,7 +2111,7 @@ Chunk *compile_file(char *fname, CompileErr *err) {
         *err = COMPILE_ERR_ERRNO;
         return NULL;
     }
-    char *buf = calloc(st.st_size+1, 1);
+    char *buf = xcalloc(1, st.st_size+1);
     ASSERT_MEM(buf);
     res = (int)read(fd, buf, st.st_size);
     if (res == -1) {

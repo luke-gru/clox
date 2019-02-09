@@ -74,7 +74,7 @@ static void registerBreakpt(Debugger *dbg, char *file, int line) {
     if (breakptIsRegistered(dbg, file, line)) {
             return;
     }
-    Breakpoint *bp = calloc(sizeof(*bp), 1);
+    Breakpoint *bp = calloc(1, sizeof(*bp));
     ASSERT_MEM(bp);
     bp->file = strdup(file);
     bp->line = line;

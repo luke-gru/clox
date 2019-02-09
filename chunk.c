@@ -77,6 +77,8 @@ int iseqInsnIndex(Iseq *seq, Insn *insn) {
 
 // removes and frees the given insn
 bool iseqRmInsn(Iseq *seq, Insn *toRm) {
+    ASSERT(seq);
+    ASSERT(toRm);
     Insn *in = seq->insns;
     if (in == NULL) return false;
     while (in && in != toRm) {

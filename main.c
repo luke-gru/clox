@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
             } else {
                 strcat(dirbuf, fname);
             }
-            char *fullPath = (char*)calloc(strlen(dirbuf)+1, 1);
+            char *fullPath = (char*)calloc(1, strlen(dirbuf)+1);
             ASSERT_MEM(fullPath);
             strcpy(fullPath, dirbuf);
             fname = fullPath;

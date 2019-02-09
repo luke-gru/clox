@@ -216,7 +216,7 @@ static Token identifier() {
 
     if (type == TOKEN_IDENTIFIER && memcmp(current->tokenStart, "__LINE__", length) == 0) {
         Token token = makeToken(TOKEN_NUMBER);
-        char *numBuf = (char*)calloc(8, 1);
+        char *numBuf = (char*)calloc(1, 8);
         ASSERT_MEM(numBuf);
         sprintf(numBuf, "%d", current->line);
         token.start = numBuf;
@@ -284,7 +284,7 @@ static Token doubleQuotedString() {
   Token tok = makeToken(TOKEN_STRING_DQUOTE);
 
   // replace \" with "
-  char *newBuf = (char*)calloc(tok.length+1, 1);
+  char *newBuf = (char*)calloc(1, tok.length+1);
   ASSERT_MEM(newBuf);
   strncpy(newBuf, tok.start, tok.length);
   strReplace(newBuf, "\\\"", '"');
@@ -337,7 +337,7 @@ static Token singleQuotedString(bool isStatic) {
     }
 
     // replace \" with "
-    char *newBuf = (char*)calloc(tok.length+1, 1);
+    char *newBuf = (char*)calloc(1, tok.length+1);
     ASSERT_MEM(newBuf);
     strncpy(newBuf, tok.start, tok.length);
     strReplace(newBuf, "\\\'", '\'');
@@ -614,7 +614,7 @@ char *tokStr(Token *tok) {
     if (tok->lexeme != NULL) return tok->lexeme;
     ASSERT(tok->length > 0);
     ASSERT(tok->start);
-    char *buf = (char*)calloc(tok->length+1, 1);
+    char *buf = (char*)calloc(1, tok->length+1);
     ASSERT_MEM(buf);
     memcpy(buf, tok->start, tok->length);
     tok->lexeme = buf;

@@ -134,7 +134,7 @@ static void enableAllTraceOptions(void) {
 int parseOption(char **argv, int i) {
     if (strcmp(argv[i], "-L") == 0) {
         if (argv[i+1]) {
-            char *path = calloc(strlen(argv[i+1])+2, 1);
+            char *path = calloc(1, strlen(argv[i+1])+2);
             ASSERT_MEM(path);
             strcpy(path, argv[i+1]);
             if (path[strlen(path)-1] != ':') {
