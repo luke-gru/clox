@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
     // Normalize filename to full path to file. Don't yet check if the file
     // exists, though.
     if (!interactive && strlen(fname) > 0 && fname[0] != pathSeparator) {
-        char dirbuf[350] = { '\0' };
+        char dirbuf[350];
         memset(dirbuf, 0, 350);
         char *cwdres = getcwd(dirbuf, 250);
         if (cwdres != NULL) {

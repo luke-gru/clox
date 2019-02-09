@@ -60,31 +60,32 @@ void freeParser(Parser *p) {
 }
 
 static void errorAt(Token *token, const char *message) {
-  if (current->panicMode) return;
-  current->panicMode = true;
+    ASSERT(message);
+    if (current->panicMode) { return; }
+    current->panicMode = true;
 
-  ObjString *str = hiddenString("", 0, NEWOBJ_FLAG_NONE);
-  pushCStringFmt(str, "[Parse Error], (line %d) Error", token->line);
+    ObjString *str = hiddenString("", 0, NEWOBJ_FLAG_NONE);
+    pushCStringFmt(str, "[Parse Error], (line %d) Error", token->line);
 
-  if (token->type == TOKEN_EOF) {
-    pushCStringFmt(str, " at end");
-  } else if (token->type == TOKEN_ERROR) {
-    // Nothing.
-  } else {
-    pushCStringFmt(str, " at '%.*s'", token->length, token->start);
-  }
+    if (token->type == TOKEN_EOF) {
+        pushCStringFmt(str, " at end");
+    } else if (token->type == TOKEN_ERROR) {
+        // Nothing.
+    } else {
+        pushCStringFmt(str, " at '%.*s'", token->length, token->start);
+    }
 
-  pushCStringFmt(str, ": %s\n", message);
-  vec_push(&current->v_errMessages, str);
-  current->hadError = true;
-  longjmp(current->errJmpBuf, JUMP_PERFORMED);
+    pushCStringFmt(str, ": %s\n", message);
+    vec_push(&current->v_errMessages, str);
+    current->hadError = true;
+    longjmp(current->errJmpBuf, JUMP_PERFORMED);
 }
 
 static void error(const char *message) {
-  errorAt(&current->previous, message);
+    errorAt(&current->previous, message);
 }
 static void errorAtCurrent(const char *message) {
-  errorAt(&current->current, message);
+    errorAt(&current->current, message);
 }
 
 void outputParserErrors(Parser *p, FILE *f) {
@@ -120,8 +121,11 @@ static void advance() {
   // parse the next non-error token
   for (;;) {
     current->current = nextToken();
-    if (current->current.type != TOKEN_ERROR) break;
+    if (current->current.type != TOKEN_ERROR) {
+        break;
+    }
 
+    fprintf(stderr, "Error\n");
     errorAtCurrent(current->current.start);
   }
 }
@@ -214,22 +218,22 @@ Node *parse(Parser *p) {
         return NULL;
     }
     initParser(p);
-    Parser *oldCurrent = current;
+    volatile Parser *oldCurrent = current;
     current = p;
     node_type_t nType = {
         .type = NODE_STMT,
         .kind = STMTLIST_STMT,
     };
     Node *ret = createNode(nType, emptyTok(), NULL);
-    advance(); // prime parser with parser.current
-    TRACE_START("parse");
     int jumpRes = setjmp(current->errJmpBuf);
     if (jumpRes == JUMP_PERFORMED) { // jumped, had error
         ASSERT(current->panicMode);
-        current = oldCurrent;
+        current = (Parser*)oldCurrent;
         TRACE_END("parse (error)");
         return NULL;
     }
+    advance(); // prime parser with parser.current
+    TRACE_START("parse");
     while (!isAtEnd()) {
         Node *stmt = declaration();
         ASSERT(stmt->type.type == NODE_STMT);
@@ -241,7 +245,7 @@ Node *parse(Parser *p) {
         char *output = outputASTString(ret, 0);
         fprintf(stdout, "%s", output);
     }
-    current = oldCurrent;
+    current = (Parser*)oldCurrent;
     return ret;
 }
 

@@ -143,12 +143,14 @@ static Token makeToken(TokenType type) {
 }
 
 static Token errorToken(const char *message) {
-  Token token;
-  token.type = TOKEN_ERROR;
-  token.start = message;
-  token.length = (int)strlen(message);
-  token.line = current->line;
-  return token;
+    Token token;
+    token.type = TOKEN_ERROR;
+    token.start = message;
+    token.length = (int)strlen(message);
+    token.line = current->line;
+    token.lexeme = NULL;
+    token.alloced = false;
+    return token;
 }
 
 static void skipWhitespace() {
