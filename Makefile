@@ -8,6 +8,7 @@ GPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
 # NOTE: clang++ doesn't compile yet, too many C++ type errors
 CLANGPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
 CLANG_CFLAGS=-std=c99 -Wall -Wextra -Wmissing-prototypes -I. -Ivendor -Wno-unused-parameter -Wno-unused-label -pthread ${DEFINES}
+RELEASE_CFLAGS=-Wno-unused-function
 ifneq (,$(findstring clang,$(CC)))
 	ifneq (,$(findstring clang++,$(CC)))
 		CFLAGS=${CLANGPP_CFLAGS}
@@ -44,7 +45,7 @@ gprof: build
 
 .PHONY: release
 release: build
-	${CC} ${CFLAGS} $(SRCS) ${RELEASE_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_RELEASE}
+	${CC} ${CFLAGS} ${RELEASE_CFLAGS} $(SRCS) ${RELEASE_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_RELEASE}
 
 .PHONY: build
 build:

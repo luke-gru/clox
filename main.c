@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 
 static void usage(int exitstatus) {
     fprintf(stdout, "Usage:\n"
@@ -25,6 +26,7 @@ int main(int argc, char *argv[]) {
     int i = 0;
     int incrOpt = 0;
     bool interactive = false;
+    bool useStdin = false;
     while (argvp[i] != NULL) {
         if ((incrOpt = parseOption(argvp, i)) > 0) {
             i+=incrOpt;
@@ -33,14 +35,20 @@ int main(int argc, char *argv[]) {
         if (strncmp(argvp[i], "-i", 2) == 0) {
             interactive = true;
             i+=1;
+        } else if (strncmp(argvp[i], "-", 1) == 0) {
+            useStdin = true;
+            i+=1;
         } else {
             fprintf(stderr, "Invalid option: %s\n", argvp[i]);
             usage(1);
         }
     }
 
-    fname = GET_OPTION(initialScript);
-    if (strlen(fname) == 0) {
+    fname = GET_OPTION(initialScript); // set to "" if not given
+    if (strlen(fname) > 0) {
+        useStdin = false;
+        interactive = false;
+    } else if (!interactive && !useStdin && strlen(fname) == 0) {
         interactive = true;
     }
 
@@ -70,13 +78,41 @@ int main(int argc, char *argv[]) {
     initCoreSighandlers();
 
     CompileErr err = COMPILE_ERR_NONE;
-    if (fname == NULL || interactive) {
+    if (interactive) {
         repl();
         exit(0);
     }
 
+    if (useStdin) {
+        const char *tmpTemplate = "/tmp/clox-stdin-XXXXXX";
+        char tmpNameBuf[32];
+        strncpy(tmpNameBuf, tmpTemplate, strlen(tmpTemplate));
+        int tmpfno = mkstemp(tmpNameBuf);
+        if (tmpfno < 0) {
+            die("mkstemp error while creating tempfile name: %s", strerror(errno));
+        }
+        char buf[4096];
+        ssize_t nread = 0;
+        int stdinno = fileno(stdin);
+        while ((nread = read(stdinno, buf, 4096)) > 0) {
+            ssize_t writeRes = write(tmpfno, buf, nread);
+            if (writeRes < 0) {
+                unlink(tmpNameBuf);
+                die("Error writing to tmpfile: %s", strerror(errno));
+            }
+        }
+        if (nread < 0) {
+            unlink(tmpNameBuf);
+            die("Error reading from stdin: %s", strerror(errno));
+        }
+        fname = strdup(tmpNameBuf);
+    }
+
     initVM();
     Chunk *chunk = compile_file(fname, &err);
+    if (useStdin) {
+        unlink(fname);
+    }
 
     if (err != COMPILE_ERR_NONE || !chunk) {
         if (err == COMPILE_ERR_SYNTAX) {

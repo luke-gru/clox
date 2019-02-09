@@ -81,11 +81,7 @@ char *unredefinableGlobals[] = {
     "yield",
     "blockGiven",
     "sleep",
-    "__FILE__",
-    "__DIR__",
-    "__LINE__",
-    "__FUNC__",
-    NULL
+    NULL,
 };
 
 static bool isUnredefinableGlobal(char *name) {
@@ -387,8 +383,7 @@ static inline void push_EC(void) {
     th->ec = ectx; // EC = ectx
 }
 
-// Pop the current execution context and use the one created before
-// the current one.
+// Pop the current execution context
 static inline void pop_EC(void) {
     LxThread *th = THREAD();
     ASSERT(th->v_ecs.length > 0);
@@ -3143,7 +3138,6 @@ vmLoop:
           uint8_t isStatic = READ_BYTE();
           VM_PUSH(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
-          buf->klass = lxStringClass;
           if (UNLIKELY(isStatic)) {
               STRING_SET_STATIC(buf);
               VM_PUSH(OBJ_VAL(buf));
