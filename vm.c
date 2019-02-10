@@ -1764,6 +1764,18 @@ static InterpretResult vm_run(bool doResetStack) {
           pop();
           break;
       }
+      case OP_UNPACK_DEFINE_GLOBAL: {
+          Value varName = READ_CONSTANT();
+          uint8_t unpackIdx = READ_BYTE();
+          char *name = AS_CSTRING(varName);
+          if (isUnredefinableGlobal(name)) {
+              throwErrorFmt(lxNameErrClass, "Can't redeclare global variable '%s'", name);
+              break;
+          }
+          Value val = unpackValue(peek(0), unpackIdx);
+          tableSet(&vm.globals, varName, val);
+          break;
+      }
       case OP_GET_GLOBAL: {
         Value varName = READ_CONSTANT();
         Value val;
@@ -1826,7 +1838,12 @@ static InterpretResult vm_run(bool doResetStack) {
           uint8_t slot = READ_BYTE();
           uint8_t unpackIdx = READ_BYTE();
           ASSERT(slot >= 0);
-          getFrame()->slots[slot] = unpackValue(peek(0), unpackIdx); // locals are popped at end of scope by VM
+          int peekIdx = 0;
+          while (getFrame()->slots+slot >= EC->stackTop) {
+              push(NIL_VAL);
+              peekIdx++;
+          }
+          getFrame()->slots[slot] = unpackValue(peek(peekIdx+unpackIdx), unpackIdx); // locals are popped at end of scope by VM
           break;
       }
       case OP_GET_LOCAL: {

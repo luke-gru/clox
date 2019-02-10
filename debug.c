@@ -73,6 +73,8 @@ const char *opName(OpCode code) {
         return "OP_SET_GLOBAL";
     case OP_DEFINE_GLOBAL:
         return "OP_DEFINE_GLOBAL";
+    case OP_UNPACK_DEFINE_GLOBAL:
+        return "OP_UNPACK_DEFINE_GLOBAL";
     case OP_PROP_GET:
         return "OP_PROP_GET";
     case OP_PROP_SET:
@@ -303,6 +305,19 @@ static int unpackSetVarInstruction(ObjString *buf, char *op, Chunk *chunk, int i
     return i+3;
 }
 
+static int printUnpackDefGlobalInstruction(FILE *f, char *op, Chunk *chunk, int i) {
+    uint8_t constantIdx = chunk->code[i + 1];
+    Value constant = getConstant(chunk, constantIdx);
+    uint8_t unpackIdx = chunk->code[i + 2];
+    fprintf(f, "%-16s    '%s' %d\n", op, AS_STRING(constant)->chars, unpackIdx);
+    return i+3;
+}
+
+static int unpackDefGlobalInstruction(ObjString *buf, char *op, Chunk *chunk, int i) {
+    // TODO
+    return i+3;
+}
+
 static int printClosureInstruction(FILE *f, char *op, Chunk *chunk, int i, vec_funcp_t *funcs) {
     uint8_t funcConstIdx = chunk->code[i + 1];
     Value constant = getConstant(chunk, funcConstIdx);
@@ -495,6 +510,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
             return printLocalVarInstruction(f, opName(byte), chunk, i);
         case OP_UNPACK_SET_LOCAL:
             return printUnpackSetVarInstruction(f, opName(byte), chunk, i);
+        case OP_UNPACK_DEFINE_GLOBAL:
+            return printUnpackDefGlobalInstruction(f, opName(byte), chunk, i);
         case OP_CLOSURE:
             return printClosureInstruction(f, opName(byte), chunk, i, funcs);
         case OP_JUMP:
@@ -579,6 +596,8 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
             return localVarInstruction(buf, opName(byte), chunk, i);
         case OP_UNPACK_SET_LOCAL:
             return unpackSetVarInstruction(buf, opName(byte), chunk, i);
+        case OP_UNPACK_DEFINE_GLOBAL:
+            return unpackDefGlobalInstruction(buf, opName(byte), chunk, i);
         case OP_CLOSURE:
             return closureInstruction(buf, opName(byte), chunk, i, funcs);
         case OP_JUMP:

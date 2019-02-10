@@ -1305,7 +1305,7 @@ static void emitNode(Node *n) {
         emitLoop(beforeIterNext);
         popScope(COMPILE_SCOPE_BLOCK);
         patchJump(iterDone, -1, NULL);
-        emitOp0(OP_POP); // pop last iterator value
+        emitOp0(OP_POP); // pop the iterator value
         emitOp0(OP_POP); // pop the iterator
         vec_deinit(&v_slots);
         break;
@@ -1333,17 +1333,17 @@ static void emitNode(Node *n) {
     // single or multi-variable assignment, global or local
     case VAR_STMT: {
         int numVarsSet = 1;
-        Node *lastNode = vec_last(n->children);
-        bool uninitialized = nodeKind(lastNode) == VAR_STMT;
-        if (uninitialized && n->children->length > 0) {
-            numVarsSet += n->children->length;
-        } else if (!uninitialized && n->children->length > 1) {
+        Node *lastNode = NULL;
+        if (n->children && n->children->length > 0) {
+            lastNode = vec_last(n->children);
+        }
+        bool uninitialized = lastNode == NULL || nodeKind(lastNode) == VAR_STMT;
+        if (!uninitialized && n->children->length > 1) {
             numVarsSet += n->children->length - 1;
         }
 
         if (!uninitialized) {
             emitNode(lastNode); // expression node
-            current->localCount++;
         } else {
             for (int i = 0; i < numVarsSet; i++) {
                 emitNil();
@@ -1364,9 +1364,8 @@ static void emitNode(Node *n) {
                 if (numVarsSet == 1 || uninitialized) {
                     emitOp1(OP_DEFINE_GLOBAL, (uint8_t)arg);
                 } else {
-                    ASSERT(0);
-                    /*emitOp1(OP_UNPACK_DEFINE_GLOBAL, (uint8_t)arg, slotIdx);*/
-                    /*slotIdx++;*/
+                    emitOp2(OP_UNPACK_DEFINE_GLOBAL, (uint8_t)arg, slotIdx);
+                    slotIdx++;
                 }
             } else {
                 if (numVarsSet == 1 || uninitialized) {
@@ -1377,7 +1376,10 @@ static void emitNode(Node *n) {
                 }
             }
         }
-        current->localCount--;
+
+        if (numVarsSet > 1) {
+            emitOp0(OP_POP); // pop the array
+        }
 
         return;
     }
