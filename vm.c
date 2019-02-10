@@ -1846,6 +1846,13 @@ static InterpretResult vm_run(bool doResetStack) {
           getFrame()->slots[slot] = unpackValue(peek(peekIdx+unpackIdx), unpackIdx); // locals are popped at end of scope by VM
           break;
       }
+      case OP_UNPACK_NOPUSH_SET_LOCAL: {
+          uint8_t slot = READ_BYTE();
+          uint8_t unpackIdx = READ_BYTE();
+          ASSERT(slot >= 0);
+          getFrame()->slots[slot] = unpackValue(peek(0), unpackIdx); // locals are popped at end of scope by VM
+          break;
+      }
       case OP_GET_LOCAL: {
           uint8_t slot = READ_BYTE();
           ASSERT(slot >= 0);
@@ -2093,7 +2100,9 @@ static InterpretResult vm_run(bool doResetStack) {
       }
       case OP_ITER_NEXT: {
           Value iterator = peek(0);
-          ASSERT(isIterator(iterator)); // FIXME: throw TypeError
+          if (!isIterator(iterator)) {
+              throwErrorFmt(lxTypeErrClass, "Iterator value must be an iterator, got: %s", typeOfVal(iterator));
+          }
           Value next = iteratorNext(iterator);
           ASSERT(!IS_UNDEF(next));
           push(next);

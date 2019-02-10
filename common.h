@@ -24,6 +24,7 @@ typedef enum {
     OP_GET_LOCAL, // get local var, next byte is frame slot index
     OP_SET_LOCAL, // set local var, next byte is frame slot index, value is on top of stack
     OP_UNPACK_SET_LOCAL, // set local var, next byte is frame slot index, byte after is index into value on top of stack
+    OP_UNPACK_NOPUSH_SET_LOCAL,
     OP_GET_GLOBAL, // get global var, next byte is frame slot index
     OP_SET_GLOBAL, // set global var, next byte is frame slot index, value is on top of stack
     OP_DEFINE_GLOBAL, // define global var for first time

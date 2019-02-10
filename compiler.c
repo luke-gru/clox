@@ -1292,7 +1292,7 @@ static void emitNode(Node *n) {
         emitOp0(OP_ITER_NEXT);
         Insn *iterDone = emitJump(OP_JUMP_IF_FALSE_PEEK); // TODO: op_jump_if_undef?
         uint8_t slotNum = 0; int slotIdx = 0;
-        int setOp = numVars > 1 ? OP_UNPACK_SET_LOCAL : OP_SET_LOCAL;
+        int setOp = numVars > 1 ? OP_UNPACK_NOPUSH_SET_LOCAL : OP_SET_LOCAL;
         vec_foreach(&v_slots, slotNum, slotIdx) {
             if (setOp == OP_SET_LOCAL) {
                 emitOp1(setOp, slotNum);
