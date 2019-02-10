@@ -8,7 +8,6 @@ GPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
 # NOTE: clang++ doesn't compile yet, too many C++ type errors
 CLANGPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
 CLANG_CFLAGS=-std=c99 -Wall -Wextra -Wmissing-prototypes -I. -Ivendor -Wno-unused-parameter -Wno-unused-label -pthread ${DEFINES}
-RELEASE_CFLAGS=-Wno-unused-function
 ifneq (,$(findstring clang,$(CC)))
 	ifneq (,$(findstring clang++,$(CC)))
 		CFLAGS=${CLANGPP_CFLAGS}
@@ -28,7 +27,7 @@ TEST_FILES = test/test_object.c test/test_nodes.c test/test_compiler.c test/test
 DEBUG_FLAGS=-O2 -g -rdynamic
 GPROF_FLAGS=-O3 -pg -DNDEBUG
 TEST_FLAGS=-O2 -g -rdynamic -Itest/include -I. -DLOX_TEST
-RELEASE_FLAGS=-O3 -DNDEBUG
+RELEASE_FLAGS=-O3 -DNDEBUG -Wno-unused-function
 BUILD_DIR=bin
 BUILD_FILE_RELEASE=clox
 BUILD_FILE_DEBUG=clox
@@ -45,7 +44,7 @@ gprof: build
 
 .PHONY: release
 release: build
-	${CC} ${CFLAGS} ${RELEASE_CFLAGS} $(SRCS) ${RELEASE_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_RELEASE}
+	${CC} ${CFLAGS} $(SRCS) ${RELEASE_FLAGS} -o ${BUILD_DIR}/${BUILD_FILE_RELEASE}
 
 .PHONY: build
 build:

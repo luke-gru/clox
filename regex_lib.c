@@ -427,11 +427,6 @@ static int regex_parse(Regex *regex) {
         if (!begOrNode) {
             begOrNode = prev;
         }
-        /*} else if (prev->type == NODE_GROUP) {*/
-            /*begOrNode = prev;*/
-        /*} else if (prev->type == NODE_OR) {*/
-            /*begOrNode = prev;*/
-        /*}*/
     }
     return 0;
 }
