@@ -2767,8 +2767,22 @@ vmLoop:
               numArgs += (th->lastSplatNumArgs-1);
               th->lastSplatNumArgs = -1;
           }
-          Value instanceVal = peek(numArgs);
-          if (IS_INSTANCE(instanceVal) || IS_ARRAY(instanceVal) || IS_STRING(instanceVal) || IS_MAP(instanceVal) || IS_REGEX(instanceVal)) {
+          Value instanceVal = VM_PEEK(numArgs);
+          if (IS_CLASS(instanceVal) || IS_MODULE(instanceVal)) {
+              ObjClass *klass = AS_CLASS(instanceVal);
+              Obj *callable = classFindStaticMethod(klass, mname);
+              /*if (!callable && numArgs == 0) {*/
+                  /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
+              /*}*/
+              if (UNLIKELY(!callable)) {
+                  ObjString *className = CLASSINFO(klass)->name;
+                  const char *modStr = IS_CLASS(instanceVal) ? "class" : "module";
+                  const char *classStr = className ? className->chars : "(anon)";
+                  throwErrorFmt(lxErrClass, "%s method '%s.%s' not found", modStr, classStr, mname->chars);
+              }
+              EC->stackTop[-numArgs-1] = instanceVal;
+              callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
+          } else if (IS_INSTANCE_LIKE(instanceVal)) {
               ObjInstance *inst = AS_INSTANCE(instanceVal);
               Obj *callable = instanceFindMethod(inst, mname);
               if (!callable && numArgs == 0) {
@@ -2779,32 +2793,6 @@ vmLoop:
                   const char *classStr = className->chars ? className->chars : "(anon)";
                   throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, mname->chars);
               }
-              callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
-          } else if (IS_CLASS(instanceVal)) {
-              ObjClass *klass = AS_CLASS(instanceVal);
-              Obj *callable = classFindStaticMethod(klass, mname);
-              /*if (!callable && numArgs == 0) {*/
-                  /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
-              /*}*/
-              if (UNLIKELY(!callable)) {
-                  ObjString *className = CLASSINFO(klass)->name;
-                  const char *classStr = className ? className->chars : "(anon)";
-                  throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, mname->chars);
-              }
-              EC->stackTop[-numArgs-1] = instanceVal;
-              callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
-          } else if (IS_MODULE(instanceVal)) {
-              ObjModule *mod = AS_MODULE(instanceVal);
-              Obj *callable = classFindStaticMethod((ObjClass*)mod, mname);
-              /*if (!callable && numArgs == 0) {*/
-                  /*callable = instanceFindGetter((ObjInstance*)mod, mname);*/
-              /*}*/
-              if (UNLIKELY(!callable)) {
-                  ObjString *modName = CLASSINFO(mod)->name;
-                  const char *modStr = modName ? modName->chars : "(anon)";
-                  throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, mname->chars);
-              }
-              EC->stackTop[-numArgs-1] = instanceVal;
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
           } else {
               throwErrorFmt(lxTypeErrClass, "Tried to invoke method '%s' on non-instance (type=%s)", mname->chars, typeOfVal(instanceVal));
