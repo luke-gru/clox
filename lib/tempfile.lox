@@ -15,7 +15,7 @@ class Tempfile {
         f.close();
         f.unlink();
       } catch (Error e) {
-        print e.message; // TODO: print to stderr
+        stderr.puts(e.message);
       }
     });
   }

@@ -134,6 +134,7 @@ usage:
 requireScript("testunit")
 
 class MyTests < TestUnit {
+  // test method's name must start with 'test'
   fun testEqual() {
     this.assertEq(1, 1);
   }

@@ -374,13 +374,24 @@ static Value lxIOCloseStatic(int argCount, Value *args) {
 }
 
 static Value lxIOWrite(int argCount, Value *args) {
-    CHECK_ARITY("IO#read", 2, 2, argCount);
+    CHECK_ARITY("IO#write", 2, 2, argCount);
     CHECK_ARG_IS_A(args[1], lxStringClass, 1);
     Value self = *args;
     const char *buf = VAL_TO_STRING(args[1])->chars;
     return NUMBER_VAL(IOWrite(self, buf, strlen(buf)));
 }
 
+// like IO#write except returns the string to print
+static Value lxIOPrint(int argCount, Value *args) {
+    CHECK_ARITY("IO#write", 2, 2, argCount);
+    CHECK_ARG_IS_A(args[1], lxStringClass, 1);
+    Value self = *args;
+    const char *buf = VAL_TO_STRING(args[1])->chars;
+    IOWrite(self, buf, strlen(buf));
+    return args[1];
+}
+
+// like IO#write, but adds a newline and returns nil
 static Value lxIOPuts(int argCount, Value *args) {
     CHECK_ARITY("IO#puts", 2, 2, argCount);
     CHECK_ARG_IS_A(args[1], lxStringClass, 1);
@@ -427,6 +438,7 @@ void Init_IOClass(void) {
     addNativeMethod(ioClass, "getline", lxIOGetline);
     addNativeMethod(ioClass, "getchar", lxIOGetchar);
     addNativeMethod(ioClass, "write", lxIOWrite);
+    addNativeMethod(ioClass, "print", lxIOPrint);
     addNativeMethod(ioClass, "puts", lxIOPuts);
     addNativeMethod(ioClass, "close", lxIOClose);
     addNativeMethod(ioClass, "fcntl", lxIOFcntl);

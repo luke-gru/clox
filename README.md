@@ -19,8 +19,8 @@ Added features
 * Integrated REPL
 * Multi-process support using fork() syscall
 * Basic multi-threading with libpthread and a global VM lock. Threads can run
-  concurrently for IO and other blocking operations, but cannot run
-  concurrently in the VM itself.
+  concurrently for IO and other blocking operations, but cannot run concurrently
+  in the VM itself (like cpython and cruby).
 * try/catch exception handling
 * Iterators and foreach() statement
 * String interpolation
@@ -28,27 +28,27 @@ Added features
 * Object finalizers
 * Regular expressions
 * Signal handling: registering signal handlers, sending signals
+* Small standard library
 
-Some internal differences
--------------------------
+Some internal differences with the book
+---------------------------------------
 * creation of AST before compilation phase (separate parser/compiler)
 * bytecode optimization passes (including constant folding)
 * Generational M&S garbage collector with managed heaps
 
 Future features
 ---------------
-* Add some standard library and networking support
+* Standard library networking support
 * Support non-ascii strings
 * Add constants (no redefinitions, will given compiler or runtime error)
-* Improve managed heaps memory waste
 * See TODO for more info
 * Add JIT compiler, either method or tracing
 
 OS/compiler support
 -------------------
-* Only tested on linux (Ubuntu 16.04) and mac OS, uses fork() and libpthread, as well as C99 features.
+* Only tested on linux (Ubuntu 16.04) and mac OS, uses fork() and libpthread, as well as some C99 features
 * Tested with gcc and clang
-* C++ compliant (g++ compiles, clang++ doesn't)
+* Almost C++ compliant (g++ compiles, clang++ doesn't)
 
 Examples
 --------
