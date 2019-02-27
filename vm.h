@@ -386,6 +386,10 @@ const char *threadStatusName(ThreadStatus status);
 typedef Value (*stopRecursionFn)(Value obj, Value arg, int recurse);
 Value execStopRecursion(stopRecursionFn, Value obj, Value arg);
 
+// TODO: move these from vm.h
+Value propertyGet(ObjInstance *obj, ObjString *propName);
+void propertySet(ObjInstance *obj, ObjString *propName, Value rval);
+
 // debug
 void printVMStack(FILE *f, LxThread *th);
 void setPrintBuf(ObjString *buf, bool alsoStdout); // `print` will output given strings to this buffer, if given

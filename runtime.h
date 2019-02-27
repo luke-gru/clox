@@ -67,6 +67,8 @@ Value lxObjectHashKey(int argCount, Value *args);
 Value lxObjectOpEquals(int argCount, Value *args);
 Value lxObjectIsSame(int argCount, Value *args);
 Value lxObjectSend(int argCount, Value *args);
+Value lxObjectGetProperty(int argCount, Value *args);
+Value lxObjectSetProperty(int argCount, Value *args);
 Value lxObjectGetClass(int argCount, Value *args);
 Value lxObjectGetSingletonClass(int argCount, Value *args);
 Value lxObjectGetObjectId(int argCount, Value *args);
@@ -168,6 +170,10 @@ ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func);
 // API for adding constants
 void addConstantUnder(const char *name, Value constVal, Value owner);
 bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut);
+
+// getting/setting properties
+Value propertyGet(ObjInstance *obj, ObjString *propName);
+void propertySet(ObjInstance *obj, ObjString *propName, Value rval);
 
 #ifdef __cplusplus
 }

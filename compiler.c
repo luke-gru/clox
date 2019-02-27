@@ -1014,7 +1014,7 @@ static void initCompiler(
     case FUN_TYPE_SETTER:
     case FUN_TYPE_METHOD:
     case FUN_TYPE_CLASS_METHOD: {
-        ASSERT(currentClassOrModule || inINBlock); // TODO: error out
+        ASSERT(currentClassOrModule || inINBlock);
         char *className = "";
         if (currentClassOrModule) {
             className = tokStr(&currentClassOrModule->name);

@@ -701,6 +701,24 @@ Value lxObjectSend(int argCount, Value *args) {
     return callMethod(AS_OBJ(self), mname, argCount-2, args+2, getFrame()->callInfo);
 }
 
+Value lxObjectGetProperty(int argCount, Value *args) {
+    CHECK_ARITY("Object#getProperty", 2, 2, argCount);
+    Value self = *args;
+    Value propName = args[1];
+    CHECK_ARG_IS_A(propName, lxStringClass, 1);
+    return propertyGet(AS_INSTANCE(self), AS_STRING(propName));
+}
+
+Value lxObjectSetProperty(int argCount, Value *args) {
+    CHECK_ARITY("Object#setProperty", 3, 3, argCount);
+    Value self = *args;
+    Value propName = args[1];
+    Value propVal = args[2];
+    CHECK_ARG_IS_A(propName, lxStringClass, 1);
+    propertySet(AS_INSTANCE(self), AS_STRING(propName), propVal);
+    return propVal;
+}
+
 // ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
     CHECK_ARITY("Module#init", 1, 2, argCount);

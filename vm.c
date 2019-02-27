@@ -165,6 +165,8 @@ static void defineNativeClasses(void) {
     addNativeMethod(objClass, "unfreeze", lxObjectUnfreeze);
     addNativeMethod(objClass, "isFrozen", lxObjectIsFrozen);
     addNativeMethod(objClass, "send", lxObjectSend);
+    addNativeMethod(objClass, "getProperty", lxObjectGetProperty);
+    addNativeMethod(objClass, "setProperty", lxObjectSetProperty);
     addNativeGetter(objClass, "class", lxObjectGetClass);
     addNativeGetter(objClass, "singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
@@ -1007,7 +1009,7 @@ static bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, Valu
 static InterpretResult vm_run0(void);
 static InterpretResult vm_run(void);
 
-static Value propertyGet(ObjInstance *obj, ObjString *propName) {
+Value propertyGet(ObjInstance *obj, ObjString *propName) {
     Value ret;
     Obj *method = NULL;
     Obj *getter = NULL;
@@ -1031,7 +1033,7 @@ static Value propertyGet(ObjInstance *obj, ObjString *propName) {
     }
 }
 
-static void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
+void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
     if (isFrozen(TO_OBJ(obj))) {
         throwErrorFmt(lxErrClass, "Tried to set property on frozen object");
     }
@@ -3069,7 +3071,7 @@ vmLoop:
               VM_POPN(2);
               throwErrorFmt(lxTypeErrClass, "Tried to set property '%s' of non-instance", propStr->chars);
           }
-          propertySet(AS_INSTANCE(instance), propStr, rval); // TODO: check frozenness of object
+          propertySet(AS_INSTANCE(instance), propStr, rval);
           VM_POP(); // leave rval on stack
           VM_PUSHSWAP(rval);
           DISPATCH_BOTTOM();
