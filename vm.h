@@ -389,6 +389,7 @@ Value execStopRecursion(stopRecursionFn, Value obj, Value arg);
 // TODO: move these from vm.h
 Value propertyGet(ObjInstance *obj, ObjString *propName);
 void propertySet(ObjInstance *obj, ObjString *propName, Value rval);
+bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, Value *ret, bool lookInGivenClass);
 
 // debug
 void printVMStack(FILE *f, LxThread *th);

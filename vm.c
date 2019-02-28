@@ -167,6 +167,10 @@ static void defineNativeClasses(void) {
     addNativeMethod(objClass, "send", lxObjectSend);
     addNativeMethod(objClass, "getProperty", lxObjectGetProperty);
     addNativeMethod(objClass, "setProperty", lxObjectSetProperty);
+    addNativeMethod(objClass, "hasProperty", lxObjectHasProperty);
+    addNativeMethod(objClass, "hasGetter", lxObjectHasGetter);
+    addNativeMethod(objClass, "hasSetter", lxObjectHasSetter);
+    addNativeMethod(objClass, "respondsTo", lxObjectRespondsTo);
     addNativeGetter(objClass, "class", lxObjectGetClass);
     addNativeGetter(objClass, "singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
@@ -985,7 +989,7 @@ static inline bool isThrowable(Value val) {
     return IS_AN_ERROR(val);
 }
 
-static bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
+bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
     Obj *givenClass = klass;
     if (klass == TO_OBJ(obj->klass) && obj->singletonKlass) {
         klass = TO_OBJ(obj->singletonKlass);

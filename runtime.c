@@ -719,6 +719,43 @@ Value lxObjectSetProperty(int argCount, Value *args) {
     return propVal;
 }
 
+Value lxObjectHasGetter(int argCount, Value *args) {
+    CHECK_ARITY("Object#hasGetter", 2, 2, argCount);
+    Value self = *args;
+    Value propName = args[1];
+    CHECK_ARG_IS_A(propName, lxStringClass, 1);
+    Obj *getter = instanceFindGetter(AS_INSTANCE(self), AS_STRING(propName));
+    return BOOL_VAL(getter != NULL);
+}
+
+Value lxObjectHasSetter(int argCount, Value *args) {
+    CHECK_ARITY("Object#hasSetter", 2, 2, argCount);
+    Value self = *args;
+    Value propName = args[1];
+    CHECK_ARG_IS_A(propName, lxStringClass, 1);
+    Obj *setter = instanceFindSetter(AS_INSTANCE(self), AS_STRING(propName));
+    return BOOL_VAL(setter != NULL);
+}
+
+Value lxObjectHasProperty(int argCount, Value *args) {
+    CHECK_ARITY("Object#hasProperty", 2, 2, argCount);
+    Value self = *args;
+    Value propName = args[1];
+    CHECK_ARG_IS_A(propName, lxStringClass, 1);
+    Value ret;
+    return BOOL_VAL(tableGet(AS_INSTANCE(self)->fields, propName, &ret));
+}
+
+Value lxObjectRespondsTo(int argCount, Value *args) {
+    CHECK_ARITY("Object#respondsTo", 2, 2, argCount);
+    Value self = *args;
+    Value methodName = args[1];
+    CHECK_ARG_IS_A(methodName, lxStringClass, 1);
+    Value methodFound;
+    bool found = lookupMethod(AS_INSTANCE(self), (Obj*)AS_INSTANCE(self)->klass, AS_STRING(methodName), &methodFound, true);
+    return BOOL_VAL(found);
+}
+
 // ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
     CHECK_ARITY("Module#init", 1, 2, argCount);
