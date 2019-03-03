@@ -829,6 +829,23 @@ int arrayDelete(Value self, Value el) {
     return found;
 }
 
+bool arrayDeleteAt(Value self, int idx, Value *found) {
+    ObjInstance *selfObj = AS_INSTANCE(self);
+    if (isFrozen((Obj*)selfObj)) {
+        throwErrorFmt(lxErrClass, "%s", "Array is frozen, cannot modify");
+    }
+    arrayDedup(AS_ARRAY(self));
+    ValueArray *ary = &AS_ARRAY(self)->valAry;
+    if (ary->count > idx) {
+        Value val = ary->values[idx];
+        removeValueArray(ary, idx);
+        *found = val;
+        return true;
+    } else {
+        return false;
+    }
+}
+
 Value arrayPop(Value self) {
     ObjArray *selfObj = AS_ARRAY(self);
     if (isFrozen((Obj*)selfObj)) {

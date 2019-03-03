@@ -98,6 +98,20 @@ static Value lxArrayDelete(int argCount, Value *args) {
     }
 }
 
+static Value lxArrayDeleteAt(int argCount, Value *args) {
+    CHECK_ARITY("Array#deleteAt", 2, 2, argCount);
+    Value self = args[0];
+    Value num = args[1];
+    CHECK_ARG_BUILTIN_TYPE(num, IS_NUMBER_FUNC, "number", 1);
+    Value found;
+    bool deleted = arrayDeleteAt(self, (int)AS_NUMBER(num), &found);
+    if (deleted) {
+        return found;
+    } else {
+        return NIL_VAL;
+    }
+}
+
 // ex: a.clear();
 static Value lxArrayClear(int argCount, Value *args) {
     CHECK_ARITY("Array#clear", 1, 1, argCount);
@@ -507,6 +521,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "pushFront", lxArrayPushFront);
     addNativeMethod(arrayClass, "popFront", lxArrayPopFront);
     addNativeMethod(arrayClass, "delete", lxArrayDelete);
+    addNativeMethod(arrayClass, "deleteAt", lxArrayDeleteAt);
     addNativeMethod(arrayClass, "opIndexGet", lxArrayOpIndexGet);
     addNativeMethod(arrayClass, "opIndexSet", lxArrayOpIndexSet);
     addNativeMethod(arrayClass, "opEquals", lxArrayOpEquals);

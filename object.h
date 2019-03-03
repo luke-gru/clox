@@ -471,6 +471,7 @@ Value  arrayPop(Value aryVal);
 void   arrayPushFront(Value aryVal, Value el);
 Value  arrayPopFront(Value aryVal);
 int    arrayDelete(Value aryVal, Value el);
+bool   arrayDeleteAt(Value aryVal, int idx, Value *found);
 void   arrayClear(Value aryVal);
 bool   arrayEquals(Value self, Value other);
 Value  arrayDup(Value other);

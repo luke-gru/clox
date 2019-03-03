@@ -7,7 +7,7 @@ all listed features/improvements are going to get done.
 Features
 --------
 
-* Add Array#deleteAt
+* Add Array#sort, sortBy
 * Add Map#replace(other)
 * Add String#replace(other)
 * Make it so that global variables aren't accessible everywhere, or that
