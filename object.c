@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h> // qsort
 #include "memory.h"
 #include "object.h"
 #include "value.h"
@@ -719,6 +720,37 @@ Value arrayDup(Value otherVal) {
         }
     }
     DBG_ASSERT(retAry->valAry.count == other->valAry.count);
+    return ret;
+}
+
+static int valCmp(const void *a, const void *b) {
+    Value *val1 = (Value*)a;
+    Value *val2 = (Value*)b;
+    if (IS_NUMBER(*val1) && IS_NUMBER(*val2)) {
+        double num1 = AS_NUMBER(*val1);
+        double num2 = AS_NUMBER(*val2);
+        if (num1 < num2) {
+            return -1;
+        } else if (num1 == num2) {
+            return 0;
+        } else {
+            return 1;
+        }
+    } else if (IS_STRING(*val1) && IS_STRING(*val2)) {
+        char *str1 = AS_STRING(*val1)->chars;
+        char *str2 = AS_STRING(*val2)->chars;
+        return strcmp(str1, str2);
+    } else {
+        throwErrorFmt(lxTypeErrClass, "Can only compare a number with number or string with string");
+    }
+}
+
+Value arraySort(Value aryVal) {
+    Value ret = arrayDup(aryVal);
+    ObjArray *retAry = AS_ARRAY(ret);
+    ValueArray valAry = retAry->valAry;
+    Value *values = valAry.values;
+    qsort(values, valAry.count, sizeof(Value), valCmp);
     return ret;
 }
 

@@ -146,6 +146,14 @@ static Value lxArrayJoin(int argCount, Value *args) {
     return OBJ_VAL(buf);
 }
 
+// returns a newly sorted array. Each element must be comparable (number or
+// string)
+static Value lxArraySort(int argCount, Value *args) {
+    CHECK_ARITY("Array#sort", 1, 1, argCount);
+    Value self = *args;
+    return arraySort(self);
+}
+
 // ex:
 //   print a;
 // OR
@@ -273,6 +281,7 @@ static Value lxArrayFillStatic(int argCount, Value *args) {
     OBJ_WRITE(ret, fill);
     return ret;
 }
+
 
 static Value lxArrayEach(int argCount, Value *args) {
     CHECK_ARITY("Array#each", 1, 1, argCount); // 2nd could be block arg (&arg)
@@ -526,6 +535,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "opIndexSet", lxArrayOpIndexSet);
     addNativeMethod(arrayClass, "opEquals", lxArrayOpEquals);
     addNativeMethod(arrayClass, "toString", lxArrayToString);
+    addNativeMethod(arrayClass, "sort", lxArraySort);
     addNativeMethod(arrayClass, "iter", lxArrayIter);
     addNativeMethod(arrayClass, "clear", lxArrayClear);
     addNativeMethod(arrayClass, "join", lxArrayJoin);

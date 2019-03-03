@@ -199,7 +199,6 @@ uint32_t valHash(Value val);
 bool valEqual(Value a, Value b);
 bool isTruthy(Value a);
 void fillCallableName(Value callable, char buf[], size_t buflen);
-struct ObjString;
 struct ObjString *getCallableFunctionName(Value callable);
 
 #ifdef __cplusplus
