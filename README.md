@@ -86,6 +86,16 @@ class Benchmark {
     print "Average iteration (s): ${avg}";
   }
 }
+
+// Usage:
+
+fun bench() {
+  for (var i = 0; i < 100000; i+=1) {
+    [1,2,3,4,5] << 1;
+  }
+}
+
+Benchmark.start(name: "array", iterations: 1, &bench);
 ```
 
 See the examples folder for more examples, and the lib folder for the standard library.
