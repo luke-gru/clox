@@ -7,7 +7,7 @@ all listed features/improvements are going to get done.
 Features
 --------
 
-* Add Array#sort, sortBy
+* Add Array#sortBy
 * Add Map#replace(other)
 * Add String#replace(other)
 * Make it so that global variables aren't accessible everywhere, or that
@@ -38,10 +38,11 @@ mutex held blocks release of GVL for a thread)
 * Throw SyntaxError from invalid compile/parse if given flag
 * Make variable lookup work as lookup in Environment tables, not statically
 compiled lookup
-* Add more to File class
 * Allow giving keyword args to native functions
 * Change string representation to UTF8
 * Make autoloading thread-safe
+* Make op stack growable, not fixed at 256
+* Make call stack growable, not fixed at 64
 
 Bugs
 ----
@@ -50,7 +51,7 @@ Bugs
 when evaling.
 * loadScript/requireScript should use pwd of lox process during startup for
 file lookup, not pwd when calling loadScript/requireScript
-* Debugger bugs, not evaluating variables in context of function
+* Debugger not evaluating variables in context of function
 * +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] +=1, or other lvalues
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
@@ -59,10 +60,7 @@ Optimizations
 -------------
 
 * more bytecode optimization passes (ex: skip OP_NIL,OP_RETURN after an OP_RETURN)
-* Add specialization bytecodes
 * Add tailcall optimization
-* Add common subexpression elimination to optimizations in compiler
 * simple (tracing?) JIT
 * different GC strategies, maybe support copying GC (but then need to change
 Value representation, no more tagging, need to use struct).
-* optimize method lookup with a polymorphic inline cache and benchmark the lookup results

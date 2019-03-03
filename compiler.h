@@ -1,5 +1,5 @@
-#ifndef clox_compile_h
-#define clox_compile_h
+#ifndef clox_compiler_h
+#define clox_compiler_h
 
 #include "common.h"
 #include "object.h"
