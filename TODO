@@ -27,6 +27,7 @@ get/set a different sigil maybe, like @prop.
 * Allow dynamically loading lox extensions, which can be '.so' files.
 * Add guilds, with per-guild VM lock and restricted guild to guild sharing
 * Add Regex::MatchData class
+* Add method/function aliasing
 
 Improvements
 ------------

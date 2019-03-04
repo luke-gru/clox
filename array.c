@@ -154,6 +154,15 @@ static Value lxArraySort(int argCount, Value *args) {
     return arraySort(self);
 }
 
+static Value lxArraySortBy(int argCount, Value *args) {
+    CHECK_ARITY("Array#sortBy", 1, 1, argCount);
+    Value self = *args;
+    if (!blockGiven()) {
+        throwErrorFmt(lxArgErrClass, "Block must be given");
+    }
+    return arraySortBy(self);
+}
+
 // ex:
 //   print a;
 // OR
@@ -536,6 +545,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "opEquals", lxArrayOpEquals);
     addNativeMethod(arrayClass, "toString", lxArrayToString);
     addNativeMethod(arrayClass, "sort", lxArraySort);
+    addNativeMethod(arrayClass, "sortBy", lxArraySortBy);
     addNativeMethod(arrayClass, "iter", lxArrayIter);
     addNativeMethod(arrayClass, "clear", lxArrayClear);
     addNativeMethod(arrayClass, "join", lxArrayJoin);

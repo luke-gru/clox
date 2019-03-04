@@ -745,12 +745,34 @@ static int valCmp(const void *a, const void *b) {
     }
 }
 
+static int valCmpBlock(const void *a, const void *b) {
+    Value *val1 = (Value*)a;
+    Value *val2 = (Value*)b;
+    Value args[2];
+    args[0] = *val1;
+    args[1] = *val2;
+    Value res = yieldBlock(2, args);
+    if (!IS_NUMBER(res)) {
+        throwErrorFmt(lxTypeErrClass, "sort block must return a number");
+    }
+    return (int)AS_NUMBER(res);
+}
+
 Value arraySort(Value aryVal) {
     Value ret = arrayDup(aryVal);
     ObjArray *retAry = AS_ARRAY(ret);
     ValueArray valAry = retAry->valAry;
     Value *values = valAry.values;
     qsort(values, valAry.count, sizeof(Value), valCmp);
+    return ret;
+}
+
+Value arraySortBy(Value aryVal) {
+    Value ret = arrayDup(aryVal);
+    ObjArray *retAry = AS_ARRAY(ret);
+    ValueArray valAry = retAry->valAry;
+    Value *values = valAry.values;
+    qsort(values, valAry.count, sizeof(Value), valCmpBlock);
     return ret;
 }
 

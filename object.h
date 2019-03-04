@@ -476,6 +476,7 @@ void   arrayClear(Value aryVal);
 bool   arrayEquals(Value self, Value other);
 Value  arrayDup(Value other);
 Value  arraySort(Value aryVal);
+Value  arraySortBy(Value aryVal);
 Value  newArrayConstant(void);
 static inline void arrayDedup(ObjArray *ary) {
     if (ARRAY_IS_SHARED(ary)) {
