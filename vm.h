@@ -188,6 +188,7 @@ typedef struct VM {
     ObjString *opIndexGetString;
     ObjString *opIndexSetString;
     ObjString *opEqualsString;
+    ObjString *opCmpString;
     ObjString *printBuf;
     bool printToStdout;
 

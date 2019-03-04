@@ -1,0 +1,37 @@
+class Student {
+  init(name) {
+    this.name = name;
+  }
+
+  opCmp(other) {
+    if (this.name < other.name) {
+      return -1;
+    } else if (this.name == other.name) {
+      return 0;
+    } else {
+      return 1;
+    }
+  }
+
+  opEquals(other) {
+    return this.opCmp(other) == 0;
+  }
+}
+
+s = Student("Luke");
+s2 = Student("Lola");
+s3 = Student("Luke");
+
+print s2 < s;
+print s < s2;
+print s > s2;
+print s2 > s;
+print s == s3;
+
+__END__
+-- expect: --
+true
+false
+true
+false
+true

@@ -501,6 +501,7 @@ void initVM() {
     vm.opIndexGetString = INTERNED("opIndexGet", 10);
     vm.opIndexSetString = INTERNED("opIndexSet", 10);
     vm.opEqualsString = INTERNED("opEquals", 8);
+    vm.opCmpString = INTERNED("opCmp", 5);
 
     pushFrame();
 
@@ -564,6 +565,7 @@ void freeVM(void) {
     vm.opIndexGetString = NULL;
     vm.opIndexSetString = NULL;
     vm.opEqualsString = NULL;
+    vm.opCmpString = NULL;
     vm.printBuf = NULL;
     vm.printToStdout = true;
     vec_deinit(&vm.hiddenObjs);
@@ -778,8 +780,16 @@ static inline Value falseValue() {
 }
 
 static inline bool canCmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
-    return (IS_NUMBER(lhs) && IS_NUMBER(rhs)) ||
-        (IS_STRING(lhs) && IS_STRING(rhs));
+    if ( (IS_NUMBER(lhs) && IS_NUMBER(rhs)) ||
+        (IS_STRING(lhs) && IS_STRING(rhs)) ) {
+        return true;
+    // should respond to opCmp, but will throw if doesn't and it's called on the
+    // object so okay to return true here
+    } else if (IS_INSTANCE_LIKE(lhs)) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 // returns -1, 0, 1, or -2 on error
@@ -798,6 +808,12 @@ static int cmpValues(Value lhs, Value rhs, uint8_t cmpOp) {
         ObjString *lhsStr = AS_STRING(lhs);
         ObjString *rhsStr = AS_STRING(rhs);
         return strcmp(lhsStr->chars, rhsStr->chars);
+    } else {
+        Value ret = callMethod(AS_OBJ(lhs), vm.opCmpString, 1, &rhs, NULL);
+        if (!IS_NUMBER(ret)) {
+            throwErrorFmt(lxTypeErrClass, "Expected number returned from opCmp");
+        }
+        return (int)AS_NUMBER(ret);
     }
 
     UNREACHABLE_RETURN(-2);
@@ -815,10 +831,15 @@ static bool isValueOpEqual(Value lhs, Value rhs) {
             ObjString *opEquals = vm.opEqualsString;
             ObjInstance *self = AS_INSTANCE(lhs);
             Obj *methodOpEq = instanceFindMethod(self, opEquals);
-            if (LIKELY(methodOpEq != NULL)) {
+            Obj *methodOpCmp;
+            if (methodOpEq != NULL) {
                 Value ret = callVMMethod(self, OBJ_VAL(methodOpEq), 1, &rhs, NULL);
                 pop();
                 return isTruthy(ret);
+            } else if ((methodOpCmp = instanceFindMethod(self, vm.opCmpString))) {
+                Value ret = callVMMethod(self, OBJ_VAL(methodOpCmp), 1, &rhs, NULL);
+                pop();
+                return IS_NUMBER(ret) && (int)AS_NUMBER(ret) == 0;
             }
         }
         // 2 objects, same pointers to Obj are equal
@@ -2320,10 +2341,10 @@ vmLoop:
           if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
               VM_POP();
               throwErrorFmt(lxTypeErrClass,
-                      "Can only compare 2 numbers or 2 strings with '<', lhs=%s, rhs=%s",
+                      "Can only compare numbers and objects with '<', lhs=%s, rhs=%s",
                       typeOfVal(lhs), typeOfVal(rhs));
           }
-          if (cmpValues(lhs, rhs, instruction) == -1) {
+          if (cmpValues(lhs, rhs, instruction) < 0) {
               VM_PUSHSWAP(trueValue());
           } else {
               VM_PUSHSWAP(falseValue());
@@ -2336,10 +2357,10 @@ vmLoop:
         if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
             VM_POP();
             throwErrorFmt(lxTypeErrClass,
-                "Can only compare 2 numbers or 2 strings with '>', lhs=%s, rhs=%s",
+                "Can only compare numbers and objects with '>', lhs=%s, rhs=%s",
                 typeOfVal(lhs), typeOfVal(rhs));
         }
-        if (cmpValues(lhs, rhs, instruction) == 1) {
+        if (cmpValues(lhs, rhs, instruction) > 0) {
             VM_PUSHSWAP(trueValue());
         } else {
             VM_PUSHSWAP(falseValue());
@@ -2377,10 +2398,10 @@ vmLoop:
           if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
               VM_POP();
               throwErrorFmt(lxTypeErrClass,
-                  "Can only compare 2 numbers or 2 strings with '>=', lhs=%s, rhs=%s",
+                  "Can only compare numbers and objects with '>=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
           }
-          if (cmpValues(lhs, rhs, instruction) != -1) {
+          if (cmpValues(lhs, rhs, instruction) >= 0) {
               VM_PUSHSWAP(trueValue());
           } else {
               VM_PUSHSWAP(falseValue());
@@ -2393,10 +2414,10 @@ vmLoop:
           if (UNLIKELY(!canCmpValues(lhs, rhs, instruction))) {
               VM_POP();
               throwErrorFmt(lxTypeErrClass,
-                  "Can only compare 2 numbers or 2 strings with '<=', lhs=%s, rhs=%s",
+                  "Can only compare numbers and objects with '<=', lhs=%s, rhs=%s",
                    typeOfVal(lhs), typeOfVal(rhs));
           }
-          if (cmpValues(lhs, rhs, instruction) != 1) {
+          if (cmpValues(lhs, rhs, instruction) <= 0) {
               VM_PUSHSWAP(trueValue());
           } else {
               VM_PUSHSWAP(falseValue());
