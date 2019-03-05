@@ -1,0 +1,14 @@
+fun woah(*args) { woah2(*args); }
+fun woah2(*args) { print args; }
+
+woah(1,2,3);
+woah(1,2);
+woah(1);
+woah();
+
+__END__
+-- expect: --
+[1,2,3]
+[1,2]
+[1]
+[]

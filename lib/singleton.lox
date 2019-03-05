@@ -1,0 +1,20 @@
+module Singleton {
+  class instance(*args) {
+    if (!this._instance) {
+      this._instance = this(*args);
+    }
+      return this._instance;
+  }
+}
+
+__END__
+usage:
+
+class DbDriver {
+  init(name) {
+    this.name = name;
+  }
+  this.include(Singleton);
+}
+
+db = DbDriver.instance("mysql")

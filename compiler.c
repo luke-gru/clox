@@ -1163,6 +1163,7 @@ static CallInfo *emitCall(Node *n) {
     Node *lhs = vec_first(n->children);
     int argc = n->children->length; // num regular arguments
     int numKwargs = 0;
+    bool usesSplat = false;
     CallInfo *callInfoData;
     if (nodeKind(lhs) == PROP_ACCESS_EXPR) {
         emitChildren(lhs); // the instance
@@ -1172,6 +1173,9 @@ static CallInfo *emitCall(Node *n) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
                 argc--;
                 numKwargs++;
+            } else if (arg->type.kind == SPLAT_EXPR) {
+                usesSplat = true;
+                argc--;
             }
             emitNode(arg);
         }
@@ -1181,6 +1185,7 @@ static CallInfo *emitCall(Node *n) {
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
+        callInfoData->usesSplat = usesSplat;
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
@@ -1200,6 +1205,9 @@ static CallInfo *emitCall(Node *n) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
                 argc--;
                 numKwargs++;
+            } else if (arg->type.kind == SPLAT_EXPR) {
+                usesSplat = true;
+                argc--;
             }
             emitNode(arg);
         }
@@ -1209,6 +1217,7 @@ static CallInfo *emitCall(Node *n) {
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
+        callInfoData->usesSplat = usesSplat;
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {

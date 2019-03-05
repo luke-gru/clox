@@ -1638,6 +1638,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
             for (int i = numRestArgs; i > 0; i--) { pop(); }
             push(restAry);
             argCountWithRestAry++;
+        } else {
+            ASSERT(0);
         }
     // empty rest arg
     } else if (hasRestArg) {
@@ -2754,7 +2756,7 @@ vmLoop:
       }
       CASE_OP(CALL): {
           uint8_t numArgs = READ_BYTE();
-          if (th->lastSplatNumArgs > 0) {
+          if (th->lastSplatNumArgs >= 0) {
               numArgs += (th->lastSplatNumArgs-1);
               th->lastSplatNumArgs = -1;
           }
@@ -2790,8 +2792,10 @@ vmLoop:
           uint8_t numArgs = READ_BYTE();
           Value callInfoVal = READ_CONSTANT();
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
-          if (th->lastSplatNumArgs > 0) {
-              numArgs += (th->lastSplatNumArgs-1);
+          if (th->lastSplatNumArgs >= 0) {
+              if (th->lastSplatNumArgs > 0) {
+                  numArgs += (th->lastSplatNumArgs-1);
+              }
               th->lastSplatNumArgs = -1;
           }
           Value instanceVal = VM_PEEK(numArgs);
@@ -2838,7 +2842,7 @@ vmLoop:
               throwErrorFmt(lxTypeErrClass, "Splatted expression must evaluate to an Array (type=%s)",
                       typeOfVal(ary));
           }
-          th->lastSplatNumArgs = ARRAY_SIZE(ary);
+          th->lastSplatNumArgs = ARRAY_SIZE(ary); // can be 0
           for (int i = 0; i < th->lastSplatNumArgs; i++) {
               VM_PUSH(ARRAY_GET(ary, i));
           }

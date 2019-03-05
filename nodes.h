@@ -91,7 +91,7 @@ typedef enum eStmtType {
     THROW_STMT,
     IN_STMT,
     STMTLIST_STMT,
-    KWARG_IN_CALL_STMT
+    KWARG_IN_CALL_STMT,
 } StmtType;
 
 static const char *stmtTypeNames[] = {
