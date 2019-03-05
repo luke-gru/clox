@@ -1,0 +1,18 @@
+fun oldFunc() { print "called"; }
+alias(oldFunc, "newFunc");
+oldFunc();
+newFunc();
+fun oldFunc() {
+  print "redefined old";
+  newFunc();
+}
+oldFunc();
+newFunc();
+
+__END__
+-- expect: --
+called
+called
+redefined old
+called
+called

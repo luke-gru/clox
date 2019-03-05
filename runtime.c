@@ -498,6 +498,18 @@ Value lxAutoload(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+Value lxAlias(int argCount, Value *args) {
+    CHECK_ARITY("alias", 2, 2, argCount);
+    Value func = args[0];
+    if (!isCallable(func)) {
+        throwErrorFmt(lxArgErrClass, "Argument 1 given to alias() must be callable");
+    }
+    Value newName = args[1];
+    CHECK_ARG_IS_A(newName, lxStringClass, 2);
+    tableSet(&vm.globals, OBJ_VAL(dupString(AS_STRING(newName))), func);
+    return NIL_VAL;
+}
+
 #define SCRIPT_PATH_MAX (PATH_MAX+1)
 #define SCRIPT_DIR_MAX (PATH_MAX+1-100)
 static Value loadScriptHelper(Value fname, bool checkLoaded) {

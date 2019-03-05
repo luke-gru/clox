@@ -111,6 +111,7 @@ static void defineNativeFunctions(void) {
     addGlobalFunction("exit", lxExit);
     addGlobalFunction("_exit", lx_Exit);
     addGlobalFunction("atExit", lxAtExit);
+    addGlobalFunction("alias", lxAlias);
     // TODO: make Thread() and Thread.join
     addGlobalFunction("newThread", lxNewThread);
     addGlobalFunction("joinThread", lxJoinThread);

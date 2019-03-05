@@ -54,6 +54,7 @@ Value lxNewThread(int argCount, Value *args);
 Value lxJoinThread(int argCount, Value *args);
 Value lxAtExit(int argCount, Value *args);
 Value lxAutoload(int argCount, Value *args);
+Value lxAlias(int argCount, Value *args);
 
 // class Object
 

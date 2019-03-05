@@ -55,6 +55,8 @@ file lookup, not pwd when calling loadScript/requireScript
 * +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] +=1, or other lvalues
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
+* When qualified error is thrown, only the last class name is shown, not the
+qualified name
 
 Optimizations
 -------------
