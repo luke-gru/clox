@@ -382,7 +382,7 @@ static int curLine = 1; // TODO: per thread
 
 // Add and use a new execution context
 static inline void push_EC(void) {
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     VMExecContext *ectx = ALLOCATE(VMExecContext, 1);
     memset(ectx, 0, sizeof(*ectx));
     initTable(&ectx->roGlobals);
@@ -392,7 +392,7 @@ static inline void push_EC(void) {
 
 // Pop the current execution context
 static inline void pop_EC(void) {
-    LxThread *th = THREAD();
+    LxThread *th = vm.curThread;
     ASSERT(th->v_ecs.length > 0);
     VMExecContext *ctx = (VMExecContext*)vec_pop(&th->v_ecs);
     freeTable(&ctx->roGlobals);
@@ -1045,7 +1045,7 @@ Value propertyGet(ObjInstance *obj, ObjString *propName) {
     } else if ((getter = instanceFindGetter(obj, propName))) {
         VM_DEBUG(3, "getter found (propertyGet)");
         callVMMethod(obj, OBJ_VAL(getter), 0, NULL, NULL);
-        if (THREAD()->hadError) {
+        if (vm.curThread->hadError) {
             return NIL_VAL;
         } else {
             return pop();
@@ -1306,7 +1306,7 @@ CallFrame *pushFrame(void) {
     frame->callLine = curLine;
     frame->file = EC->filename;
     frame->prev = prev;
-    BlockStackEntry *bentry = vec_last_or(&THREAD()->v_blockStack, NULL);
+    BlockStackEntry *bentry = vec_last_or(&vm.curThread->v_blockStack, NULL);
     if (bentry && bentry->frame == NULL) {
         bentry->frame = frame;
     }
@@ -1337,7 +1337,7 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->nativeFunc = native;
     newFrame->name = native->name;
     newFrame->file = EC->filename;
-    BlockStackEntry *bentry = vec_last_or(&THREAD()->v_blockStack, NULL);
+    BlockStackEntry *bentry = vec_last_or(&vm.curThread->v_blockStack, NULL);
     if (bentry && bentry->frame == NULL) {
         bentry->frame = newFrame;
     }
@@ -1468,7 +1468,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 newFrame->callInfo = callInfo;
                 VM_DEBUG(2, "calling native initializer for class %s with %d args", klassName, argCount);
                 Value val = captureNativeError(nativeInit, argCount+1, EC->stackTop-argCount-1, callInfo);
-                th = THREAD();
+                th = vm.curThread;
                 newFrame->slots = EC->stackTop-argCount-1;
                 if (UNLIKELY(th->returnedFromNativeErr)) {
                     th->returnedFromNativeErr = false;
@@ -1540,16 +1540,17 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         }
         newFrame->callInfo = callInfo;
         volatile Value val = captureNativeError(TO_NATIVE(native), argci, EC->stackTop-argci, callInfo);
+        th = vm.curThread;
         newFrame->slots = ec->stackTop - argcActuali;
-        if (THREAD()->returnedFromNativeErr) {
+        if (th->returnedFromNativeErr) {
             VM_DEBUG(2, "Returned from native function with error");
-            THREAD()->returnedFromNativeErr = false;
+            th->returnedFromNativeErr = false;
             while (getFrame() >= newFrame) {
                 popFrame();
             }
-            THREAD()->inCCall = 0;
+            th->inCCall = 0;
             VM_DEBUG(2, "Rethrowing inside VM");
-            throwError(THREAD()->lastErrorThrown); // re-throw inside VM
+            throwError(th->lastErrorThrown); // re-throw inside VM
             return false;
         } else {
             VM_DEBUG(2, "Returned from native function without error");
