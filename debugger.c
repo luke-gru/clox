@@ -197,7 +197,7 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
                 fprintf(stdout, "\n");
             } else {
                 fprintf(stderr, "Error during execution\n");
-                // TODO: reset error state
+                th->hadError = false;
             }
         } else if (strcmp(buf, "locals") == 0 || strcmp(buf, "l") == 0) {
             CallFrame *frame = &th->ec->frames[th->ec->frameCount-1];
