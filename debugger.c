@@ -67,6 +67,7 @@ const char *debuggerUsage[] = {
     "into (i)           Step into and stop at next statement",
     "frames             View call frames",
     "eval (e) EXPR      Evaluate expression",
+    "locals (l)         Show local variables",
     NULL
 };
 
@@ -196,7 +197,20 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
                 fprintf(stdout, "\n");
             } else {
                 fprintf(stderr, "Error during execution\n");
+                // TODO: reset error state
             }
+        } else if (strcmp(buf, "locals") == 0 || strcmp(buf, "l") == 0) {
+            CallFrame *frame = &th->ec->frames[th->ec->frameCount-1];
+            Chunk *ch = frame->closure->function->chunk;
+            Entry e;
+            int idx = 0;
+            TABLE_FOREACH(ch->varInfo, e, idx, {
+                    fprintf(stdout, "%s: ", AS_CSTRING(e.key));
+                    int slot = (int)AS_NUMBER(e.value);
+                    Value val = frame->slots[slot];
+                    printValue(stdout, val, true, -1);
+                    fprintf(stdout, " [%d]\n", slot);
+            });
         } else {
             fprintf(stderr, "Unrecognized command: '%s'\n", buf);
             fprintf(stderr, "'help' for usage details\n");

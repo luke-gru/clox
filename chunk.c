@@ -13,6 +13,8 @@ void initChunk(Chunk *chunk) {
     chunk->catchTbl = NULL;
     chunk->constants = ALLOCATE(ValueArray, 1);
     initValueArray(chunk->constants);
+    chunk->varInfo = ALLOCATE(Table, 1);
+    initTable(chunk->varInfo);
 }
 
 void initIseq(Iseq *seq) {
@@ -172,6 +174,7 @@ void freeChunk(Chunk *chunk) {
         freeCatchTable(chunk->catchTbl);
         chunk->catchTbl = NULL;
     }
+    freeTable(chunk->varInfo);
     /*fprintf(stderr, "freeChunk reinit\n");*/
     initChunk(chunk);
 }
@@ -181,6 +184,10 @@ void freeChunk(Chunk *chunk) {
  */
 Value getConstant(Chunk *chunk, int idx) {
     return chunk->constants->values[idx];
+}
+
+void addVarInfo(Chunk *chunk, ObjString *varName, int idx) {
+    tableSet(chunk->varInfo, OBJ_VAL(varName), NUMBER_VAL(idx));
 }
 
 int iseqAddCatchRow(

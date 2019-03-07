@@ -3,10 +3,13 @@
 
 #include "value.h"
 #include "vec.h"
+#include "table.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct ObjString; // fwd decl
 
 typedef struct CatchTable {
     // Row info
@@ -36,6 +39,7 @@ typedef struct Chunk {
     int *ndepths; // node depth level associated with bytecode instruction (used by debugger)
     int *nwidths; // node width level ...
     ValueArray *constants;
+    Table *varInfo; // for debugger, to print variables
     CatchTable *catchTbl;
 } Chunk;
 
@@ -81,6 +85,7 @@ void freeChunk(Chunk *chunk);
 
 int addConstant(Chunk *chunk, Value value);
 Value getConstant(Chunk *chunk, int idx);
+void addVarInfo(Chunk *chunk, struct ObjString *varName, int idx);
 int addCatchRow(
     Chunk *chunk,
     int ifrom,

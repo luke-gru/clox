@@ -969,8 +969,13 @@ static void namedVariable(Token name, VarOp getSet) {
     if (varNameUsed) {
         emitOp1(op, (uint8_t)arg);
     } else {
-        uint8_t varName = identifierConstant(&name);
-        emitOp2(op, (uint8_t)arg, varName);
+        uint8_t varNameSlot = identifierConstant(&name);
+        emitOp2(op, (uint8_t)arg, varNameSlot);
+        // TODO: get upvalues working
+        if (op == OP_SET_LOCAL) {
+            char *varName = tokStr(&name);
+            addVarInfo(currentChunk(), INTERN(varName), (int)arg);
+        }
     }
 }
 
