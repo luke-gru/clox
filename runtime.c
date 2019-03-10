@@ -994,6 +994,22 @@ Value lxClassIsA(int argCount, Value *args) {
     return BOOL_VAL(false);
 }
 
+Value lxClassAliasMethod(int argCount, Value *args) {
+    CHECK_ARITY("Class#aliasMethod", 3, 3, argCount);
+    Value klass = *args;
+    Value oldName = args[1];
+    Value newName = args[2];
+    CHECK_ARG_IS_INSTANCE_OF(oldName, lxStringClass, 1);
+    CHECK_ARG_IS_INSTANCE_OF(newName, lxStringClass, 2);
+    Obj *method = findMethod(AS_OBJ(klass), AS_STRING(oldName));
+    if (!method) {
+        throwErrorFmt(lxArgErrClass, "Method '%s' not found for aliasMethod", AS_CSTRING(oldName));
+    }
+    Table *mtable = CLASS_METHOD_TBL(AS_OBJ(klass));
+    tableSet(mtable, newName, OBJ_VAL(method));
+    return NIL_VAL;
+}
+
 Value lxClassAncestors(int argCount, Value *args) {
     CHECK_ARITY("Class#ancestors", 1, 1, argCount);
     Value self = *args;

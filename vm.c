@@ -202,6 +202,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(classClass, "ancestors", lxClassAncestors);
     addNativeMethod(classClass, "isA", lxClassIsA);
     addNativeMethod(classClass, "include", lxClassInclude);
+    addNativeMethod(classClass, "aliasMethod", lxClassAliasMethod);
     addNativeGetter(classClass, "superClass", lxClassGetSuperclass);
     addNativeGetter(classClass, "name", lxClassGetName);
 
@@ -1787,7 +1788,7 @@ bool callCallable(Value callable, int argCount, bool isMethod, CallInfo *info) {
     return ret;
 }
 
-static Obj *findMethod(Obj *klass, ObjString *methodName) {
+Obj *findMethod(Obj *klass, ObjString *methodName) {
     Value method;
     Obj *classLookup = klass;
     while (classLookup) {

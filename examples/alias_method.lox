@@ -1,0 +1,15 @@
+class MyClass {
+  myMethod() {
+    print this;
+  }
+}
+
+class MySub < MyClass {
+  this.aliasMethod("myMethod", "myOther");
+}
+
+var m = MySub().myOther();
+
+__END__
+-- expect: --
+<instance MySub>
