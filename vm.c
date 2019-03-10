@@ -924,7 +924,7 @@ void errorPrintScriptBacktrace(const char *format, ...) {
 }
 
 static void showUncaughtError(Value err) {
-    ObjString *classNameObj = CLASSINFO(AS_INSTANCE(err)->klass)->name;
+    ObjString *classNameObj = classNameFull(AS_INSTANCE(err)->klass);
     char *className = NULL;
     if (classNameObj) {
         className = classNameObj->chars;

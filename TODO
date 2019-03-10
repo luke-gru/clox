@@ -14,7 +14,6 @@ the syntax is different for them, like in ruby.
 * Dumping/loading values to/from disk (like Ruby's Marshal)
 * Saving/loading bytecode to disk
 * Add tracing/coverage information
-* add multiple var declaration, setters for array returns [GIT BRANCH]
 * Add socket class in io.c, make it work with multi-threading
 * Allow getters to be called like methods (when given 0 args) [PARTIAL]
   works for instances, not classes or modules (ex: Array.name())
@@ -26,7 +25,7 @@ get/set a different sigil maybe, like @prop.
 * Allow dynamically loading lox extensions, which can be '.so' files.
 * Add guilds, with per-guild VM lock and restricted guild to guild sharing
 * Add Regex::MatchData class
-* Add method/function aliasing
+* Add method aliasing
 
 Improvements
 ------------
@@ -39,7 +38,7 @@ mutex held blocks release of GVL for a thread)
 * Make variable lookup work as lookup in Environment tables, not statically
 compiled lookup
 * Allow giving keyword args to native functions
-* Change string representation to UTF8
+* Change string representation to UTF8 (maybe used iconv)
 * Make autoloading thread-safe
 * Make op stack growable, not fixed at 256
 * Make call stack growable, not fixed at 64
@@ -52,11 +51,15 @@ when evaling.
 * loadScript/requireScript should use pwd of lox process during startup for
 file lookup, not pwd when calling loadScript/requireScript
 * Debugger not evaluating variables in context of function
-* +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] +=1, or other lvalues
+* +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] += 1, or other lvalues
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
 * When qualified error is thrown, only the last class name is shown, not the
 qualified name
+* Eval() doesn't evaluate local variables, because there isn't a chunk
+hierarchy, and we don't pass the current chunk as the environment when
+evaling. The best solution might be to used named locals in the bytecode
+instead of indexed. Would fix issues with the debugger as well.
 
 Optimizations
 -------------
