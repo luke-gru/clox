@@ -2051,8 +2051,8 @@ static void emitNode(Node *n) {
                 if (i == 0) continue; // already emitted
                 int itarget = iseq->byteCount;
                 Node *catchConstant = vec_first(catchStmt->children);
-                ObjString *className = copyString("", 0, NEWOBJ_FLAG_NONE);
-                if (catchConstant->children) {
+                ObjString *className = hiddenString("", 0, NEWOBJ_FLAG_NONE);
+                if (catchConstant->children && catchConstant->children->length > 0) {
                     while (catchConstant->children && catchConstant->children->length > 0) {
                         Node *catchPrefix = vec_first(catchConstant->children);
                         Token classPrefixTok = catchPrefix->tok;

@@ -1885,7 +1885,7 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
             row = row->next;
             continue;
         }
-        VM_DEBUG(2, "a class found for row");
+        VM_DEBUG(2, "a class found for row: %s", classNameFull(AS_CLASS(klassFound))->chars);
         if (IS_SUBCLASS(klass, AS_CLASS(klassFound))) {
             VM_DEBUG(2, "good class found for row");
             if (poppedEC || (currentIpOff > row->ifrom && currentIpOff <= row->ito)) {

@@ -54,12 +54,11 @@ file lookup, not pwd when calling loadScript/requireScript
 * +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] += 1, or other lvalues
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
-* When qualified error is thrown, only the last class name is shown, not the
-qualified name
 * Eval() doesn't evaluate local variables, because there isn't a chunk
 hierarchy, and we don't pass the current chunk as the environment when
 evaling. The best solution might be to used named locals in the bytecode
 instead of indexed. Would fix issues with the debugger as well.
+* cref for class isn't pushed on static methods on class
 
 Optimizations
 -------------

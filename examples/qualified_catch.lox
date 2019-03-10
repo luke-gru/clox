@@ -5,5 +5,9 @@ class Mine {
 try {
   throw Mine::Err("msg");
 } catch (Mine::Err err) {
-  print err;
+  print "caught";
 }
+
+__END__
+-- expect: --
+caught

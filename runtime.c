@@ -101,12 +101,23 @@ void addConstantUnder(const char *name, Value constVal, Value owner) {
     tableSet(CLASSINFO(AS_CLASS(owner))->constants, OBJ_VAL(INTERN(name)), constVal);
 }
 
-// NOTE: `klass` can be NULL, in which case only `vm.constants` is checked
+// NOTE: `klass` can be NULL, in which case only `vm.constants` is checked.
+// Also, `name` can be a qualified constant, ex: `My::Error`.
 bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut) {
     ObjClass *origKlass = klass;
+    Obj *baseConstant = NULL;
+    ObjString *origName = name;
+    int qualifiedParts = 1;
+    if ((qualifiedParts = constantQualifiedParts(name)) > 1) {
+        ObjString *qualifiedPart = constantQualifiedPart(name, 1);
+        /*fprintf(stderr, "Qualified part: \"%s\"\n", qualifiedPart->chars);*/
+        name = qualifiedPart;
+    }
     while (klass) {
         if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
-            return true;
+            baseConstant = AS_OBJ(*valOut);
+            if (qualifiedParts == 1) return true;
+            goto foundBase;
         }
         klass = TO_CLASS(CLASS_SUPER(klass));
     }
@@ -114,15 +125,74 @@ bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut) {
         origKlass = klass;
         while (klass) {
             if (tableGet(CLASSINFO(klass)->constants, OBJ_VAL(name), valOut)) {
-                return true;
+                baseConstant = AS_OBJ(*valOut);
+                if (qualifiedParts == 1) return true;
+                goto foundBase;
             }
             klass = TO_CLASS(CLASSINFO(klass)->superclass);
         }
     }
     if (tableGet(&vm.constants, OBJ_VAL(name), valOut)) {
-        return true;
+        baseConstant = AS_OBJ(*valOut);
+        if (qualifiedParts == 1) return true;
+        goto foundBase;
     }
-    return false;
+
+foundBase:
+    if (!baseConstant) { return false; }
+    ASSERT(qualifiedParts > 1);
+    int partsProcessed = 1;
+    while (partsProcessed < qualifiedParts) {
+        ObjString *partName = constantQualifiedPart(origName, partsProcessed+1);
+        /*fprintf(stderr, "Qualified part (partName): \"%s\"\n", partName->chars);*/
+        ASSERT(partName);
+        if (tableGet(CLASSINFO(TO_CLASS(baseConstant))->constants, OBJ_VAL(partName), valOut)) {
+            baseConstant = AS_OBJ(*valOut);
+            partsProcessed++;
+        } else {
+            return false;
+        }
+    }
+    ASSERT(baseConstant);
+    return partsProcessed == qualifiedParts;
+}
+
+int constantQualifiedParts(ObjString *name) {
+    int parts = 1;
+    char *sep = NULL;
+    sep = strstr(name->chars, "::");
+    while (sep) {
+        parts++;
+        sep += 2;
+        if (!*sep) {
+            break;
+        }
+        sep = strstr(sep, "::");
+    }
+    return parts;
+}
+
+ObjString *constantQualifiedPart(ObjString *name, int npart) {
+    ASSERT(npart > 0);
+    int part = 1;
+    char *sep = NULL;
+    char *start = name->chars;
+    sep = strstr(start, "::");
+    while (sep) {
+        if (part == npart) {
+            return copyString(start, sep-start, NEWOBJ_FLAG_NONE);
+        }
+        start = sep + 2;
+        if (!*start) {
+            break;
+        }
+        sep = strstr(start, "::");
+        part++;
+        if (!sep && part == npart) {
+            return copyString(start, name->chars+strlen(name->chars)-start, NEWOBJ_FLAG_NONE);
+        }
+    }
+    return NULL;
 }
 
 // Does this file exist and is it readable?
@@ -472,6 +542,8 @@ Value lxExit(int argCount, Value *args) {
     UNREACHABLE_RETURN(NIL_VAL);
 }
 
+// Exit current thread, don't run atExit hooks
+// ex: _exit(0);
 Value lx_Exit(int argCount, Value *args) {
     CHECK_ARITY("_exit", 0, 1, argCount);
     int status = 0;

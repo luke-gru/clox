@@ -11,7 +11,7 @@ class Timeout {
       sleep(secs);
       Thread.schedule();
       if (!done) {
-        outerThread.throw(Error("timeout"));
+        outerThread.throw(Timeout::Error("timeout"));
       }
     });
     newThread.detach();
