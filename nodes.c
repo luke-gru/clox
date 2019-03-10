@@ -201,6 +201,15 @@ static char *outputConstantExpr(Node *n, int indentLevel) {
     return buf;
 }
 
+static char *outputConstantLookupExpr(Node *n, int indentLevel) {
+    const char *constName = tokStr(&n->tok);
+    char *prefixExpr = outputASTString(vec_first(n->children), 0);
+    char *buf = calloc(1, strlen(constName)+1+16+strlen(prefixExpr));
+    ASSERT_MEM(buf);
+    sprintf(buf, "(constLookup %s, %s)", prefixExpr, constName);
+    return buf;
+}
+
 static char *outputAssignExpr(Node *n, int indentLevel) {
     char *lhsOut = outputASTString(vec_first(n->children), indentLevel);
     char *rhsOut = outputASTString(n->children->data[1], indentLevel);
@@ -673,6 +682,8 @@ char *outputASTString(Node *node, int indentLevel) {
                     return outputVariableExpr(node, indentLevel);
                 case CONSTANT_EXPR:
                     return outputConstantExpr(node, indentLevel);
+                case CONSTANT_LOOKUP_EXPR:
+                    return outputConstantLookupExpr(node, indentLevel);
                 case ASSIGN_EXPR:
                     return outputAssignExpr(node, indentLevel);
                 case CALL_EXPR:
@@ -698,7 +709,7 @@ char *outputASTString(Node *node, int indentLevel) {
             }
         }
         case NODE_STMT: {
-            switch(node->type.kind) {
+            switch (node->type.kind) {
                 case EXPR_STMT:
                     return outputExpressionStmt(node, indentLevel);
                 case PRINT_STMT:

@@ -23,7 +23,7 @@ typedef enum eExprType {
     INDEX_GET_EXPR,
     INDEX_SET_EXPR,
     UNARY_EXPR,
-    VARIABLE_EXPR,
+    VARIABLE_EXPR, // 10
     CONSTANT_EXPR,
     CONSTANT_LOOKUP_EXPR,
     ASSIGN_EXPR,
@@ -33,7 +33,7 @@ typedef enum eExprType {
     ANON_FN_EXPR,
     PROP_ACCESS_EXPR,
     PROP_SET_EXPR,
-    PROP_SET_BINOP_EXPR,
+    PROP_SET_BINOP_EXPR, // 20
     THIS_EXPR,
     SUPER_EXPR,
     SPLAT_EXPR,
