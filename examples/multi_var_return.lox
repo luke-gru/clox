@@ -1,0 +1,17 @@
+fun ret() { return [1,2]; }
+var a, b = ret();
+print a;
+print b;
+
+{
+  var c, d = ret();
+  print c;
+  print d;
+}
+
+__END__
+-- expect: --
+1
+2
+1
+2

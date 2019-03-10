@@ -1341,6 +1341,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
 
     if ((currentClassOrModule == NULL && !inINBlock) || ftype == FUN_TYPE_NAMED) { // regular function
         namedVariable(n->tok, VAR_SET);
+        emitOp0(OP_POP);
     } else { // method
         switch (ftype) {
             case FUN_TYPE_METHOD:
@@ -1737,7 +1738,7 @@ static void emitNode(Node *n) {
         // TODO: op_jump_if_undef? Otherwise, nil or false marks end of iteration
         Insn *iterDone = emitJump(OP_JUMP_IF_FALSE_PEEK);
         uint8_t slotNum = 0; int slotIdx = 0;
-        int setOp = numVars > 1 ? OP_UNPACK_NOPUSH_SET_LOCAL : OP_SET_LOCAL;
+        int setOp = numVars > 1 ? OP_UNPACK_SET_LOCAL : OP_SET_LOCAL;
         vec_foreach(&v_slots, slotNum, slotIdx) {
             Token name = n->children->data[slotIdx]->tok;
             uint8_t nameIdx = identifierConstant(&name);
@@ -1819,6 +1820,10 @@ static void emitNode(Node *n) {
             }
         }
 
+        if (numVarsSet > 1 && current->scopeDepth > 0) {
+            pushVarSlots(); // for array
+        }
+
         uint8_t slotIdx = 0;
         for (int i = 0; i < numVarsSet; i++) {
             Node *varNode = NULL;
@@ -1838,16 +1843,12 @@ static void emitNode(Node *n) {
                 }
             } else {
                 if (numVarsSet == 1 || uninitialized) {
-                    emitOp1(OP_SET_LOCAL, (uint8_t)arg);
+                    emitOp2(OP_SET_LOCAL, (uint8_t)arg, identifierConstant(&varNode->tok));
                 } else {
-                    emitOp2(OP_UNPACK_SET_LOCAL, (uint8_t)arg, slotIdx);
+                    emitOp3(OP_UNPACK_SET_LOCAL, (uint8_t)arg, slotIdx, identifierConstant(&varNode->tok));
                     slotIdx++;
                 }
             }
-        }
-
-        if (numVarsSet > 1) {
-            emitOp0(OP_POP); // pop the array
         }
 
         return;

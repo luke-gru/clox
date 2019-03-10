@@ -96,8 +96,6 @@ const char *opName(OpCode code) {
         return "OP_SET_LOCAL";
     case OP_UNPACK_SET_LOCAL:
         return "OP_UNPACK_SET_LOCAL";
-    case OP_UNPACK_NOPUSH_SET_LOCAL:
-        return "OP_UNPACK_NOPUSH_SET_LOCAL";
     case OP_GET_GLOBAL:
         return "OP_GET_GLOBAL";
     case OP_SET_GLOBAL:
@@ -682,7 +680,6 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_GET_UPVALUE:
             return printLocalVarInstruction(f, opName(byte), chunk, i);
         case OP_UNPACK_SET_LOCAL:
-        case OP_UNPACK_NOPUSH_SET_LOCAL:
             return printUnpackSetVarInstruction(f, opName(byte), chunk, i);
         case OP_UNPACK_DEFINE_GLOBAL:
             return printUnpackDefGlobalInstruction(f, opName(byte), chunk, i);
@@ -794,7 +791,6 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_GET_UPVALUE:
             return localVarInstruction(buf, opName(byte), chunk, i);
         case OP_UNPACK_SET_LOCAL:
-        case OP_UNPACK_NOPUSH_SET_LOCAL:
             return unpackSetVarInstruction(buf, opName(byte), chunk, i);
         case OP_UNPACK_DEFINE_GLOBAL:
             return unpackDefGlobalInstruction(buf, opName(byte), chunk, i);

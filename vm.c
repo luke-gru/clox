@@ -2562,12 +2562,6 @@ vmLoop:
           frame->slots[slot] = unpackValue(peek(peekIdx+unpackIdx), unpackIdx); // locals are popped at end of scope by VM
           DISPATCH_BOTTOM();
       }
-      CASE_OP(UNPACK_NOPUSH_SET_LOCAL): {
-          uint8_t slot = READ_BYTE();
-          uint8_t unpackIdx = READ_BYTE();
-          getFrame()->slots[slot] = unpackValue(peek(0), unpackIdx); // locals are popped at end of scope by VM
-          DISPATCH_BOTTOM();
-      }
       CASE_OP(GET_LOCAL): {
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
