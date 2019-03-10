@@ -2479,6 +2479,13 @@ vmLoop:
           }
           DISPATCH_BOTTOM();
       }
+      CASE_OP(UNPACK_DEFINE_GLOBAL): {
+          Value varName = READ_CONSTANT();
+          uint8_t unpackIdx = READ_BYTE();
+          Value val = unpackValue(peek(0), unpackIdx);
+          tableSet(&vm.globals, varName, val);
+          DISPATCH_BOTTOM();
+      }
       CASE_OP(SET_GLOBAL): {
           Value val = VM_PEEK(0);
           Value varName = READ_CONSTANT();

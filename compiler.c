@@ -1766,7 +1766,7 @@ static void emitNode(Node *n) {
         emitLoop(beforeIterNext);
         popScope(COMPILE_SCOPE_BLOCK);
         patchJump(iterDone, -1, NULL);
-        emitOp0(OP_POP); // pop last iterator value
+        emitOp0(OP_POP); // pop the iterator value
         emitOp0(OP_POP); // pop the iterator
         vec_deinit(&v_slots);
         break;
@@ -1805,20 +1805,58 @@ static void emitNode(Node *n) {
         emitOp0(OP_PRINT);
         break;
     }
+    // single or multi-variable assignment, global or local
     case VAR_STMT: {
-        if (n->children->length > 0) {
-            emitChildren(n);
-        } else {
-            emitNil();
+        int numVarsSet = 1;
+        Node *lastNode = NULL;
+        if (n->children && n->children->length > 0) {
+            lastNode = vec_last(n->children);
         }
-        int arg = declareVariable(&n->tok);
-        if (arg == -1) return; // error already printed
-        if (current->scopeDepth == 0) {
-            emitOp1(OP_DEFINE_GLOBAL, (uint8_t)arg);
-        } else {
-            emitOp2(OP_SET_LOCAL, (uint8_t)arg, identifierConstant(&n->tok));
+        bool uninitialized = lastNode == NULL || nodeKind(lastNode) == VAR_STMT;
+        if (!uninitialized && n->children->length > 1) {
+            numVarsSet += n->children->length - 1;
         }
-        break;
+
+        if (!uninitialized) {
+            emitNode(lastNode); // expression node
+        } else {
+            for (int i = 0; i < numVarsSet; i++) {
+                emitNil();
+            }
+        }
+
+        if (numVarsSet > 1 && current->scopeDepth > 0) {
+            pushVarSlots(); // for array
+        }
+
+        uint8_t slotIdx = 0;
+        for (int i = 0; i < numVarsSet; i++) {
+            Node *varNode = NULL;
+            if (i == 0) {
+                varNode = n;
+            } else {
+                varNode = n->children->data[i-1];
+            }
+            int arg = declareVariable(&varNode->tok);
+            if (arg == -1) return; // error already printed
+            if (current->scopeDepth == 0) {
+                if (numVarsSet == 1 || uninitialized) {
+                    emitOp1(OP_DEFINE_GLOBAL, (uint8_t)arg);
+                } else {
+                    emitOp2(OP_UNPACK_DEFINE_GLOBAL, (uint8_t)arg, slotIdx);
+                    slotIdx++;
+                }
+            } else {
+                if (numVarsSet == 1 || uninitialized) {
+                    emitOp2(OP_SET_LOCAL, (uint8_t)arg, identifierConstant(&varNode->tok));
+                } else {
+                    emitOp3(OP_UNPACK_SET_LOCAL, (uint8_t)arg, slotIdx, identifierConstant(&varNode->tok));
+                    slotIdx++;
+                }
+            }
+        }
+
+        return;
     }
     case VARIABLE_EXPR: {
         namedVariable(n->tok, VAR_GET);
