@@ -1346,6 +1346,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
 
     if ((currentClassOrModule == NULL && !inINBlock) || ftype == FUN_TYPE_NAMED) { // regular function
         namedVariable(n->tok, VAR_SET);
+        emitOp0(OP_POP);
     } else { // method
         switch (ftype) {
             case FUN_TYPE_METHOD:
