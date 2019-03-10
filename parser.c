@@ -459,7 +459,7 @@ static Node *statement() {
         return forNode;
     }
 
-    // try { } [catch (Error e) { }]+
+    // try { } [catch ([Prefix::+]Error e) { }]+
     if (match(TOKEN_TRY)) {
         Token tryTok = current->previous;
         node_type_t nType = {
@@ -476,7 +476,7 @@ static Node *statement() {
         while (match(TOKEN_CATCH)) {
             Token catchTok = current->previous;
             consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'catch'");
-            Node *catchExpr = expression(); // should be constant expression
+            Node *catchExpr = expression(); // should be constant expression (can be fully qualified)
             Token identToken;
             bool foundIdentToken = false;
             if (match(TOKEN_IDENTIFIER)) { // should be variable

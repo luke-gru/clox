@@ -2050,8 +2050,24 @@ static void emitNode(Node *n) {
             vec_foreach(n->children, catchStmt, i) {
                 if (i == 0) continue; // already emitted
                 int itarget = iseq->byteCount;
-                Token classTok = vec_first(catchStmt->children)->tok;
-                ObjString *className = INTERNED(tokStr(&classTok), strlen(tokStr(&classTok)));
+                Node *catchConstant = vec_first(catchStmt->children);
+                ObjString *className = copyString("", 0, NEWOBJ_FLAG_NONE);
+                if (catchConstant->children) {
+                    while (catchConstant->children && catchConstant->children->length > 0) {
+                        Node *catchPrefix = vec_first(catchConstant->children);
+                        Token classPrefixTok = catchPrefix->tok;
+                        pushCString(className, tokStr(&classPrefixTok), strlen(tokStr(&classPrefixTok)));
+                        pushCString(className, "::", 2);
+                        Node *classSuffix = catchConstant;
+                        Token classSuffixTok = classSuffix->tok;
+                        pushCString(className, tokStr(&classSuffixTok), strlen(tokStr(&classSuffixTok)));
+                        catchConstant = catchPrefix;
+                    }
+                } else {
+                    Token classTok = catchConstant->tok;
+                    pushCString(className, tokStr(&classTok), strlen(tokStr(&classTok)));
+                }
+                /*fprintf(stderr, "classTok: %s, children: %d\n", tokStr(&classTok), catchStmt->children->length);*/
                 STRING_SET_STATIC(className);
                 double catchTblIdx = (double)iseqAddCatchRow(
                     iseq, ifrom, ito,
