@@ -256,16 +256,21 @@ static inline void emitLeave() {
     emitOp0(OP_LEAVE);
 }
 
+static const char *compilerName(Compiler *compiler);
+
 // Adds an upvalue to [compiler]'s function with the given properties. Does not
 // add one if an upvalue for that variable is already in the list. Returns the
 // index of the upvalue.
 static int addUpvalue(Compiler *compiler, uint8_t index, bool isLocal) {
     // Look for an existing one.
-    COMP_TRACE("Adding upvalue to COMP=%p, index: %d, isLocal: %s",
-            compiler, index, isLocal ? "true" : "false");
+    COMP_TRACE("Adding upvalue to COMP=%p (%s), index: %d, isLocal: %s",
+            compiler, compilerName(compiler), index, isLocal ? "true" : "false");
     for (int i = 0; i < compiler->function->upvalueCount; i++) {
         Upvalue *upvalue = &compiler->upvalues[i];
-        if (upvalue->index == index && upvalue->isLocal == isLocal) return i;
+        if (upvalue->index == index && upvalue->isLocal == isLocal) {
+            COMP_TRACE("Upvalue already exists, skipping");
+            return i;
+        }
     }
 
     if (compiler->function->upvalueCount == LX_MAX_UPVALUES) {
@@ -286,9 +291,10 @@ static bool identifiersEqual(Token *a, Token *b) {
 
 // returns -1 if local variable not found, otherwise returns slot index
 // in the given compiler's locals table.
-static int resolveLocal(Compiler *compiler, Token* name) {
+static int resolveLocal(Compiler *compiler, Token *name) {
     // Look it up in the local scopes. Look in reverse order so that the most
     // nested variable is found first and shadows outer ones.
+    COMP_TRACE("compiler localCount: %d for compiler %s", compiler->localCount, compilerName(compiler));
     for (int i = compiler->localCount - 1; i >= 0; i--) {
         Local *local = &compiler->locals[i];
         if (identifiersEqual(name, &local->name)) {
@@ -297,6 +303,19 @@ static int resolveLocal(Compiler *compiler, Token* name) {
     }
 
     return -1;
+}
+static const char *compilerName(Compiler *compiler) {
+    switch (compiler->type) {
+        case FUN_TYPE_ANON:
+            return "(closure)";
+        case FUN_TYPE_BLOCK:
+            return "(block)";
+        case FUN_TYPE_TOP_LEVEL:
+            return "(top level)";
+        default:
+            ASSERT(compiler->function);
+            return compiler->function->name->chars;
+    }
 }
 
 // Attempts to look up [name] in the functions enclosing the one being compiled
@@ -308,12 +327,17 @@ static int resolveLocal(Compiler *compiler, Token* name) {
 // will flatten the closure and add upvalues to all of the intermediate
 // functions so that it gets walked down to this one.
 static int resolveUpvalue(Compiler *compiler, Token *name) {
-    COMP_TRACE("Resolving upvalue for variable '%s'", tokStr(name));
+    COMP_TRACE("Resolving upvalue for variable '%s' in compiler %s", tokStr(name), compilerName(compiler));
     // If we are at the top level, we didn't find it.
-    if (compiler->enclosing == NULL) return -1;
+    if (compiler->enclosing == NULL) {
+        COMP_TRACE("No enclosing compiler, no upvalue");
+        return -1;
+    }
 
     // See if it's a local variable in the immediately enclosing function.
+    fprintf(stderr, "resolveLocal before\n");
     int local = resolveLocal(compiler->enclosing, name);
+    fprintf(stderr, "resolveLocal after\n");
     if (local != -1) {
         COMP_TRACE("Upvalue variable '%s' found as local", tokStr(name));
         // Mark the local as an upvalue so we know to close it when it goes out of
@@ -971,7 +995,7 @@ static void namedVariable(Token name, VarOp getSet) {
     } else {
         uint8_t varNameSlot = identifierConstant(&name);
         emitOp2(op, (uint8_t)arg, varNameSlot);
-        // TODO: get upvalues working
+        // TODO: get varinfo working for upvalues
         if (op == OP_SET_LOCAL) {
             char *varName = tokStr(&name);
             addVarInfo(currentChunk(), INTERN(varName), (int)arg);
@@ -979,13 +1003,15 @@ static void namedVariable(Token name, VarOp getSet) {
     }
 }
 
+
 // Initializes a new compiler for a function, and sets it as the `current`
 // function compiler.
 static void initCompiler(
     Compiler *compiler, // new compiler
+    Compiler *enclosingCompiler,
     int scopeDepth,
     FunctionType ftype,
-    Token *fTok, /* if NULL, ftype must be FUN_TYPE_TOP_LEVEL */
+    Token *fTok, /* function name */
     Chunk *chunk /* if NULL, creates new chunk */
 ) {
     COMP_TRACE("initCompiler");
@@ -993,15 +1019,17 @@ static void initCompiler(
     if (ftype == FUN_TYPE_TOP_LEVEL) {
         vec_init(&compiler->v_errMessages);
     }
-    compiler->enclosing = current;
+    compiler->enclosing = enclosingCompiler;
+    compiler->type = ftype;
     compiler->localCount = 0; // NOTE: below, this is increased to 1
     compiler->scopeDepth = scopeDepth;
     compiler->function = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
+    compiler->function->chunk->compiler = compiler;
     initIseq(&compiler->iseq);
     compiler->iseq.constants = compiler->function->chunk->constants;
     hideFromGC(TO_OBJ(compiler->function)); // TODO: figure out way to unhide these functions on freeVM()
-    compiler->type = ftype;
     compiler->hadError = false;
+
     initTable(&compiler->constTbl);
 
     current = compiler;
@@ -1191,6 +1219,7 @@ static CallInfo *emitCall(Node *n) {
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
         callInfoData->usesSplat = usesSplat;
+        callInfoData->localCountSnapshot = current->localCount;
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
@@ -1223,6 +1252,8 @@ static CallInfo *emitCall(Node *n) {
         callInfoData->argc = argc;
         callInfoData->numKwargs = numKwargs;
         callInfoData->usesSplat = usesSplat;
+        callInfoData->localCountSnapshot = current->localCount;
+        nodeAddData(n, callInfoData);
         i = 0; int idx = 0;
         vec_foreach(n->children, arg, i) {
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
@@ -1240,12 +1271,13 @@ static CallInfo *emitCall(Node *n) {
 
 // emit function or method
 static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
-    Compiler fCompiler;
+    Compiler *fCompiler = ALLOCATE(Compiler, 1);
+    fCompiler->functionNode = n;
     int scopeDepth = current->scopeDepth;
-    initCompiler(&fCompiler, scopeDepth, ftype, &n->tok, NULL);
+    initCompiler(fCompiler, current, scopeDepth, ftype, &n->tok, NULL);
 
     pushScope(COMPILE_SCOPE_FUNCTION); // this scope holds the local variable parameters
-    ObjFunction *func = fCompiler.function;
+    ObjFunction *func = fCompiler->function;
     ASSERT(func);
     func->funcNode = n;
 
@@ -1333,10 +1365,10 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     ASSERT_MEM(func->upvaluesInfo);
     for (int i = 0; i < func->upvalueCount; i++) {
         if (ftype != FUN_TYPE_BLOCK) {
-            emitOp0(fCompiler.upvalues[i].isLocal ? 1 : 0);
-            emitOp0(fCompiler.upvalues[i].index);
+            emitOp0(fCompiler->upvalues[i].isLocal ? 1 : 0);
+            emitOp0(fCompiler->upvalues[i].index);
         }
-        func->upvaluesInfo[i] = fCompiler.upvalues[i]; // copy upvalue info
+        func->upvaluesInfo[i] = fCompiler->upvalues[i]; // copy upvalue info
     }
 
     if (ftype == FUN_TYPE_TOP_LEVEL || ftype == FUN_TYPE_BLOCK ||
@@ -2126,6 +2158,10 @@ static void emitNode(Node *n) {
 }
 
 Chunk *compile_src(char *src, CompileErr *err) {
+    return compile_eval_src(src, NULL, NULL, err);
+}
+
+Chunk *compile_eval_src(char *src, Chunk *parentChunk, CallInfo *cinfo, CompileErr *err) {
     initScanner(&scanner, src);
     Parser p;
     initParser(&p);
@@ -2148,17 +2184,29 @@ Chunk *compile_src(char *src, CompileErr *err) {
     }
     ASSERT(program);
     freeParser(&p);
-    Compiler mainCompiler;
-    top = &mainCompiler;
-    initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, NULL);
+    Compiler *mainCompiler = ALLOCATE(Compiler, 1);
+    mainCompiler->functionNode = program;
+    top = mainCompiler;
+    Compiler *enclosingCompiler = current;
+    FunctionType ftype = FUN_TYPE_TOP_LEVEL;
+    if (parentChunk) {
+        ftype = FUN_TYPE_ANON;
+        enclosingCompiler = parentChunk->compiler;
+        COMP_TRACE("Compiling src with parentChunk (parent=%s)", compilerName(enclosingCompiler));
+        ASSERT(cinfo);
+        int localCountSnapshot = cinfo->localCountSnapshot;
+        enclosingCompiler->localCount = localCountSnapshot;
+        COMP_TRACE("parentChunk localCount: %d", enclosingCompiler->localCount);
+    }
+    initCompiler(mainCompiler, enclosingCompiler, 0, ftype, NULL, NULL);
     emitNode(program);
     ObjFunction *prog = endCompiler();
-    if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
+    if (CLOX_OPTION_T(debugBytecode) && !mainCompiler->hadError) {
         printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
     }
-    if (mainCompiler.hadError) {
-        outputCompilerErrors(&mainCompiler, stderr);
-        freeCompiler(&mainCompiler, true);
+    if (mainCompiler->hadError) {
+        outputCompilerErrors(mainCompiler, stderr);
+        freeCompiler(mainCompiler, true);
         *err = COMPILE_ERR_SEMANTICS;
         return NULL;
     } else {

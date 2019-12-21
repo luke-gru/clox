@@ -2572,10 +2572,18 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_UPVALUE): {
+          fprintf(stderr, "OP_GET_UPVALUE\n");
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
+          ASSERT(frame);
+          ASSERT(frame->closure);
+          ASSERT(frame->closure->upvalues);
+          ASSERT(frame->closure->upvalues[slot]);
+          ASSERT(frame->closure->upvalues[slot]->value);
+          fprintf(stderr, "pushing upvalue\n");
           VM_PUSH(*frame->closure->upvalues[slot]->value);
+          fprintf(stderr, "pushed upvalue\n");
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_UPVALUE): {
@@ -3351,8 +3359,9 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     }
 }
 
-static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
+static Value doVMEval(char *src, char *filename, int lineno, CallInfo *cinfo, bool throwOnErr) {
     CallFrame *oldFrame = getFrame();
+    Chunk *parentChunk = currentChunk();
     CompileErr err = COMPILE_ERR_NONE;
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
     compilerOpts.noRemoveUnusedExpressions = true;
@@ -3360,7 +3369,7 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     VMExecContext *ectx = EC;
     ectx->evalContext = true;
     resetStack();
-    Chunk *chunk = compile_src(src, &err);
+    Chunk *chunk = compile_eval_src(src, parentChunk, cinfo, &err);
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
     if (err != COMPILE_ERR_NONE || !chunk) {
@@ -3419,12 +3428,12 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     }
 }
 
-Value VMEvalNoThrow(char *src, char *filename, int lineno) {
-    return doVMEval(src, filename, lineno, false);
+Value VMEvalNoThrow(char *src, char *filename, int lineno, CallInfo *cinfo) {
+    return doVMEval(src, filename, lineno, cinfo, false);
 }
 
-Value VMEval(char *src, char *filename, int lineno) {
-    return doVMEval(src, filename, lineno, true);
+Value VMEval(char *src, char *filename, int lineno, CallInfo *cinfo) {
+    return doVMEval(src, filename, lineno, cinfo, true);
 }
 
 void setPrintBuf(ObjString *buf, bool alsoStdout) {

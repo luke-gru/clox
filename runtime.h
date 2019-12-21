@@ -169,11 +169,13 @@ void Init_TimeClass(void);
 void addGlobalFunction(const char *name, NativeFn func);
 ObjClass *addGlobalClass(const char *name, ObjClass *super);
 ObjModule *addGlobalModule(const char *name);
+ObjClass *addClassUnder(const char *name, ObjClass *super, Value owner);
+ObjModule *addModuleUnder(const char *name, Value owner);
 ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func);
 ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func);
 ObjNative *addNativeSetter(void *klass, const char *name, NativeFn func);
 
-// API for adding constants
+// API for adding/finding constants
 void addConstantUnder(const char *name, Value constVal, Value owner);
 bool findConstantUnder(ObjClass *klass, ObjString *name, Value *valOut);
 int constantQualifiedParts(ObjString *name);

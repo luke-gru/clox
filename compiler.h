@@ -65,6 +65,7 @@ typedef struct Compiler {
   // The currently in scope local variables.
   struct Compiler *enclosing;
   ObjFunction *function; // function or top-level code object
+  Node *functionNode;
   FunctionType type;
   Local locals[LX_MAX_LOCALS];
   Upvalue upvalues[LX_MAX_UPVALUES];
@@ -116,6 +117,7 @@ typedef struct CallInfo {
     Token nameTok;
     int argc;
     int numKwargs;
+    int localCountSnapshot; // used for eval() calls, so eval() can access local variables in enclosing scope
     bool usesSplat;
     Token kwargNames[LX_MAX_KWARGS];
     // for blocks
@@ -139,6 +141,7 @@ typedef struct CompilerOpts {
 extern CompilerOpts compilerOpts;
 
 Chunk *compile_src(char *src, CompileErr *err);
+Chunk *compile_eval_src(char *src, Chunk *parentChunk, CallInfo *cinfo, CompileErr *err);
 Chunk *compile_file(char *fname, CompileErr *err);
 
 void grayCompilerRoots(void);

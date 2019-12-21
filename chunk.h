@@ -10,6 +10,7 @@ extern "C" {
 #endif
 
 struct ObjString; // fwd decl
+struct Compiler; // fwd decl
 
 typedef struct CatchTable {
     // Row info
@@ -41,6 +42,7 @@ typedef struct Chunk {
     ValueArray *constants;
     Table *varInfo; // for debugger, to print variables
     CatchTable *catchTbl;
+    struct Compiler *compiler;
 } Chunk;
 
 typedef struct NodeLvl {

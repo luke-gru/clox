@@ -54,6 +54,24 @@ ObjModule *addGlobalModule(const char *name) {
     return mod;
 }
 
+ObjClass *addClassUnder(const char *name, ObjClass *super, Value owner) {
+    ObjString *className = INTERNED(name, strlen(name));
+    ObjClass *objClass = newClass(className, super, NEWOBJ_FLAG_OLD);
+    hideFromGC((Obj*)objClass);
+    addConstantUnder(name, OBJ_VAL(objClass), owner);
+    unhideFromGC((Obj*)objClass);
+    return objClass;
+}
+
+ObjModule *addModuleUnder(const char *name, Value owner) {
+    ObjString *modName = INTERNED(name, strlen(name));
+    ObjModule *mod = newModule(modName, NEWOBJ_FLAG_OLD);
+    hideFromGC((Obj*)mod);
+    addConstantUnder(name, OBJ_VAL(mod), owner);
+    unhideFromGC((Obj*)mod);
+    return mod;
+}
+
 ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func) {
     DBG_ASSERT(klass);
     ObjString *mname = INTERNED(name, strlen(name));
@@ -235,7 +253,8 @@ Value lxEval(int argCount, Value *args) {
     if (strlen(csrc) == 0) {
         return NIL_VAL;
     }
-    return VMEval(csrc, "(eval)", 1);
+    CallInfo *cinfo = getFrame()->callInfo;
+    return VMEval(csrc, "(eval)", 1, cinfo);
 }
 
 static void threadSleep(LxThread *th, int secs) {

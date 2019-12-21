@@ -1,0 +1,8 @@
+fun evalme() {
+    var local = "local";
+    var other = "other";
+    eval("print local;");
+    var after = "after";
+}
+
+evalme();

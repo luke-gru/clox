@@ -15,6 +15,7 @@ void initChunk(Chunk *chunk) {
     initValueArray(chunk->constants);
     chunk->varInfo = ALLOCATE(Table, 1);
     initTable(chunk->varInfo);
+    chunk->compiler = NULL;
 }
 
 void initIseq(Iseq *seq) {

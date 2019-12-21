@@ -10,6 +10,7 @@
 #include "debugger.h"
 #include "memory.h"
 #include "debug.h"
+#include "nodes.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -268,8 +269,8 @@ void initVM(void);
 void freeVM(void);
 InterpretResult interpret(Chunk *chunk, char *filename);
 InterpretResult loadScript(Chunk *chunk, char *filename);
-Value VMEval(char *src, char *filename, int lineno);
-Value VMEvalNoThrow(char *src, char *filename, int lineno);
+Value VMEval(char *src, char *filename, int lineno, struct CallInfo *cinfo);
+Value VMEvalNoThrow(char *src, char *filename, int lineno, struct CallInfo *cinfo);
 Value *getLastValue(void);
 
 // script loading
