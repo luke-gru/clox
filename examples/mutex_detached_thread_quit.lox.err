@@ -1,0 +1,13 @@
+var t = newThread(fun() {
+  print "in bad thread";
+  var m = Mutex();
+  m.lock();
+});
+
+sleep(1);
+print "thats okay, exiting from main thread destroys all mutexes in unjoined threads";
+
+__END__
+-- expect: --
+in bad thread
+thats okay, exiting from main thread destroys all mutexes in unjoined threads

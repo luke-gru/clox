@@ -175,6 +175,8 @@ static inline void parseTestOptions(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "--skip") == 0) {
             vec_push(skips, argv[i+1]);
             i += 2;
+        } else if (strcmp(argv[i], "--") == 0) { // end of cmdline options
+          break;
         } else {
             die("Invalid option\n");
         }

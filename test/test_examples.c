@@ -11,6 +11,9 @@
 
 static char lineBuf[1024];
 
+int mainArgc = 1;
+char **mainArgv = NULL;
+
 // like stopVM() but for this test file
 static void _freeVM() {
     vm.exiting = true;
@@ -55,6 +58,10 @@ static int stringDiff(ObjString *actual, ObjString *expect) {
 
 static int test_run_example_files(void) {
     DIR *d = getDir("./examples");
+    char *onlyFile = NULL; // run only the given example file (cmdline option)
+    if (mainArgc > 1) {
+      onlyFile = mainArgv[mainArgc-1]; // last given cmdline word
+    }
     char fbuf[FILENAME_BUFSZ] = { '\0' };
     if (d == NULL) {
         fprintf(stderr, "[ERROR]: Cannot open './examples' directory.\n");
@@ -89,6 +96,9 @@ static int test_run_example_files(void) {
         if (entSz+filePrefixLen+1 > FILENAME_BUFSZ) {
             fprintf(stderr, "Skipping file '%s', filename too long\n", ent->d_name);
             continue;
+        }
+        if (onlyFile != NULL && strstr(ent->d_name, onlyFile) == NULL) {
+          continue;
         }
         memset(fbuf, 0, FILENAME_BUFSZ);
         strcat(fbuf, filePrefix);
@@ -170,7 +180,19 @@ cleanup:
     return 0;
 }
 
+
+
+static void copyArgv(int argc, char *argv[]) {
+  mainArgv = malloc(argc * sizeof(char*));
+  for (int i = 0; argv[i] != NULL; i++) {
+    mainArgv[i] = malloc(strlen(argv[i])+1);
+    strcpy(mainArgv[i], argv[i]);
+  }
+}
+
 int main(int argc, char *argv[]) {
+    mainArgc = argc;
+    copyArgv(argc, argv);
     parseTestOptions(argc, argv);
     initCoreSighandlers();
     INIT_TESTS();

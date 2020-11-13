@@ -1,0 +1,13 @@
+fun evalme() {
+    var a = 1;
+    var inner = fun() {
+        print a;
+    };
+    return inner;
+}
+
+evalme()();
+
+__END__
+-- expect: --
+1
