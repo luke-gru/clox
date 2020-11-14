@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
         if (strncmp(argvp[i], "-i", 2) == 0) {
             interactive = true;
             i+=1;
-        } else if (strncmp(argvp[i], "-", 1) == 0) {
+        } else if (strncmp(argvp[i], "-", 1) == 0 && strlen(argvp[i]) == 1) {
             useStdin = true;
             i+=1;
         } else {

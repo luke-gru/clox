@@ -129,6 +129,37 @@ static void enableAllTraceOptions(void) {
     SET_OPTION(traceCompiler, true);
 }
 
+static void help(FILE *f) {
+  fprintf(f, "-f SCRIPT_FILE (path to script)\n");
+  fprintf(f, "-i (interactive mode, or REPL)\n");
+  fprintf(f, "-L LOAD_PATH (colon-separated load path)\n");
+  fprintf(f, "- (read script code from stdin)\n");
+  fprintf(f, "--parse-only (check syntax of file)\n");
+  fprintf(f, "--compile-only (check syntax and semantics)\n");
+  fprintf(f, "-DTRACE_PARSER_CALLS (debug option)\n");
+  fprintf(f, "-DTRACE_COMPILER (debug option)\n");
+  fprintf(f, "-DTRACE_VM_EXECUTION (debug option)\n");
+  fprintf(f, "-DSTEP_VM_EXECUTION (debug option)\n");
+  fprintf(f, "-DTRACE_GC_LVL (debug option)\n");
+  fprintf(f, "-DTRACE_ALL (debug option)\n");
+  fprintf(f, "--debug-tokens (debug option)\n");
+  fprintf(f, "--print-AST (debug option)\n");
+  fprintf(f, "--debug-bytecode (debug option)\n");
+  fprintf(f, "--debug-VM (debug option)\n");
+  fprintf(f, "--debug-regex (debug option)\n");
+  fprintf(f, "--debug-opt (debug option)\n");
+  fprintf(f, "--debug-bopt (debug option)\n");
+  fprintf(f, "--debug-threads (debug option)\n");
+  fprintf(f, "--disable-bopt (debug option)\n");
+  fprintf(f, "--disable-GC (debug option)\n");
+  fprintf(f, "--profile-GC (debug option)\n");
+  #if GEN_GC
+  fprintf(f, "--stress-GC=young (debug option)\n");
+  fprintf(f,  "--stress-GC=both (debug option)\n");
+  #endif
+  fprintf(f, "--stress-GC=full (debug option)\n");
+}
+
 // Assumes *argv is not NULL. Returns the amount to increment
 // idx by in the caller's code.
 int parseOption(char **argv, int i) {
@@ -256,6 +287,10 @@ int parseOption(char **argv, int i) {
     if (strcmp(argv[i], "--parse-only") == 0) {
         SET_OPTION(parseOnly, true);
         return 1;
+    }
+    if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+      help(stdout);
+      exit(0);
     }
     return 0;
 }
