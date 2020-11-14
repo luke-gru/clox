@@ -1,4 +1,9 @@
-for (var i = 0; i < 10; i+=1) {
+//var i = 0;
+/*for (var i = 0; i < 10; i+=1) {
   if (i ==5) { debugger(); }
   print i;
 }
+*/
+var i = 10;
+eval("i = 5;");
+print i;

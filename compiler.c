@@ -198,7 +198,7 @@ static void namedVariable(Token name, VarOp getSet);
 // returns nil, this is in case OP_RETURN wasn't emitted from an explicit
 // `return` statement in a function.
 static void emitReturn(Compiler *compiler) {
-    ASSERT(compiler->type != FUN_TYPE_TOP_LEVEL);
+    ASSERT(compiler->type != FUN_TYPE_TOP_LEVEL && compiler->type != FUN_TYPE_EVAL);
     COMP_TRACE("Emitting return");
     if (compiler->type == FUN_TYPE_INIT) {
         emitOp0(OP_GET_THIS);
@@ -1044,6 +1044,7 @@ static void initCompiler(
     case FUN_TYPE_ANON:
     case FUN_TYPE_BLOCK:
     case FUN_TYPE_TOP_LEVEL:
+    case FUN_TYPE_EVAL:
         current->function->name = NULL;
         if (ftype == FUN_TYPE_BLOCK) {
             current->function->isBlock = true;
@@ -1340,7 +1341,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     }
 
     if (ftype == FUN_TYPE_TOP_LEVEL || ftype == FUN_TYPE_BLOCK ||
-            ftype == FUN_TYPE_ANON) {
+            ftype == FUN_TYPE_ANON || ftype == FUN_TYPE_EVAL) {
         return func;
     }
 
@@ -2159,6 +2160,48 @@ Chunk *compile_src(char *src, CompileErr *err) {
     if (mainCompiler.hadError) {
         outputCompilerErrors(&mainCompiler, stderr);
         freeCompiler(&mainCompiler, true);
+        *err = COMPILE_ERR_SEMANTICS;
+        return NULL;
+    } else {
+        *err = COMPILE_ERR_NONE;
+        ASSERT(prog->chunk);
+        return prog->chunk;
+    }
+}
+
+Chunk *compile_eval_src(char *src, CompileErr *err) {
+    initScanner(&scanner, src);
+    Parser p;
+    initParser(&p);
+    Node *program = parse(&p);
+    freeScanner(&scanner);
+    if (CLOX_OPTION_T(parseOnly)) {
+        *err = p.hadError ? COMPILE_ERR_SYNTAX :
+            COMPILE_ERR_NONE;
+        if (p.hadError) {
+            outputParserErrors(&p, stderr);
+            freeParser(&p);
+            return NULL;
+        }
+        return 0;
+    } else if (p.hadError) {
+        outputParserErrors(&p, stderr);
+        freeParser(&p); // TODO: throw SyntaxError
+        *err = COMPILE_ERR_SYNTAX;
+        return NULL;
+    }
+    ASSERT(program);
+    freeParser(&p);
+    Compiler evalCompiler;
+    initCompiler(&evalCompiler, 0, FUN_TYPE_EVAL, NULL, NULL);
+    emitNode(program);
+    ObjFunction *prog = endCompiler();
+    if (CLOX_OPTION_T(debugBytecode) && !evalCompiler.hadError) {
+        printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
+    }
+    if (evalCompiler.hadError) {
+        outputCompilerErrors(&evalCompiler, stderr);
+        freeCompiler(&evalCompiler, true);
         *err = COMPILE_ERR_SEMANTICS;
         return NULL;
     } else {

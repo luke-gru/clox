@@ -35,6 +35,8 @@ typedef enum {
     FUN_TYPE_CLASS_METHOD,
     // implementation detail, top-level is compiled as if it was a function
     FUN_TYPE_TOP_LEVEL,
+    // implementation detail, evaled source code is compiled as if it was a function
+    FUN_TYPE_EVAL,
     FUN_TYPE_BLOCK,
 } FunctionType;
 
@@ -139,6 +141,7 @@ typedef struct CompilerOpts {
 extern CompilerOpts compilerOpts;
 
 Chunk *compile_src(char *src, CompileErr *err);
+Chunk *compile_eval_src(char *src, CompileErr *err);
 Chunk *compile_file(char *fname, CompileErr *err);
 
 void grayCompilerRoots(void);

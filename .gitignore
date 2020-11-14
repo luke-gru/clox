@@ -5,3 +5,5 @@ gmon.out
 profile.txt
 callgrind.out.*
 tags
+out
+fuzz

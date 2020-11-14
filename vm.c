@@ -2585,6 +2585,17 @@ vmLoop:
           *frame->closure->upvalues[slot]->value = peek(0);
           DISPATCH_BOTTOM();
       }
+      CASE_OP(GET_DYNAMIC_VAR): {
+        Value varName = READ_CONSTANT();
+        fprintf(stderr, "Getting dyna var: %s\n", AS_CSTRING(varName));
+        DISPATCH_BOTTOM();
+      }
+      CASE_OP(SET_DYNAMIC_VAR): {
+        Value varName = READ_CONSTANT();
+        Value val = VM_PEEK(0);
+        fprintf(stderr, "Setting dyna var: %s\n", AS_CSTRING(varName));
+        DISPATCH_BOTTOM();
+      }
       CASE_OP(CLOSE_UPVALUE): {
           closeUpvalues(EC->stackTop - 1);
           VM_POP(); // pop the variable from the stack frame
@@ -3356,11 +3367,11 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     CompileErr err = COMPILE_ERR_NONE;
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
     compilerOpts.noRemoveUnusedExpressions = true;
-    push_EC();
+    //push_EC();
     VMExecContext *ectx = EC;
     ectx->evalContext = true;
-    resetStack();
-    Chunk *chunk = compile_src(src, &err);
+    //resetStack();
+    Chunk *chunk = compile_eval_src(src, &err);
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
     if (err != COMPILE_ERR_NONE || !chunk) {
@@ -3369,7 +3380,7 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
             FREE(Chunk, chunk);
         }
         VM_DEBUG(1, "compile error in eval");
-        pop_EC();
+        //pop_EC();
         ASSERT(getFrame() == oldFrame);
         if (throwOnErr) {
             throwErrorFmt(lxSyntaxErrClass, "%s", "Syntax error");
@@ -3404,8 +3415,7 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     VM_DEBUG(2, "eval finished: error: %d", THREAD()->hadError ? 1 : 0);
     // `EC != ectx` if an error occured in the eval, and propagated out
     // due to being caught in a surrounding context or never being caught.
-    if (EC == ectx) pop_EC();
-    ASSERT(getFrame() == oldFrame);
+    EC->evalContext = false;
     if (result == INTERPRET_OK) {
         return val;
     } else {
