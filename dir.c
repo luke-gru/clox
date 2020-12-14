@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <dirent.h>
 #include <glob.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "object.h"
 #include "vm.h"
 #include "runtime.h"
@@ -96,6 +98,29 @@ static Value lxDirPwdStatic(int argCount, Value *args) {
     return OBJ_VAL(copyString(buf, strlen(buf), NEWOBJ_FLAG_NONE));
 }
 
+static Value lxDirMkdirStatic(int argCount, Value *args) {
+    CHECK_ARITY("Dir.mkdir", 2, 3, argCount);
+    Value nameStrVal = args[1];
+    int mode = 0777; // umask is applied
+    CHECK_ARG_IS_A(nameStrVal, lxStringClass, 1);
+    if (argCount == 3) {
+      Value modeVal = args[2];
+      CHECK_ARG_BUILTIN_TYPE(modeVal, IS_NUMBER_FUNC, "number", 3);
+      mode = AS_NUMBER(modeVal);
+    }
+    char *nameCStr = AS_STRING(nameStrVal)->chars;
+    releaseGVL(THREAD_STOPPED);
+    int res = mkdir(nameCStr, mode);
+    acquireGVL();
+    int last = errno;
+    if (res != 0) {
+        int err = errno;
+        errno = last;
+        throwErrorFmt(sysErrClass(err), "Couldn't create directory %s: %s", nameCStr, strerror(err));
+    }
+    return TRUE_VAL;
+}
+
 static Value lxDirGlobStatic(int argCount, Value *args) {
     CHECK_ARITY("Dir.glob", 2, 2, argCount);
     Value globStrVal = args[1];
@@ -105,7 +130,9 @@ static Value lxDirGlobStatic(int argCount, Value *args) {
     glob_t globBuf;
 
     Value ary = newArray();
+    releaseGVL(THREAD_STOPPED);
     int res = glob((const char *)globCStr, GLOB_BRACE, NULL, &globBuf);
+    acquireGVL();
     if (res == GLOB_NOMATCH) {
         globfree(&globBuf);
         return ary;
@@ -168,6 +195,7 @@ void Init_DirClass() {
     addNativeMethod(lxDirClass, "rewind", lxDirRewind);
     addNativeMethod(lxDirClass, "iterNext", lxDirIterNext);
     ObjClass *dirStatic = classSingletonClass(lxDirClass);
+    addNativeMethod(dirStatic, "mkdir", lxDirMkdirStatic);
     addNativeMethod(dirStatic, "pwd", lxDirPwdStatic);
     addNativeMethod(dirStatic, "chdir", lxDirChdirStatic);
     addNativeMethod(dirStatic, "glob", lxDirGlobStatic);

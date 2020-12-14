@@ -110,7 +110,6 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
     bool leftoverLine = false;
     char fileReadBuf[READBUF_SZ];
     while ((nread = fread(fileReadBuf, 1, sizeof(fileReadBuf), f)) > 0) {
-        acquireGVL();
         size_t nleft = nread;
         char *bufp = fileReadBuf;
         char *bufpStart = bufp;
@@ -136,7 +135,6 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
             }
             bufpStart = bufp;
         }
-        releaseGVL(THREAD_STOPPED);
     }
     acquireGVL();
     checkFerror(f, "reading", fnameStr->chars);
@@ -303,6 +301,21 @@ static Value lxFileRewind(int argCount, Value *args) {
     return callMethod(AS_OBJ(*args), INTERN("seek"), 2, seekArgs, NULL);
 }
 
+static Value lxFileChmod(int argCount, Value *args) {
+    CHECK_ARITY("File#chmod", 2, 2, argCount);
+    Value modeVal = args[1];
+    CHECK_ARG_BUILTIN_TYPE(modeVal, IS_NUMBER_FUNC, "number", 1);
+    int mode = AS_NUMBER(modeVal);
+    LxFile *lxfile = fileGetHidden(args[0]);
+    releaseGVL(THREAD_STOPPED);
+    int res = chmod(lxfile->name->chars, mode);
+    acquireGVL();
+    if (res != 0) {
+        throwErrorFmt(sysErrClass(res), "Error during chmod for file '%s': %s", lxfile->name, strerror(res));
+    }
+    return TRUE_VAL;
+}
+
 void Init_FileClass(void) {
     ObjClass *fileClass = addGlobalClass("File", lxIOClass);
     ObjClass *fileStatic = classSingletonClass(fileClass);
@@ -321,7 +334,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileClass, "rename", lxFileRename);
     addNativeMethod(fileClass, "seek", lxFileSeek);
     addNativeMethod(fileClass, "rewind", lxFileRewind);
-
+    addNativeMethod(fileClass, "chmod", lxFileChmod);
 
     Value fileClassVal = OBJ_VAL(fileClass);
     addConstantUnder("O_RDONLY", NUMBER_VAL(O_RDONLY), fileClassVal);
