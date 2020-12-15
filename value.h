@@ -112,12 +112,20 @@ typedef struct ValueArray {
 
 #define VALARRAY_FOREACH_START(ary, val, startIdx, idx) \
     for (idx = startIdx; idx < (ary)->count && (val = (ary)->values[idx]) && !IS_UNDEF(val); idx++)
+
+#define VALARRAY_FOREACH_REVERSE(ary, val, idx) \
+    for (idx = ((ary)->count-1); idx >= 0 && (val = (ary)->values[idx]) && !IS_UNDEF(val); idx--)
+
 #else
 #define VALARRAY_FOREACH(ary, val, idx) \
     for (idx = 0; idx < (ary)->count && (val = (ary)->values[idx]).type != VAL_T_UNDEF; idx++)
 
 #define VALARRAY_FOREACH_START(ary, val, startIdx, idx) \
     for (idx = startIdx; idx < (ary)->count && (val = (ary)->values[idx]).type != VAL_T_UNDEF; idx++)
+
+#define VALARRAY_FOREACH_REVERSE(ary, val, idx) \
+    for (idx = ((ary)->count-1); idx >= 0 && (val = (ary)->values[idx]).type != VAL_T_UNDEF; idx--)
+
 #endif
 
 #define IS_BOOL_FUNC (is_bool_p)

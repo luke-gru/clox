@@ -46,4 +46,25 @@ module FileUtils {
         f.chmod(newMode);
         return true;
     }
+
+    class mkdir_p(path) {
+        var existingParts = [];
+        path.split("/").each() -> (part) {
+            var pathpart = existingParts.join("/");
+            if (pathpart.size() != 0) {
+                pathpart.push("/" + part);
+            } else {
+                pathpart = part;
+            }
+            if (File.exists(pathpart)) {
+                if (!File.isDir(pathpart)) {
+                    throw Error("file ${pathpart} is not a directory");
+                }
+            } else {
+                Dir.mkdir(pathpart);
+            }
+            existingParts.push(part);
+        };
+        return true;
+    }
 }

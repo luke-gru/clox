@@ -168,6 +168,20 @@ static Value lxFileReadLinesStatic(int argCount, Value *args) {
     return ary;
 }
 
+static Value lxFileStaticIsDir(int argCount, Value *args) {
+    CHECK_ARITY("File.isDir", 2, 2, argCount);
+    Value path = args[1];
+    CHECK_ARG_IS_A(path, lxStringClass, 1);
+    struct stat st;
+    releaseGVL(THREAD_STOPPED);
+    int res = stat(AS_CSTRING(path), &st);
+    acquireGVL();
+    if (res != 0) {
+      throwErrorFmt(sysErrClass(errno), "Error during stat for file %s: %s", AS_CSTRING(path), strerror(errno));
+    }
+    return BOOL_VAL(S_ISDIR(st.st_mode));
+}
+
 static Value lxFileInit(int argCount, Value *args) {
     CHECK_ARITY("File#init", 2, 2, argCount);
     callSuper(0, NULL, NULL);
@@ -366,6 +380,7 @@ static Value lxFileGid(int argCount, Value *args) {
     return NUMBER_VAL((int)st.st_gid);
 }
 
+
 static Value lxFileChmod(int argCount, Value *args) {
     CHECK_ARITY("File#chmod", 2, 2, argCount);
     Value modeVal = args[1];
@@ -493,6 +508,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "user", lxFileUserStatic);
     addNativeMethod(fileStatic, "group", lxFileGroupStatic);
     addNativeMethod(fileStatic, "stat", lxFileStatStatic);
+    addNativeMethod(fileStatic, "isDir", lxFileStaticIsDir);
 
     addNativeMethod(fileClass, "init", lxFileInit);
     addNativeMethod(fileClass, "write", lxFileWrite);
