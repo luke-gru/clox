@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <pwd.h>
+#include <grp.h>
 #include "object.h"
 #include "vm.h"
 #include "runtime.h"
@@ -10,6 +12,9 @@
 #include "table.h"
 
 ObjClass *lxFileClass;
+static ObjClass *lxFilePasswdClass;
+static ObjClass *lxFileGroupClass;
+static ObjClass *lxFileStatClass;
 #define READBUF_SZ 4092
 #define WRITEBUF_SZ 4092
 
@@ -95,6 +100,14 @@ static Value lxFileReadStatic(int argCount, Value *args) {
     checkFclose(f);
     return OBJ_VAL(buf);
 }
+
+static Value lxFileStatStatic(int argCount, Value *args) {
+    CHECK_ARITY("File.stat", 2, 2, argCount);
+    Value path = args[1];
+    Value ret = callFunctionValue(OBJ_VAL(lxFileStatClass), 1, &path);
+    return ret;
+}
+
 
 static Value lxFileReadLinesStatic(int argCount, Value *args) {
     CHECK_ARITY("File.readLines", 2, 2, argCount);
@@ -301,19 +314,158 @@ static Value lxFileRewind(int argCount, Value *args) {
     return callMethod(AS_OBJ(*args), INTERN("seek"), 2, seekArgs, NULL);
 }
 
+static Value lxFileMode(int argCount, Value *args) {
+    CHECK_ARITY("File#mode", 1, 1, argCount);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
+    struct stat st;
+    releaseGVL(THREAD_STOPPED);
+    int res = stat(lxfile->name->chars, &st);
+    acquireGVL();
+    if (res != 0) {
+      throwErrorFmt(sysErrClass(errno), "Error during stat for file %s: %s", lxfile->name->chars, strerror(errno));
+    }
+    return NUMBER_VAL((int)st.st_mode);
+}
+
+static Value lxFileUid(int argCount, Value *args) {
+    CHECK_ARITY("File#uid", 1, 1, argCount);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
+    struct stat st;
+    releaseGVL(THREAD_STOPPED);
+    int res = stat(lxfile->name->chars, &st);
+    acquireGVL();
+    if (res != 0) {
+      throwErrorFmt(sysErrClass(errno), "Error during stat for file %s: %s", lxfile->name->chars, strerror(errno));
+    }
+    return NUMBER_VAL((int)st.st_uid);
+}
+
+static Value lxFileGid(int argCount, Value *args) {
+    CHECK_ARITY("File#gid", 1, 1, argCount);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
+    struct stat st;
+    releaseGVL(THREAD_STOPPED);
+    int res = stat(lxfile->name->chars, &st);
+    acquireGVL();
+    if (res != 0) {
+      throwErrorFmt(sysErrClass(errno), "Error during stat for file %s: %s", lxfile->name->chars, strerror(errno));
+    }
+    return NUMBER_VAL((int)st.st_gid);
+}
+
 static Value lxFileChmod(int argCount, Value *args) {
     CHECK_ARITY("File#chmod", 2, 2, argCount);
     Value modeVal = args[1];
     CHECK_ARG_BUILTIN_TYPE(modeVal, IS_NUMBER_FUNC, "number", 1);
     int mode = AS_NUMBER(modeVal);
-    LxFile *lxfile = fileGetHidden(args[0]);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
     releaseGVL(THREAD_STOPPED);
     int res = chmod(lxfile->name->chars, mode);
     acquireGVL();
     if (res != 0) {
-        throwErrorFmt(sysErrClass(res), "Error during chmod for file '%s': %s", lxfile->name, strerror(res));
+        throwErrorFmt(sysErrClass(errno), "Error during chmod for file '%s': %s", lxfile->name->chars, strerror(errno));
     }
     return TRUE_VAL;
+}
+
+static Value lxFileChown(int argCount, Value *args) {
+    CHECK_ARITY("File#chown", 4, 4, argCount);
+    Value pathVal = args[1];
+    Value ownerVal = args[2];
+    Value groupVal = args[3];
+    CHECK_ARG_IS_A(pathVal, lxStringClass, 1);
+    CHECK_ARG_BUILTIN_TYPE(ownerVal, IS_NUMBER_FUNC, "number", 2);
+    CHECK_ARG_BUILTIN_TYPE(groupVal, IS_NUMBER_FUNC, "number", 3);
+    int owner = AS_NUMBER(ownerVal);
+    int group = AS_NUMBER(groupVal);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
+    releaseGVL(THREAD_STOPPED);
+    int res = chown(lxfile->name->chars, (uid_t)owner, (gid_t)group);
+    acquireGVL();
+    if (res != 0) {
+        throwErrorFmt(sysErrClass(errno), "Error during chown for file '%s': %s", lxfile->name->chars, strerror(errno));
+    }
+    return TRUE_VAL;
+}
+
+static Value lxFilePasswdInit(int argCount, Value *args) {
+    CHECK_ARITY("FilePasswd#init", 2, 2, argCount);
+    Value self = args[0];
+    Value initArg = args[1];
+    if (!IS_NUMBER(initArg) && !IS_A_STRING(initArg)) {
+      throwErrorFmt(lxArgErrClass, "FilePasswd must be initialized with a string or number");
+    }
+    struct passwd *pw = NULL;
+    if (IS_NUMBER(initArg)) {
+      pw = getpwuid((uid_t)AS_NUMBER(initArg));
+    } else {
+      pw = getpwnam(AS_CSTRING(initArg));
+    }
+    if (pw == NULL) {
+      throwErrorFmt(sysErrClass(errno), "user info (passwd) retrieval error: %s", strerror(errno));
+    }
+    Value pw_nameVal = OBJ_VAL(copyString(pw->pw_name, strlen(pw->pw_name), NEWOBJ_FLAG_NONE));
+    Value pw_passwdVal = OBJ_VAL(copyString(pw->pw_passwd, strlen(pw->pw_passwd), NEWOBJ_FLAG_NONE));
+    Value pw_dirVal = OBJ_VAL(copyString(pw->pw_dir, strlen(pw->pw_dir), NEWOBJ_FLAG_NONE));
+    Value pw_shellVal = OBJ_VAL(copyString(pw->pw_shell, strlen(pw->pw_shell), NEWOBJ_FLAG_NONE));
+    propertySet(AS_INSTANCE(self), INTERN("name"), pw_nameVal);
+    propertySet(AS_INSTANCE(self), INTERN("passwd"), pw_passwdVal);
+    propertySet(AS_INSTANCE(self), INTERN("uid"), NUMBER_VAL((int)pw->pw_uid));
+    propertySet(AS_INSTANCE(self), INTERN("gid"), NUMBER_VAL((int)pw->pw_gid));
+    propertySet(AS_INSTANCE(self), INTERN("dir"), pw_dirVal);
+    propertySet(AS_INSTANCE(self), INTERN("shell"), pw_shellVal);
+    return self;
+}
+
+static Value lxFileGroupInit(int argCount, Value *args) {
+    CHECK_ARITY("FileGroup#init", 2, 2, argCount);
+    Value self = args[0];
+    Value initArg = args[1];
+    if (!IS_NUMBER(initArg) && !IS_A_STRING(initArg)) {
+      throwErrorFmt(lxArgErrClass, "FileGroup must be initialized with a string or number");
+    }
+    struct group *gr = NULL;
+    if (IS_NUMBER(initArg)) {
+      gr = getgrgid((gid_t)AS_NUMBER(initArg));
+    } else {
+      gr = getgrnam(AS_CSTRING(initArg));
+    }
+    if (gr == NULL) {
+      throwErrorFmt(sysErrClass(errno), "group info retrieval error: %s", strerror(errno));
+    }
+    Value gr_nameVal = OBJ_VAL(copyString(gr->gr_name, strlen(gr->gr_name), NEWOBJ_FLAG_NONE));
+    Value gr_passwdVal = OBJ_VAL(copyString(gr->gr_passwd, strlen(gr->gr_passwd), NEWOBJ_FLAG_NONE));
+    propertySet(AS_INSTANCE(self), INTERN("name"), gr_nameVal);
+    propertySet(AS_INSTANCE(self), INTERN("passwd"), gr_passwdVal);
+    propertySet(AS_INSTANCE(self), INTERN("gid"), NUMBER_VAL((int)gr->gr_gid));
+    // TODO: add members array (gr->gr_mem)
+    return self;
+}
+
+static Value lxFileStatInit(int argCount, Value *args) {
+    CHECK_ARITY("FileStat#init", 2, 2, argCount);
+    Value self = args[0];
+    Value path = args[1];
+    if (!IS_A_STRING(path)) {
+      throwErrorFmt(lxArgErrClass, "FileStat must be initialized with a string");
+    }
+
+    struct stat st;
+    releaseGVL(THREAD_STOPPED);
+    int res = stat(AS_CSTRING(path), &st);
+    acquireGVL();
+    if (res != 0) {
+      throwErrorFmt(sysErrClass(errno), "stat retrieval error for file %s: %s", AS_CSTRING(path), strerror(errno));
+    }
+    Value modeVal = NUMBER_VAL((int)st.st_mode);
+    Value uidVal = NUMBER_VAL((int)st.st_uid);
+    Value gidVal = NUMBER_VAL((int)st.st_gid);
+    Value sizeVal = NUMBER_VAL((int)st.st_size);
+    propertySet(AS_INSTANCE(self), INTERN("mode"), modeVal);
+    propertySet(AS_INSTANCE(self), INTERN("uid"), uidVal);
+    propertySet(AS_INSTANCE(self), INTERN("gid"), gidVal);
+    propertySet(AS_INSTANCE(self), INTERN("size"), sizeVal);
+    return self;
 }
 
 void Init_FileClass(void) {
@@ -325,6 +477,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "exists", lxFileExistsStatic);
     addNativeMethod(fileStatic, "read", lxFileReadStatic);
     addNativeMethod(fileStatic, "readLines", lxFileReadLinesStatic);
+    addNativeMethod(fileStatic, "stat", lxFileStatStatic);
 
     addNativeMethod(fileClass, "init", lxFileInit);
     addNativeMethod(fileClass, "write", lxFileWrite);
@@ -335,6 +488,20 @@ void Init_FileClass(void) {
     addNativeMethod(fileClass, "seek", lxFileSeek);
     addNativeMethod(fileClass, "rewind", lxFileRewind);
     addNativeMethod(fileClass, "chmod", lxFileChmod);
+    addNativeMethod(fileClass, "chown", lxFileChown);
+    addNativeMethod(fileClass, "mode", lxFileMode);
+    addNativeMethod(fileClass, "uid", lxFileUid);
+    addNativeMethod(fileClass, "gid", lxFileGid);
+
+    // FIXME: add it under File namespace
+    lxFilePasswdClass = addGlobalClass("FilePasswd", lxObjClass);
+    addNativeMethod(lxFilePasswdClass, "init", lxFilePasswdInit);
+
+    lxFileGroupClass = addGlobalClass("FileGroup", lxObjClass);
+    addNativeMethod(lxFileGroupClass, "init", lxFileGroupInit);
+
+    lxFileStatClass = addGlobalClass("FileStat", lxObjClass);
+    addNativeMethod(lxFileStatClass, "init", lxFileStatInit);
 
     Value fileClassVal = OBJ_VAL(fileClass);
     addConstantUnder("O_RDONLY", NUMBER_VAL(O_RDONLY), fileClassVal);

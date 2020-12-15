@@ -1205,6 +1205,7 @@ Value lxGCSetFinalizer(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+// TODO: map error to unix error values
 ObjClass *sysErrClass(int err) {
     (void)err;
     return lxSystemErrClass;
