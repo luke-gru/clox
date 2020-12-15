@@ -3,6 +3,7 @@
 #include "runtime.h"
 #include "table.h"
 #include "memory.h"
+#include <string.h>
 
 ObjClass *lxStringClass;
 
@@ -172,6 +173,31 @@ static Value lxStringOpEquals(int argCount, Value *args) {
     return BOOL_VAL(stringEquals(args[0], args[1]));
 }
 
+static Value lxStringSplit(int argCount, Value *args) {
+    CHECK_ARITY("String#split", 2, 2, argCount);
+    Value self = args[0];
+    Value pat = args[1];
+    CHECK_ARG_IS_A(pat, lxStringClass, 1);
+    Value ret = newArray();
+    char *hay = AS_CSTRING(self);
+    char *needle = AS_CSTRING(pat);
+    char *end = hay + strlen(hay);
+
+    char *res = NULL;
+    // ex: hay: "hello,,there", needle: ",,"
+    // TODO: support regexes as pat
+    while (hay < end && (res = strstr(hay, needle)) != NULL) {
+      ObjString *part = copyString(hay, res - hay, NEWOBJ_FLAG_NONE);
+      hay = res + strlen(needle);
+      arrayPush(ret, OBJ_VAL(part));
+    }
+    if (hay != end) {
+      ObjString *part = copyString(hay, end - hay, NEWOBJ_FLAG_NONE);
+      arrayPush(ret, OBJ_VAL(part));
+    }
+    return ret;
+}
+
 static Value lxStringGetSize(int argCount, Value *args) {
     ObjString *str = AS_STRING(*args);
     return NUMBER_VAL(str->length);
@@ -193,6 +219,7 @@ void Init_StringClass() {
     addNativeMethod(stringClass, "insertAt", lxStringInsertAt);
     addNativeMethod(stringClass, "substr", lxStringSubstr);
     addNativeMethod(stringClass, "dup", lxStringDup);
+    addNativeMethod(stringClass, "split", lxStringSplit);
 
     // getters
     addNativeGetter(stringClass, "size", lxStringGetSize);
