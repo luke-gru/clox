@@ -505,6 +505,18 @@ static Value lxArraySum(int argCount, Value *args) {
     return NUMBER_VAL(sum);
 }
 
+static Value lxArrayReverse(int argCount, Value *args) {
+    CHECK_ARITY("Array#reverse", 1, 1, argCount);
+    Value self = *args;
+    Value ret = newArray();
+    ObjArray *selfObj = AS_ARRAY(self);
+    Value el; int elIdx = 0;
+    VALARRAY_FOREACH_REVERSE(&selfObj->valAry, el, elIdx) {
+      arrayPush(ret, el);
+    }
+    return ret;
+}
+
 static Value lxArrayGetSize(int argCount, Value *args) {
     ValueArray *ary = &AS_ARRAY(*args)->valAry;
     return NUMBER_VAL(ary->count);
@@ -557,6 +569,7 @@ void Init_ArrayClass() {
     addNativeMethod(arrayClass, "find", lxArrayFind);
     addNativeMethod(arrayClass, "reduce", lxArrayReduce);
     addNativeMethod(arrayClass, "sum", lxArraySum);
+    addNativeMethod(arrayClass, "reverse", lxArrayReverse);
 
     // getters
     addNativeGetter(arrayClass, "size", lxArrayGetSize);
