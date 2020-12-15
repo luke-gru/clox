@@ -108,6 +108,19 @@ static Value lxFileStatStatic(int argCount, Value *args) {
     return ret;
 }
 
+static Value lxFileUserStatic(int argCount, Value *args) {
+    CHECK_ARITY("File.user", 2, 2, argCount);
+    Value user = args[1];
+    Value ret = callFunctionValue(OBJ_VAL(lxFilePasswdClass), 1, &user);
+    return ret;
+}
+
+static Value lxFileGroupStatic(int argCount, Value *args) {
+    CHECK_ARITY("File.group", 2, 2, argCount);
+    Value group = args[1];
+    Value ret = callFunctionValue(OBJ_VAL(lxFileGroupClass), 1, &group);
+    return ret;
+}
 
 static Value lxFileReadLinesStatic(int argCount, Value *args) {
     CHECK_ARITY("File.readLines", 2, 2, argCount);
@@ -477,6 +490,8 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "exists", lxFileExistsStatic);
     addNativeMethod(fileStatic, "read", lxFileReadStatic);
     addNativeMethod(fileStatic, "readLines", lxFileReadLinesStatic);
+    addNativeMethod(fileStatic, "user", lxFileUserStatic);
+    addNativeMethod(fileStatic, "group", lxFileGroupStatic);
     addNativeMethod(fileStatic, "stat", lxFileStatStatic);
 
     addNativeMethod(fileClass, "init", lxFileInit);
