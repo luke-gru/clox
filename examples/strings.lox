@@ -28,6 +28,10 @@ print typeof(err);
 print "a" < "b";
 print "b" < "a";
 
+var s5 = "a string";
+s5[0] = "weird";
+print s5;
+
 __END__
 -- expect: --
 string1
@@ -45,3 +49,4 @@ true
 instance
 true
 false
+weird string

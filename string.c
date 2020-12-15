@@ -123,7 +123,7 @@ static Value lxStringInsertAt(int argCount, Value *args) {
     CHECK_ARG_IS_A(insert, lxStringClass, 1);
     CHECK_ARG_BUILTIN_TYPE(at, IS_NUMBER_FUNC, "number", 2);
     dedupString(AS_STRING(self));
-    stringInsertAt(self, insert, (int)AS_NUMBER(at));
+    stringInsertAt(self, insert, (int)AS_NUMBER(at), false);
     return self;
 }
 
@@ -153,12 +153,17 @@ static Value lxStringOpIndexSet(int argCount, Value *args) {
     Value self = args[0];
     Value index = args[1];
     CHECK_ARG_BUILTIN_TYPE(index, IS_NUMBER_FUNC, "number", 1);
-    Value chrStr = args[1];
+    Value chrStr = args[2];
     CHECK_ARG_IS_A(chrStr, lxStringClass, 3);
-    // TODO: allow string longer than 1 char, or check size of given string
-    char chr = VAL_TO_STRING(chrStr)->chars[0];
     dedupString(AS_STRING(self));
-    stringIndexSet(self, AS_NUMBER(index), chr);
+    // TODO: allow string longer than 1 char, or check size of given string
+    char *chars = VAL_TO_STRING(chrStr)->chars;
+    char chr = chars[0];
+    if (strlen(chars) == 1) {
+      stringIndexSet(self, AS_NUMBER(index), chr);
+    } else {
+      stringInsertAt(self, chrStr, (int)AS_NUMBER(index), true);
+    }
     return self;
 }
 

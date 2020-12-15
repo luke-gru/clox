@@ -429,7 +429,7 @@ static inline ObjString *dupString(ObjString *string) {
 // strings as values
 void clearString(Value self);
 void pushString(Value self, Value pushed);
-void stringInsertAt(Value self, Value insert, size_t at);
+void stringInsertAt(Value self, Value insert, size_t at, bool replaceAt);
 Value stringSubstr(Value self, size_t startIdx, size_t len);
 Value stringIndexGet(Value self, size_t index);
 Value stringIndexSet(Value self, size_t index, char c);
@@ -439,7 +439,7 @@ bool stringEquals(Value a, Value b);
 // hash value changes and the map won't be able to index it anymore (see
 // Map#rehash())
 void pushCString(ObjString *string, const char *chars, size_t lenToAdd);
-void insertCString(ObjString *a, const char *chars, size_t lenToAdd, size_t at);
+void insertCString(ObjString *a, const char *chars, size_t lenToAdd, size_t at, bool replaceAt);
 void pushCStringFmt(ObjString *string, const char *format, ...);
 void pushCStringVFmt(ObjString *string, const char *format, va_list ap);
 uint32_t hashString(char *key, size_t length);
@@ -447,8 +447,8 @@ uint32_t hashString(char *key, size_t length);
 static inline void pushObjString(ObjString *a, ObjString *b) {
     pushCString(a, b->chars, b->length);
 }
-static inline void insertObjString(ObjString *a, ObjString *b, size_t at) {
-    insertCString(a, b->chars, b->length, at);
+static inline void insertObjString(ObjString *a, ObjString *b, size_t at, bool replaceAt) {
+    insertCString(a, b->chars, b->length, at, replaceAt);
 }
 
 // misc

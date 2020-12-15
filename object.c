@@ -186,7 +186,7 @@ void pushCString(ObjString *string, const char *chars, size_t lenToAdd) {
     string->hash = 0;
 }
 
-void insertCString(ObjString *string, const char *chars, size_t lenToAdd, size_t at) {
+void insertCString(ObjString *string, const char *chars, size_t lenToAdd, size_t at, bool replaceAt) {
     DBG_ASSERT(strlen(chars) >= lenToAdd);
     ASSERT(!isFrozen((Obj*)string));
 
@@ -199,6 +199,9 @@ void insertCString(ObjString *string, const char *chars, size_t lenToAdd, size_t
     if (lenToAdd == 0) return;
 
     size_t newLen = string->length + lenToAdd;
+    if (replaceAt) {
+      newLen--;
+    }
     if (newLen > string->capacity) {
         size_t newCapa = GROW_CAPACITY(string->capacity);
         size_t newSz = newLen > newCapa ? newLen : newCapa;
@@ -207,12 +210,14 @@ void insertCString(ObjString *string, const char *chars, size_t lenToAdd, size_t
     }
     char *dest = string->chars + at + lenToAdd;
     char *src = string->chars+at;
+    if (replaceAt) src++;
     int charsToMove = string->length-at;
+    if (replaceAt) charsToMove--;
     memmove(dest, src, sizeof(char)*charsToMove);
     for (size_t i = 0; i < lenToAdd; i++) {
         string->chars[at+i] = chars[i];
     }
-    string->length += lenToAdd;
+    string->length = newLen;
     string->chars[string->length] = '\0';
     string->hash = 0;
 }
@@ -784,13 +789,13 @@ void clearString(Value string) {
     clearObjString(buf);
 }
 
-void stringInsertAt(Value self, Value insert, size_t at) {
+void stringInsertAt(Value self, Value insert, size_t at, bool replaceAt) {
     if (isFrozen(AS_OBJ(self))) {
         throwErrorFmt(lxErrClass, "%s", "String is frozen, cannot modify");
     }
     ObjString *selfBuf = AS_STRING(self);
     ObjString *insertBuf = AS_STRING(insert);
-    insertObjString(selfBuf, insertBuf, at);
+    insertObjString(selfBuf, insertBuf, at, replaceAt);
 }
 
 Value stringSubstr(Value self, size_t startIdx, size_t len) {
@@ -1291,12 +1296,12 @@ ObjString *classNameFull(ObjClass *klass) {
     while (klass) {
         ObjString *name = CLASSINFO(klass)->name;
         if (orig != klass) {
-            insertCString(ret, "::", 2, 0);
+            insertCString(ret, "::", 2, 0, false);
         }
         if (name) {
-            insertCString(ret, name->chars, strlen(name->chars), 0);
+            insertCString(ret, name->chars, strlen(name->chars), 0, false);
         } else {
-            insertCString(ret, "(anon)", strlen("(anon)"), 0);
+            insertCString(ret, "(anon)", strlen("(anon)"), 0, false);
         }
         klass = TO_CLASS(CLASSINFO(klass)->under);
     }
