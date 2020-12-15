@@ -1,0 +1,49 @@
+module FileUtils {
+    class chown(path, user, group) {
+        pw = FilePasswd(user);
+        gr = FileGroup(group);
+        f = File(path);
+        f.close();
+        f.chown(path, pw.uid, gr.gid);
+        return true;
+    }
+
+    class chmod(path, userStr, groupStr, otherStr) {
+        f = File(path);
+        f.close();
+        rpat = %"r";
+        wpat = %"w";
+        xpat = %"x";
+        oldMode = f.mode();
+        newMode = 0c111000 & oldMode;
+        if (rpat.match(userStr)) {
+            newMode = newMode | 0c400;
+        }
+        if (wpat.match(userStr)) {
+            newMode = newMode | 0c200;
+        }
+        if (xpat.match(userStr)) {
+            newMode = newMode | 0c100;
+        }
+        if (rpat.match(groupStr)) {
+            newMode = newMode | 0c040;
+        }
+        if (wpat.match(groupStr)) {
+            newMode = newMode | 0c020;
+        }
+        if (xpat.match(groupStr)) {
+            newMode = newMode | 0c010;
+        }
+        if (rpat.match(otherStr)) {
+            newMode = newMode | 0c004;
+        }
+        if (wpat.match(otherStr)) {
+            newMode = newMode | 0c002;
+        }
+        if (xpat.match(otherStr)) {
+            newMode = newMode | 0c001;
+        }
+        f.chmod(newMode);
+        return true;
+    }
+}
