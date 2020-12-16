@@ -198,6 +198,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(classClass, "methodAdded", lxClassMethodAdded);
     addNativeMethod(classClass, "constDefined", lxClassConstDefined);
     addNativeMethod(classClass, "constGet", lxClassConstGet);
+    addNativeMethod(classClass, "defineMethod", lxClassDefineMethod);
     addNativeMethod(classClass, "constants", lxClassConstants);
     addNativeMethod(classClass, "ancestors", lxClassAncestors);
     addNativeMethod(classClass, "isA", lxClassIsA);
@@ -1077,13 +1078,35 @@ void propertySet(ObjInstance *obj, ObjString *propName, Value rval) {
     }
 }
 
-static void defineMethod(ObjString *name) {
-    Value method = peek(0); // function
-    ASSERT(IS_CLOSURE(method));
-    Value classOrMod = peek(1);
-    ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
-    ObjFunction *func = AS_CLOSURE(method)->function;
-    func->klass = AS_OBJ(classOrMod);
+static ObjFunction *funcFromCallable(Value callable) {
+  if (IS_FUNCTION(callable)) { return AS_FUNCTION(callable); }
+  if (IS_CLASS(callable)) {
+    Obj *methodObj = instanceFindMethod(AS_INSTANCE(callable), INTERN("init"));
+    if (!methodObj) { return NULL; }
+    Value method = OBJ_VAL(methodObj);
+    return funcFromCallable(method);
+  } else if (IS_CLOSURE(callable)) {
+    return AS_CLOSURE(callable)->function;
+  } else if (IS_NATIVE_FUNCTION(callable)) {
+    return NULL;
+  } else if (IS_BOUND_METHOD(callable)) {
+    ObjBoundMethod *bmethod = AS_BOUND_METHOD(callable);
+    Obj *callable = bmethod->callable; // native function or user-defined function (ObjClosure)
+    return funcFromCallable(OBJ_VAL(callable));
+  } else {
+    UNREACHABLE_RETURN(NULL);
+  }
+}
+
+void defineMethod(Value classOrMod, ObjString *name, Value method) {
+    ASSERT(isCallable(method));
+    ObjFunction *func = funcFromCallable(method);
+    // FIXME: a function can be attached to multiple classes because of
+    // runtime defineMethod(). I don't think this field should exist anymore,
+    // not sure if it's currently used anywhere.
+    if (func) {
+      func->klass = AS_OBJ(classOrMod);
+    }
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         const char *klassName = CLASSINFO(klass)->name ? CLASSINFO(klass)->name->chars : "(anon)";
@@ -1105,7 +1128,6 @@ static void defineMethod(ObjString *name) {
     } else {
         UNREACHABLE("class type: %s", typeOfVal(classOrMod));
     }
-    pop(); // function
 }
 
 static void defineStaticMethod(ObjString *name) {
@@ -3068,7 +3090,12 @@ vmLoop:
       CASE_OP(METHOD): { // method definition in class or module
           Value methodName = READ_CONSTANT();
           ObjString *methStr = AS_STRING(methodName);
-          defineMethod(methStr);
+          Value method = peek(0); // function
+          ASSERT(IS_CLOSURE(method));
+          Value classOrMod = peek(1);
+          ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
+          defineMethod(classOrMod, methStr, method);
+          pop(); // function
           DISPATCH_BOTTOM();
       }
       CASE_OP(CLASS_METHOD): { // method definition

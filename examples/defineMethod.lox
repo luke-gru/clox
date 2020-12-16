@@ -1,0 +1,32 @@
+class MyClass {}
+// defined with closure
+MyClass.defineMethod("hi", fun() {
+    print "hi";
+    print this;
+});
+
+var myInst = MyClass();
+myInst.hi();
+
+// defined with bound method
+MyClass.defineMethod("hello", myInst.hi);
+myInst.hello();
+
+// defined with native function
+MyClass.defineMethod("mytypeof", typeof);
+print myInst.mytypeof();
+
+// defined with class
+class MyClass2 { }
+MyClass.defineMethod("initOther", MyClass2);
+print myInst.initOther();
+
+__END__
+
+-- expect: --
+hi
+<instance MyClass>
+hi
+<instance MyClass>
+instance
+<instance MyClass2>

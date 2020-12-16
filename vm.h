@@ -392,6 +392,7 @@ Value propertyGet(ObjInstance *obj, ObjString *propName);
 void propertySet(ObjInstance *obj, ObjString *propName, Value rval);
 bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *methodName, Value *ret, bool lookInGivenClass);
 Obj *findMethod(Obj *klass, ObjString *methodName);
+void defineMethod(Value classOrMod, ObjString *name, Value method);
 
 // debug
 void printVMStack(FILE *f, LxThread *th);

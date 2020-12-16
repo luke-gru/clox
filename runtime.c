@@ -1028,6 +1028,19 @@ Value lxClassAncestors(int argCount, Value *args) {
     return ret;
 }
 
+Value lxClassDefineMethod(int argCount, Value *args) {
+    CHECK_ARITY("Class#defineMethod", 3, 3, argCount);
+    Value self = args[0];
+    Value name = args[1];
+    Value func = args[2];
+    CHECK_ARG_IS_A(name, lxStringClass, 1);
+    if (!isCallable(func)) {
+        throwErrorFmt(lxArgErrClass, "Method must be a callable");
+    }
+    defineMethod(self, AS_STRING(name), func);
+    return self;
+}
+
 #define FLAG_ITER_ARRAY 1
 #define FLAG_ITER_MAP 2
 #define FLAG_ITER_INSTANCE 4
