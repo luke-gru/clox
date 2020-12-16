@@ -4,6 +4,7 @@
 #include "table.h"
 #include "memory.h"
 #include <string.h>
+#include <ctype.h>
 
 ObjClass *lxStringClass;
 
@@ -203,6 +204,45 @@ static Value lxStringGetSize(int argCount, Value *args) {
     return NUMBER_VAL(str->length);
 }
 
+static Value lxStringEndsWith(int argCount, Value *args) {
+    CHECK_ARITY("String#endsWith", 2, 2, argCount);
+    Value self = args[0];
+    Value endsPat = args[1];
+    bool endsWith = false;
+    CHECK_ARG_IS_A(endsPat, lxStringClass, 1);
+    char *hay = AS_CSTRING(self);
+    char *needle = AS_CSTRING(endsPat);
+    if (strlen(needle) > strlen(hay)) {
+      return BOOL_VAL(false);
+    }
+    char *hayEnd = hay + strlen(hay);
+    char *hayStart = hayEnd - strlen(needle);
+    if (strncmp(hayStart, needle, strlen(needle)) == 0) {
+      endsWith = true;
+    }
+
+    return BOOL_VAL(endsWith);
+}
+
+static Value lxStringCompact(int argCount, Value *args) {
+    CHECK_ARITY("String#compact", 1, 1, argCount);
+    Value self = args[0];
+    char *orig = AS_CSTRING(self);
+    ObjString *new = copyString("", 0, NEWOBJ_FLAG_NONE);
+    char *start = orig;
+    char *end = start + strlen(orig)-1;
+    while (start < end && isspace(*start)) {
+      start++;
+    }
+    while (end > start && isspace(*end)) {
+      end--;
+    }
+    if (start < end) {
+      pushCString(new, start, end-start+1);
+    }
+    return OBJ_VAL(new);
+}
+
 void Init_StringClass() {
     ObjClass *stringClass = addGlobalClass("String", lxObjClass);
     lxStringClass = stringClass;
@@ -220,6 +260,9 @@ void Init_StringClass() {
     addNativeMethod(stringClass, "substr", lxStringSubstr);
     addNativeMethod(stringClass, "dup", lxStringDup);
     addNativeMethod(stringClass, "split", lxStringSplit);
+    addNativeMethod(stringClass, "endsWith", lxStringEndsWith);
+    addNativeMethod(stringClass, "compact", lxStringCompact);
+    // TODO: add startsWith, index, rindex
 
     // getters
     addNativeGetter(stringClass, "size", lxStringGetSize);

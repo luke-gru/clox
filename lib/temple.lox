@@ -1,0 +1,69 @@
+/*
+
+t = Temple("hello %{= name %}")
+t.compile();
+print t.eval(%{"name": "Luke")
+
+For now, this template system is just string substitution but once eval() is
+working properly it will change to using the language's eval() facility.
+
+*/
+
+class TemplePart {
+    init(str, isDynamic) {
+        this.str = str;
+        this.isDynamic = isDynamic;
+    }
+
+    stringValue() {
+        return this.str;
+    }
+
+    eval(valuesMap) {
+        var value = valuesMap[this.str];
+        if (value == nil) {
+            value = valuesMap[this.str.compact()];
+            if (value == nil) { return ""; }
+        }
+        return value;
+    }
+
+}
+
+class Temple {
+    init(str) {
+        this.str = str;
+        this.parts = [];
+        this._compiled = false;
+    }
+
+    compile() {
+        if (this._compiled) { return this; }
+        this.prepareParts();
+        this._compiled = true;
+        return this;
+    }
+
+    eval(valuesMap) {
+        var buf = [];
+        foreach (part in this.parts) {
+            if (part.isDynamic) {
+                buf.push(part.eval(valuesMap));
+            } else {
+                buf.push(part.stringValue());
+            }
+        }
+        return buf.join("");
+    }
+
+    prepareParts() {
+        var pieces = this.str.split("%{=");
+        foreach (piece in pieces) {
+            if (piece.endsWith("%}")) {
+                this.parts.push(TemplePart(piece.substr(0, piece.size-2), true));
+            } else {
+                this.parts.push(TemplePart(piece, false));
+            }
+        }
+    }
+}
