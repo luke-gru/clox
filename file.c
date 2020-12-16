@@ -450,6 +450,19 @@ static Value lxFileIsSymlink(int argCount, Value *args) {
     return BOOL_VAL(S_ISLNK(st.st_mode));
 }
 
+static Value lxFileIsReg(int argCount, Value *args) {
+    CHECK_ARITY("File#isReg", 1, 1, argCount);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
+    struct stat st;
+    releaseGVL(THREAD_STOPPED);
+    int res = lstat(lxfile->name->chars, &st);
+    acquireGVL();
+    if (res != 0) {
+      throwErrorFmt(sysErrClass(errno), "Error during stat for file %s: %s", lxfile->name->chars, strerror(errno));
+    }
+    return BOOL_VAL(S_ISREG(st.st_mode));
+}
+
 
 // Change the mode of the file, dereferenced if it's a symbolic link
 static Value lxFileChmod(int argCount, Value *args) {
@@ -621,6 +634,55 @@ static Value lxFileStatInit(int argCount, Value *args) {
     return self;
 }
 
+static Value lxFileStatIsSymlink(int argCount, Value *args) {
+  Value self = args[0];
+  Value modeVal = propertyGet(AS_INSTANCE(self), INTERN("mode"));
+  int mode = AS_NUMBER(modeVal);
+  return BOOL_VAL(S_ISLNK(mode));
+}
+
+static Value lxFileStatIsReg(int argCount, Value *args) {
+  Value self = args[0];
+  Value modeVal = propertyGet(AS_INSTANCE(self), INTERN("mode"));
+  int mode = AS_NUMBER(modeVal);
+  return BOOL_VAL(S_ISREG(mode));
+}
+
+static Value lxFileStatIsSock(int argCount, Value *args) {
+  Value self = args[0];
+  Value modeVal = propertyGet(AS_INSTANCE(self), INTERN("mode"));
+  int mode = AS_NUMBER(modeVal);
+  return BOOL_VAL(S_ISSOCK(mode));
+}
+
+static Value lxFileStatIsBlock(int argCount, Value *args) {
+  Value self = args[0];
+  Value modeVal = propertyGet(AS_INSTANCE(self), INTERN("mode"));
+  int mode = AS_NUMBER(modeVal);
+  return BOOL_VAL(S_ISBLK(mode));
+}
+
+static Value lxFileStatIsDir(int argCount, Value *args) {
+  Value self = args[0];
+  Value modeVal = propertyGet(AS_INSTANCE(self), INTERN("mode"));
+  int mode = AS_NUMBER(modeVal);
+  return BOOL_VAL(S_ISDIR(mode));
+}
+
+static Value lxFileStatIsChar(int argCount, Value *args) {
+  Value self = args[0];
+  Value modeVal = propertyGet(AS_INSTANCE(self), INTERN("mode"));
+  int mode = AS_NUMBER(modeVal);
+  return BOOL_VAL(S_ISCHR(mode));
+}
+
+static Value lxFileStatIsFifo(int argCount, Value *args) {
+  Value self = args[0];
+  Value modeVal = propertyGet(AS_INSTANCE(self), INTERN("mode"));
+  int mode = AS_NUMBER(modeVal);
+  return BOOL_VAL(S_ISFIFO(mode));
+}
+
 void Init_FileClass(void) {
     ObjClass *fileClass = addGlobalClass("File", lxIOClass);
     ObjClass *fileStatic = classSingletonClass(fileClass);
@@ -655,7 +717,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileClass, "uid", lxFileUid);
     addNativeMethod(fileClass, "gid", lxFileGid);
     addNativeMethod(fileClass, "isSymlink", lxFileIsSymlink);
-    addNativeMethod(fileClass, "isReg", lxFileIsSymlink);
+    addNativeMethod(fileClass, "isReg", lxFileIsReg);
 
     // FIXME: add it under File namespace
     lxFilePasswdClass = addGlobalClass("FilePasswd", lxObjClass);
@@ -666,6 +728,14 @@ void Init_FileClass(void) {
 
     lxFileStatClass = addGlobalClass("FileStat", lxObjClass);
     addNativeMethod(lxFileStatClass, "init", lxFileStatInit);
+
+    addNativeMethod(lxFileStatClass, "isSymlink", lxFileStatIsSymlink);
+    addNativeMethod(lxFileStatClass, "isReg", lxFileStatIsReg);
+    addNativeMethod(lxFileStatClass, "isSock", lxFileStatIsSock);
+    addNativeMethod(lxFileStatClass, "isBlock", lxFileStatIsBlock);
+    addNativeMethod(lxFileStatClass, "isDir", lxFileStatIsDir);
+    addNativeMethod(lxFileStatClass, "isChar", lxFileStatIsChar);
+    addNativeMethod(lxFileStatClass, "isFifo", lxFileStatIsFifo);
 
     Value fileClassVal = OBJ_VAL(fileClass);
     addConstantUnder("O_RDONLY", NUMBER_VAL(O_RDONLY), fileClassVal);
