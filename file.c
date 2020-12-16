@@ -182,6 +182,32 @@ static Value lxFileStaticIsDir(int argCount, Value *args) {
     return BOOL_VAL(S_ISDIR(st.st_mode));
 }
 
+static Value lxFileStaticCopy(int argCount, Value *args) {
+    CHECK_ARITY("File.copy", 3, 3, argCount);
+    Value src = args[1];
+    Value dst = args[2];
+    CHECK_ARG_IS_A(src, lxFileClass, 1);
+    CHECK_ARG_IS_A(dst, lxFileClass, 2);
+    LxFile *srcf = FILE_GETHIDDEN(src);
+    LxFile *dstf = FILE_GETHIDDEN(dst);
+    size_t chunkSz = 1024 * 16;
+    ssize_t res = 0;
+    ssize_t bytesCopied = 0;
+    char *buf = ALLOCATE(char, chunkSz);
+    releaseGVL(THREAD_STOPPED);
+    while ((res = read(srcf->fd, buf, chunkSz)) > 0) {
+      int wres = write(dstf->fd, buf, res);
+      if (wres != res) {
+        FREE_SIZE(chunkSz, buf);
+        throwErrorFmt(sysErrClass(errno), "Error during write: %s", strerror(errno));
+      }
+      bytesCopied += res;
+    }
+    acquireGVL();
+    FREE_SIZE(chunkSz, buf);
+    return NUMBER_VAL(bytesCopied);
+}
+
 static Value lxFileInit(int argCount, Value *args) {
     CHECK_ARITY("File#init", 2, 2, argCount);
     callSuper(0, NULL, NULL);
@@ -196,12 +222,16 @@ static Value lxFileInit(int argCount, Value *args) {
 }
 
 static Value lxFileCreateStatic(int argCount, Value *args) {
-    CHECK_ARITY("File.create", 2, 4, argCount);
+    CHECK_ARITY("File.create", 2, 3, argCount);
     Value fname = args[1];
-    // TODO: support flags and mode arguments
     CHECK_ARG_IS_A(fname, lxStringClass, 1);
     mode_t mode = 0664;
     int flags = O_CREAT|O_EXCL|O_RDWR|O_CLOEXEC;
+    if (argCount == 3) {
+      Value modeVal = args[2];
+      CHECK_ARG_BUILTIN_TYPE(modeVal, IS_NUMBER_FUNC, "number", 2);
+      mode = AS_NUMBER(modeVal);
+    }
     ObjString *fnameStr = VAL_TO_STRING(fname);
     int fd = checkOpen(fnameStr->chars, flags, mode);
     Value file = OBJ_VAL(newInstance(lxFileClass, NEWOBJ_FLAG_NONE));
@@ -393,6 +423,7 @@ static Value lxFileChmod(int argCount, Value *args) {
     if (res != 0) {
         throwErrorFmt(sysErrClass(errno), "Error during chmod for file '%s': %s", lxfile->name->chars, strerror(errno));
     }
+    lxfile->mode = mode;
     return TRUE_VAL;
 }
 
@@ -509,6 +540,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "group", lxFileGroupStatic);
     addNativeMethod(fileStatic, "stat", lxFileStatStatic);
     addNativeMethod(fileStatic, "isDir", lxFileStaticIsDir);
+    addNativeMethod(fileStatic, "copy", lxFileStaticCopy);
 
     addNativeMethod(fileClass, "init", lxFileInit);
     addNativeMethod(fileClass, "write", lxFileWrite);

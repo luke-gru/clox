@@ -67,4 +67,14 @@ module FileUtils {
         };
         return true;
     }
+
+    class cp(src, dest) {
+        fsrc = File(src);
+        fdst = File.create(dest, 0c664);
+        File.copy(fsrc, fdst);
+        fdst.chmod(fsrc.mode());
+        fsrc.close();
+        fdst.close();
+        return true;
+    }
 }
