@@ -208,6 +208,20 @@ static Value lxFileStaticCopy(int argCount, Value *args) {
     return NUMBER_VAL(bytesCopied);
 }
 
+static Value lxFileStaticSymlink(int argCount, Value *args) {
+    CHECK_ARITY("File.symlink", 3, 3, argCount);
+    Value target = args[1];
+    Value linkpath = args[2];
+    CHECK_ARG_IS_A(target, lxStringClass, 1);
+    CHECK_ARG_IS_A(linkpath, lxStringClass, 2);
+
+    int res = symlink(AS_CSTRING(target), AS_CSTRING(linkpath));
+    if (res != 0) {
+        throwErrorFmt(sysErrClass(errno), "Error during symlink: %s", strerror(errno));
+    }
+    return TRUE_VAL;
+}
+
 static Value lxFileInit(int argCount, Value *args) {
     CHECK_ARITY("File#init", 2, 2, argCount);
     callSuper(0, NULL, NULL);
@@ -541,6 +555,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "stat", lxFileStatStatic);
     addNativeMethod(fileStatic, "isDir", lxFileStaticIsDir);
     addNativeMethod(fileStatic, "copy", lxFileStaticCopy);
+    addNativeMethod(fileStatic, "symlink", lxFileStaticSymlink);
 
     addNativeMethod(fileClass, "init", lxFileInit);
     addNativeMethod(fileClass, "write", lxFileWrite);
