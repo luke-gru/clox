@@ -108,6 +108,16 @@ static Value lxFileStatStatic(int argCount, Value *args) {
     return ret;
 }
 
+static Value lxFileLstatStatic(int argCount, Value *args) {
+    CHECK_ARITY("File.lstat", 2, 2, argCount);
+    Value path = args[1];
+    Value statArgs[2];
+    statArgs[0] = path;
+    statArgs[1] = BOOL_VAL(true);
+    Value ret = callFunctionValue(OBJ_VAL(lxFileStatClass), 2, statArgs);
+    return ret;
+}
+
 static Value lxFileUserStatic(int argCount, Value *args) {
     CHECK_ARITY("File.user", 2, 2, argCount);
     Value user = args[1];
@@ -385,6 +395,7 @@ static Value lxFileRewind(int argCount, Value *args) {
     return callMethod(AS_OBJ(*args), INTERN("seek"), 2, seekArgs, NULL);
 }
 
+// Returns the mode of the given file, dereferenced if it's a symbolic link
 static Value lxFileMode(int argCount, Value *args) {
     CHECK_ARITY("File#mode", 1, 1, argCount);
     LxFile *lxfile = FILE_GETHIDDEN(args[0]);
@@ -398,6 +409,7 @@ static Value lxFileMode(int argCount, Value *args) {
     return NUMBER_VAL((int)st.st_mode);
 }
 
+// Returns the uid of the given file, dereferenced if it's a symbolic link
 static Value lxFileUid(int argCount, Value *args) {
     CHECK_ARITY("File#uid", 1, 1, argCount);
     LxFile *lxfile = FILE_GETHIDDEN(args[0]);
@@ -411,6 +423,7 @@ static Value lxFileUid(int argCount, Value *args) {
     return NUMBER_VAL((int)st.st_uid);
 }
 
+// Returns the gid of the given file, dereferenced if it's a symbolic link
 static Value lxFileGid(int argCount, Value *args) {
     CHECK_ARITY("File#gid", 1, 1, argCount);
     LxFile *lxfile = FILE_GETHIDDEN(args[0]);
@@ -424,7 +437,21 @@ static Value lxFileGid(int argCount, Value *args) {
     return NUMBER_VAL((int)st.st_gid);
 }
 
+static Value lxFileIsSymlink(int argCount, Value *args) {
+    CHECK_ARITY("File#isSymlink", 1, 1, argCount);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
+    struct stat st;
+    releaseGVL(THREAD_STOPPED);
+    int res = lstat(lxfile->name->chars, &st);
+    acquireGVL();
+    if (res != 0) {
+      throwErrorFmt(sysErrClass(errno), "Error during stat for file %s: %s", lxfile->name->chars, strerror(errno));
+    }
+    return BOOL_VAL(S_ISLNK(st.st_mode));
+}
 
+
+// Change the mode of the file, dereferenced if it's a symbolic link
 static Value lxFileChmod(int argCount, Value *args) {
     CHECK_ARITY("File#chmod", 2, 2, argCount);
     Value modeVal = args[1];
@@ -441,6 +468,7 @@ static Value lxFileChmod(int argCount, Value *args) {
     return TRUE_VAL;
 }
 
+// Change the ownership of the file, dereferenced if it's a symbolic link
 static Value lxFileChown(int argCount, Value *args) {
     CHECK_ARITY("File#chown", 4, 4, argCount);
     Value pathVal = args[1];
@@ -459,6 +487,49 @@ static Value lxFileChown(int argCount, Value *args) {
         throwErrorFmt(sysErrClass(errno), "Error during chown for file '%s': %s", lxfile->name->chars, strerror(errno));
     }
     return TRUE_VAL;
+}
+
+// Change the ownership of the file, even if it's a symbolic link
+static Value lxFileLchown(int argCount, Value *args) {
+    CHECK_ARITY("File#lchown", 4, 4, argCount);
+    Value pathVal = args[1];
+    Value ownerVal = args[2];
+    Value groupVal = args[3];
+    CHECK_ARG_IS_A(pathVal, lxStringClass, 1);
+    CHECK_ARG_BUILTIN_TYPE(ownerVal, IS_NUMBER_FUNC, "number", 2);
+    CHECK_ARG_BUILTIN_TYPE(groupVal, IS_NUMBER_FUNC, "number", 3);
+    int owner = AS_NUMBER(ownerVal);
+    int group = AS_NUMBER(groupVal);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
+    releaseGVL(THREAD_STOPPED);
+    int res = lchown(lxfile->name->chars, (uid_t)owner, (gid_t)group);
+    acquireGVL();
+    if (res != 0) {
+        throwErrorFmt(sysErrClass(errno), "Error during lchown for file '%s': %s", lxfile->name->chars, strerror(errno));
+    }
+    return TRUE_VAL;
+}
+
+// Returns a FileStat object for the given file, dereferenced if it's a symbolic link
+static Value lxFileStat(int argCount, Value *args) {
+    CHECK_ARITY("File#stat", 1, 1, argCount);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
+    Value path = OBJ_VAL(lxfile->name);
+    Value ret = callFunctionValue(OBJ_VAL(lxFileStatClass), 1, &path);
+    return ret;
+}
+
+// Returns a FileStat object for the given file, even if it's a symbolic link
+static Value lxFileLstat(int argCount, Value *args) {
+    CHECK_ARITY("File#lstat", 1, 1, argCount);
+    LxFile *lxfile = FILE_GETHIDDEN(args[0]);
+    Value path = OBJ_VAL(lxfile->name);
+    Value lstat = BOOL_VAL(true);
+    Value initArgs[2];
+    initArgs[0] = path;
+    initArgs[1] = lstat;
+    Value ret = callFunctionValue(OBJ_VAL(lxFileStatClass), 2, initArgs);
+    return ret;
 }
 
 static Value lxFilePasswdInit(int argCount, Value *args) {
@@ -516,16 +587,25 @@ static Value lxFileGroupInit(int argCount, Value *args) {
 }
 
 static Value lxFileStatInit(int argCount, Value *args) {
-    CHECK_ARITY("FileStat#init", 2, 2, argCount);
+    CHECK_ARITY("FileStat#init", 2, 3, argCount);
     Value self = args[0];
     Value path = args[1];
+    bool dolstat = false;
+    if (argCount == 3) {
+      dolstat = AS_BOOL(args[2]);
+    }
     if (!IS_A_STRING(path)) {
       throwErrorFmt(lxArgErrClass, "FileStat must be initialized with a string");
     }
 
     struct stat st;
     releaseGVL(THREAD_STOPPED);
-    int res = stat(AS_CSTRING(path), &st);
+    int res = 0;
+    if (dolstat) {
+      res = lstat(AS_CSTRING(path), &st);
+    } else {
+      res = stat(AS_CSTRING(path), &st);
+    }
     acquireGVL();
     if (res != 0) {
       throwErrorFmt(sysErrClass(errno), "stat retrieval error for file %s: %s", AS_CSTRING(path), strerror(errno));
@@ -553,6 +633,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "user", lxFileUserStatic);
     addNativeMethod(fileStatic, "group", lxFileGroupStatic);
     addNativeMethod(fileStatic, "stat", lxFileStatStatic);
+    addNativeMethod(fileStatic, "lstat", lxFileLstatStatic);
     addNativeMethod(fileStatic, "isDir", lxFileStaticIsDir);
     addNativeMethod(fileStatic, "copy", lxFileStaticCopy);
     addNativeMethod(fileStatic, "symlink", lxFileStaticSymlink);
@@ -567,9 +648,14 @@ void Init_FileClass(void) {
     addNativeMethod(fileClass, "rewind", lxFileRewind);
     addNativeMethod(fileClass, "chmod", lxFileChmod);
     addNativeMethod(fileClass, "chown", lxFileChown);
+    addNativeMethod(fileClass, "lchown", lxFileLchown);
+    addNativeMethod(fileClass, "stat", lxFileStat);
+    addNativeMethod(fileClass, "lstat", lxFileLstat);
     addNativeMethod(fileClass, "mode", lxFileMode);
     addNativeMethod(fileClass, "uid", lxFileUid);
     addNativeMethod(fileClass, "gid", lxFileGid);
+    addNativeMethod(fileClass, "isSymlink", lxFileIsSymlink);
+    addNativeMethod(fileClass, "isReg", lxFileIsSymlink);
 
     // FIXME: add it under File namespace
     lxFilePasswdClass = addGlobalClass("FilePasswd", lxObjClass);
@@ -612,6 +698,15 @@ void Init_FileClass(void) {
 #endif
     addConstantUnder("SEEK_HOLE", NUMBER_VAL(SEEK_HOLE), fileClassVal);
 
+    /* stat(2) mode file type mask and values */
+    addConstantUnder("S_IFMT",   NUMBER_VAL(S_IFMT), fileClassVal);
+    addConstantUnder("S_IFSOCK", NUMBER_VAL(S_IFSOCK), fileClassVal);
+    addConstantUnder("S_IFLNK", NUMBER_VAL(S_IFLNK), fileClassVal);
+    addConstantUnder("S_IFREG", NUMBER_VAL(S_IFREG), fileClassVal);
+    addConstantUnder("S_IFBLK", NUMBER_VAL(S_IFBLK), fileClassVal);
+    addConstantUnder("S_IFDIR", NUMBER_VAL(S_IFDIR), fileClassVal);
+    addConstantUnder("S_IFCHR", NUMBER_VAL(S_IFCHR), fileClassVal);
+    addConstantUnder("S_IFIFO", NUMBER_VAL(S_IFIFO), fileClassVal);
 
     lxFileClass = fileClass;
 }
