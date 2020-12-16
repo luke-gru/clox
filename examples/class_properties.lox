@@ -1,0 +1,11 @@
+class MyClass {
+    this.property  = true;
+    print this.name;
+    print this.property;
+}
+
+__END__
+
+-- expect: --
+MyClass
+true

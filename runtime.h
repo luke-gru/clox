@@ -1,6 +1,10 @@
 #ifndef clox_runtime_h
 #define clox_runtime_h
 
+/*
+ * Functions used for builtin lox functions and methods for builtin classes
+ */
+
 #include "value.h"
 #include "vm.h"
 
@@ -95,6 +99,7 @@ Value lxClassConstGet(int argCount, Value *args);
 Value lxClassAncestors(int argCount, Value *args);
 Value lxClassIsA(int argCount, Value *args);
 Value lxClassAliasMethod(int argCount, Value *args);
+Value lxClassDefineMethod(int argCount, Value *args);
 extern ObjNative *nativeClassInit;
 
 // class String
