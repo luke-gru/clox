@@ -45,6 +45,12 @@ ObjClass *addGlobalClass(const char *name, ObjClass *super) {
     return objClass;
 }
 
+ObjClass *createClass(const char *name, ObjClass *super) {
+    ObjString *className = INTERNED(name, strlen(name));
+    ObjClass *objClass = newClass(className, super, NEWOBJ_FLAG_OLD);
+    return objClass;
+}
+
 ObjModule *addGlobalModule(const char *name) {
     ObjString *modName = INTERNED(name, strlen(name));
     ObjModule *mod = newModule(modName, NEWOBJ_FLAG_OLD);
@@ -1203,12 +1209,6 @@ Value lxGCSetFinalizer(int argCount, Value *args) {
     setObjectFinalizer(AS_INSTANCE(objVal), AS_OBJ(callable));
     ASSERT(AS_INSTANCE(objVal)->finalizerFunc == AS_OBJ(callable));
     return NIL_VAL;
-}
-
-// TODO: map error to unix error values
-ObjClass *sysErrClass(int err) {
-    (void)err;
-    return lxSystemErrClass;
 }
 
 bool checkArity(int min, int max, int actual) {
