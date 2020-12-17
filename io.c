@@ -50,6 +50,7 @@ LxFile *initIOAfterOpen(Value ioVal, ObjString *fname, int fd, int mode, int ofl
     file->mode = mode;
     file->oflags = oflags;
     file->isOpen = true;
+    file->sock = NULL;
     internalObj->data = file;
     ioObj->internal = internalObj;
     unhideFromGC((Obj*)file->name);
@@ -78,6 +79,7 @@ static void NORETURN throwIOSyserr(int err, int last, const char *desc) {
 }
 
 ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
+    ASSERT(fd >= 0);
     ObjString *retBuf = copyString("", 0, NEWOBJ_FLAG_NONE);
     size_t nread = 0;
     ssize_t justRead = 0;
@@ -85,11 +87,11 @@ ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
     size_t maxRead = untilEOF ? READBUF_SZ-1 : (numBytes > (READBUF_SZ-1) ? (READBUF_SZ-1) : numBytes);
     int last = errno;
     releaseGVL(THREAD_STOPPED);
+    /*fprintf(stderr, "read from %d with max %d\n", fd, (int)maxRead);*/
     while ((justRead = read(fd, fileReadBuf, maxRead)) > 0) {
-        acquireGVL();
+        /*fprintf(stderr, "Just read: '%s'", fileReadBuf);*/
         fileReadBuf[justRead] = '\0';
         pushCString(retBuf, fileReadBuf, justRead);
-        releaseGVL(THREAD_STOPPED);
         nread += justRead;
         numBytes -= justRead;
         maxRead = untilEOF ? READBUF_SZ : (numBytes > READBUF_SZ ? READBUF_SZ : numBytes);
@@ -423,6 +425,13 @@ static Value lxIOFcntl(int argCount, Value *args) {
     return NUMBER_VAL(IOFcntl(self, cmd, arg));
 }
 
+static Value lxIOFd(int argCount, Value *args) {
+    CHECK_ARITY("IO#fd", 1, 1, argCount);
+    Value self = *args;
+    LxFile *f = FILE_GETHIDDEN(self);
+    return NUMBER_VAL(f->fd);
+}
+
 void Init_IOClass(void) {
     ObjClass *ioClass = addGlobalClass("IO", lxObjClass);
     lxIOClass = ioClass;
@@ -442,6 +451,7 @@ void Init_IOClass(void) {
     addNativeMethod(ioClass, "puts", lxIOPuts);
     addNativeMethod(ioClass, "close", lxIOClose);
     addNativeMethod(ioClass, "fcntl", lxIOFcntl);
+    addNativeMethod(ioClass, "fd", lxIOFd);
 
     // stdin/stdout/stderr
     ObjInstance *istdin = newInstance(ioClass, NEWOBJ_FLAG_OLD);

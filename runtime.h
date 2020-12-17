@@ -169,10 +169,13 @@ void Init_rand(void);
 void Init_ThreadClass(void);
 void Init_BlockClass(void);
 void Init_TimeClass(void);
+void Init_SocketClass(void);
+void Init_ErrorClasses(void);
 
 // API for adding classes/modules/methods
 void addGlobalFunction(const char *name, NativeFn func);
 ObjClass *addGlobalClass(const char *name, ObjClass *super);
+ObjClass *createClass(const char *name, ObjClass *super);
 ObjModule *addGlobalModule(const char *name);
 ObjNative *addNativeMethod(void *klass, const char *name, NativeFn func);
 ObjNative *addNativeGetter(void *klass, const char *name, NativeFn func);

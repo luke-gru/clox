@@ -282,6 +282,8 @@ static void defineNativeClasses(void) {
     Init_ThreadClass();
     Init_TimeClass();
     Init_BlockClass();
+    Init_SocketClass();
+    Init_ErrorClasses();
     isClassHierarchyCreated = true;
 }
 

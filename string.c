@@ -199,6 +199,28 @@ static Value lxStringSplit(int argCount, Value *args) {
     return ret;
 }
 
+static Value lxStringPadRight(int argCount, Value *args) {
+    CHECK_ARITY("String#padRight", 3, 3, argCount);
+    Value self = args[0];
+    Value lenVal = args[1];
+    Value padChar = args[2];
+    CHECK_ARG_BUILTIN_TYPE(lenVal, IS_NUMBER_FUNC, "number", 1);
+    CHECK_ARG_IS_A(padChar, lxStringClass, 2);
+    ObjString *selfStr = AS_STRING(self);
+    ObjString *padStr = AS_STRING(padChar);
+    int newLen = AS_NUMBER(lenVal);
+    int oldLen = selfStr->length;
+    if (newLen <= oldLen) {
+      return self;
+    }
+    int bytesToPad = newLen - oldLen;
+    while (bytesToPad > 0) {
+      pushCString(selfStr, padStr->chars, 1);
+      bytesToPad--;
+    }
+    return self;
+}
+
 static Value lxStringGetSize(int argCount, Value *args) {
     ObjString *str = AS_STRING(*args);
     return NUMBER_VAL(str->length);
@@ -243,10 +265,23 @@ static Value lxStringCompact(int argCount, Value *args) {
     return OBJ_VAL(new);
 }
 
+static Value lxStringStaticParseInt(int argCount, Value *args) {
+    CHECK_ARITY("String.parseInt", 2, 2, argCount);
+    Value str = args[1];
+    CHECK_ARG_IS_A(str, lxStringClass, 1);
+    char *chars = AS_CSTRING(str);
+    return NUMBER_VAL(atoi(chars));
+}
+
 void Init_StringClass() {
     ObjClass *stringClass = addGlobalClass("String", lxObjClass);
     lxStringClass = stringClass;
+    ObjClass *stringClassStatic = classSingletonClass(stringClass);
     nativeStringInit = addNativeMethod(stringClass, "init", lxStringInit);
+
+    // static methods
+    addNativeMethod(stringClassStatic, "parseInt", lxStringStaticParseInt);
+
     // methods
     addNativeMethod(stringClass, "toString", lxStringToString);
     addNativeMethod(stringClass, "opAdd", lxStringOpAdd);
@@ -262,6 +297,7 @@ void Init_StringClass() {
     addNativeMethod(stringClass, "split", lxStringSplit);
     addNativeMethod(stringClass, "endsWith", lxStringEndsWith);
     addNativeMethod(stringClass, "compact", lxStringCompact);
+    addNativeMethod(stringClass, "padRight", lxStringPadRight);
     // TODO: add startsWith, index, rindex
 
     // getters

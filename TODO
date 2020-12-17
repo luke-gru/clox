@@ -7,13 +7,12 @@ all listed features/improvements are going to get done.
 Features
 --------
 
-* Add Map#replace(other)
-* Add String#replace(other)
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in ruby.
 * Dumping/loading values to/from disk (like Ruby's Marshal)
 * Saving/loading bytecode to disk
 * Add tracing/coverage information
+* Add profiler
 * Add socket class in io.c, make it work with multi-threading
 * Allow getters to be called like methods (when given 0 args) [PARTIAL]
   works for instances, not classes or modules (ex: Array.name())
@@ -25,6 +24,7 @@ get/set a different sigil maybe, like @prop.
 * Allow dynamically loading lox extensions, which can be '.so' files.
 * Add guilds, with per-guild VM lock and restricted guild to guild sharing
 * Add Regex::MatchData class
+* Get template library using eval instead of string subst
 
 Improvements
 ------------
