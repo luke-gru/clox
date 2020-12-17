@@ -9,6 +9,12 @@
 
 #define FILENAME_BUFSZ (300)
 
+/*
+ * For each example file ending in .lox in the examples directory, start a new
+ * lox VM, run the example file and compare the standard output with what's in
+ * the commented --expect-- section of the example file.
+ */
+
 static char lineBuf[1024];
 
 int mainArgc = 1;

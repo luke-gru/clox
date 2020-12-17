@@ -18,6 +18,9 @@ static ObjClass *lxFileStatClass;
 #define READBUF_SZ 4092
 #define WRITEBUF_SZ 4092
 
+#define DIR_SEPARATOR_CHR '/'
+#define DIR_SEPARATOR_STR "/"
+
 // Does this file exist and is it accessible? If not, returns errno from stat()
 static int fileExists(char *fname) {
     struct stat buffer;
@@ -230,6 +233,58 @@ static Value lxFileStaticSymlink(int argCount, Value *args) {
         throwErrorFmt(sysErrClass(errno), "Error during symlink: %s", strerror(errno));
     }
     return TRUE_VAL;
+}
+
+static Value lxFileStaticJoin(int argCount, Value *args) {
+    CHECK_ARITY("File.join", 2, -1, argCount);
+    ObjString *pathBuf = emptyString();
+    int argIdx = 1;
+    bool lastPart = false;
+    while (argIdx < argCount) {
+      if (argIdx == argCount -1) {
+        lastPart = true;
+      }
+      Value part = args[argIdx];
+      char *partStr = AS_CSTRING(part);
+      pushCString(pathBuf, partStr, strlen(partStr));
+      if (!lastPart && partStr[strlen(partStr)-1] != DIR_SEPARATOR_CHR) {
+        pushCString(pathBuf, DIR_SEPARATOR_STR, 1);
+      }
+      argIdx++;
+    }
+    return OBJ_VAL(pathBuf);
+}
+
+static ObjString *getcwdStr(void) {
+  char *buf = ALLOCATE(char, READBUF_SZ);
+  buf = getcwd(buf, READBUF_SZ);
+  if (!buf) {
+    FREE_SIZE(READBUF_SZ, buf);
+    throwErrorFmt(sysErrClass(errno), "Unable to get current working directory");
+  }
+  ObjString *ret = copyString(buf, strlen(buf), NEWOBJ_FLAG_NONE);
+  FREE_SIZE(READBUF_SZ, buf);
+  return ret;
+}
+
+static Value lxFileStaticExpandPath(int argCount, Value *args) {
+    CHECK_ARITY("File.expandPath", 2, 3, argCount);
+    Value path = args[1];
+    char *pathStr = AS_CSTRING(path);
+    ObjString *buf = emptyString();
+    bool isAbs = pathStr[0] == DIR_SEPARATOR_CHR;
+    if (isAbs) {
+      pushCString(buf, pathStr, strlen(pathStr));
+    } else {
+      ObjString *curDir = getcwdStr();
+      pushCString(buf, curDir->chars, strlen(curDir->chars));
+      pushCString(buf, DIR_SEPARATOR_STR, 1);
+      pushCString(buf, pathStr, strlen(pathStr));
+    }
+    // TODO: Expand ".."
+    // /my/file/../other should expand to /my/other
+
+    return OBJ_VAL(buf);
 }
 
 static Value lxFileInit(int argCount, Value *args) {
@@ -699,6 +754,8 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "isDir", lxFileStaticIsDir);
     addNativeMethod(fileStatic, "copy", lxFileStaticCopy);
     addNativeMethod(fileStatic, "symlink", lxFileStaticSymlink);
+    addNativeMethod(fileStatic, "join", lxFileStaticJoin);
+    addNativeMethod(fileStatic, "expandPath", lxFileStaticExpandPath);
 
     addNativeMethod(fileClass, "init", lxFileInit);
     addNativeMethod(fileClass, "write", lxFileWrite);

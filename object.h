@@ -313,6 +313,14 @@ typedef struct ObjAny {
     } as;
 } ObjAny;
 
+typedef struct LxSocket {
+  int domain;
+  int type;
+  int proto;
+  bool server;
+  bool connected; // with connect(2), for clients
+} LxSocket;
+
 // io/file internals
 typedef struct LxFile {
     int fd;
@@ -320,6 +328,7 @@ typedef struct LxFile {
     int oflags; // open flags
     bool isOpen;
     ObjString *name; // copied (owned value)
+    LxSocket *sock; // only for sockets
 } LxFile;
 
 #define TO_OBJ(obj) ((Obj*)(obj))
@@ -424,6 +433,9 @@ ObjString *internedString(char *chars, size_t length, int flags);
 bool objStringEquals(ObjString *a, ObjString *b);
 static inline ObjString *dupString(ObjString *string) {
     return copyString(string->chars, string->length, NEWOBJ_FLAG_NONE);
+}
+static inline ObjString *emptyString(void) {
+    return copyString("", 0, NEWOBJ_FLAG_NONE);
 }
 
 // strings as values
