@@ -50,6 +50,17 @@ static Value lxStringToString(int argCount, Value *args) {
     return *args;
 }
 
+static Value lxStringInspect(int argCount, Value *args) {
+    CHECK_ARITY("String#inspect", 1, 1, argCount);
+    Value self = args[0];
+    ObjString *selfStr = AS_STRING(self);
+    ObjString *buf = emptyString();
+    pushCString(buf, "\"", 1);
+    pushCString(buf, selfStr->chars, selfStr->length);
+    pushCString(buf, "\"", 1);
+    return OBJ_VAL(buf);
+}
+
 // ex: print "hi " + "there";
 static Value lxStringOpAdd(int argCount, Value *args) {
     CHECK_ARITY("String#opAdd", 2, 2, argCount);
@@ -284,6 +295,7 @@ void Init_StringClass() {
 
     // methods
     addNativeMethod(stringClass, "toString", lxStringToString);
+    addNativeMethod(stringClass, "inspect", lxStringInspect);
     addNativeMethod(stringClass, "opAdd", lxStringOpAdd);
     addNativeMethod(stringClass, "opIndexGet", lxStringOpIndexGet);
     addNativeMethod(stringClass, "opIndexSet", lxStringOpIndexSet);

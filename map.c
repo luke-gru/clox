@@ -69,6 +69,28 @@ static Value lxMapDup(int argCount, Value *args) {
     return dup;
 }
 
+static Value lxMapInspect(int argCount, Value *args) {
+    CHECK_ARITY("Map#inspect", 1, 1, argCount);
+    Value self = args[0];
+    Table *selfMap = AS_MAP(self)->table;
+    ObjString *buf = emptyString();
+    pushCString(buf, "%{", 2);
+    Entry e; int idx = 0;
+    ObjString *inspectKey, *inspectVal;
+    TABLE_FOREACH(selfMap, e, idx, {
+        inspectKey = inspectString(e.key);
+        inspectVal = inspectString(e.value);
+        pushCString(buf, inspectKey->chars, inspectKey->length);
+        pushCString(buf, ":", 1);
+        pushCString(buf, inspectVal->chars, inspectVal->length);
+        if (idx < (selfMap->count-1)) {
+          pushCString(buf, ",", 1);
+        }
+    })
+    pushCString(buf, "}", 1);
+    return OBJ_VAL(buf);
+}
+
 static Value lxMapToString(int argCount, Value *args) {
     CHECK_ARITY("Map#toString", 1, 1, argCount);
     Value self = args[0];
@@ -484,6 +506,7 @@ void Init_MapClass() {
     nativeMapInit = addNativeMethod(mapClass, "init", lxMapInit);
     // methods
     addNativeMethod(mapClass, "dup", lxMapDup);
+    addNativeMethod(mapClass, "inspect", lxMapInspect);
     addNativeMethod(mapClass, "opIndexGet", lxMapGet);
     addNativeMethod(mapClass, "opIndexSet", lxMapSet);
     addNativeMethod(mapClass, "opEquals", lxMapEquals);

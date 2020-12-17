@@ -880,6 +880,19 @@ Value lxModuleInit(int argCount, Value *args) {
     return self;
 }
 
+Value lxModuleGetName(int argCount, Value *args) {
+    Value self = args[0];
+    ObjClass *klass = AS_CLASS(self);
+    return OBJ_VAL(classNameFull(klass));
+}
+
+Value lxModuleInspect(int argCount, Value *args) {
+    CHECK_ARITY("Module#inspect", 1, 1, argCount);
+    Value self = args[0];
+    ObjClass *klass = AS_CLASS(self);
+    return OBJ_VAL(classNameFull(klass));
+}
+
 // ex: var c = Class("MyClass", Object);
 Value lxClassInit(int argCount, Value *args) {
     CHECK_ARITY("Class#init", 1, 3, argCount);
@@ -935,6 +948,13 @@ Value lxClassInclude(int argCount, Value *args) {
 // Returns a copy of the class's name as a String
 // ex: print Object.name // "Object"
 Value lxClassGetName(int argCount, Value *args) {
+    Value self = args[0];
+    ObjClass *klass = AS_CLASS(self);
+    return OBJ_VAL(classNameFull(klass));
+}
+
+Value lxClassInspect(int argCount, Value *args) {
+    CHECK_ARITY("Class#inspect", 1, 1, argCount);
     Value self = args[0];
     ObjClass *klass = AS_CLASS(self);
     return OBJ_VAL(classNameFull(klass));

@@ -196,6 +196,7 @@ static void defineNativeClasses(void) {
 
     // class Class
     nativeClassInit = addNativeMethod(classClass, "init", lxClassInit);
+    addNativeMethod(classClass, "inspect", lxClassInspect);
     addNativeMethod(classClass, "methodAdded", lxClassMethodAdded);
     addNativeMethod(classClass, "constDefined", lxClassConstDefined);
     addNativeMethod(classClass, "constGet", lxClassConstGet);
@@ -209,6 +210,8 @@ static void defineNativeClasses(void) {
     addNativeGetter(classClass, "name", lxClassGetName);
 
     nativeModuleInit = addNativeMethod(modClass, "init", lxModuleInit);
+    addNativeMethod(modClass, "inspect", lxModuleInspect);
+    addNativeGetter(modClass, "name", lxModuleGetName);
 
     Init_ArrayClass();
     Init_MapClass();

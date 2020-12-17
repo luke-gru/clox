@@ -86,10 +86,13 @@ extern ObjNative *nativeObjectInit;
 
 // class Module
 Value lxModuleInit(int argCount, Value *args);
+Value lxModuleInspect(int argCount, Value *args);
+Value lxModuleGetName(int argCount, Value *args);
 extern ObjNative *nativeModuleInit;
 
 // class Class
 Value lxClassInit(int argCount, Value *args);
+Value lxClassInspect(int argCount, Value *args);
 Value lxClassInclude(int argCount, Value *args);
 Value lxClassGetSuperclass(int argCount, Value *args);
 Value lxClassGetName(int argCount, Value *args);
