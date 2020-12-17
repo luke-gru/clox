@@ -105,6 +105,9 @@ void addConstantUnder(const char *name, Value constVal, Value owner) {
     ASSERT(IS_CLASS(owner) || IS_MODULE(owner));
     OBJ_WRITE(owner, constVal);
     tableSet(CLASSINFO(AS_CLASS(owner))->constants, OBJ_VAL(INTERN(name)), constVal);
+    if (IS_CLASS(constVal)) {
+      CLASSINFO(AS_CLASS(constVal))->under = AS_OBJ(owner);
+    }
 }
 
 // NOTE: `klass` can be NULL, in which case only `vm.constants` is checked.
@@ -916,7 +919,7 @@ Value lxClassInclude(int argCount, Value *args) {
 }
 
 // Returns a copy of the class's name as a String
-// ex: print Object.name
+// ex: print Object.name // "Object"
 Value lxClassGetName(int argCount, Value *args) {
     Value self = args[0];
     ObjClass *klass = AS_CLASS(self);
