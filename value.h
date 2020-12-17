@@ -203,6 +203,7 @@ bool is_obj_p(Value);
 typedef struct ObjString *(*newStringFunc)(char *chars, size_t length, int flags);
 struct ObjString *valueToString(Value value, newStringFunc fn, int flags);
 struct ObjString *valueToInspectString(Value value, newStringFunc fn, int flags);
+struct ObjString *inspectString(Value value);
 
 const char *typeOfVal(Value val);
 uint32_t valHash(Value val);

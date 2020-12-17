@@ -322,6 +322,10 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
     UNREACHABLE("error: invalid type given %s", typeOfVal(value));
 }
 
+ObjString *inspectString(Value value) {
+  return valueToInspectString(value, copyString, NEWOBJ_FLAG_NONE);
+}
+
 ObjString *valueToInspectString(Value value, newStringFunc stringConstructor, int flags) {
   if (IS_INSTANCE_LIKE(value)) {
     Value ret = callMethod(AS_OBJ(value), INTERN("inspect"), 0, NULL, NULL);

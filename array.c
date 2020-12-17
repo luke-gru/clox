@@ -48,6 +48,26 @@ static Value lxArrayDup(int argCount, Value *args) {
     return dup;
 }
 
+static Value lxArrayInspect(int argCount, Value *args) {
+    CHECK_ARITY("Array#inspect", 1, 1, argCount);
+    Value self = *args;
+    ObjArray *selfObj = AS_ARRAY(self);
+    ValueArray *selfAry = &selfObj->valAry;
+    ObjString *buf = emptyString();
+    pushCString(buf, "[", 1);
+    Value el; int idx = 0;
+    ObjString *res;
+    VALARRAY_FOREACH(selfAry, el, idx) {
+      res = inspectString(el);
+      pushCString(buf, res->chars, strlen(res->chars));
+      if (idx != selfAry->count-1) {
+        pushCString(buf, ",", 1);
+      }
+    }
+    pushCString(buf, "]", 1);
+    return OBJ_VAL(buf);
+}
+
 // ex: a.push(1);
 static Value lxArrayPush(int argCount, Value *args) {
     CHECK_ARITY("Array#push", 2, 2, argCount);
@@ -545,6 +565,7 @@ void Init_ArrayClass() {
 
     // methods
     addNativeMethod(arrayClass, "dup", lxArrayDup);
+    addNativeMethod(arrayClass, "inspect", lxArrayInspect);
     addNativeMethod(arrayClass, "push", lxArrayPush);
     addNativeMethod(arrayClass, "opShovelLeft", lxArrayPush);
     addNativeMethod(arrayClass, "pop", lxArrayPop);
