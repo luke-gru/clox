@@ -94,6 +94,11 @@ static int printNumber(FILE *file, double number, int maxLen) {
     return fprintf(file, "%g", number);
 }
 
+void printInspectValue(FILE *file, Value value) {
+  ObjString *str = valueToInspectString(value, copyString, NEWOBJ_FLAG_NONE);
+  fprintf(file, "%s", str->chars);
+}
+
 int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
     if (IS_BOOL(value)) {
         return printBool(file, AS_BOOL(value), maxLen);
@@ -315,6 +320,18 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
         return ret;
     }
     UNREACHABLE("error: invalid type given %s", typeOfVal(value));
+}
+
+ObjString *valueToInspectString(Value value, newStringFunc stringConstructor, int flags) {
+  if (IS_INSTANCE_LIKE(value)) {
+    Value ret = callMethod(AS_OBJ(value), INTERN("inspect"), 0, NULL, NULL);
+    if (IS_STRING(ret)) {
+      return AS_STRING(ret);
+    }
+    return valueToString(ret, stringConstructor, flags);
+  } else {
+    return valueToString(value, stringConstructor, flags);
+  }
 }
 
 const char *typeOfVal(Value val) {

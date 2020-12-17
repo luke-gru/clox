@@ -849,6 +849,20 @@ Value lxObjectRespondsTo(int argCount, Value *args) {
     return BOOL_VAL(found);
 }
 
+Value lxObjectInspect(int argCount, Value *args) {
+    CHECK_ARITY("Object#inspect", 1, 1, argCount);
+    Value self = *args;
+    ObjString *buf = emptyString();
+    pushCString(buf, "#<", 2);
+    ObjClass *klass = AS_INSTANCE(self)->klass;
+    ObjString *className = classNameFull(klass);
+    pushCString(buf, className->chars, strlen(className->chars));
+    size_t objectId = AS_OBJ(self)->objectId;
+    pushCStringFmt(buf, " (%lu)", objectId);
+    pushCString(buf, ">", 1);
+    return OBJ_VAL(buf);
+}
+
 // ex: var m = Module("MyMod");
 Value lxModuleInit(int argCount, Value *args) {
     CHECK_ARITY("Module#init", 1, 2, argCount);

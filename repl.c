@@ -160,7 +160,7 @@ NORETURN void repl(void) {
                 if (THREAD()->ec->frameCount == 0) {
                     THREAD()->ec->frameCount++;
                 }
-                printValue(stderr, *val, true, -1);
+                printInspectValue(stderr, *val);
             } else {
                 printValue(stderr, NIL_VAL, false, -1);
             }

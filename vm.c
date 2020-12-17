@@ -172,6 +172,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(objClass, "hasGetter", lxObjectHasGetter);
     addNativeMethod(objClass, "hasSetter", lxObjectHasSetter);
     addNativeMethod(objClass, "respondsTo", lxObjectRespondsTo);
+    addNativeMethod(objClass, "inspect", lxObjectInspect);
     addNativeGetter(objClass, "class", lxObjectGetClass);
     addNativeGetter(objClass, "singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);

@@ -78,6 +78,7 @@ Value lxObjectHasGetter(int argCount, Value *args);
 Value lxObjectHasSetter(int argCount, Value *args);
 Value lxObjectHasProperty(int argCount, Value *args);
 Value lxObjectRespondsTo(int argCount, Value *args);
+Value lxObjectInspect(int argCount, Value *args);
 Value lxObjectGetClass(int argCount, Value *args);
 Value lxObjectGetSingletonClass(int argCount, Value *args);
 Value lxObjectGetObjectId(int argCount, Value *args);

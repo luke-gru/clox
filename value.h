@@ -191,6 +191,7 @@ void writeValueArrayBulk(ValueArray *array, size_t offset, size_t num, Value val
 void freeValueArray(ValueArray *array);
 bool removeValueArray(ValueArray *array, int idx);
 int printValue(FILE *file, Value value, bool canCallMethods, int maxLen);
+void printInspectValue(FILE *file, Value value);
 
 // value type predicate function
 typedef bool (*value_type_p)(Value val);
@@ -201,6 +202,7 @@ bool is_obj_p(Value);
 
 typedef struct ObjString *(*newStringFunc)(char *chars, size_t length, int flags);
 struct ObjString *valueToString(Value value, newStringFunc fn, int flags);
+struct ObjString *valueToInspectString(Value value, newStringFunc fn, int flags);
 
 const char *typeOfVal(Value val);
 uint32_t valHash(Value val);
