@@ -1,0 +1,12 @@
+try {
+    File.isDir("this_file_doesnt_exist");
+} catch (SystemError err) {
+    print err;
+    print err.message;
+}
+
+__END__
+
+-- expect: --
+<instance SystemError::ENOENT>
+Error during stat for file this_file_doesnt_exist: No such file or directory

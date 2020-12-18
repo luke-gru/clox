@@ -160,17 +160,20 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
                     return fprintf(file, "]");
                 } else {
                     ObjClass *klass = inst->klass;
-                    char *klassName = CLASSINFO(klass)->name->chars;
+                    ObjString *nameFull = classNameFull(klass);
+                    char *klassName = nameFull->chars;
                     return fprintf(file, "<instance %.*s>", PRINTNUM(11, maxLen), klassName);
                 }
             }
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
-            char *klassName = CLASSINFO(klass)->name ? CLASSINFO(klass)->name->chars : (char*)"(anon)";
+            ObjString *nameFull = classNameFull(klass);
+            char *klassName = nameFull->chars;
             return fprintf(file, "<class %.*s>", PRINTNUM(8, maxLen), klassName);
         } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
             ObjModule *mod = AS_MODULE(value);
-            char *modName = CLASSINFO(mod)->name ? CLASSINFO(mod)->name->chars : (char*)"(anon)";
+            ObjString *nameFull = classNameFull(TO_CLASS(mod));
+            char *modName = nameFull->chars;
             return fprintf(file, "<module %.*s>", PRINTNUM(9, maxLen), modName);
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
@@ -263,7 +266,8 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
                 pop(); // stringVal
             } else {
                 ObjClass *klass = inst->klass;
-                char *klassName = CLASSINFO(klass)->name->chars;
+                ObjString *nameFull = classNameFull(klass);
+                char *klassName = nameFull->chars;
                 char *cbuf = calloc(1, strlen(klassName)+1+11);
                 ASSERT_MEM(cbuf);
                 sprintf(cbuf, "<instance %s>", klassName);
@@ -272,7 +276,8 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
             }
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
-            char *klassName = CLASSINFO(klass)->name->chars;
+            ObjString *nameFull = classNameFull(klass);
+            char *klassName = nameFull->chars;
             char *cbuf = calloc(1, strlen(klassName)+1+8);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<class %s>", klassName);
@@ -280,7 +285,8 @@ ObjString *valueToString(Value value, newStringFunc stringConstructor, int flags
             xfree(cbuf);
         } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
             ObjModule *mod = AS_MODULE(value);
-            char *modName = CLASSINFO(mod)->name->chars;
+            ObjString *nameFull = classNameFull(TO_CLASS(mod));
+            char *modName = nameFull->chars;
             char *cbuf = calloc(1, strlen(modName)+1+9);
             ASSERT_MEM(cbuf);
             sprintf(cbuf, "<module %s>", modName);

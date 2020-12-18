@@ -1198,7 +1198,7 @@ Value lxErrInit(int argCount, Value *args) {
     } else {
         msg = NIL_VAL;
     }
-    setProp(self, INTERNED("message", 7), msg);
+    setProp(self, INTERN("message"), msg);
     return self;
 }
 
