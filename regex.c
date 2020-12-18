@@ -25,6 +25,17 @@ static Value lxRegexInit(int argCount, Value *args) {
     return *args;
 }
 
+static Value lxRegexInspect(int argCount, Value *args) {
+    CHECK_ARITY("Regex#inspect", 1, 1, argCount);
+    Value self = args[0];
+    Regex *re = AS_REGEX(self)->regex;
+    ObjString *buf = emptyString();
+    pushCStringFmt(buf, "%s", "#<Regex %\"");
+    pushCString(buf, re->src, strlen(re->src));
+    pushCString(buf, "\">", 2);
+    return OBJ_VAL(buf);
+}
+
 static Value lxRegexMatch(int argCount, Value *args) {
     CHECK_ARITY("Regex#match", 2, 2, argCount);
     Value str = args[1];
@@ -44,5 +55,6 @@ void Init_RegexClass() {
     lxRegexErrClass = addGlobalClass("RegexError", lxErrClass);
 
     nativeRegexInit = addNativeMethod(lxRegexClass, "init", lxRegexInit);
+    addNativeMethod(lxRegexClass, "inspect", lxRegexInspect);
     addNativeMethod(lxRegexClass, "match", lxRegexMatch);
 }

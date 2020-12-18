@@ -1210,7 +1210,7 @@ Value callVMMethod(ObjInstance *instance, Value callable, int argCount, Value *a
 }
 
 Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, CallInfo *cinfo) {
-    if (obj->type == OBJ_T_INSTANCE || obj->type == OBJ_T_ARRAY || obj->type == OBJ_T_STRING || obj->type == OBJ_T_MAP) {
+    if (obj->type == OBJ_T_INSTANCE || obj->type == OBJ_T_ARRAY || obj->type == OBJ_T_STRING || obj->type == OBJ_T_MAP || obj->type == OBJ_T_REGEX) {
         ObjInstance *instance = (ObjInstance*)obj;
         Obj *callable = instanceFindMethod(instance, methodName);
         if (!callable && argCount == 0) {
