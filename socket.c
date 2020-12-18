@@ -7,9 +7,11 @@
 #include <sys/un.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #include <errno.h>
 
 ObjClass *lxSocketClass;
+ObjClass *lxAddrInfoClass;
 
 static void markInternalSocket(Obj *obj) {
     ASSERT(obj->type == OBJ_T_INTERNAL);
@@ -107,11 +109,6 @@ static Value lxSocketConnect(int argCount, Value *args) {
       res = connect(f->fd, (struct sockaddr *)&in_serv_addr, sizeof(in_serv_addr));
       acquireGVL();
     } else if (sock->domain == AF_UNIX) {
-      /*Value path = args[1];*/
-      /*CHECK_ARG_IS_A(path, lxStringClass, 1);*/
-      /*my_un_addr.sun_family = AF_UNIX;*/
-      /*my_addr = (struct sockaddr*)&my_un_addr;*/
-      /*strncpy(my_un_addr.sun_path, AS_CSTRING(path), sizeof(my_un_addr.sun_path)-1);*/
       struct sockaddr_un un_serv_addr;
       un_serv_addr.sun_family = AF_UNIX;
       strncpy(un_serv_addr.sun_path, AS_CSTRING(addr), sizeof(un_serv_addr.sun_path)-1);
@@ -227,9 +224,200 @@ static Value lxSocketAccept(int argCount, Value *args) {
     return newSock;
 }
 
+// TODO: move this function
+static ObjString *numberToString(int num) {
+  char numbuf[20];
+  memset(numbuf, 0, 20);
+  snprintf(numbuf, 20, "%d", num);
+  ObjString *buf = emptyString();
+  pushCString(buf, numbuf, strlen(numbuf));
+  return buf;
+}
+
+typedef struct LxAddrInfo {
+  struct addrinfo *ai;
+  int ai_is_freed;
+} LxAddrInfo;
+
+static void markInternalAddrInfo(Obj *obj) {
+    ASSERT(obj->type == OBJ_T_INTERNAL);
+    ObjInternal *internal = (ObjInternal*)obj;
+}
+
+static void freeInternalAddrInfo(Obj *obj) {
+    ASSERT(obj->type == OBJ_T_INTERNAL);
+    ObjInternal *internal = (ObjInternal*)obj;
+    LxAddrInfo *lai = internal->data;
+    if (!lai->ai_is_freed) {
+      freeaddrinfo(lai->ai);
+    }
+    lai->ai_is_freed = true;
+    FREE(LxAddrInfo, lai);
+}
+
+static LxAddrInfo *getAddrInfoHidden(Value addrInfoVal) {
+    ObjInstance *addrInfoInst = AS_INSTANCE(addrInfoVal);
+    ObjInternal *internal = addrInfoInst->internal;
+    LxAddrInfo *lai = internal->data;
+    return lai;
+}
+
+static Value makeNewAddrInfo(struct addrinfo *ai) {
+    Value addrInfoVal = callFunctionValue(OBJ_VAL(lxAddrInfoClass), 0, NULL);
+    ObjInstance *addrInfoInst = AS_INSTANCE(addrInfoVal);
+    ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxAddrInfo), markInternalAddrInfo, freeInternalAddrInfo,
+            NEWOBJ_FLAG_NONE);
+    hideFromGC((Obj*)internalObj);
+    LxAddrInfo *lai = ALLOCATE(LxAddrInfo, 1);
+    lai->ai = ai;
+    lai->ai_is_freed = false;
+    internalObj->data = lai;
+    addrInfoInst->internal = internalObj;
+    unhideFromGC((Obj*)internalObj);
+    return addrInfoVal;
+}
+
+static Value addrInfoArrayList(struct addrinfo *res) {
+  struct addrinfo *rp = res;
+  Value ret = newArray();
+  for (rp = res; rp != NULL; rp = rp->ai_next) {
+    arrayPush(ret, makeNewAddrInfo(rp));
+  }
+  return ret;
+}
+
+static Value lxAddrInfoStaticGetAddrInfo(int argCount, Value *args) {
+  CHECK_ARITY("AddrInfo.getaddrinfo", 3, 5, argCount);
+  Value nodeVal = args[1];
+  Value serviceVal = args[2]; // port number or service string like "tcp" or "unix"
+  CHECK_ARG_IS_A(nodeVal, lxStringClass, 1);
+  ObjString *nodeStr = AS_STRING(nodeVal);
+  ObjString *serviceStr = NULL;
+  int sockType = 0; // unspecified
+  int afamily = AF_UNSPEC;
+  int flags = 0;
+  if (IS_NUMBER(serviceVal)) {
+    serviceStr = numberToString(AS_NUMBER(serviceVal));
+    flags |= AI_NUMERICSERV;
+  } else {
+    if (!IS_NIL(serviceVal)) {
+      CHECK_ARG_IS_A(serviceVal, lxStringClass, 2);
+      serviceStr = AS_STRING(serviceVal);
+    }
+  }
+  if (argCount >= 4) {
+    Value sockTypeVal = args[3];
+    if (!IS_NIL(sockTypeVal)) {
+      CHECK_ARG_BUILTIN_TYPE(sockTypeVal, IS_NUMBER_FUNC, "number", 4);
+      sockType = AS_NUMBER(sockTypeVal);
+    }
+  }
+  if (argCount >= 5) {
+    Value afamilyVal = args[4];
+    CHECK_ARG_BUILTIN_TYPE(afamilyVal, IS_NUMBER_FUNC, "number", 5);
+    afamily = AS_NUMBER(afamilyVal);
+  }
+
+  struct addrinfo hints;
+  struct addrinfo *res;
+  hints.ai_socktype = sockType; // ex: Socket::SOCK_STREAM
+  hints.ai_family = afamily; // ex: Socket::AF_INET
+  hints.ai_flags = flags;
+  hints.ai_protocol = 0;
+
+  int st = getaddrinfo(nodeStr->chars,
+      serviceStr ? serviceStr->chars : NULL,
+      &hints, &res);
+  if (st != 0) {
+    throwErrorFmt(sysErrClass(errno), "error in getaddrinfo(2): %s", strerror(errno));
+  }
+
+  // When given a numbered port, sin_port is not set correctly
+  struct addrinfo *addr;
+  for (addr = res; addr != NULL; addr = addr->ai_next) {
+    if (addr->ai_family == AF_INET6) {
+      // START WORKAROUND
+      struct sockaddr_in6 *sockaddr_v6 = (struct sockaddr_in6 *)addr->ai_addr;
+      if (sockaddr_v6->sin6_port == 0) {
+        sockaddr_v6->sin6_port = htons(AS_NUMBER(serviceVal));
+      }
+      // END WORKAROUND
+    } else if (addr->ai_family == AF_INET) {
+      // START WORKAROUND
+      struct sockaddr_in *sockadr = (struct sockaddr_in *)addr->ai_addr;
+      if (sockadr->sin_port == 0) {
+        sockadr->sin_port = htons(AS_NUMBER(serviceVal));
+      }
+      // END WORKAROUND
+    }
+  }
+  return addrInfoArrayList(res);
+}
+
+static Value lxAddrInfoIp(int argCount, Value *args) {
+  CHECK_ARITY("AddrInfo#ip", 1, 1, argCount);
+  Value self = args[0];
+  LxAddrInfo *lai = getAddrInfoHidden(self);
+  int afamily = lai->ai->ai_family;
+  if (afamily != AF_INET && afamily != AF_INET6) {
+    return NIL_VAL;
+  }
+  ObjString *buf = emptyString();
+  if (afamily == AF_INET) {
+    struct sockaddr_in *addr_in = (struct sockaddr_in*)lai->ai->ai_addr;
+    char *s = inet_ntoa(addr_in->sin_addr); // XXX: not thread-safe
+    pushCString(buf, s, strlen(s));
+  } else {
+    // TODO
+  }
+  return OBJ_VAL(buf);
+}
+
+static Value lxAddrInfoInspect(int argCount, Value *args) {
+  CHECK_ARITY("AddrInfo#inspect", 1, 1, argCount);
+  Value self = args[0];
+  LxAddrInfo *lai = getAddrInfoHidden(self);
+  int afamily = lai->ai->ai_family;
+  int socktype = lai->ai->ai_socktype;
+  ObjString *buf = emptyString();
+  pushCStringFmt(buf, "%s", "#<AddrInfo ");
+
+  if (afamily == AF_INET) {
+    struct sockaddr_in *addr_in = (struct sockaddr_in*)lai->ai->ai_addr;
+    char *s = inet_ntoa(addr_in->sin_addr); // XXX: not thread-safe
+    pushCString(buf, s, strlen(s));
+    int port = ntohs(addr_in->sin_port);
+    pushCStringFmt(buf, ":%d", port);
+  } else if (afamily == AF_UNIX) {
+    // TODO
+  } else if (afamily == AF_INET6) {
+    // TODO
+  }
+  char *canonname = lai->ai->ai_canonname;
+  if (canonname && strlen(canonname) > 0) {
+    pushCStringFmt(buf, " (%s)", canonname);
+  }
+  if (socktype == SOCK_STREAM) {
+    pushCString(buf, " (TCP)", 6);
+  } else if (socktype == SOCK_DGRAM) {
+    pushCString(buf, " (UDP)", 6);
+  }
+  pushCString(buf, ">", 1);
+  return OBJ_VAL(buf);
+}
+
 void Init_SocketClass(void) {
     lxSocketClass = addGlobalClass("Socket", lxIOClass);
     Value sockVal = OBJ_VAL(lxSocketClass);
+
+    lxAddrInfoClass = addGlobalClass("AddrInfo", lxObjClass);
+    ObjClass *addrInfoStatic = classSingletonClass(lxAddrInfoClass);
+    addNativeMethod(addrInfoStatic, "getaddrinfo", lxAddrInfoStaticGetAddrInfo);
+    /*addNativeMethod(lxAddrInfoClass, "protocol", lxAddrInfoProtocol);*/
+    /*addNativeMethod(lxAddrInfoClass, "socktype", lxAddrInfoSocktype);*/
+    /*addNativeMethod(lxAddrInfoClass, "afamily", lxAddrInfoSocktype);*/
+    addNativeMethod(lxAddrInfoClass, "ip", lxAddrInfoIp);
+    addNativeMethod(lxAddrInfoClass, "inspect", lxAddrInfoInspect);
 
     addNativeMethod(lxSocketClass, "init", lxSocketInit);
     addNativeMethod(lxSocketClass, "connect", lxSocketConnect);

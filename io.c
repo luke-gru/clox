@@ -479,7 +479,6 @@ void Init_IOClass(void) {
     // get file description status flags (O_xxx flags)
     addConstantUnder("F_GETFL", NUMBER_VAL(F_SETFL), ioClassVal);
     addConstantUnder("F_SETFL", NUMBER_VAL(F_GETFL), ioClassVal);
-    // the few file dlags to set in lox
     addConstantUnder("O_NONBLOCK", NUMBER_VAL(O_NONBLOCK), ioClassVal);
 #ifndef O_DIRECT
 #define O_DIRECT 0
