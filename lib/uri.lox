@@ -1,0 +1,70 @@
+class URI {
+    class Error < Error {}
+
+    init(uri) {
+        this.uri = uri;
+        this._scheme = nil;
+        this._host = nil;
+        this._path = nil;
+        this._queryString = nil;
+        this.parseParts(uri);
+    }
+
+    scheme() {
+        return this._scheme;
+    }
+
+    host() {
+        return this._host;
+    }
+
+    path() {
+        return this._path;
+    }
+
+    queryString() {
+        return this._queryString;
+    }
+
+    inspect() {
+        return "#<URI ${this.uri}>";
+    }
+
+    parseParts(uri) {
+        var reScheme = %"\w{3,4}://";
+        var md = reScheme.match(uri, true);
+        var rest = uri;
+        if (md) {
+            var scheme = uri.substr(0, md.length);
+            this._scheme = scheme;
+            rest = uri.rest(md.length);
+        }
+        var reHost = %"\w*\.\w{2,3}";
+        md = reHost.match(rest, true);
+        if (!md) {
+            throw URI::Error("URI needs a host");
+        }
+        this._host = rest.substr(0, md.length);
+        rest = rest.rest(md.length);
+        if (rest.size() == 0) {
+            this._path = "/";
+            return;
+        }
+        var pathRe = %"/\w*";
+        md = pathRe.match(rest, true);
+        if (!md or md.start != 0) {
+            this._path = "/";
+            return;
+        }
+        this._path = rest.substr(0, md.length);
+        rest = rest.rest(md.length);
+        var queryRe = %"\?[\w&=]*";
+        md = queryRe.match(rest, true);
+        if (!md or md.start != 0) {
+            this._queryString = "";
+            return;
+        }
+        this._queryString = rest.substr(0, md.length);
+    }
+
+}
