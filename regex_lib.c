@@ -147,7 +147,16 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
     if (*err != 0) return NULL; // for recursive calls
     char c;
     while ((c = **src_p)) {
-        if (c == '(') {
+         if (c == '^' || c == '$') {
+            RNode *anch = new_node(NODE_ANCHOR, *src_p, 1, parent, prev);
+            if (c == '^') {
+              anch->anchor_type = ANCHOR_BOL;
+            } else {
+              anch->anchor_type = ANCHOR_EOL;
+            }
+            (*src_p)++;
+            return anch;
+         } else if (c == '(') {
             RNode *grp = new_node(NODE_GROUP, *src_p, 1, parent, prev);
             (*src_p)++;
             RNode *grp_child = NULL;
@@ -391,8 +400,15 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
                 }
                 node->eclass_type = etype;
             } else if (c == '.' || c == '*' || c == '+' || c == '[' || c == '|' ||
-                    c == '?' || c == '{' || c == '}') {
+                    c == '?' || c == '{' || c == '}' || c == '^' || c == '$') {
                 node = new_node(NODE_ATOM, *src_p, 1, parent, prev);
+            } else if (c == 'A' || c == 'Z') {
+                node = new_node(NODE_ANCHOR, *src_p, 1, parent, prev);
+                if (c == 'A') {
+                    node->anchor_type = ANCHOR_BOS;
+                } else if (c == 'Z') {
+                    node->anchor_type = ANCHOR_EOS;
+                }
             } else {
                 // FIXME: could be a non-atom...
                 (*src_p)++;
@@ -537,6 +553,10 @@ static void regex_output_ast_node(RNode *node, int indent) {
             fprintf(stderr, "%s(dot)\n", i(indent));
             break;
         }
+        case NODE_ANCHOR: {
+            fprintf(stderr, "%s(anchor %c)\n", i(indent), node->tok[0]);
+            break;
+        }
         default:
             ASSERT(0);
     }
@@ -567,6 +587,30 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
             } else {
                 return false;
             }
+        case NODE_ANCHOR: {
+            if (node->anchor_type == ANCHOR_EOL) { // end of line (or string)
+                if (!**cptr_p || **cptr_p == '\n' || **cptr_p == '\r') {
+                    *nnext = node->next; // NULL
+                    return true;
+                } else {
+                    return false;
+                }
+            } else if (node->anchor_type == ANCHOR_BOL) { // ^
+                *nnext = node->next;
+                return true;
+            } else if (node->anchor_type == ANCHOR_EOS) { // \Z
+              if (!**cptr_p) {
+                *nnext = node->next; // NULL
+                return true;
+              } else {
+                return false;
+              }
+            } else { // \A
+              *nnext = node->next;
+              return true;
+            }
+            break;
+        }
         case NODE_ATOM:
             ASSERT(node->tok);
             if (node->tok[0] == **cptr_p) {
@@ -808,12 +852,27 @@ MatchData regex_match(Regex *regex, const char *string) {
         return mres;
     }
     RNode *nparent = node->parent;
+    int begAnchorFound = 0;
+    bool bosAnchor = false;
+    bool bolAnchor = false;
+    char curChar, prevChar;
+    bool lastAccept = false;
     while (**cptr_p) {
+        curChar = **cptr_p;
         regex_debug(1, "matching '%c' at nodetype=%s", **cptr_p, nodeTypeName(node->type));
         RNode *nnext = NULL;
         char *match_start = *cptr_p;
         (void)match_start;
-        if (node_accepts_ch(node, nparent, cptr_p, &nnext)) {
+        if (begAnchorFound == 0) {
+          if (node->type == NODE_PROGRAM && node->children && node->children->anchor_type == ANCHOR_BOS) {
+            bosAnchor = true;
+          }
+          if (node->type == NODE_PROGRAM && node->children && node->children->anchor_type == ANCHOR_BOL) {
+            bolAnchor = true;
+          }
+          begAnchorFound++;
+        }
+        if ((lastAccept = node_accepts_ch(node, nparent, cptr_p, &nnext))) {
             if (**cptr_p) {
                 regex_debug(1, "matched '%c'", *match_start);
             } else {
@@ -829,11 +888,48 @@ MatchData regex_match(Regex *regex, const char *string) {
                 return mres;
             }
             nparent = node->parent;
+        // No match on node
+        } else if (bosAnchor) {
+            return mres; // no match period if no first match
         } else {
             regex_debug(1, "no match for '%c'", **cptr_p);
+            if (bolAnchor) {
+              char beg = **cptr_p;
+              if (beg == '\r' || beg == '\n') {
+                  // continue
+              } else {
+                  // advance cursor until hits beginning of line
+                  while (beg != '\r' && beg != '\n') {
+                      (*cptr_p)++;
+                      beg = **cptr_p;
+                      if (!beg) {
+                        return mres; // no match, end of string
+                      }
+                  }
+              }
+            }
+
             (*cptr_p)++;
             start = *cptr_p;
         }
+    }
+
+    if (lastAccept && node && (node->anchor_type == ANCHOR_EOL || node->anchor_type == ANCHOR_EOS)) {
+        char *match_end = *cptr_p;
+        if (node->anchor_type == ANCHOR_EOS && **cptr_p) {
+            return mres; // no match
+        }
+        if (node->anchor_type == ANCHOR_EOL) {
+            if (**cptr_p == '\n' || **cptr_p == '\r' || !**cptr_p) {
+                // continue
+            } else {
+                return mres; // no match
+            }
+        }
+        regex_debug(1, "Successful match starting at %d", (int)(start - string));
+        mres.matched = true;
+        mres.match_start = start - string;
+        mres.match_len = match_end - start;
     }
     return mres;
 }

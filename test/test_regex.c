@@ -329,6 +329,7 @@ cleanup:
     return 0;
 }
 
+
 int test_match_escapes(void) {
     Regex re;
     regex_init(&re, "\\s*\\d{3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}", NULL);
@@ -399,6 +400,164 @@ cleanup:
     return 0;
 }
 
+int test_compile_line_anchors(void) {
+    Regex re;
+    regex_init(&re, "^hi$", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_match_bol_anchor(void) {
+    Regex re;
+    regex_init(&re, "^hi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "hi there");
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(2, mdata.match_len);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_match_bol_anchor_at_line(void) {
+    Regex re;
+    regex_init(&re, "^hi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "l\nhi there");
+    T_ASSERT_EQ(2, mdata.match_start);
+    T_ASSERT_EQ(2, mdata.match_len);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_nomatch_bol_anchor(void) {
+    Regex re;
+    regex_init(&re, "^hi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "lhi there");
+    T_ASSERT_EQ(false, mdata.matched);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_match_bos_anchor(void) {
+    Regex re;
+    regex_init(&re, "\\Ahi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "hi there");
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(2, mdata.match_len);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_nomatch_bos_anchor(void) {
+    Regex re;
+    regex_init(&re, "\\Ahi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "lhi there");
+    T_ASSERT_EQ(false, mdata.matched);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_match_eol_anchor(void) {
+    Regex re;
+    regex_init(&re, "hi$", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "lolhi");
+    T_ASSERT_EQ(3, mdata.match_start);
+    T_ASSERT_EQ(2, mdata.match_len);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_match_eol_anchor_at_line(void) {
+    Regex re;
+    regex_init(&re, "hi$", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "lolhi\nother");
+    T_ASSERT_EQ(3, mdata.match_start);
+    T_ASSERT_EQ(2, mdata.match_len);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_nomatch_eol_anchor(void) {
+    Regex re;
+    regex_init(&re, "hi$", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "lolhi5");
+    T_ASSERT_EQ(false, mdata.matched);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_match_eos_anchor(void) {
+    Regex re;
+    regex_init(&re, "hi\\Z", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "lolhi");
+    T_ASSERT_EQ(3, mdata.match_start);
+    T_ASSERT_EQ(2, mdata.match_len);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_nomatch_eos_anchor(void) {
+    Regex re;
+    regex_init(&re, "hi\\Z", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    MatchData mdata = regex_match(&re, "lolhi5");
+    T_ASSERT_EQ(false, mdata.matched);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_compile_string_anchors(void) {
+    Regex re;
+    regex_init(&re, "\\Ahi\\Z", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initCoreSighandlers();
@@ -435,5 +594,17 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_match_cclass_hyphen);
     RUN_TEST(test_match_cclass_close_bracket);
     RUN_TEST(test_match_eclass_in_cclass);
+    RUN_TEST(test_compile_line_anchors);
+    RUN_TEST(test_compile_string_anchors);
+    RUN_TEST(test_match_bol_anchor);
+    RUN_TEST(test_match_bol_anchor_at_line);
+    RUN_TEST(test_nomatch_bol_anchor);
+    RUN_TEST(test_match_bos_anchor);
+    RUN_TEST(test_nomatch_bos_anchor);
+    RUN_TEST(test_match_eol_anchor);
+    RUN_TEST(test_match_eol_anchor_at_line);
+    RUN_TEST(test_nomatch_eol_anchor);
+    RUN_TEST(test_match_eos_anchor);
+    RUN_TEST(test_nomatch_eos_anchor);
     END_TESTS();
 }
