@@ -151,14 +151,14 @@ static Value lxMatchDataCaptures(int argCount, Value *args) {
 
 static Value lxMatchDataStart(int argCount, Value *args) {
     Value self = args[0];
-    MatchData *md = getMatchData(self);
-    return NUMBER_VAL(md->match_start);
+    LxMatchData *lmd = getMatchData(self);
+    return NUMBER_VAL(lmd->md.match_start);
 }
 
 static Value lxMatchDataLength(int argCount, Value *args) {
     Value self = args[0];
-    MatchData *md = getMatchData(self);
-    return NUMBER_VAL(md->match_len);
+    LxMatchData *lmd = getMatchData(self);
+    return NUMBER_VAL(lmd->md.match_len);
 }
 
 void Init_RegexClass() {
