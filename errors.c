@@ -38,8 +38,12 @@ void Init_ErrorClasses(void) {
   registerError("EADDRINUSE", EADDRINUSE);
   registerError("EAGAIN", EAGAIN);
   registerError("EBADF", EBADF);
+#ifdef EBADFD
   registerError("EBADFD", EBADFD);
+#endif
+#ifdef ECONNRESET
   registerError("ECONNRESET", ECONNRESET);
+#endif
   registerError("EEXIST", EEXIST);
   registerError("EINTR", EINTR);
   registerError("EINVAL", EINVAL);
