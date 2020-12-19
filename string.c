@@ -56,7 +56,21 @@ static Value lxStringInspect(int argCount, Value *args) {
     ObjString *selfStr = AS_STRING(self);
     ObjString *buf = emptyString();
     pushCString(buf, "\"", 1);
-    pushCString(buf, selfStr->chars, selfStr->length);
+    size_t i = 0;
+    while (i < selfStr->length) {
+      if (selfStr->chars[i] == '\r') {
+          pushCString(buf, "\\r", 2);
+      } else if (selfStr->chars[i] == '\n') {
+          pushCString(buf, "\\n", 2);
+      } else if (selfStr->chars[i] == '\t') {
+          pushCString(buf, "\\t", 2);
+      } else if (selfStr->chars[i] == '"') {
+          pushCString(buf, "\\\"", 2);
+      } else {
+          pushCString(buf, selfStr->chars+i, 1);
+      }
+      i++;
+    }
     pushCString(buf, "\"", 1);
     return OBJ_VAL(buf);
 }
@@ -232,6 +246,20 @@ static Value lxStringPadRight(int argCount, Value *args) {
     return self;
 }
 
+static Value lxStringRest(int argCount, Value *args) {
+    CHECK_ARITY("String#rest", 2, 2, argCount);
+    Value self = args[0];
+    Value startVal = args[1];
+    ObjString *selfStr = AS_STRING(self);
+    CHECK_ARG_BUILTIN_TYPE(startVal, IS_NUMBER_FUNC, "number", 1);
+    int start = AS_NUMBER(startVal);
+    if (start < 0 || (size_t)start >= selfStr->length) {
+      return OBJ_VAL(emptyString());
+    }
+    ObjString *ret = copyString(selfStr->chars+start, selfStr->length-start, NEWOBJ_FLAG_NONE);
+    return OBJ_VAL(ret);
+}
+
 static Value lxStringGetSize(int argCount, Value *args) {
     ObjString *str = AS_STRING(*args);
     return NUMBER_VAL(str->length);
@@ -310,6 +338,7 @@ void Init_StringClass() {
     addNativeMethod(stringClass, "endsWith", lxStringEndsWith);
     addNativeMethod(stringClass, "compact", lxStringCompact);
     addNativeMethod(stringClass, "padRight", lxStringPadRight);
+    addNativeMethod(stringClass, "rest", lxStringRest);
     // TODO: add startsWith, index, rindex
 
     // getters
