@@ -16,6 +16,11 @@ print %".*?".match("abc");
 print %"ab?c".match("abc");
 print %"ab?c".match("ac");
 
+print %"(hi)".match("hithere", true).captures().inspect();
+print %"(hi)(there)".match("hithere", true).captures().inspect();
+print %"hi(there)".match("hithere", true).captures().inspect();
+print %"hithere".match("hithere", true).captures().inspect();
+
 __END__
 -- expect: --
 1
@@ -25,3 +30,7 @@ true
 0
 0
 0
+["hi"]
+["hi","there"]
+["there"]
+[]

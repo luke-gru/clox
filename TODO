@@ -7,24 +7,25 @@ all listed features/improvements are going to get done.
 Features
 --------
 
+* Add captures to regex
+* Add more socket classes, like UnixSocket, TCPSocket, etc, along
+with TCPServer, UnixServer.
+* Add HTTPServer library
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in ruby.
 * Dumping/loading values to/from disk (like Ruby's Marshal)
-* Saving/loading bytecode to disk
-* Add tracing/coverage information
-* Add profiler
-* Add socket class in io.c, make it work with multi-threading
 * Allow getters to be called like methods (when given 0 args) [PARTIAL]
   works for instances, not classes or modules (ex: Array.name())
 * Allow '?' or '!' at end of method name?
 * Disallow property get/set outside of class like Ruby? Also, make property
 get/set a different sigil maybe, like @prop.
 * Add method privacy (private/public)
-* Add defineMethod() function
 * Allow dynamically loading lox extensions, which can be '.so' files.
-* Add guilds, with per-guild VM lock and restricted guild to guild sharing
-* Add Regex::MatchData class
 * Get template library using eval instead of string subst
+* Saving/loading bytecode to disk
+* Add tracing/coverage information
+* Add profiler
+* Add guilds, with per-guild VM lock and restricted guild to guild sharing
 
 Improvements
 ------------
@@ -44,7 +45,12 @@ compiled lookup
 
 Bugs
 ----
+* Undefined init for a class, when object is given parameters the error
+message is Object#init received too many args instead of the original
+method
 * super bug for getters/setters (examples/super_setter.lox)
+* Bug in repl, inspect on last value doesn't work right when inspect()
+is a lox defined method instead of a native
 * Nodes created during parsing are never freed. This results in memory leak
 when evaling.
 * loadScript/requireScript should use pwd of lox process during startup for

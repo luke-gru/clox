@@ -563,6 +563,8 @@ int test_capture_groups_nodes(void) {
     regex_init(&re, "(hi)", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
     T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    T_ASSERT_EQ(NODE_GROUP, re.groups->group->type);
+
     char *str = "hithere";
     MatchData mdata = regex_match(&re, str);
     T_ASSERT(mdata.matched);
@@ -572,6 +574,8 @@ int test_capture_groups_nodes(void) {
     T_ASSERT_EQ(NODE_GROUP, re.node->children->type);
     T_ASSERT_EQ(str, re.node->children->capture_beg);
     T_ASSERT_EQ(str+1, re.node->children->capture_end);
+    T_ASSERT_EQ(re.node->children, re.groups->group);
+
 cleanup:
     regex_free(&re);
     return 0;

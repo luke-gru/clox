@@ -331,6 +331,12 @@ typedef struct LxFile {
     LxSocket *sock; // only for sockets
 } LxFile;
 
+typedef struct LxMatchData {
+    MatchData md;
+    ObjRegex *re; // can be NULL
+    Value captures;
+} LxMatchData;
+
 #define TO_OBJ(obj) ((Obj*)(obj))
 #define TO_CLASS(obj) ((ObjClass*)(obj))
 #define TO_INSTANCE(obj) ((ObjInstance*)(obj))

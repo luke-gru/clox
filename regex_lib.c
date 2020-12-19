@@ -31,6 +31,7 @@ void regex_init(Regex *regex, const char *src, RegexOptions *opts) {
     regex->node = NULL;
     regex->src = strdup(src);
     regex->ownsSrc = true;
+    regex->groups = NULL;
     if (opts) {
         regex->opts = *opts;
     } else {
@@ -42,6 +43,7 @@ void regex_init_from(Regex *regex, const char *src, RegexOptions *opts) {
     regex->node = NULL;
     regex->src = src;
     regex->ownsSrc = false;
+    regex->groups = NULL;
     if (opts) {
         regex->opts = *opts;
     } else {
@@ -145,7 +147,31 @@ static void parse_error(char c, const char *at, const char *msg) {
 
 static void regex_output_ast_node(RNode *node, RNode *parent, int indent);
 
-static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *err) {
+static void regex_add_group(Regex *regex, RNode *group) {
+    GroupNode *gn = ALLOCATE(GroupNode, 1);
+    gn->group = group;
+    gn->next = NULL;
+    GroupNode *cur = regex->groups;
+    if (!cur) {
+        regex->groups = gn;
+        return;
+    }
+    while (cur->next) {
+        cur = cur->next;
+    }
+    cur->next = gn;
+}
+
+static void regex_blank_out_group_captures(Regex *regex) {
+    GroupNode *gn = regex->groups;
+    while (gn) {
+        gn->group->capture_beg = NULL;
+        gn->group->capture_end = NULL;
+        gn = gn->next;
+    }
+}
+
+static RNode *regex_parse_node(Regex *regex, RNode *parent, RNode *prev, char **src_p, int *err) {
     if (*err != 0) return NULL; // for recursive calls
     char c;
     while ((c = **src_p)) {
@@ -165,7 +191,7 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
             while (**src_p && **src_p != ')') {
                 /*fprintf(stderr, "parsing %c\n", **src_p);*/
                 RNode *grp_child_old = grp_child;
-                grp_child = regex_parse_node(grp, grp_child, src_p, err);
+                grp_child = regex_parse_node(regex, grp, grp_child, src_p, err);
                 if (!grp_child_old) {
                     begOrNode = grp_child;
                 }
@@ -177,6 +203,7 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
             if (**src_p) {
                 ASSERT(**src_p == ')');
                 (*src_p)++; // ')'
+                regex_add_group(regex, grp);
                 return grp;
             } else {
                 *err = -1;
@@ -230,7 +257,7 @@ static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *er
 
             while (**src_p) {
                 if (**src_p == ')') break; // end of group, don't advance. TODO: check if inGroupLvl > 0
-                alt = regex_parse_node(altGroupNode, alt, src_p, err);
+                alt = regex_parse_node(regex, altGroupNode, alt, src_p, err);
                 if (*err != 0) return NULL;
                 if (begOrNode != lastBegOrNode && lastIdx > 0) break;
                 lastIdx++;
@@ -440,7 +467,7 @@ static int regex_parse(Regex *regex) {
     char **src_pout = &src_p;
     while (*src_p) {
         int err = 0;
-        prev = regex_parse_node(parent, prev, src_pout, &err);
+        prev = regex_parse_node(regex, parent, prev, src_pout, &err);
         if (err != 0) { return err; }
         if (!begOrNode) {
             begOrNode = prev;
@@ -847,6 +874,7 @@ MatchData regex_match(Regex *regex, const char *string) {
     if (!regex->node || !regex->src) { // uninitialized regex
         return mres;
     }
+    regex_blank_out_group_captures(regex); // from previous matches, if any
     char *cptr = (char*)string;
     char *start = cptr;
     char **cptr_p = &cptr;

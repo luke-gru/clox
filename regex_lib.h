@@ -64,10 +64,16 @@ typedef struct RegexOptions {
     bool multiline; // don't end on \n
 } RegexOptions;
 
+typedef struct GroupNode {
+    RNode *group;
+    struct GroupNode *next;
+} GroupNode;
+
 typedef struct Regex {
     RNode *node;
     const char *src;
     bool ownsSrc; // if `ownsSrc`, can free it in regex_free
+    GroupNode *groups;
     RegexOptions opts;
 } Regex;
 
