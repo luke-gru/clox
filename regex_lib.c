@@ -122,6 +122,8 @@ static RNode *new_node(RNodeType type, const char *tok, int toklen, RNode *paren
     node->repeat_max = -1;
     node->eclass_type = ECLASS_NONE;
     node->anchor_type = ANCHOR_NONE;
+    node->capture_beg = NULL;
+    node->capture_end = NULL;
     if (parent) {
         parent->nodelen += toklen;
     }
@@ -141,7 +143,7 @@ static void parse_error(char c, const char *at, const char *msg) {
     regex_debug(1, "%s", msg);
 }
 
-static void regex_output_ast_node(RNode *node, int indent);
+static void regex_output_ast_node(RNode *node, RNode *parent, int indent);
 
 static RNode *regex_parse_node(RNode *parent, RNode *prev, char **src_p, int *err) {
     if (*err != 0) return NULL; // for recursive calls
@@ -468,7 +470,7 @@ static char *i(int indent) {
     return buf;
 }
 
-static void regex_output_ast_node(RNode *node, int indent) {
+static void regex_output_ast_node(RNode *node, RNode *parent, int indent) {
     switch (node->type) {
         case NODE_PROGRAM: {
             fprintf(stderr, "(program");
@@ -479,21 +481,23 @@ static void regex_output_ast_node(RNode *node, int indent) {
                 fprintf(stderr, "\n");
             }
             while (child) {
-                regex_output_ast_node(child, indent+1);
+                regex_output_ast_node(child, node, indent+1);
                 child = child->next;
             }
             fprintf(stderr, ")\n");
             break;
         }
         case NODE_ATOM: {
-            fprintf(stderr, "%s(atom %.*s)\n", i(indent), 1, node->tok);
+            fprintf(stderr, "%s(atom %.*s)", i(indent), 1, node->tok);
+            fprintf(stderr, "  parent = %s, next = %s\n", nodeTypeName(parent->type),
+                node->next == NULL ? "NULL" : nodeTypeName(node->next->type));
             break;
         }
         case NODE_OR: {
             fprintf(stderr, "%s(alt\n", i(indent));
             RNode *child = node->children;
             while (child) {
-                regex_output_ast_node(child, indent+1);
+                regex_output_ast_node(child, node, indent+1);
                 child = child->next;
             }
             fprintf(stderr, "%s)\n", i(indent));
@@ -503,7 +507,7 @@ static void regex_output_ast_node(RNode *node, int indent) {
             fprintf(stderr, "%s(maybe\n", i(indent));
             RNode *child = node->children;
             while (child) {
-                regex_output_ast_node(child, indent+1);
+                regex_output_ast_node(child, node, indent+1);
                 child = child->next;
             }
             fprintf(stderr, "%s)\n", i(indent));
@@ -513,7 +517,7 @@ static void regex_output_ast_node(RNode *node, int indent) {
             fprintf(stderr, "%s(group\n", i(indent));
             RNode *child = node->children;
             while (child) {
-                regex_output_ast_node(child, indent+1);
+                regex_output_ast_node(child, node, indent+1);
                 child = child->next;
             }
             fprintf(stderr, "%s)\n", i(indent));
@@ -531,7 +535,7 @@ static void regex_output_ast_node(RNode *node, int indent) {
             }
             RNode *child = node->children;
             while (child) {
-                regex_output_ast_node(child, indent+1);
+                regex_output_ast_node(child, node, indent+1);
                 child = child->next;
             }
             fprintf(stderr, "%s)\n", i(indent));
@@ -563,8 +567,8 @@ static void regex_output_ast_node(RNode *node, int indent) {
 }
 
 void regex_output_ast(Regex *regex) {
-    if (regex->node == NULL) { fprintf(stderr, "(unitialized)\n"); }
-    regex_output_ast_node(regex->node, 0);
+    if (regex->node == NULL) { fprintf(stderr, "(uninitialized)\n"); }
+    regex_output_ast_node(regex->node, NULL, 0);
 }
 
 static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
@@ -578,10 +582,8 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
         case NODE_GROUP:
             ASSERT(node->children);
             if (node_accepts_ch(node->children, node, cptr_p, nnext)) {
-                if (node->children->next) {
-                    *nnext = node->children->next;
-                } else {
-                    *nnext = node->next;
+                if (node->type == NODE_GROUP) {
+                    node->capture_beg = (*cptr_p)-1;
                 }
                 return true;
             } else {
@@ -618,6 +620,9 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                     *nnext = node->next;
                 } else {
                     *nnext = parent->next;
+                    if (parent->type == NODE_GROUP) {
+                        parent->capture_end = *cptr_p;
+                    }
                 }
                 (*cptr_p)++;
                 return true;
@@ -818,6 +823,9 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 *nnext = node->next;
             } else {
                 *nnext = parent->next;
+                if (parent->type == NODE_GROUP) {
+                  parent->capture_end = *cptr_p;
+                }
             }
             (*cptr_p)++;
             return true;

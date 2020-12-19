@@ -46,11 +46,13 @@ typedef struct RNode {
     const char *tok; // not owned
     int toklen;
     int nodelen; // includes child tokens, if any
-    long repeat_min;
+    long repeat_min; // ex: {3,4}, would be 3
     long repeat_max;
     REClassType eclass_type;
     RNodeType type;
     RAnchorType anchor_type;
+    char *capture_beg;
+    char *capture_end;
     struct RNode *next;
     struct RNode *prev;
     struct RNode *parent;

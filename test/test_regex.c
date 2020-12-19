@@ -558,6 +558,25 @@ cleanup:
     return 0;
 }
 
+int test_capture_groups_nodes(void) {
+    Regex re;
+    regex_init(&re, "(hi)", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    char *str = "hithere";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT(mdata.matched);
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(2, mdata.match_len);
+    /*regex_output_ast(&re);*/
+    T_ASSERT_EQ(NODE_GROUP, re.node->children->type);
+    T_ASSERT_EQ(str, re.node->children->capture_beg);
+    T_ASSERT_EQ(str+1, re.node->children->capture_end);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initCoreSighandlers();
@@ -606,5 +625,6 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_nomatch_eol_anchor);
     RUN_TEST(test_match_eos_anchor);
     RUN_TEST(test_nomatch_eos_anchor);
+    RUN_TEST(test_capture_groups_nodes);
     END_TESTS();
 }
