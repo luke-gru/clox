@@ -291,6 +291,16 @@ static void defineNativeClasses(void) {
     isClassHierarchyCreated = true;
 }
 
+static void addToDefaultLoadPath(Value loadPathVal, const char *dir) {
+    // add 'lib' path as default load path
+    ObjString *path = hiddenString("", 0, NEWOBJ_FLAG_OLD);
+    // FIXME: this won't work if user moves their clox binary after building
+    pushCString(path, QUOTE(LX_BUILT_DIR), strlen(QUOTE(LX_BUILT_DIR)));
+    pushCStringFmt(path, "/%s", dir);
+    arrayPush(loadPathVal, OBJ_VAL(path));
+    unhideFromGC(TO_OBJ(path));
+}
+
 // NOTE: this initialization function can create Lox runtime objects
 static void defineGlobalVariables(void) {
     Value loadPathVal = newArray();
@@ -298,13 +308,10 @@ static void defineGlobalVariables(void) {
     lxLoadPath = AS_ARRAY(loadPathVal);
     ObjString *loadPathStr = INTERN("loadPath");
     ASSERT(tableSet(&vm.globals, OBJ_VAL(loadPathStr), loadPathVal));
-    // add 'lib' path as default load path
-    ObjString *libPath = hiddenString("", 0, NEWOBJ_FLAG_OLD);
-    // FIXME: this won't work if user moves their clox binary after building
-    pushCString(libPath, QUOTE(LX_BUILT_DIR), strlen(QUOTE(LX_BUILT_DIR)));
-    pushCString(libPath, "/lib", strlen("/lib"));
-    arrayPush(loadPathVal, OBJ_VAL(libPath));
-    unhideFromGC(TO_OBJ(libPath));
+
+    addToDefaultLoadPath(loadPathVal, "lib");
+    addToDefaultLoadPath(loadPathVal, "ext");
+
     // populate load path from -L option given to commandline
     char *lpath = GET_OPTION(initialLoadPath);
     if (lpath && strlen(lpath) > 0) {
@@ -1219,6 +1226,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, Cal
         if (UNLIKELY(!callable)) {
             ObjString *className = CLASSINFO(instance->klass)->name;
             const char *classStr = className->chars ? className->chars : "(anon)";
+            // TODO: show full class name
             throwErrorFmt(lxErrClass, "instance method '%s#%s' not found", classStr, methodName->chars);
         }
         callVMMethod(instance, OBJ_VAL(callable), argCount, args, cinfo);
@@ -1226,12 +1234,13 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, Cal
     } else if (obj->type == OBJ_T_CLASS) {
         ObjClass *klass = (ObjClass*)obj;
         Obj *callable = classFindStaticMethod(klass, methodName);
-        /*if (!callable && numArgs == 0) {*/
-        /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
-        /*}*/
-        if (UNLIKELY(!callable)) {
+        if (!callable && argCount == 0) {
+          callable = instanceFindGetter((ObjInstance*)klass, methodName);
+        }
+        if (!callable) {
             ObjString *className = CLASSINFO(klass)->name;
             const char *classStr = className ? className->chars : "(anon)";
+            // TODO: show full class name
             throwErrorFmt(lxErrClass, "class method '%s.%s' not found", classStr, methodName->chars);
         }
         callVMMethod((ObjInstance*)klass, OBJ_VAL(callable), argCount, args, cinfo);
@@ -1242,6 +1251,7 @@ Value callMethod(Obj *obj, ObjString *methodName, int argCount, Value *args, Cal
         if (UNLIKELY(!callable)) {
             ObjString *modName = CLASSINFO(mod)->name;
             const char *modStr = modName ? modName->chars : "(anon)";
+            // TODO: show full mod name
             throwErrorFmt(lxErrClass, "module method '%s.%s' not found", modStr, methodName->chars);
         }
         callVMMethod((ObjInstance*)mod, OBJ_VAL(callable), argCount, args, cinfo);
@@ -2840,13 +2850,14 @@ vmLoop:
           if (IS_CLASS(instanceVal) || IS_MODULE(instanceVal)) {
               ObjClass *klass = AS_CLASS(instanceVal);
               Obj *callable = classFindStaticMethod(klass, mname);
-              /*if (!callable && numArgs == 0) {*/
-                  /*callable = instanceFindGetter((ObjInstance*)klass, mname);*/
-              /*}*/
+              if (!callable && numArgs == 0) {
+                  callable = instanceFindGetter((ObjInstance*)klass, mname);
+              }
               if (UNLIKELY(!callable)) {
                   ObjString *className = CLASSINFO(klass)->name;
                   const char *modStr = IS_CLASS(instanceVal) ? "class" : "module";
                   const char *classStr = className ? className->chars : "(anon)";
+                  // TODO: use full name
                   throwErrorFmt(lxErrClass, "%s method '%s.%s' not found", modStr, classStr, mname->chars);
               }
               EC->stackTop[-numArgs-1] = instanceVal;

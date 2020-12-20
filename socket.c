@@ -14,9 +14,6 @@ ObjClass *lxSocketClass;
 ObjClass *lxAddrInfoClass;
 
 static void markInternalSocket(Obj *obj) {
-    ASSERT(obj->type == OBJ_T_INTERNAL);
-    ObjInternal *internal = (ObjInternal*)obj;
-    LxFile *f = (LxFile*)internal->data;
     // do nothing
 }
 
@@ -211,7 +208,7 @@ static Value lxSocketAccept(int argCount, Value *args) {
     int sfd = f->fd;
     struct sockaddr *peer_addr;
     struct sockaddr_in in_peer_addr; // TODO: support unix
-    peer_addr = &in_peer_addr;
+    peer_addr = (struct sockaddr*)&in_peer_addr;
     socklen_t addr_size = sizeof(struct sockaddr_in);
 
     releaseGVL(THREAD_STOPPED);
@@ -222,6 +219,13 @@ static Value lxSocketAccept(int argCount, Value *args) {
     }
     Value newSock = newSocketFromAccept(self, newFd, peer_addr, addr_size);
     return newSock;
+}
+
+static Value lxSocketGetFd(int argCount, Value *args) {
+    Value self = args[0];
+    LxFile *f = checkSocket(self);
+    int sfd = f->fd;
+    return NUMBER_VAL(sfd);
 }
 
 // TODO: move this function
@@ -240,8 +244,7 @@ typedef struct LxAddrInfo {
 } LxAddrInfo;
 
 static void markInternalAddrInfo(Obj *obj) {
-    ASSERT(obj->type == OBJ_T_INTERNAL);
-    ObjInternal *internal = (ObjInternal*)obj;
+  // do nothing
 }
 
 static void freeInternalAddrInfo(Obj *obj) {
@@ -424,6 +427,7 @@ void Init_SocketClass(void) {
     addNativeMethod(lxSocketClass, "send", lxSocketSend);
     addNativeMethod(lxSocketClass, "bind", lxSocketBind);
     addNativeMethod(lxSocketClass, "accept", lxSocketAccept);
+    addNativeGetter(lxSocketClass, "fd", lxSocketGetFd);
 
     addConstantUnder("AF_UNIX", NUMBER_VAL(AF_UNIX), sockVal);
     addConstantUnder("AF_LOCAL", NUMBER_VAL(AF_LOCAL), sockVal);

@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <dlfcn.h>
 #include "runtime.h"
 #include "object.h"
 #include "value.h"
@@ -591,6 +592,50 @@ Value lxAlias(int argCount, Value *args) {
     return NIL_VAL;
 }
 
+static const char *get_filename_ext(const char *filename) {
+    const char *dot = strrchr(filename, '.');
+    if (!dot || dot == filename) return "";
+    return dot + 1;
+}
+
+static bool hasSharedObjectExtension(const char *path) {
+  return strncmp(get_filename_ext(path), "so", 2) == 0;
+}
+
+// assumes `path` is an absolute path
+static char *extensionName(const char *path, size_t *sizeOut) {
+    char *dot = strrchr(path, '.');
+    char *lastSlash = strrchr(path, '/');
+    ASSERT(lastSlash);
+    char *start = lastSlash+1;
+    char *end = dot;
+    *sizeOut = end-start;
+    return start;
+}
+
+// assumes `path` is an absolute path to a readable file
+static bool loadSharedObject(const char *path) {
+    size_t extNameLen;
+    char *extName = extensionName(path, &extNameLen);
+    void *h = dlopen(path, RTLD_NOW);
+    void (*initFn)(void);
+    if (!h) {
+      throwErrorFmt(lxLoadErrClass,
+          "Could not dynamically load extension library %.*s", extNameLen, extName);
+    }
+    char fnname[200] = {0};
+    strcat(fnname, "Init_");
+    strncat(fnname, extName, extNameLen);
+    initFn = dlsym(h, fnname);
+    if (!initFn) {
+      throwErrorFmt(lxLoadErrClass,
+          "Could not find Init function for extension library %.*s", extNameLen, extName);
+    }
+    initFn();
+    dlclose(h);
+    return true;
+}
+
 #define SCRIPT_PATH_MAX (PATH_MAX+1)
 #define SCRIPT_DIR_MAX (PATH_MAX+1-100)
 static Value loadScriptHelper(Value fname, bool checkLoaded) {
@@ -631,12 +676,20 @@ static Value loadScriptHelper(Value fname, bool checkLoaded) {
             }
             strcat(pathbuf, cfile);
             bool isReadable = false;
+            bool triedAddingLoxExt = false;
+            bool triedAddingSOExt = false;
 readableCheck:
             isReadable = fileReadable(pathbuf);
             if (!isReadable) {
-                if (!strstr(pathbuf, ".lox") && strlen(pathbuf)+4 < SCRIPT_PATH_MAX) {
+                if (!triedAddingLoxExt && !strstr(pathbuf, ".lox") && strlen(pathbuf)+4 < SCRIPT_PATH_MAX) {
                     strcat(pathbuf, ".lox");
+                    triedAddingLoxExt = true;
                     goto readableCheck;
+                }
+                if (!triedAddingSOExt && !strstr(pathbuf, ".so") && strlen(pathbuf)+3 < SCRIPT_PATH_MAX) {
+                  strcat(pathbuf, ".so");
+                  triedAddingSOExt = true;
+                  goto readableCheck;
                 }
                 continue; // look in other directories for file
             }
@@ -644,11 +697,20 @@ readableCheck:
             break;
         }
     }
+    // finished looking for file
     if (!fileFound) {
         throwErrorFmt(lxLoadErrClass, "File '%s' not found", cfile);
     }
     if (checkLoaded && VMLoadedScript(pathbuf)) {
         return BOOL_VAL(false);
+    }
+    if (hasSharedObjectExtension(pathbuf)) {
+        bool extloaded = loadSharedObject(pathbuf);
+        ObjString *fpath = copyString(pathbuf, strlen(pathbuf), NEWOBJ_FLAG_OLD);
+        if (checkLoaded) {
+          vec_push(&vm.loadedScripts, OBJ_VAL(fpath));
+        }
+        return BOOL_VAL(extloaded);
     }
     CompileErr err = COMPILE_ERR_NONE;
     Chunk *chunk = compile_file(pathbuf, &err);

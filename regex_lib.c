@@ -891,10 +891,8 @@ MatchData regex_match(Regex *regex, const char *string) {
     int begAnchorFound = 0;
     bool bosAnchor = false;
     bool bolAnchor = false;
-    char curChar, prevChar;
     bool lastAccept = false;
     while (**cptr_p) {
-        curChar = **cptr_p;
         regex_debug(1, "matching '%c' at nodetype=%s", **cptr_p, nodeTypeName(node->type));
         RNode *nnext = NULL;
         char *match_start = *cptr_p;

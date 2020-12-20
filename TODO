@@ -7,7 +7,6 @@ all listed features/improvements are going to get done.
 Features
 --------
 
-* Add captures to regex
 * Add more socket classes, like UnixSocket, TCPSocket, etc, along
 with TCPServer, UnixServer.
 * Add HTTPServer library
@@ -24,6 +23,7 @@ get/set a different sigil maybe, like @prop.
 * Get template library using eval instead of string subst
 * Saving/loading bytecode to disk
 * Add tracing/coverage information
+* Add binding object that you can eval() with
 * Add profiler
 * Add guilds, with per-guild VM lock and restricted guild to guild sharing
 
