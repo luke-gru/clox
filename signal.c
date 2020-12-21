@@ -48,15 +48,18 @@ void execSignal(LxThread *th, int signum) {
     }
 }
 
+// callback when a native signal gets sent
 static void sigHandlerFunc(int signum, siginfo_t *sinfo, void *_context) {
     enqueueSignal(signum);
     pthread_mutex_lock(&vm.mainThread->interruptLock);
     SET_TRAP_INTERRUPT(vm.mainThread);
     pthread_mutex_unlock(&vm.mainThread->interruptLock);
+    // execute the interrupts on the main thread
     if (vm.mainThread != vm.curThread) {
         threadSchedule(vm.mainThread);
+    } else {
+        vmCheckInts(vm.curThread);
     }
-    return;
 }
 
 void removeVMSignalHandlers(void) {

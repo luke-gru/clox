@@ -3684,6 +3684,16 @@ void acquireGVL(void) {
         pthread_mutex_unlock(&vm.GVLock);
         return;
     }
+    // This happens when an interrupt occurs while the GVL was released
+    // (like during a syscall being blocked), and the interrupt handler function needs
+    // to run if there's a lox Signal.trap() for that interrupt, so the GVL is
+    // acquired there, and then tries to be re-acquired afterwards in the C
+    // code when the syscall returns.
+    if (th && GVLOwner == th->tid && th->tid == pthread_self()) {
+        THREAD_DEBUG(1, "Thread %lu skipping acquire of GVL due to already being held\n", pthread_self());
+        pthread_mutex_unlock(&vm.GVLock);
+        return;
+    }
     vm.GVLWaiters++;
     while (vm.GVLockStatus > 0) {
         pthread_cond_wait(&vm.GVLCond, &vm.GVLock); // block on wait queue
