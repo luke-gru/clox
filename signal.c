@@ -111,6 +111,7 @@ static int addSigHandler(int signum, Value callable) {
 
 static Value lxSignalTrapStatic(int argCount, Value *args) {
     CHECK_ARITY("Signal.trap", 3, 3, argCount);
+    Value self = args[0];
     Value signo = args[1];
     Value callable = args[2];
     CHECK_ARG_BUILTIN_TYPE(signo, IS_NUMBER_FUNC, "number", 1);
@@ -119,14 +120,11 @@ static Value lxSignalTrapStatic(int argCount, Value *args) {
     }
     int signum = AS_NUMBER(signo);
 
-    int last = errno;
-    OBJ_WRITE(*args, callable);
+    OBJ_WRITE(self, callable);
     GC_OLD(AS_OBJ(callable));
     int res = addSigHandler(signum, callable);
     if (res != 0) {
-        int err = errno;
-        errno = last;
-        throwErrorFmt(lxErrClass, "Error adding signal handler: %s", strerror(err));
+        throwErrorFmt(lxErrClass, "Error adding signal handler: %s", strerror(errno));
     }
 
     return NIL_VAL;

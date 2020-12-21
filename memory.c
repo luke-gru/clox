@@ -331,6 +331,12 @@ void collectYoungGarbage() {
     GC_TRACE_DEBUG(2, "Marking VM stack roots");
     // Mark stack roots up the stack for every execution context in every thread
     Obj *thObj; int thIdx = 0;
+    SigHandler *sigh = sigHandlers;
+    while (sigh) {
+        ASSERT(sigh->callable);
+        grayObject(sigh->callable);
+        sigh = sigh->next;
+    }
     vec_foreach(&vm.threads, thObj, thIdx) {
         DBG_ASSERT(thObj);
         grayObject(thObj);

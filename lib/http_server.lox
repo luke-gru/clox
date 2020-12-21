@@ -29,7 +29,6 @@ class HTTPServer {
         var sock = this.servsock;
         Signal.trap(Signal::INT, fun() {
             if (sock) {
-                print "Closing socket ${sock.fd}";
                 sock.close();
             }
             exit(1);
@@ -40,6 +39,7 @@ class HTTPServer {
         var sock = Socket(Socket::AF_INET, Socket::SOCK_STREAM);
         sock.bind("127.0.0.1", this.port);
         this.servsock = sock;
+        this.setupTrap();
         var clisock = nil;
         while (true) {
             var headers = [];

@@ -56,7 +56,7 @@ static void vm_warn(const char *format, ...) {
 static void stacktraceHandler(int sig, siginfo_t *si, void *unused) {
     fprintf(stderr, "Got SIGSEGV at address: 0x%lx\n", (long)si->si_addr);
     fprintf(stderr, "VM initialized: %s\n", vm.inited ? "true" : "false");
-    diePrintCBacktrace("info:");
+    diePrintCBacktrace("%s", "info:");
 }
 
 void initCoreSighandlers(void) {
@@ -3710,6 +3710,10 @@ void acquireGVL(void) {
 void releaseGVL(ThreadStatus thStatus) {
     pthread_mutex_lock(&vm.GVLock);
     LxThread *th = vm.curThread;
+    if (!th) { // NOTE: happens only in signal handler trap calls
+        pthread_mutex_unlock(&vm.GVLock);
+        return;
+    }
     if (GVLOwner != th->tid) {
         THREAD_DEBUG(1, "Thread %lu skipping release of GVL due to not holding!\n", pthread_self());
         pthread_mutex_unlock(&vm.GVLock);
