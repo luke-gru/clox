@@ -287,6 +287,22 @@ static Value lxFileStaticExpandPath(int argCount, Value *args) {
     return OBJ_VAL(buf);
 }
 
+static Value lxFileStaticExtension(int argCount, Value *args) {
+    CHECK_ARITY("File.extension", 2, 2, argCount);
+    Value path = args[1];
+    CHECK_ARG_IS_A(path, lxStringClass, 1);
+    ObjString *pathstr = AS_STRING(path);
+    char *dot = strrchr(pathstr->chars, '.');
+    if (!dot) {
+      return OBJ_VAL(emptyString());
+    } else {
+      char *start = dot+1;
+      char *end = pathstr->chars+pathstr->length;
+      size_t restLen = end-start;
+      return OBJ_VAL(copyString(start, restLen, NEWOBJ_FLAG_NONE));
+    }
+}
+
 static Value lxFileInit(int argCount, Value *args) {
     CHECK_ARITY("File#init", 2, 2, argCount);
     callSuper(0, NULL, NULL);
@@ -756,6 +772,7 @@ void Init_FileClass(void) {
     addNativeMethod(fileStatic, "symlink", lxFileStaticSymlink);
     addNativeMethod(fileStatic, "join", lxFileStaticJoin);
     addNativeMethod(fileStatic, "expandPath", lxFileStaticExpandPath);
+    addNativeMethod(fileStatic, "extension", lxFileStaticExtension);
 
     addNativeMethod(fileClass, "init", lxFileInit);
     addNativeMethod(fileClass, "write", lxFileWrite);

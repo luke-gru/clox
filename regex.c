@@ -54,9 +54,9 @@ static void matchDataPopulateCaptures(Value md) {
     GroupNode *gn = re->groups;
     Value captures = newArray();
     while (gn) {
-        if (gn->group->capture_beg) {
+        if (gn->group->capture_beg && gn->group->capture_end) {
             ObjString *capture = copyString(gn->group->capture_beg,
-                    gn->group->capture_end-gn->group->capture_beg+1,
+                    gn->group->capture_end-gn->group->capture_beg,
                     NEWOBJ_FLAG_NONE);
             arrayPush(captures, OBJ_VAL(capture));
         } else {

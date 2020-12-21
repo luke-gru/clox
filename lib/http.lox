@@ -1,0 +1,39 @@
+requireScript("uri");
+
+class HTTPClient {
+    class Error < Error {}
+    this.logger = nil;
+
+    init(url) {
+        this.url = url;
+        this.uri = URI(url);
+    }
+
+    class setLogger(logger) {
+        this.logger = logger;
+    }
+
+    get(page, queryString = %{}) {
+        if (page.size() == 0) {
+            page = "/";
+        }
+        var sock = Socket(Socket::AF_INET, Socket::SOCK_STREAM);
+        var ip = nil;
+        if (this.uri.isIp()) {
+            ip = this.uri.host();
+        } else {
+            var ais = AddrInfo.getaddrinfo(this.uri.host(), 80);
+            ip = ais[0].ip();
+        }
+        sock.connect(ip, 80);
+        var rq = "GET ${page} HTTP/1.1\r\nConnection: close\r\nHost: localhost\r\n\r\n";
+        if (HTTPClient.logger) {
+            HTTPClient.logger.print("request:\n${rq.inspect()}\n");
+        }
+        sock.send(rq);
+        var res = sock.read();
+        sock.close();
+        return res;
+    }
+
+}

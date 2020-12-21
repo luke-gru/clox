@@ -598,6 +598,17 @@ void regex_output_ast(Regex *regex) {
     regex_output_ast_node(regex->node, NULL, 0);
 }
 
+static RNode *NEXT_NODE(RNode *node, char **cptr_p) {
+    if (node->next) {
+        return node->next;
+    } else {
+        if (node->parent->type == NODE_GROUP) {
+            node->parent->capture_end = *cptr_p;
+        }
+    }
+    return node->parent->next;
+}
+
 static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
     DBG_ASSERT(node);
     DBG_ASSERT(*cptr_p);
@@ -608,9 +619,10 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
         case NODE_PROGRAM:
         case NODE_GROUP:
             ASSERT(node->children);
+            char *start = *cptr_p;
             if (node_accepts_ch(node->children, node, cptr_p, nnext)) {
                 if (node->type == NODE_GROUP) {
-                    node->capture_beg = (*cptr_p)-1;
+                    node->capture_beg = start;
                 }
                 return true;
             } else {
@@ -643,15 +655,8 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
         case NODE_ATOM:
             ASSERT(node->tok);
             if (node->tok[0] == **cptr_p) {
-                if (node->next) {
-                    *nnext = node->next;
-                } else {
-                    *nnext = parent->next;
-                    if (parent->type == NODE_GROUP) {
-                        parent->capture_end = *cptr_p;
-                    }
-                }
                 (*cptr_p)++;
+                *nnext = NEXT_NODE(node, cptr_p);
                 return true;
             } else {
                 return false;
@@ -706,7 +711,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 count += 1;
             }
             if (count >= 1) {
-                *nnext = node->next;
+                *nnext = NEXT_NODE(node, cptr_p);
                 return true;
             }
             return false;
@@ -714,15 +719,9 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
         case NODE_REPEAT_Z: {
             RNode *child = node->children;
             RNode *parent = node;
-            RNode *next = NULL;
-            if (node->next) {
-                next = node->next;
-            } else {
-                next = node->parent->next;
-            }
             while (node_accepts_ch(child, parent, cptr_p, nnext)) {
             }
-            *nnext = next;
+            *nnext = NEXT_NODE(node, cptr_p);
             return true;
         }
         case NODE_REPEAT_N: {
@@ -741,7 +740,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 }
             }
             if (accepted) {
-                *nnext = node->next;
+                *nnext = NEXT_NODE(node, cptr_p);
             } else {
                 *cptr_p = start;
             }
@@ -752,11 +751,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
             RNode *parent = node;
             if (node_accepts_ch(child, parent, cptr_p, nnext)) {
             }
-            if (node->next) {
-                *nnext = node->next;
-            } else {
-                *nnext = node->parent->next;
-            }
+            *nnext = NEXT_NODE(node, cptr_p);
             return true;
         }
         case NODE_CCLASS: {
@@ -772,6 +767,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                     if (rnext == '-' && (rend = *(start+2))) {
                         if (c >= rc && c <= rend) {
                             (*cptr_p)++;
+                            *nnext = NEXT_NODE(node, cptr_p);
                             return true;
                         }
                         // skip over range chars
@@ -800,6 +796,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                         }
                         if (accepted) {
                             (*cptr_p)++;
+                            node = NEXT_NODE(node, cptr_p);
                             return true;
                         } else {
                             start += 2;
@@ -810,6 +807,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 }
                 if (rc == c) {
                     (*cptr_p)++;
+                    *nnext = NEXT_NODE(node, cptr_p);
                     return true;
                 }
                 start++;
@@ -822,6 +820,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 case ECLASS_DIGIT: {
                     if (isdigit(**cptr_p)) {
                         (*cptr_p)++;
+                        *nnext = NEXT_NODE(node, cptr_p);
                         return true;
                     }
                     return false;
@@ -829,6 +828,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 case ECLASS_WORD: {
                     if (isalpha(**cptr_p) || **cptr_p == '_') {
                         (*cptr_p)++;
+                        *nnext = NEXT_NODE(node, cptr_p);
                         return true;
                     }
                     return false;
@@ -836,6 +836,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 case ECLASS_SPACE: {
                     if (isspace(**cptr_p)) {
                         (*cptr_p)++;
+                        *nnext = NEXT_NODE(node, cptr_p);
                         return true;
                     }
                     return false;
@@ -846,15 +847,8 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
             }
         }
         case NODE_DOT: {
-            if (node->next) {
-                *nnext = node->next;
-            } else {
-                *nnext = parent->next;
-                if (parent->type == NODE_GROUP) {
-                  parent->capture_end = *cptr_p;
-                }
-            }
             (*cptr_p)++;
+            *nnext = NEXT_NODE(node, cptr_p);
             return true;
         }
         default:

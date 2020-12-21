@@ -573,9 +573,63 @@ int test_capture_groups_nodes(void) {
     /*regex_output_ast(&re);*/
     T_ASSERT_EQ(NODE_GROUP, re.node->children->type);
     T_ASSERT_EQ(str, re.node->children->capture_beg);
-    T_ASSERT_EQ(str+1, re.node->children->capture_end);
+    T_ASSERT_EQ(str+2, re.node->children->capture_end);
     T_ASSERT_EQ(re.node->children, re.groups->group);
 
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_capture_groups_nodes_with_nonatom(void) {
+    Regex re;
+    regex_init(&re, "([hi])", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    char *str = "h";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(1, mdata.match_len);
+    T_ASSERT_EQ(NODE_GROUP, re.node->children->type);
+    T_ASSERT_EQ(str, re.node->children->capture_beg);
+    T_ASSERT_EQ(str+1, re.node->children->capture_end);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_capture_groups_nodes_with_nonatom2(void) {
+    Regex re;
+    regex_init(&re, "GET ([\\w/]+) HTTP", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    char *str = "GET / HTTP/1.1";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(10, mdata.match_len);
+    T_ASSERT_EQ(NODE_GROUP, re.groups->group->type);
+    T_ASSERT_EQ(str+4, re.groups->group->capture_beg);
+    T_ASSERT_EQ(str+5, re.groups->group->capture_end);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+int test_capture_groups_nodes_with_nonatom3(void) {
+    Regex re;
+    regex_init(&re, "GET ([\\w/.]+) HTTP", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    char *str = "GET /object.c HTTP/1.1";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(18, mdata.match_len);
+    T_ASSERT_EQ(NODE_GROUP, re.groups->group->type);
+    T_ASSERT_EQ(str+4, re.groups->group->capture_beg);
+    T_ASSERT_EQ(str+13, re.groups->group->capture_end);
 cleanup:
     regex_free(&re);
     return 0;
@@ -630,5 +684,8 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_match_eos_anchor);
     RUN_TEST(test_nomatch_eos_anchor);
     RUN_TEST(test_capture_groups_nodes);
+    RUN_TEST(test_capture_groups_nodes_with_nonatom);
+    RUN_TEST(test_capture_groups_nodes_with_nonatom2);
+    RUN_TEST(test_capture_groups_nodes_with_nonatom3);
     END_TESTS();
 }

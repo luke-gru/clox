@@ -1,0 +1,104 @@
+requireScript("uri");
+
+class HTTPRequest {
+    init(headers) {
+        this.headers = headers;
+    }
+    path() {
+        var line = this.headers[0];
+        var pathpat = %"GET ([\w/.]+) HTTP";
+        var match = pathpat.match(line, true);
+        if (!match) { // couldn't parse it
+            return "/";
+        }
+        return match.captures()[0];
+    }
+}
+
+class HTTPServer {
+    class Error < Error {}
+    this.logger = nil;
+
+    init(port) {
+        this.port = port;
+        this.dir = Dir.pwd();
+        this.servsock = nil;
+    }
+
+    setupTrap() {
+        var sock = this.servsock;
+        Signal.trap(Signal::INT, fun() {
+            if (sock) {
+                print "Closing socket ${sock.fd}";
+                sock.close();
+            }
+            exit(1);
+        });
+    }
+
+    listen() {
+        var sock = Socket(Socket::AF_INET, Socket::SOCK_STREAM);
+        sock.bind("127.0.0.1", this.port);
+        this.servsock = sock;
+        var clisock = nil;
+        while (true) {
+            var headers = [];
+            var header = "";
+            var gotCR = 0;
+            clisock = sock.accept();
+            print "new connection: ${clisock.fd}";
+            while (true) {
+                if (gotCR == 2) {
+                    break; // headers over
+                }
+                var b = clisock.read(1);
+                if (b == "\r") {
+                    gotCR += 1;
+                    clisock.read(1); // \n
+                    if (header.size() > 0) {
+                        headers.push(header);
+                    }
+                    header = "";
+                } else if (b == "") {
+                    break; // EOF?
+                } else {
+                    gotCR = 0;
+                    header.push(b);
+                }
+            }
+            var rq = HTTPRequest(headers);
+            print "path: ${rq.path()}, headers: ${headers.inspect()}";
+            this.sendResponse(clisock, rq);
+            clisock.close();
+        }
+    }
+
+    sendResponse(clisock, req) {
+        var resHeaders = ["HTTP/1.1 200 OK", "Connection: close", "Content-Type: text/plain"];
+        var hello = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n\r\nHello world!";
+        var res = nil;
+        if (req.path() == "/") {
+            if (File.exists(File.join(this.dir, "index.html"))) {
+                resHeaders.push("Content-Type: text/html");
+                res = File.read(File.join(this.dir, "index.html"));
+            }
+        } else {
+            if (File.exists(File.join(this.dir, req.path()))) {
+                if (File.extension(req.path()) == "html") {
+                    resHeaders.push("Content-Type: text/html");
+                } else {
+                    resHeaders.push("Content-Type: text/plain");
+                }
+                res = File.read(File.join(this.dir, req.path()));
+            }
+        }
+        if (res == nil) {
+            clisock.send(hello);
+        } else {
+            resHeaders.push("Content-Length: ${res.size()}");
+            res = resHeaders.join("\r\n").push("\r\n\r\n${res}");
+            clisock.send(res);
+        }
+    }
+
+}

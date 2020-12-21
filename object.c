@@ -113,6 +113,9 @@ ObjString *takeString(char *chars, size_t length, int flags) {
 // use copy of `*chars` as the underlying storage for the new string object
 // NOTE: length here is strlen(chars)
 ObjString *copyString(char *chars, size_t length, int flags) {
+    if (strlen(chars) < length) {
+        fprintf(stderr, "chars: '%s', length: %d", chars, (int)length);
+    }
     DBG_ASSERT(strlen(chars) >= length);
 
     char *heapChars = ALLOCATE(char, length + 1);
