@@ -105,6 +105,19 @@ static bool match(char expected) {
   return true;
 }
 
+static bool matchStr(char *str, size_t len) {
+  if (isAtEnd()) return false;
+  if (strncmp(current->current, str, len) == 0) {
+    while (len > 0) {
+      current->current++;
+      len--;
+    }
+    return true;
+  } else {
+    return false;
+  }
+}
+
 static void strReplace(char *str, char *substr, char replace) {
     char *found = NULL;
     int len = strlen(substr);
@@ -124,6 +137,7 @@ static Token makeToken(TokenType type) {
     token.type = type;
     token.start = current->tokenStart;
     token.length = (int)(current->current - current->tokenStart);
+    ASSERT(token.length >= 0);
     token.lexeme = NULL; // only created on demand, see tokStr()
     token.line = current->line;
     token.alloced = false;
@@ -151,6 +165,18 @@ static Token errorToken(const char *message) {
     token.lexeme = NULL;
     token.alloced = false;
     return token;
+}
+
+static bool skipChar(char c) {
+  char cur = peek();
+  if (cur == c) {
+    if (c == '\n') {
+      current->line++;
+    }
+    advance();
+    return true;
+  }
+  return false;
 }
 
 static void skipWhitespace() {
@@ -283,9 +309,12 @@ static Token doubleQuotedString() {
   advance();
   Token tok = makeToken(TOKEN_STRING_DQUOTE);
 
+  tok.start++; // past the first '"' char
+  tok.length-=2; // the 2 '"' chars
   // replace \" with "
   char *newBuf = (char*)calloc(1, tok.length+1);
   ASSERT_MEM(newBuf);
+  newBuf[tok.length] = '\0';
   strncpy(newBuf, tok.start, tok.length);
   strReplace(newBuf, "\\\"", '"');
   strReplace(newBuf, "\\n", '\n');
@@ -306,6 +335,7 @@ static Token doubleQuotedString() {
   tok.start = newBuf;
   tok.length = strlen(newBuf);
   tok.lexeme = newBuf;
+  tok.alloced = true;
   if (CLOX_OPTION_T(debugTokens)) {
       fprintf(stderr, "  after replacements: '%s'\n", newBuf);
   }
@@ -339,7 +369,12 @@ static Token singleQuotedString(bool isStatic) {
     // replace \" with "
     char *newBuf = (char*)calloc(1, tok.length+1);
     ASSERT_MEM(newBuf);
-    strncpy(newBuf, tok.start, tok.length);
+    const char *start = tok.start+1;
+    size_t len = tok.length-2; // the two ' chars
+    if (isStatic) {
+      start++; len--; // the 's' char
+    }
+    strncpy(newBuf, start, len);
     strReplace(newBuf, "\\\'", '\'');
     tok.start = newBuf;
     tok.length = strlen(newBuf);
@@ -349,6 +384,75 @@ static Token singleQuotedString(bool isStatic) {
         fprintf(stderr, "  after replacements: '%s'\n", newBuf);
     }
     return tok;
+}
+
+static void scanLine(char *buf, size_t lineMax, size_t *sizeOut) {
+  char c;
+  size_t i = 0;
+  while ((c = peek()) && c != '\n' && c != '\r') {
+    buf[i++] = c;
+    advance();
+  }
+  *sizeOut = i;
+}
+
+static void scanNewline(void) {
+  skipChar('\r');
+  skipChar('\n');
+}
+
+static Token heredocString(void) {
+    char patBuf[100];
+    memset(patBuf, 0, 100);
+#define LINE_MAX 4096
+    char line[LINE_MAX];
+    size_t lineLen = 0;
+    char c;
+    int patBufi = 0;
+    // scan the heredoc pattern until newline
+    while ((c = peek()) && c != '\n' && c != '\r') {
+        patBuf[patBufi++] = c;
+        advance();
+    }
+    scanNewline();
+    if (strlen(patBuf) == 0) {
+        return errorToken("Heredoc needs a pattern after <<<");
+    }
+    current->tokenStart = current->current;
+    // scan the lines of the string
+    while (!isAtEnd()) {
+        scanLine(line, LINE_MAX, &lineLen);
+#undef LINE_MAX
+        if (strncmp(line, patBuf, patBufi) == 0) { // end of heredoc
+            Token tok = makeToken(TOKEN_STRING_DQUOTE);
+            tok.length -= patBufi+1;
+            ASSERT(tok.length > 0);
+            current->current -= (lineLen-patBufi); // unscan the ';' after the pattern, if on the same line
+
+            // replace \" with "
+            char *newBuf = (char*)calloc(1, tok.length+1);
+            ASSERT_MEM(newBuf);
+            strncpy(newBuf, tok.start, tok.length);
+            newBuf[tok.length] = '\0';
+            strReplace(newBuf, "\\\"", '"');
+            strReplace(newBuf, "\\n", '\n');
+            strReplace(newBuf, "\\t", '\t');
+            strReplace(newBuf, "\\r", '\r');
+
+            tok.start = newBuf;
+            tok.length = strlen(newBuf);
+            tok.lexeme = newBuf;
+            tok.alloced = true;
+            if (CLOX_OPTION_T(debugTokens)) {
+                fprintf(stderr, "  after replacements: '%s'\n", tokStr(&tok));
+            }
+            return tok;
+        } else { // still in heredoc string
+            scanNewline();
+            continue;
+        }
+    }
+    return errorToken("Heredoc missing an end pattern");
 }
 
 Token scanToken(void) {
@@ -413,6 +517,7 @@ Token scanToken(void) {
 
     case '<':
       if (match('=')) return makeToken(TOKEN_LESS_EQUAL);
+      if (matchStr("<<", 2)) return heredocString();
       if (match('<')) return makeToken(TOKEN_SHOVEL_L);
       return makeToken(TOKEN_LESS);
 
@@ -612,11 +717,12 @@ void scanAllPrint(Scanner *scan, char *src) {
 
 char *tokStr(Token *tok) {
     if (tok->lexeme != NULL) return tok->lexeme;
-    ASSERT(tok->length > 0);
+    ASSERT(tok->length >= 0);
     ASSERT(tok->start);
     char *buf = (char*)calloc(1, tok->length+1);
     ASSERT_MEM(buf);
     memcpy(buf, tok->start, tok->length);
+    buf[tok->length] = '\0';
     tok->lexeme = buf;
     tok->alloced = true;
     return buf;

@@ -1339,8 +1339,6 @@ static Node *primary() {
         TRACE_START("string");
         Token strTok = current->previous;
         char *str = strdup(tokStr(&strTok));
-        str = str+1; // opening '"'
-        str[strlen(str)-1] = '\0'; // closing '"'
         /*fprintf(stderr, "String: '%s'\n", str);*/
         char *beg = str;
 
@@ -1354,11 +1352,9 @@ static Node *primary() {
             if (end == NULL) break;
             char *contents = calloc(1, (end-interpBegin)+1);
             ASSERT_MEM(contents);
-            char *before = calloc(1, (interpBegin-beg)+3); // add room to surround with double-quotes
+            char *before = calloc(1, (interpBegin-beg)+1); // add room to surround with double-quotes
             ASSERT_MEM(before);
-            strncpy(before+1, beg, (interpBegin-beg));
-            before[0] = '"';
-            before[strlen(before)] = '"';
+            strncpy(before, beg, (interpBegin-beg));
             strncpy(contents, interpBegin+2, (end-interpBegin)-2);
             /*fprintf(stderr, "Interplation contents: '%s'\n", contents);*/
             /*fprintf(stderr, "Interplation before: '%s'\n", before);*/
@@ -1415,11 +1411,9 @@ static Node *primary() {
         if (vnodes.length > 0) {
             char *restStart = end+1;
             int restLen = (str+strlen(str))-end;
-            char *rest = calloc(1, restLen+1+2);
+            char *rest = calloc(1, restLen+1);
             ASSERT_MEM(rest);
-            rest[0] = '"';
-            strncpy(rest+1, restStart, restLen);
-            rest[strlen(rest)] = '"';
+            strncpy(rest, restStart, restLen);
             Token litTok;
             litTok.start = rest;
             litTok.length = strlen(rest);

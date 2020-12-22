@@ -1545,21 +1545,21 @@ static void emitNode(Node *n) {
             numberLiteral(n, true);
         } else if (n->type.litKind == REGEX_TYPE) {
             Token *regex = &n->tok;
-            ObjString *reStr = INTERNED(regex->start+1, regex->length-2);
+            ObjString *reStr = INTERNED(regex->start, regex->length);
             STRING_SET_STATIC(reStr);
             uint8_t strSlot = makeConstant(OBJ_VAL(reStr), CONST_T_STRLIT);
             emitOp1(OP_REGEX, strSlot);
         // non-static string
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
-            ObjString *str = INTERNED(name->start+1, name->length-2);
+            ObjString *str = INTERNED(name->start, name->length);
             STRING_SET_STATIC(str);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 0);
         // static string
         } else if (n->tok.type == TOKEN_STRING_STATIC) {
             Token *name = &n->tok;
-            ObjString *str = INTERNED(name->start+2, name->length-3);
+            ObjString *str = INTERNED(name->start, name->length);
             STRING_SET_STATIC(str);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 1);

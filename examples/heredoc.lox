@@ -1,0 +1,16 @@
+var s = <<<msg
+Hi there!
+msg;
+
+var s2 = <<<msg
+Hi again!
+msg;
+
+print s;
+print s2.compact();
+
+__END__
+--expect: --
+Hi there!
+
+Hi again!
