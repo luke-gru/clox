@@ -2042,57 +2042,81 @@ static void emitNode(Node *n) {
         vec_init(&vjumps);
         int ifrom = iseq->byteCount;
         emitNode(n->children->data[0]); // try block
-        Insn *jumpToEnd = emitJump(OP_JUMP);
-        vec_push(&vjumps, jumpToEnd);
+        bool skipJumpToEnd = false;
+        if (n->children->length == 2) {
+            Node *onlyChild = n->children->data[1];
+            if (onlyChild->type.kind == ENSURE_STMT) {
+                skipJumpToEnd = true;
+            }
+        }
+        if (!skipJumpToEnd) {
+            Insn *jumpToEnd = emitJump(OP_JUMP);
+            vec_push(&vjumps, jumpToEnd);
+        }
         int ito = iseq->byteCount;
         Node *catchStmt = NULL; int i = 0;
+        Node *ensureStmt = NULL;
         if (n->children->length > 1) {
             vec_foreach(n->children, catchStmt, i) {
                 if (i == 0) continue; // already emitted
-                int itarget = iseq->byteCount;
-                Node *catchConstant = vec_first(catchStmt->children);
-                ObjString *className = hiddenString("", 0, NEWOBJ_FLAG_NONE);
-                if (catchConstant->children && catchConstant->children->length > 0) {
-                    while (catchConstant->children && catchConstant->children->length > 0) {
-                        Node *catchPrefix = vec_first(catchConstant->children);
-                        Token classPrefixTok = catchPrefix->tok;
-                        pushCString(className, tokStr(&classPrefixTok), strlen(tokStr(&classPrefixTok)));
-                        pushCString(className, "::", 2);
-                        Node *classSuffix = catchConstant;
-                        Token classSuffixTok = classSuffix->tok;
-                        pushCString(className, tokStr(&classSuffixTok), strlen(tokStr(&classSuffixTok)));
-                        catchConstant = catchPrefix;
+                if (catchStmt->type.kind == CATCH_STMT) {
+                    int itarget = iseq->byteCount;
+                    Node *catchConstant = vec_first(catchStmt->children);
+                    ObjString *className = hiddenString("", 0, NEWOBJ_FLAG_NONE);
+                    // catch with variables
+                    if (catchConstant->children && catchConstant->children->length > 0) {
+                        while (catchConstant->children && catchConstant->children->length > 0) {
+                            Node *catchPrefix = vec_first(catchConstant->children);
+                            Token classPrefixTok = catchPrefix->tok;
+                            pushCString(className, tokStr(&classPrefixTok), strlen(tokStr(&classPrefixTok)));
+                            pushCString(className, "::", 2);
+                            Node *classSuffix = catchConstant;
+                            Token classSuffixTok = classSuffix->tok;
+                            pushCString(className, tokStr(&classSuffixTok), strlen(tokStr(&classSuffixTok)));
+                            catchConstant = catchPrefix;
+                        }
+                        // catch just with class name
+                    } else {
+                        Token classTok = catchConstant->tok;
+                        pushCString(className, tokStr(&classTok), strlen(tokStr(&classTok)));
                     }
-                } else {
-                    Token classTok = catchConstant->tok;
-                    pushCString(className, tokStr(&classTok), strlen(tokStr(&classTok)));
-                }
-                /*fprintf(stderr, "classTok: %s, children: %d\n", tokStr(&classTok), catchStmt->children->length);*/
-                STRING_SET_STATIC(className);
-                double catchTblIdx = (double)iseqAddCatchRow(
-                    iseq, ifrom, ito,
-                    itarget, OBJ_VAL(className)
-                );
-                pushScope(COMPILE_SCOPE_BLOCK);
-                // given variable expression to bind to (Ex: (catch Error err))
-                if (catchStmt->children->length > 2) {
-                    uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblIdx), CONST_T_NUMLIT);
-                    emitOp1(OP_GET_THROWN, getThrownArg);
-                    Token varTok = catchStmt->children->data[1]->tok;
-                    declareVariable(&varTok);
-                    namedVariable(varTok, VAR_SET);
-                }
-                emitNode(vec_last(catchStmt->children)); // catch block
-                ASSERT(iseq == currentIseq());
-                /*if (catchStmt->children->length > 2) {*/
+                    /*fprintf(stderr, "classTok: %s, children: %d\n", tokStr(&classTok), catchStmt->children->length);*/
+                    STRING_SET_STATIC(className);
+                    double catchTblIdx = (double)iseqAddCatchRow(
+                            iseq, ifrom, ito,
+                            itarget, OBJ_VAL(className)
+                            );
+                    pushScope(COMPILE_SCOPE_BLOCK);
+                    // given variable expression to bind to (Ex: (catch Error err))
+                    if (catchStmt->children->length > 2) {
+                        uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblIdx), CONST_T_NUMLIT);
+                        emitOp1(OP_GET_THROWN, getThrownArg);
+                        Token varTok = catchStmt->children->data[1]->tok;
+                        declareVariable(&varTok);
+                        namedVariable(varTok, VAR_SET);
+                    }
+                    emitNode(vec_last(catchStmt->children)); // catch block
+                    ASSERT(iseq == currentIseq());
+                    /*if (catchStmt->children->length > 2) {*/
                     /*emitOp0(OP_POP); // pop the bound error variable*/
-                /*}*/
-                // don't emit a jump at the end of the final catch statement
-                if (i < n->children->length-1) {
-                    Insn *jumpStart = emitJump(OP_JUMP); // jump to end of try statement
-                    vec_push(&vjumps, jumpStart);
+                    /*}*/
+                    // don't emit a jump at the end of the final catch statement, or if
+                    // the next child after this one is an ensure block
+                    if (i < n->children->length-1) {
+                        Node *nextNode = n->children->data[i+1];
+                        if (nextNode->type.kind == CATCH_STMT) {
+                            fprintf(stderr, "next node is catch, jump\n");
+                            Insn *jumpStart = emitJump(OP_JUMP); // jump to end of try statement
+                            vec_push(&vjumps, jumpStart);
+                        }
+                    }
+                    popScope(COMPILE_SCOPE_BLOCK);
+                } else { // ensure stmt
+                    fprintf(stderr, "emitting ensure\n");
+                    ensureStmt = catchStmt;
+                    ASSERT(ensureStmt->type.kind == ENSURE_STMT);
+                    emitNode(vec_last(ensureStmt->children)); // ensure block
                 }
-                popScope(COMPILE_SCOPE_BLOCK);
             }
 
             Insn *jump = NULL; int j = 0;
