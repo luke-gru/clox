@@ -31,6 +31,7 @@ static Keyword keywords[] = {
   {"try",     3, TOKEN_TRY},
   {"catch",   5, TOKEN_CATCH},
   {"throw",   5, TOKEN_THROW},
+  {"ensure",  6, TOKEN_ENSURE},
   {"or",      2, TOKEN_OR},
   {"print",   5, TOKEN_PRINT},
   {"return",  6, TOKEN_RETURN},

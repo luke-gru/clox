@@ -505,6 +505,21 @@ static Node *statement() {
             nodeAddChild(catchStmt, catchBlock);
             nodeAddChild(_try, catchStmt);
         }
+        // try { ... } ensure { ... }
+        if (match(TOKEN_ENSURE)) {
+            Token ensureTok = current->previous;
+            consume(TOKEN_LEFT_BRACE, "Expected '{' after keyword 'ensure'");
+            Token lbraceTok = current->previous;
+            Node *ensureStmtList = blockStatements();
+            Node *ensureBlock = wrapStmtsInBlock(ensureStmtList, lbraceTok);
+            node_type_t ensureT = {
+              .type = NODE_STMT,
+              .kind = ENSURE_STMT,
+            };
+            Node *ensureStmt = createNode(ensureT, ensureTok, NULL);
+            nodeAddChild(ensureStmt, ensureBlock);
+            nodeAddChild(_try, ensureStmt);
+        }
         TRACE_END("tryStatement");
         TRACE_END("statement");
         return _try;

@@ -610,6 +610,18 @@ static char *outputCatchStmt(Node *n, int indentLevel) {
     return buf;
 }
 
+static char *outputEnsureStmt(Node *n, int indentLevel) {
+    char *indent = i(indentLevel);
+    char *startFmt = "%s(ensure\n";
+    char *buf = calloc(1, strlen(indent)+1+8);
+    ASSERT_MEM(buf);
+    sprintf(buf, startFmt, indent);
+    Node *block = vec_last(n->children);
+    buf = strAdd(buf, outputASTString(block, indentLevel+1));
+    buf = strAdd(buf, ")\n"); // TODO: indent
+    return buf;
+}
+
 static char *outputThrowStmt(Node *n, int indentLevel) {
     Node *throwExpr = vec_first(n->children);
     char *indent = i(indentLevel);
@@ -744,6 +756,8 @@ char *outputASTString(Node *node, int indentLevel) {
                     return outputTryStmt(node, indentLevel);
                 case CATCH_STMT:
                     return outputCatchStmt(node, indentLevel);
+                case ENSURE_STMT:
+                    return outputEnsureStmt(node, indentLevel);
                 case THROW_STMT:
                     return outputThrowStmt(node, indentLevel);
                 case IN_STMT:
