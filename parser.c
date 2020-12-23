@@ -473,7 +473,9 @@ static Node *statement() {
         Node *stmtList = blockStatements();
         Node *tryBlock = wrapStmtsInBlock(stmtList, lbraceTok);
         nodeAddChild(_try, tryBlock);
+        int numCatches = 0;
         while (match(TOKEN_CATCH)) {
+            numCatches++;
             Token catchTok = current->previous;
             consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'catch'");
             Node *catchExpr = expression(); // should be constant expression (can be fully qualified)
@@ -504,6 +506,24 @@ static Node *statement() {
             }
             nodeAddChild(catchStmt, catchBlock);
             nodeAddChild(_try, catchStmt);
+        }
+        // try { ... } catch { ... } else { ... }
+        if (match(TOKEN_ELSE)) {
+            if (numCatches == 0) {
+                errorAtCurrent("Try needs at least one catch statement with else");
+            }
+            Token elseTok = current->previous;
+            consume(TOKEN_LEFT_BRACE, "Expected '{' after keyword 'else'");
+            Token lbraceTok = current->previous;
+            Node *elseStmtList = blockStatements();
+            Node *elseBlock = wrapStmtsInBlock(elseStmtList, lbraceTok);
+            node_type_t tryElseT = {
+              .type = NODE_STMT,
+              .kind = TRY_ELSE_STMT,
+            };
+            Node *elseStmt = createNode(tryElseT, elseTok, NULL);
+            nodeAddChild(elseStmt, elseBlock);
+            nodeAddChild(_try, elseStmt);
         }
         // try { ... } ensure { ... }
         if (match(TOKEN_ENSURE)) {

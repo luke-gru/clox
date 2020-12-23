@@ -1,0 +1,29 @@
+try {
+    print "try";
+    throw Error();
+} catch (Error) {
+    print "error";
+} else {
+    print "else";
+} ensure {
+    print "ensure";
+}
+
+try {
+    print "try";
+} catch (Error) {
+    print "error";
+} else {
+    print "else";
+} ensure {
+    print "ensure";
+}
+
+__END__
+-- expect: --
+try
+error
+ensure
+try
+else
+ensure

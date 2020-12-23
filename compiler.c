@@ -2049,13 +2049,15 @@ static void emitNode(Node *n) {
                 skipJumpToEnd = true;
             }
         }
+        Insn *jumpToEnd = NULL;
         if (!skipJumpToEnd) {
-            Insn *jumpToEnd = emitJump(OP_JUMP);
+            jumpToEnd = emitJump(OP_JUMP);
             vec_push(&vjumps, jumpToEnd);
         }
         int ito = iseq->byteCount; // end of try { } block, start of catch or ensure
         Node *catchStmt = NULL; int i = 0;
         Node *ensureStmt = NULL;
+        Node *tryElseStmt = NULL;
         if (n->children->length > 1) {
             vec_foreach(n->children, catchStmt, i) {
                 if (i == 0) continue; // already emitted
@@ -2104,27 +2106,44 @@ static void emitNode(Node *n) {
                     // the next child after this one is an ensure block
                     if (i < n->children->length-1) {
                         Node *nextNode = n->children->data[i+1];
-                        if (nextNode->type.kind == CATCH_STMT) {
+                        if (nextNode->type.kind == CATCH_STMT || nextNode->type.kind == TRY_ELSE_STMT) {
                             Insn *jumpStart = emitJump(OP_JUMP); // jump to end of try statement
                             vec_push(&vjumps, jumpStart);
                         }
                     }
                     popScope(COMPILE_SCOPE_BLOCK);
-                } else { // ensure stmt
-                    ensureStmt = catchStmt;
-                    ASSERT(ensureStmt->type.kind == ENSURE_STMT);
-                    double catchTblRowIdx = iseqAddEnsureRow(iseq, ifrom, ito, itarget);
-                    uint8_t rethrowIfArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
-                    pushScope(COMPILE_SCOPE_BLOCK);
-                    emitNode(vec_last(ensureStmt->children)); // ensure block
-                    emitOp1(OP_RETHROW_IF_ERR, rethrowIfArg);
-                    popScope(COMPILE_SCOPE_BLOCK);
+                } else { // ensure or else stmt
+                    if (catchStmt->type.kind == TRY_ELSE_STMT) {
+                        ASSERT(jumpToEnd);
+                        vec_splice(&vjumps, 0, 1);
+                        patchJump(jumpToEnd, -1, currentIseq()->tail);
+                        jumpToEnd = NULL;
+                        tryElseStmt = catchStmt;
+                        ASSERT(tryElseStmt->type.kind == TRY_ELSE_STMT);
+                        pushScope(COMPILE_SCOPE_BLOCK);
+                        emitNode(vec_last(tryElseStmt->children)); // else block
+                        popScope(COMPILE_SCOPE_BLOCK);
+                    } else { // ensure
+                        ensureStmt = catchStmt;
+                        ASSERT(ensureStmt->type.kind == ENSURE_STMT);
+                        Insn *jump = NULL; int j = 0;
+                        vec_foreach(&vjumps, jump, j) {
+                            patchJump(jump, -1, currentIseq()->tail);
+                        }
+                        vec_clear(&vjumps);
+                        double catchTblRowIdx = iseqAddEnsureRow(iseq, ifrom, ito, itarget);
+                        uint8_t rethrowIfArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
+                        pushScope(COMPILE_SCOPE_BLOCK);
+                        emitNode(vec_last(ensureStmt->children)); // ensure block
+                        emitOp1(OP_RETHROW_IF_ERR, rethrowIfArg);
+                        popScope(COMPILE_SCOPE_BLOCK);
+                    }
                 }
             }
 
             Insn *jump = NULL; int j = 0;
             vec_foreach(&vjumps, jump, j) {
-                patchJump(jump, insnOffset(jump, currentIseq()->tail), currentIseq()->tail);
+                patchJump(jump, -1, currentIseq()->tail);
             }
         }
         vec_deinit(&vjumps);

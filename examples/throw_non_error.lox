@@ -1,0 +1,18 @@
+class Err {}
+
+try {
+    throw 1;
+} catch (Error e) {
+    print %"Tried to throw unthrowable value".match(e.message);
+}
+
+try {
+    throw Err();
+} catch (Error e) {
+    print %"Tried to throw unthrowable value".match(e.message);
+}
+
+__END__
+-- expect: --
+0
+0

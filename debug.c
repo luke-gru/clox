@@ -668,6 +668,7 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_PROP_GET:
         case OP_PROP_SET:
         case OP_GET_THROWN:
+        case OP_RETHROW_IF_ERR:
         case OP_GET_SUPER:
         case OP_REGEX:
             return printConstantInstruction(f, opName(byte), chunk, i);
@@ -735,7 +736,6 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_POP_CREF:
         case OP_LEAVE:
         case OP_THROW:
-        case OP_RETHROW_IF_ERR:
         case OP_INDEX_GET:
         case OP_INDEX_SET:
         case OP_CLOSE_UPVALUE:
@@ -780,6 +780,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_PROP_GET:
         case OP_PROP_SET:
         case OP_GET_THROWN:
+        case OP_RETHROW_IF_ERR:
         case OP_GET_SUPER:
         case OP_REGEX:
             return constantInstruction(buf, opName(byte), chunk, i);
@@ -847,7 +848,6 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_POP_CREF:
         case OP_LEAVE:
         case OP_THROW:
-        case OP_RETHROW_IF_ERR:
         case OP_INDEX_GET:
         case OP_INDEX_SET:
         case OP_CLOSE_UPVALUE:

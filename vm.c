@@ -3209,7 +3209,6 @@ vmLoop:
               Value msg = throwable;
               throwable = newError(lxErrClass, msg);
           }
-          // TODO: not checking if it's subclass right now
           if (UNLIKELY(!isThrowable(throwable))) {
               throwErrorFmt(lxTypeErrClass, "Tried to throw unthrowable value, must be a subclass of Error. "
                   "Type found: %s", typeOfVal(throwable)
