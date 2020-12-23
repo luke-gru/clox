@@ -90,6 +90,24 @@ static Value lxStringOpAdd(int argCount, Value *args) {
     return OBJ_VAL(lhsBuf);
 }
 
+static Value lxStringOpMul(int argCount, Value *args) {
+    CHECK_ARITY("String#opMul", 2, 2, argCount);
+    Value self = *args;
+    Value rhs = args[1];
+    if (UNLIKELY(!IS_NUMBER(rhs))) {
+        throwErrorFmt(lxTypeErrClass, "String#* (opMul) called with non-number argument. Type: %s",
+                typeOfVal(rhs));
+    }
+    ObjString *lhsBuf = dupString(AS_STRING(self));
+    int num = AS_NUMBER(rhs);
+    num--; // because "string" * 1 == "string"
+    while (num > 0) {
+      pushObjString(lhsBuf, AS_STRING(self));
+      num--;
+    }
+    return OBJ_VAL(lhsBuf);
+}
+
 static inline void dedupString(ObjString *shared) {
     if (STRING_IS_SHARED(shared)) {
         char *cpy = shared->chars;
@@ -325,6 +343,7 @@ void Init_StringClass() {
     addNativeMethod(stringClass, "toString", lxStringToString);
     addNativeMethod(stringClass, "inspect", lxStringInspect);
     addNativeMethod(stringClass, "opAdd", lxStringOpAdd);
+    addNativeMethod(stringClass, "opMul", lxStringOpMul);
     addNativeMethod(stringClass, "opIndexGet", lxStringOpIndexGet);
     addNativeMethod(stringClass, "opIndexSet", lxStringOpIndexSet);
     addNativeMethod(stringClass, "opEquals", lxStringOpEquals);

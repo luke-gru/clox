@@ -1,0 +1,9 @@
+var re = %"[0-9]*";
+var str = "1234567890" * 1024;
+var t = Timer();
+var mdata = re.match(str, true);
+if (mdata) {
+  print "Match length: ${mdata.length}";
+}
+var t2 = Timer();
+print t2-t;
