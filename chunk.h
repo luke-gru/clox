@@ -13,13 +13,15 @@ struct ObjString; // fwd decl
 
 typedef struct CatchTable {
     // Row info
-    int ifrom; // instruction try start
-    int ito; // instruction try end
-    int itarget; // instruction try catch start
-    Value catchVal; // catch class or other value
-    Value lastThrownValue; // runtime VM value of last thrown instance
+    int ifrom; // instruction try block start
+    int ito; // instruction try block end
+    int itarget; // instruction catch or ensure block start
+    Value catchVal; // catch class or other value, if it's a catch block
+    Value lastThrownValue; // runtime VM value of last thrown instance, if any. Otherwise it's NIL_VAL
 
     struct CatchTable *next; // next row in the catch table
+    bool isEnsure; // is an ensure block
+    bool isEnsureRunning;
 } CatchTable;
 
 /**
@@ -108,6 +110,12 @@ int iseqAddCatchRow(
     int ito,
     int itarget,
     Value catchVal
+);
+int iseqAddEnsureRow(
+    Iseq *seq,
+    int ifrom,
+    int ito,
+    int itarget
 );
 
 // debugging

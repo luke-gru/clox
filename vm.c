@@ -1890,10 +1890,26 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
     int currentIpOff = (int)(getFrame()->ip - currentChunk()->code);
     bool poppedEC = false;
     VM_DEBUG(2, "findthrowjumploc");
+    CatchTable *ensureRow = NULL;
     while (row || EC->frameCount >= 1) {
         VM_DEBUG(2, "framecount: %d, num ECs: %d", EC->frameCount, th->v_ecs.length);
-        if (row == NULL) { // pop a call frame
+        if (row == NULL) { // no more catch table rows, pop a call frame
             VM_DEBUG(2, "row null");
+            if (ensureRow) {
+                if (ensureRow->isEnsureRunning) {
+                    ensureRow->isEnsureRunning = false;
+                } else {
+                  // found target ensure
+                  *ipOut = currentChunk()->code + ensureRow->itarget;
+                  *rowFound = ensureRow;
+                  while (getFrame()->isCCall) {
+                    popFrame();
+                  }
+                  ensureRow->isEnsureRunning = true;
+                  VM_DEBUG(2, "Catch jump location found (ensure)");
+                  return true;
+                }
+            }
             if (th->v_ecs.length == 0 || (th->v_ecs.length == 1 && EC->frameCount == 1)) {
                 return false;
             }
@@ -1902,6 +1918,7 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
                 poppedEC = true;
                 ASSERT(EC->stackTop > getFrame()->slots);
                 row = currentChunk()->catchTbl;
+                ensureRow = NULL;
                 continue;
             } else { // more frames in this context to go through
                 ASSERT(EC->frameCount > 1);
@@ -1911,8 +1928,15 @@ static bool findThrowJumpLoc(ObjClass *klass, uint8_t **ipOut, CatchTable **rowF
                 popFrame();
                 VM_DEBUG(2, "frame popped");
                 row = currentChunk()->catchTbl;
+                ensureRow = NULL;
                 continue;
             }
+        }
+        // jump to location in catch row, if catch found
+        if (row->isEnsure) {
+            ensureRow = row;
+            row = row->next;
+            continue;
         }
         Value klassFound;
         ObjClass *cref = NULL;
@@ -3185,13 +3209,14 @@ vmLoop:
               Value msg = throwable;
               throwable = newError(lxErrClass, msg);
           }
+          // TODO: not checking if it's subclass right now
           if (UNLIKELY(!isThrowable(throwable))) {
               throwErrorFmt(lxTypeErrClass, "Tried to throw unthrowable value, must be a subclass of Error. "
                   "Type found: %s", typeOfVal(throwable)
               );
           }
           throwError(throwable);
-          UNREACHABLE("after throw");
+          UNREACHABLE("after throw"); // should longjmp
       }
       CASE_OP(GET_THROWN): {
           Value catchTblIdx = READ_CONSTANT();
@@ -3203,6 +3228,16 @@ vmLoop:
               ASSERT(0);
           }
           VM_PUSH(tblRow->lastThrownValue);
+          DISPATCH_BOTTOM();
+      }
+      CASE_OP(RETHROW_IF_ERR): {
+          Value catchTblIdx = READ_CONSTANT();
+          ASSERT(IS_NUMBER(catchTblIdx));
+          double idx = AS_NUMBER(catchTblIdx);
+          CatchTable *ensureRow = getCatchTableRow((int)idx);
+          if (ensureRow->isEnsureRunning && !IS_NIL(th->lastErrorThrown)) {
+              throwError(th->lastErrorThrown);
+          }
           DISPATCH_BOTTOM();
       }
       CASE_OP(STRING): {

@@ -1,0 +1,32 @@
+class MyError < Error { }
+
+try {
+    throw "woops";
+} catch (Error) {
+    print "in woops";
+}
+
+try {
+    print "in try 2";
+} ensure {
+    print "in ensure 2";
+}
+
+try {
+    print "hi";
+    throw MyError();
+} catch (MyError e) {
+    print "caught my error";
+    /*throw e;*/
+} ensure {
+    print "in ensure";
+}
+
+__END__
+-- expect: --
+in woops
+in try 2
+in ensure 2
+hi
+caught my error
+in ensure

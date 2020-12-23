@@ -202,6 +202,39 @@ int iseqAddCatchRow(
     tblRow->ito = ito;
     tblRow->itarget = itarget;
     tblRow->catchVal = catchVal;
+    tblRow->isEnsure = false;
+    tblRow->isEnsureRunning = false;
+    memset(&tblRow->lastThrownValue, 0, sizeof(Value));
+    tblRow->next = NULL;
+
+    CatchTable *row = seq->catchTbl;
+    int idx = 0;
+    if (row == NULL) {
+        seq->catchTbl = tblRow;
+        return 0;
+    }
+    idx++;
+    while (row->next) {
+        row = row->next;
+        idx++;
+    }
+    row->next = tblRow;
+    return idx;
+}
+
+int iseqAddEnsureRow(
+    Iseq *seq,
+    int ifrom,
+    int ito,
+    int itarget
+) {
+    CatchTable *tblRow = ALLOCATE(CatchTable, 1);
+    tblRow->ifrom = ifrom;
+    tblRow->ito = ito;
+    tblRow->itarget = itarget;
+    tblRow->catchVal = NIL_VAL;
+    tblRow->isEnsure = true;
+    tblRow->isEnsureRunning = false;
     memset(&tblRow->lastThrownValue, 0, sizeof(Value));
     tblRow->next = NULL;
 

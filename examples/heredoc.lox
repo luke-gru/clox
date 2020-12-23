@@ -6,11 +6,10 @@ var s2 = <<<msg
 Hi again!
 msg;
 
-print s;
-print s2.compact();
+print s.inspect();
+print s2.inspect();
 
 __END__
---expect: --
-Hi there!
-
-Hi again!
+-- expect: --
+"Hi there!\n"
+"Hi again!\n"

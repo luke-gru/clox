@@ -192,6 +192,8 @@ const char *opName(OpCode code) {
         return "OP_THROW";
     case OP_GET_THROWN:
         return "OP_GET_THROWN";
+    case OP_RETHROW_IF_ERR:
+        return "OP_RETHROW_IF_ERR";
     case OP_INDEX_GET:
         return "OP_INDEX_GET";
     case OP_INDEX_SET:
@@ -238,10 +240,15 @@ static void printCatchTbl(CatchTable *tbl) {
     printf("-- catch table --\n");
     int idx = 0;
     while (row) {
-        ASSERT(IS_STRING(row->catchVal));
-        char *valstr = AS_CSTRING(row->catchVal);
-        printf("%d) from: %d, to: %d, target: %d, value: %s\n",
-                idx, row->ifrom, row->ito, row->itarget, valstr);
+        if (row->isEnsure) {
+            printf("%d) from: %d, to: %d, target: %d (ensure)\n",
+                    idx, row->ifrom, row->ito, row->itarget);
+        } else {
+            ASSERT(IS_STRING(row->catchVal));
+            char *valstr = AS_CSTRING(row->catchVal);
+            printf("%d) from: %d, to: %d, target: %d, value: %s\n",
+                    idx, row->ifrom, row->ito, row->itarget, valstr);
+        }
         row = row->next;
         idx++;
     }
@@ -728,6 +735,7 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
         case OP_POP_CREF:
         case OP_LEAVE:
         case OP_THROW:
+        case OP_RETHROW_IF_ERR:
         case OP_INDEX_GET:
         case OP_INDEX_SET:
         case OP_CLOSE_UPVALUE:
@@ -839,6 +847,7 @@ static int disassembledInstruction(ObjString *buf, Chunk *chunk, int i, vec_func
         case OP_POP_CREF:
         case OP_LEAVE:
         case OP_THROW:
+        case OP_RETHROW_IF_ERR:
         case OP_INDEX_GET:
         case OP_INDEX_SET:
         case OP_CLOSE_UPVALUE:

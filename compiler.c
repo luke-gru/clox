@@ -2040,7 +2040,7 @@ static void emitNode(Node *n) {
         Iseq *iseq = currentIseq();
         vec_void_t vjumps;
         vec_init(&vjumps);
-        int ifrom = iseq->byteCount;
+        int ifrom = iseq->byteCount; // start of try block
         emitNode(n->children->data[0]); // try block
         bool skipJumpToEnd = false;
         if (n->children->length == 2) {
@@ -2053,14 +2053,14 @@ static void emitNode(Node *n) {
             Insn *jumpToEnd = emitJump(OP_JUMP);
             vec_push(&vjumps, jumpToEnd);
         }
-        int ito = iseq->byteCount;
+        int ito = iseq->byteCount; // end of try { } block, start of catch or ensure
         Node *catchStmt = NULL; int i = 0;
         Node *ensureStmt = NULL;
         if (n->children->length > 1) {
             vec_foreach(n->children, catchStmt, i) {
                 if (i == 0) continue; // already emitted
+                int itarget = iseq->byteCount; // start of this catch block
                 if (catchStmt->type.kind == CATCH_STMT) {
-                    int itarget = iseq->byteCount;
                     Node *catchConstant = vec_first(catchStmt->children);
                     ObjString *className = hiddenString("", 0, NEWOBJ_FLAG_NONE);
                     // catch with variables
@@ -2082,20 +2082,20 @@ static void emitNode(Node *n) {
                     }
                     /*fprintf(stderr, "classTok: %s, children: %d\n", tokStr(&classTok), catchStmt->children->length);*/
                     STRING_SET_STATIC(className);
-                    double catchTblIdx = (double)iseqAddCatchRow(
+                    double catchTblRowIdx = (double)iseqAddCatchRow(
                             iseq, ifrom, ito,
                             itarget, OBJ_VAL(className)
                             );
                     pushScope(COMPILE_SCOPE_BLOCK);
                     // given variable expression to bind to (Ex: (catch Error err))
                     if (catchStmt->children->length > 2) {
-                        uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblIdx), CONST_T_NUMLIT);
+                        uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
                         emitOp1(OP_GET_THROWN, getThrownArg);
                         Token varTok = catchStmt->children->data[1]->tok;
                         declareVariable(&varTok);
                         namedVariable(varTok, VAR_SET);
                     }
-                    emitNode(vec_last(catchStmt->children)); // catch block
+                    emitNode(vec_last(catchStmt->children)); // catch { } block
                     ASSERT(iseq == currentIseq());
                     /*if (catchStmt->children->length > 2) {*/
                     /*emitOp0(OP_POP); // pop the bound error variable*/
@@ -2105,17 +2105,20 @@ static void emitNode(Node *n) {
                     if (i < n->children->length-1) {
                         Node *nextNode = n->children->data[i+1];
                         if (nextNode->type.kind == CATCH_STMT) {
-                            fprintf(stderr, "next node is catch, jump\n");
                             Insn *jumpStart = emitJump(OP_JUMP); // jump to end of try statement
                             vec_push(&vjumps, jumpStart);
                         }
                     }
                     popScope(COMPILE_SCOPE_BLOCK);
                 } else { // ensure stmt
-                    fprintf(stderr, "emitting ensure\n");
                     ensureStmt = catchStmt;
                     ASSERT(ensureStmt->type.kind == ENSURE_STMT);
+                    double catchTblRowIdx = iseqAddEnsureRow(iseq, ifrom, ito, itarget);
+                    uint8_t rethrowIfArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
+                    pushScope(COMPILE_SCOPE_BLOCK);
                     emitNode(vec_last(ensureStmt->children)); // ensure block
+                    emitOp1(OP_RETHROW_IF_ERR, rethrowIfArg);
+                    popScope(COMPILE_SCOPE_BLOCK);
                 }
             }
 
