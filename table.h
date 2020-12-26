@@ -50,12 +50,14 @@ size_t tableCapacity(Table *table);
 
 #ifdef NAN_TAGGING
 #define TABLE_FOREACH(tbl, entry, idx, exec)\
+  idx = 0;\
   if ((tbl)->count > 0) {\
-    for ((idx) = 0;\
-         (((idx) < (tbl)->capacityMask+1) &&\
-         (entry = (tbl)->entries[idx]).key != QNAN); (idx)++) {\
+    for (int _i = 0;\
+         ((_i < (tbl)->capacityMask+1) &&\
+         (entry = (tbl)->entries[_i]).key != QNAN); _i++) {\
         if (entry.key == UNDEF_VAL) { continue; } else {\
             exec\
+            idx++;\
         }\
     }\
   }
@@ -74,12 +76,14 @@ size_t tableCapacity(Table *table);
 // the expression results in a valid test expression, instead of just the
 // assignment itself. This test always returns true.
 #define TABLE_FOREACH(tbl, entry, idx, exec)\
+  idx = 0;\
   if ((tbl)->count > 0) {\
-    for ((idx) = 0;\
-         (((idx) < (tbl)->capacityMask+1) &&\
-         (entry = (tbl)->entries[idx]).key.type != 555); (idx)++) {\
+    for (int _i = 0;\
+         ((_i < (tbl)->capacityMask+1) &&\
+         (entry = (tbl)->entries[_i]).key.type != 555); _i++) {\
         if (entry.key.type == VAL_T_UNDEF) { continue; } else {\
             exec\
+            idx++;\
         }\
     }\
   }

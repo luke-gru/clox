@@ -1,0 +1,32 @@
+var global = "global";
+fun locals_binding() {
+    var a = 1;
+    var b = 2;
+    return Binding();
+}
+
+fun param_binding(a, b) {
+    return Binding();
+}
+
+fun default_param_binding(a=1) {
+    return Binding();
+}
+
+fun ignores_globals() {
+    global = 1;
+    var a = 2;
+    return Binding();
+}
+
+print locals_binding().localVariables().inspect();
+print param_binding(3,4).localVariables().inspect();
+print default_param_binding().localVariables().inspect();
+print ignores_globals().localVariables().inspect();
+
+__END__
+-- expect: --
+%{"a":1,"b":2}
+%{"a":3,"b":4}
+%{"a":1}
+%{"a":2}

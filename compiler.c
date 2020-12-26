@@ -132,6 +132,10 @@ static inline Chunk *currentChunk() {
     return current->function->chunk;
 }
 
+static inline ObjFunction *currentFunction() {
+  return current->function;
+}
+
 static inline Iseq *currentIseq() {
     return &current->iseq;
 }
@@ -935,14 +939,20 @@ static int declareVariable(Token *name) {
     } else {
         // See if a local variable with this name is already declared in this scope.
         for (int i = current->localCount - 1; i >= 0; i--) {
-            Local* local = &current->locals[i];
+            Local *local = &current->locals[i];
             if (local->depth != -1 && local->depth < current->scopeDepth) break;
             if (identifiersEqual(name, &local->name)) {
                 error("Variable with name '%s' already defined in this scope.", tokStr(name));
                 return -1;
             }
         }
-        return addLocal(*name);
+        int index = addLocal(*name);
+        if (index >= 0) {
+          tableSet(&currentFunction()->localsTable,
+              OBJ_VAL(INTERN(tokStr(name))),
+              NUMBER_VAL(index));
+        }
+        return index;
     }
 }
 
@@ -1076,7 +1086,8 @@ static void initCompiler(
 
 // Define a declared variable in local or global scope (locals MUST be
 // declared before being defined)
-static void defineVariable(uint8_t arg, bool checkDecl) {
+static void defineVariable(Token *name, uint8_t arg, bool checkDecl) {
+  (void)name;
   if (current->scopeDepth == 0) {
     emitOp1(OP_DEFINE_GLOBAL, arg);
   } else {
@@ -1255,7 +1266,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     vec_foreach(params, param, i) {
         if (param->type.kind == PARAM_NODE_REGULAR) {
             uint8_t localSlot = declareVariable(&param->tok);
-            defineVariable(localSlot, true);
+            defineVariable(&param->tok, localSlot, true);
             func->arity++;
         }
     }
@@ -1266,10 +1277,11 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     vec_foreach(params, param, i) {
         if (param->type.kind == PARAM_NODE_DEFAULT_ARG) {
             uint8_t localSlot = declareVariable(&param->tok);
-            defineVariable(localSlot, true);
+            defineVariable(&param->tok, localSlot, true);
             func->numDefaultArgs++;
             Insn *insnBefore = currentIseq()->tail; // NOTE: can be NULL
             emitNode(vec_first(param->children)); // default arg
+            // the VM skips these instructions if the argument is supplied
             emitOp2(OP_SET_LOCAL, (uint8_t)localSlot, identifierConstant(&param->tok));
             emitOp0(OP_POP);
             Insn *insnAfter = currentIseq()->tail;
@@ -1281,11 +1293,11 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             param->data = paramNodeInfo;
         } else if (param->type.kind == PARAM_NODE_SPLAT) {
             uint8_t localSlot = declareVariable(&param->tok);
-            defineVariable(localSlot, true);
+            defineVariable(&param->tok, localSlot, true);
             func->hasRestArg = true;
         } else if (param->type.kind == PARAM_NODE_KWARG) {
             uint8_t localSlot = declareVariable(&param->tok);
-            defineVariable(localSlot, true);
+            defineVariable(&param->tok, localSlot, true);
             emitOp2(OP_CHECK_KEYWORD,
                 localSlot /* slot of keyword argument */,
                 // NOTE: if a function is called with a block argument, the VM
@@ -1300,7 +1312,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             patchJump(ifJumpStart, -1, NULL);
         } else if (param->type.kind == PARAM_NODE_BLOCK) { // &arg
             uint8_t localSlot = declareVariable(&param->tok);
-            defineVariable(localSlot, true);
+            defineVariable(&param->tok, localSlot, true);
             func->hasBlockArg = true;
         } else if (param->type.kind == PARAM_NODE_REGULAR) {
             // handled above in first loop

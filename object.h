@@ -114,6 +114,7 @@ typedef struct ObjFunction {
   // and needs to be read by the VM
   Chunk *chunk;
   struct ObjString *name;
+  Table localsTable; // maps variable names to slot indices
   Obj *klass; // ObjClass* or ObjModule* (if method)
   struct sNode *funcNode;
   struct Upvalue *upvaluesInfo;
@@ -658,6 +659,7 @@ extern ObjModule *lxGCModule;
 extern ObjModule *lxProcessMod;
 extern ObjModule *lxSignalMod;
 extern ObjClass *lxIOClass;
+extern ObjClass *lxBindingClass;
 
 extern ObjClass *lxErrClass;
 extern ObjClass *lxArgErrClass;
@@ -667,6 +669,7 @@ extern ObjClass *lxSyntaxErrClass;
 extern ObjClass *lxSystemErrClass;
 extern ObjClass *lxLoadErrClass;
 extern ObjClass *lxRegexErrClass;
+extern ObjClass *lxEWouldBlockClass;
 
 extern ObjClass *lxBlockIterErrClass;
 extern ObjClass *lxBreakBlockErrClass;

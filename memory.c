@@ -741,6 +741,7 @@ void blackenObject(Obj *obj) {
             if (func->name) {
                 grayObject((Obj*)func->name);
             }
+            grayTable(&func->localsTable);
             break;
         }
         case OBJ_T_CLOSURE: {

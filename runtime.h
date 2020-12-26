@@ -174,6 +174,7 @@ void Init_ThreadClass(void);
 void Init_BlockClass(void);
 void Init_TimeClass(void);
 void Init_SocketClass(void);
+void Init_BindingClass(void);
 void Init_ErrorClasses(void);
 
 // API for adding classes/modules/methods

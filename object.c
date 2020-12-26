@@ -289,6 +289,7 @@ ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, int flags) {
         chunk = ALLOCATE(Chunk, 1);
         initChunk(chunk);
     }
+    initTable(&function->localsTable);
     function->chunk = chunk;
     GC_PROMOTE(function, GC_GEN_YOUNG_MAX);
     return function;
