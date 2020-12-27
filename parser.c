@@ -325,17 +325,17 @@ static Node *statement() {
         TRACE_END("statement");
         return ret;
     }
-    if (match(TOKEN_LEFT_BRACE)) {
-        Node *stmtList = blockStatements();
-        node_type_t blockType = {
-            .type = NODE_STMT,
-            .kind = BLOCK_STMT,
-        };
-        Node *block = createNode(blockType, current->previous, NULL);
-        nodeAddChild(block, stmtList);
-        TRACE_END("statement");
-        return block;
-    }
+    /*if (match(TOKEN_LEFT_BRACE)) {*/
+        /*Node *stmtList = blockStatements();*/
+        /*node_type_t blockType = {*/
+            /*.type = NODE_STMT,*/
+            /*.kind = BLOCK_STMT,*/
+        /*};*/
+        /*Node *block = createNode(blockType, current->previous, NULL);*/
+        /*nodeAddChild(block, stmtList);*/
+        /*TRACE_END("statement");*/
+        /*return block;*/
+    /*}*/
     if (match(TOKEN_FOREACH)) {
         Token foreachTok = current->previous;
         node_type_t foreachT = {
@@ -391,9 +391,16 @@ static Node *statement() {
         nodeAddChild(ifNode, ifBlock);
 
         if (match(TOKEN_ELSE)) {
-            Node *elseStmt = statement();
-            nodeAddChild(ifNode, elseStmt);
-            // NOTE: for now, no elseifs
+            Token elseTok = current->previous;
+            if (check(TOKEN_IF)) { // else if
+                Node *elseStmt = statement();
+                nodeAddChild(ifNode, elseStmt);
+            } else {
+                consume(TOKEN_LEFT_BRACE, "Expected '{' after 'else'");
+                Node *elseStmtList = blockStatements();
+                Node *elseBlock = wrapStmtsInBlock(elseStmtList, elseTok);
+                nodeAddChild(ifNode, elseBlock);
+            }
         }
         TRACE_END("statement");
         return ifNode;
@@ -404,14 +411,17 @@ static Node *statement() {
         consume(TOKEN_LEFT_PAREN, "Expected '(' after keyword 'while'");
         Node *cond = expression();
         consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'while' condition");
-        Node *blockStmt = statement();
+        consume(TOKEN_LEFT_BRACE, "Expected '{' after while");
+        Token lbraceTok = current->previous;
+        Node *blockStmtList = blockStatements();
         node_type_t whileT = {
             .type = NODE_STMT,
             .kind = WHILE_STMT,
         };
+        Node *whileBlock = wrapStmtsInBlock(blockStmtList, lbraceTok);
         Node *whileNode = createNode(whileT, whileTok, NULL);
         nodeAddChild(whileNode, cond);
-        nodeAddChild(whileNode, blockStmt);
+        nodeAddChild(whileNode, whileBlock);
         TRACE_END("statement");
         return whileNode;
     }
@@ -453,8 +463,11 @@ static Node *statement() {
         }
         nodeAddChild(forNode, incrExpr);
         consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'for' increment/decrement expression");
-        Node *blockNode = statement();
-        nodeAddChild(forNode, blockNode);
+        consume(TOKEN_LEFT_BRACE, "Expected '{' after 'for'");
+        Token lbraceTok = current->previous;
+        Node *blockStmtList = blockStatements();
+        Node *forBlock = wrapStmtsInBlock(blockStmtList, lbraceTok);
+        nodeAddChild(forNode, forBlock);
         TRACE_END("statement");
         return forNode;
     }

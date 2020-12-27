@@ -1,8 +1,7 @@
 class MyClass {}
-{
-  var o = Object();
-  MyClass.prop = o;
-}
+var o = Object();
+MyClass.prop = o;
+o = nil;
 GC.collectYoung();
 print MyClass.prop; // without write barrier, generational GC would destroy this object
 

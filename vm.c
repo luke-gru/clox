@@ -1286,12 +1286,14 @@ static void unwindErrInfo(CallFrame *frame) {
     vm.curThread->errInfo = info;
 }
 
+static void closeUpvalues(Value *last);
 
 void popFrame(void) {
     DBG_ASSERT(vm.inited);
     register LxThread *th = vm.curThread;
     ASSERT(EC->frameCount >= 1);
     CallFrame *frame = getFrame();
+    Value *newTop = frame->slots;
     VM_DEBUG(2, "popping callframe (%s)", frame->isCCall ? "native" : "non-native");
     int stackAdjust = frame->stackAdjustOnPop;
     /*VM_DEBUG("stack adjust: %d", stackAdjust);*/
@@ -1302,6 +1304,8 @@ void popFrame(void) {
         if (th->inCCall == 0) {
             vec_clear(&vm.curThread->stackObjects);
         }
+    } else {
+        closeUpvalues(newTop);
     }
     if (frame->klass != NULL) {
         ASSERT(th->v_crefStack.length > 0);
@@ -2137,8 +2141,9 @@ ObjUpvalue *captureUpvalue(Value *local) {
         fprintf(stderr, "\n");
     }
 
-    ObjUpvalue* prevUpvalue = NULL;
-    ObjUpvalue* upvalue = th->openUpvalues;
+    ObjUpvalue *prevUpvalue = NULL;
+    ObjUpvalue *upvalue = th->openUpvalues;
+    // th->openUpvalues is a linked list of upvalue objects, top of stack are in the list first
 
     // Walk towards the bottom of the stack until we find a previously existing
     // upvalue or reach where it should be.
@@ -2153,7 +2158,7 @@ ObjUpvalue *captureUpvalue(Value *local) {
     // We walked past the local on the stack, so there must not be an upvalue for
     // it already. Make a new one and link it in in the right place to keep the
     // list sorted.
-    ObjUpvalue* createdUpvalue = newUpvalue(local, NEWOBJ_FLAG_NONE);
+    ObjUpvalue *createdUpvalue = newUpvalue(local, NEWOBJ_FLAG_NONE);
     OBJ_WRITE(OBJ_VAL(threadInst), OBJ_VAL(createdUpvalue));
     createdUpvalue->next = upvalue;
 
@@ -2167,12 +2172,14 @@ ObjUpvalue *captureUpvalue(Value *local) {
     return createdUpvalue;
 }
 
+// Close the upvalues that are going to get popped off the stack
+// param `last` is the stackTop after popFrame()
 static void closeUpvalues(Value *last) {
     LxThread *th = vm.curThread;
     while (th->openUpvalues != NULL && th->openUpvalues->value >= last) {
         ObjUpvalue *upvalue = th->openUpvalues;
 
-        // Move the value into the upvalue itself and point the upvalue to it.
+        // Copy the value into the upvalue itself and point the upvalue to it.
         upvalue->closed = *upvalue->value;
         upvalue->value = &upvalue->closed;
 
@@ -2649,8 +2656,8 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(CLOSE_UPVALUE): {
-          closeUpvalues(EC->stackTop - 1);
-          VM_POP(); // pop the variable from the stack frame
+          closeUpvalues(EC->stackTop - 1); // close over the top of stack value
+          VM_POP(); // pop the variable off the stack frame
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_CONST): {
@@ -2979,7 +2986,6 @@ vmLoop:
           Value result = VM_POP(); // pop from caller's frame
           ASSERT(!getFrame()->isCCall);
           Value *newTop = getFrame()->slots;
-          closeUpvalues(getFrame()->slots);
           popFrame();
           EC->stackTop = newTop;
           VM_PUSH(result);

@@ -3,7 +3,7 @@
 
 if (true) {
   if (false) {
-    { var a; var b; var c; var d; var e; }
+    var a; var b; var c; var d; var e;
     print "no";
   } else {
     print "yes";

@@ -3,11 +3,9 @@ var a, b = ret();
 print a;
 print b;
 
-{
-  var c, d = ret();
-  print c;
-  print d;
-}
+var c, d = ret();
+print c;
+print d;
 
 __END__
 -- expect: --
