@@ -86,8 +86,63 @@ static Value lxBindingLocalVariables(int argCount, Value *args) {
     return ret;
 }
 
+static Value lxBindingLocalVariableGet(int argCount, Value *args) {
+    CHECK_ARITY("Binding#localVariableGet", 2, 2, argCount);
+    Value self = *args;
+    Value name = args[1];
+    CHECK_ARG_IS_A(name, lxStringClass, 1);
+    LxBinding *binding = getBinding(self);
+    Value val;
+    if (tableGet(&binding->localsTable, name, &val)) {
+        return val;
+    } else {
+        return NIL_VAL;
+    }
+}
+
+static Value lxBindingLocalVariableSet(int argCount, Value *args) {
+    CHECK_ARITY("Binding#localVariableGet", 3, 3, argCount);
+    Value self = *args;
+    Value name = args[1];
+    CHECK_ARG_IS_A(name, lxStringClass, 1);
+    Value val = args[2];
+    LxBinding *binding = getBinding(self);
+    tableSet(&binding->localsTable, name, val);
+    return val;
+}
+
+static Value lxBindingReceiver(int argCount, Value *args) {
+    CHECK_ARITY("Binding#receiver", 1, 1, argCount);
+    Value self = *args;
+    LxBinding *binding = getBinding(self);
+    if (binding->frame.instance) {
+        return OBJ_VAL(binding->frame.instance);
+    } else {
+        return NIL_VAL;
+    }
+}
+
+static Value lxBindingInspect(int argCount, Value *args) {
+    CHECK_ARITY("Binding#inspect", 1, 1, argCount);
+    Value self = *args;
+    LxBinding *binding = getBinding(self);
+    ObjString *ret = emptyString();
+    pushCString(ret, "#<Binding ", 10);
+    if (binding->frame.name) {
+        pushCStringFmt(ret, "%s", binding->frame.name->chars);
+    } else {
+        pushCStringFmt(ret, "%s", "(anon)");
+    }
+    pushCString(ret, ">", 1);
+    return OBJ_VAL(ret);
+}
+
 void Init_BindingClass(void) {
     lxBindingClass = addGlobalClass("Binding", lxObjClass);
     addNativeMethod(lxBindingClass, "init", lxBindingInit);
     addNativeMethod(lxBindingClass, "localVariables", lxBindingLocalVariables);
+    addNativeMethod(lxBindingClass, "localVariableGet", lxBindingLocalVariableGet);
+    addNativeMethod(lxBindingClass, "localVariableSet", lxBindingLocalVariableSet);
+    addNativeMethod(lxBindingClass, "receiver", lxBindingReceiver);
+    addNativeMethod(lxBindingClass, "inspect", lxBindingInspect);
 }
