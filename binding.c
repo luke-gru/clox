@@ -8,20 +8,22 @@
 ObjClass *lxBindingClass;
 
 typedef struct LxBinding {
-  CallFrame frame;
-  Table localsTable;
+    CallFrame frame;
+    CallFrame *origFrame;
+    long origFrameCookie;
+    Table localsTable;
 } LxBinding;
 
 static void populateLocalsTable(LxBinding *b) {
-  Table *btbl = &b->localsTable;
-  ASSERT(b->frame.closure);
-  ObjFunction *func = b->frame.closure->function;
-  ASSERT(func);
-  Entry e; int idx = 0;
-  TABLE_FOREACH(&func->localsTable, e, idx, {
-      int i = AS_NUMBER(e.value);
-      tableSet(btbl, e.key, b->frame.slots[i]);
-  });
+    Table *btbl = &b->localsTable;
+    ASSERT(b->frame.closure);
+    ObjFunction *func = b->frame.closure->function;
+    ASSERT(func);
+    Entry e; int idx = 0;
+    TABLE_FOREACH(&func->localsTable, e, idx, {
+        int slot = AS_NUMBER(e.value);
+        tableSet(btbl, e.key, b->frame.slots[slot]);
+    });
 }
 
 static void markInternalBinding(Obj *obj) {
@@ -59,6 +61,8 @@ static Value lxBindingInit(int argCount, Value *args) {
     LxBinding *binding = ALLOCATE(LxBinding, 1);
     binding->frame = *getFrame()->prev; // copy frame object
     ASSERT(!binding->frame.isCCall);
+    binding->origFrame = getFrame()->prev;
+    binding->origFrameCookie = getFrame()->prev->cookie;
     initTable(&binding->localsTable);
     populateLocalsTable(binding);
 
@@ -80,9 +84,18 @@ static Value lxBindingLocalVariables(int argCount, Value *args) {
     LxBinding *binding = getBinding(self);
     Value ret = newMap();
     Entry e; int i = 0;
-    TABLE_FOREACH(&binding->localsTable, e, i, {
-        mapSet(ret, e.key, e.value);
-    });
+    if (binding->origFrame->popped || binding->origFrameCookie != binding->origFrame->cookie) {
+        TABLE_FOREACH(&binding->localsTable, e, i, {
+            mapSet(ret, e.key, e.value);
+        });
+    } else {
+        ObjFunction *func = binding->frame.closure->function;
+        int idx = 0;
+        TABLE_FOREACH(&func->localsTable, e, idx, {
+            int slot = AS_NUMBER(e.value);
+            mapSet(ret, e.key, binding->origFrame->slots[slot]);
+        });
+    }
     return ret;
 }
 
@@ -93,21 +106,39 @@ static Value lxBindingLocalVariableGet(int argCount, Value *args) {
     CHECK_ARG_IS_A(name, lxStringClass, 1);
     LxBinding *binding = getBinding(self);
     Value val;
-    if (tableGet(&binding->localsTable, name, &val)) {
-        return val;
+    if (binding->origFrame->popped || binding->origFrameCookie != binding->origFrame->cookie) {
+        if (tableGet(&binding->localsTable, name, &val)) {
+            return val;
+        } else {
+            return NIL_VAL;
+        }
     } else {
-        return NIL_VAL;
+        ObjFunction *func = binding->frame.closure->function;
+        Value slotVal;
+        int res = tableGet(&func->localsTable, name, &slotVal);
+        if (!res) { return NIL_VAL; }
+        int slot = AS_NUMBER(slotVal);
+        return binding->origFrame->slots[slot];
     }
 }
 
 static Value lxBindingLocalVariableSet(int argCount, Value *args) {
-    CHECK_ARITY("Binding#localVariableGet", 3, 3, argCount);
+    CHECK_ARITY("Binding#localVariableSet", 3, 3, argCount);
     Value self = *args;
     Value name = args[1];
     CHECK_ARG_IS_A(name, lxStringClass, 1);
     Value val = args[2];
     LxBinding *binding = getBinding(self);
-    tableSet(&binding->localsTable, name, val);
+    if (binding->origFrame->popped || binding->origFrameCookie != binding->origFrame->cookie) {
+        tableSet(&binding->localsTable, name, val);
+    } else {
+        ObjFunction *func = binding->frame.closure->function;
+        Value slotVal;
+        int res = tableGet(&func->localsTable, name, &slotVal);
+        if (!res) { return val; }
+        int slot = AS_NUMBER(slotVal);
+        binding->origFrame->slots[slot] = val;
+    }
     return val;
 }
 

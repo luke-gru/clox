@@ -322,6 +322,36 @@ static Value lxStringCompact(int argCount, Value *args) {
     return OBJ_VAL(new);
 }
 
+static Value lxStringCompactLeft(int argCount, Value *args) {
+    CHECK_ARITY("String#compactLeft", 1, 1, argCount);
+    Value self = args[0];
+    char *orig = AS_CSTRING(self);
+    ObjString *new = copyString("", 0, NEWOBJ_FLAG_NONE);
+    char *start = orig;
+    char *end = start + strlen(orig)-1;
+    while (start < end && isspace(*start)) {
+      start++;
+    }
+    if (start < end) {
+      pushCString(new, start, end-start+1);
+    }
+    return OBJ_VAL(new);
+}
+
+static Value lxStringIndex(int argCount, Value *args) {
+    CHECK_ARITY("String#index", 2, 2, argCount);
+    Value self = args[0];
+    Value needleVal = args[1];
+    char *hay = AS_CSTRING(self);
+    char *needle = AS_CSTRING(needleVal);
+    char *found = strstr(hay, needle);
+    if (found == NULL) {
+      return NIL_VAL;
+    } else {
+      return NUMBER_VAL(found-hay);
+    }
+}
+
 static Value lxStringStaticParseInt(int argCount, Value *args) {
     CHECK_ARITY("String.parseInt", 2, 2, argCount);
     Value str = args[1];
@@ -356,9 +386,11 @@ void Init_StringClass() {
     addNativeMethod(stringClass, "split", lxStringSplit);
     addNativeMethod(stringClass, "endsWith", lxStringEndsWith);
     addNativeMethod(stringClass, "compact", lxStringCompact);
+    addNativeMethod(stringClass, "compactLeft", lxStringCompactLeft);
     addNativeMethod(stringClass, "padRight", lxStringPadRight);
     addNativeMethod(stringClass, "rest", lxStringRest);
-    // TODO: add startsWith, index, rindex
+    addNativeMethod(stringClass, "index", lxStringIndex);
+    // TODO: add startsWith, rindex
 
     // getters
     addNativeGetter(stringClass, "size", lxStringGetSize);

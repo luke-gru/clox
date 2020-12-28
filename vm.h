@@ -49,6 +49,8 @@ typedef struct CallFrame {
     struct BlockStackEntry *blockEntry; // if block, this is the block info
     int stackAdjustOnPop;
     struct CallInfo *callInfo;
+    bool popped;
+    long cookie;
 } CallFrame; // represents a local scope (block, function, etc)
 
 typedef enum ErrTag {

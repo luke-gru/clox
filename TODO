@@ -13,7 +13,6 @@ with TCPServer, UnixServer.
 * Add IO read buffer, per-thread to avoid releasing and acquiring GVL over and
 over (not necessary if implementing read_nonblock but still fun to add and
 benchmark).
-* Add try { ... } ensure { ... }
 * Add negative lookahead to regular expressions
 * Add non-greediness to regular expressions
 * Make it so that global variables aren't accessible everywhere, or that
@@ -28,12 +27,18 @@ get/set a different sigil maybe, like @prop.
 * Get template library using eval instead of string subst
 * Saving/loading bytecode to disk
 * Add tracing/coverage information
-* Add binding object that you can eval() with
+* Get binding object to eval() strings
+* Get template class to use binding object
 * Add profiler
 * Add guilds, with per-guild VM lock and restricted guild to guild sharing
 
 Improvements
 ------------
+* Get REPL to allow pasted code that's multiple lines. Right now it reads just
+one line at a time, it needs to account for non-finished statements.
+* Get 'continue' working in foreach loops
+* Make regular expression library work with bytecodes instead of nodes, and
+benchmark the performance difference
 * Get threads running concurrently even with at least 1 mutex (right now, any
 mutex held blocks release of GVL for a thread)
 * Allow more constants in a chunk (more than 256 bytes)
@@ -50,6 +55,8 @@ compiled lookup
 
 Bugs
 ----
+* A regular expression object that calls #match() will override captures
+of the same regex object in other threads, I think
 * Undefined init for a class, when object is given parameters the error
 message is Object#init received too many args instead of the original
 method

@@ -1,0 +1,18 @@
+requireScript("temple");
+
+t = Temple(<<<EOS
+%{ if (greeting == "hi") { %}
+HI %{= name %}
+%{ } else { %}
+BYE %{= name %}
+%{ } %}
+EOS,
+["greeting", "name"]);
+
+t.compile();
+
+print t.eval(%{"greeting": "hi", "name": "Luke"}).inspect();
+
+__END__
+-- expect: --
+"HI Luke\n"

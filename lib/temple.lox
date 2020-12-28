@@ -1,69 +1,102 @@
 /*
 
-t = Temple("hello %{= name %}")
+Ex 1:
+t = Temple("hello %{= name %}", ["name"])
 t.compile();
 print t.eval(%{"name": "Luke")
 
-For now, this template system is just string substitution but once eval() is
-working properly it will change to using the language's eval() facility.
+Ex 2:
+t = Temple(<<<EOS
+%{ if (greeting == "hi") { %}
+HI %{= name %}
+%{ } else { %}
+BYE %{= name %}
+%{ } %}
+EOS, ["greeting", "name"]);
 
+compiles to:
+
+fun temple_eval(_args) {
+    var greeting; var name;
+    var _b = Binding();
+    foreach (k, v in _args) {
+        _b.localVariableSet(k, v);
+    }
+    var _buf = "";
+    if (greeting == "hi") {
+        _buf.push("HI ");
+        _buf.push(name);
+        _buf.push("\n");
+    } else {
+        _buf.push("BYE ")
+        _buf.push(name);
+        _buf.push("\n");
+    }
+    return _buf;
+}
 */
 
-class TemplePart {
-    init(str, isDynamic) {
-        this.str = str;
-        this.isDynamic = isDynamic;
-    }
-
-    stringValue() {
-        return this.str;
-    }
-
-    eval(valuesMap) {
-        var value = valuesMap[this.str];
-        if (value == nil) {
-            value = valuesMap[this.str.compact()];
-            if (value == nil) { return ""; }
-        }
-        return value;
-    }
-
-}
-
 class Temple {
-    init(str) {
+    init(str, variableNames) {
         this.str = str;
         this.parts = [];
-        this._compiled = false;
+        this.variableNames = variableNames;
+        this._compiledFunction = nil;
     }
 
     compile() {
-        if (this._compiled) { return this; }
-        this.prepareParts();
-        this._compiled = true;
+        if (this._compiledFunction) { return this; }
+        this.compileFunction();
         return this;
     }
 
     eval(valuesMap) {
-        var buf = [];
-        foreach (part in this.parts) {
-            if (part.isDynamic) {
-                buf.push(part.eval(valuesMap));
-            } else {
-                buf.push(part.stringValue());
-            }
+        if (!this._compiledFunction) {
+            throw Error("Uncompiled template called eval");
         }
-        return buf.join("");
+        var fn = this._compiledFunction;
+        return fn(valuesMap);
     }
 
-    prepareParts() {
-        var pieces = this.str.split("%{=");
+    compileFunction() {
+        // preamble
+        var fnLines = [];
+        foreach (varName in this.variableNames) {
+            fnLines.push("var ${varName};");
+        }
+        fnLines.push("var _b = Binding();");
+        fnLines.push("foreach (k, v in _args) {");
+        fnLines.push("  _b.localVariableSet(k, v);");
+        fnLines.push("}");
+        fnLines.push("var _buf = '';");
+
+        var pieces = this.str.split("%{");
         foreach (piece in pieces) {
-            if (piece.endsWith("%}")) {
-                this.parts.push(TemplePart(piece.substr(0, piece.size-2), true));
+            if (piece == "") {
+                // do nothing
             } else {
-                this.parts.push(TemplePart(piece, false));
+                if (piece[0] == '=') {
+                    var codePieceEndIdx = piece.index("%}");
+                    var codeLine = piece.substr(1, codePieceEndIdx-1);
+                    fnLines.push("_buf.push(" + codeLine + ");");
+                    var rest = piece.substr(codePieceEndIdx+2, -1);
+                    if (rest != "") {
+                        fnLines.push("_buf.push(" + rest.inspect() + ");");
+                    }
+                } else {
+                    piece = piece.compactLeft();
+                    var codePieceEndIdx = piece.index("%}");
+                    var codeLine = piece.substr(0, codePieceEndIdx);
+                    fnLines.push(codeLine);
+                    var rest = piece.substr(codePieceEndIdx+2, -1).compactLeft();
+                    if (rest.compact() != "") {
+                        fnLines.push("_buf.push(" + rest.inspect() + ");");
+                    }
+                }
             }
         }
+        fnLines.push('return _buf;');
+        var fn = "fun temple_eval(_args) {\n" + fnLines.join("\n") + "}";
+        this._compiledFunction = eval(fn);
     }
 }
