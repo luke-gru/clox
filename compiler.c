@@ -42,6 +42,7 @@ static ClassCompiler *currentClassOrModule = NULL;
 static bool inINBlock = false;
 static Token *curTok = NULL;
 static int loopStart = -1;
+static int inForeach = 0;
 static int nodeDepth = 0;
 static int nodeWidth = -1;
 static int blockDepth = 0;
@@ -864,6 +865,16 @@ static void patchJump(Insn *toPatch, int jumpoffset, Insn *jumpTo) {
     toPatch->operands[0] = jumpoffset;
     toPatch->jumpTo = jumpTo; // FIXME: should be jumpToPrev
     jumpTo->isLabel = true;
+}
+
+static void patchJumpsBetween(Insn *a, Insn *b) {
+  Insn *cur = a;
+  while (cur != b) {
+    if (cur->code == OP_JUMP) {
+      patchJump(cur, -1, NULL);
+    }
+    cur = cur->next;
+  }
 }
 
 // Emit a jump backwards (loop) instruction from the current code count to offset `loopStart`
@@ -1765,7 +1776,11 @@ static void emitNode(Node *n) {
                 emitOp3(setOp, slotNum, (uint8_t)slotIdx, nameIdx);
             }
         }
+        Insn *beforeForeach = currentIseq()->tail;
+        inForeach++;
         emitNode(n->children->data[i]); // foreach block
+        inForeach--;
+        Insn *afterForeach = currentIseq()->tail;
         if (numVars == 1) {
             emitOp0(OP_POP); // pop the iterator value
         }
@@ -1777,6 +1792,7 @@ static void emitNode(Node *n) {
         }
         emitLoop(beforeIterNext);
         popScope(COMPILE_SCOPE_BLOCK);
+        patchJumpsBetween(beforeForeach, afterForeach);
         patchJump(iterDone, -1, NULL);
         emitOp0(OP_POP); // pop the iterator value
         emitOp0(OP_POP); // pop the iterator
@@ -1797,8 +1813,8 @@ static void emitNode(Node *n) {
         break; // I heard you like break statements, so I put a break in your break
     }
     case CONTINUE_STMT: {
-        if (loopStart == -1 && blockDepth == 0) {
-            error("'continue' can only be used in loops ('while' or 'for' loops) and blocks");
+        if (loopStart == -1 && blockDepth == 0 && inForeach == 0) {
+            error("'continue' can only be used in loops ('while', 'for', 'foreach' loops) and blocks");
             return;
         }
         if (breakBlock) {
@@ -1807,6 +1823,9 @@ static void emitNode(Node *n) {
                 emitOp0(OP_POP);
             }
             emitOp0(OP_BLOCK_CONTINUE);
+        // TODO: use tag like lastLoop enum { FOREACH, FOR, WHILE }
+        } else if (inForeach > 0) {
+            emitJump(OP_JUMP);
         } else {
             emitLoop(loopStart);
         }

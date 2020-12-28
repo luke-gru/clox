@@ -24,11 +24,9 @@ the syntax is different for them, like in ruby.
 * Disallow property get/set outside of class like Ruby? Also, make property
 get/set a different sigil maybe, like @prop.
 * Add method privacy (private/public)
-* Get template library using eval instead of string subst
 * Saving/loading bytecode to disk
 * Add tracing/coverage information
 * Get binding object to eval() strings
-* Get template class to use binding object
 * Add profiler
 * Add guilds, with per-guild VM lock and restricted guild to guild sharing
 
@@ -36,7 +34,7 @@ Improvements
 ------------
 * Get REPL to allow pasted code that's multiple lines. Right now it reads just
 one line at a time, it needs to account for non-finished statements.
-* Get 'continue' working in foreach loops
+* Get 'continue' working in nested foreach loops with for and others []
 * Make regular expression library work with bytecodes instead of nodes, and
 benchmark the performance difference
 * Get threads running concurrently even with at least 1 mutex (right now, any

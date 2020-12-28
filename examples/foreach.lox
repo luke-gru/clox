@@ -43,6 +43,15 @@ foreach (student in croom) {
   print student;
 }
 
+print "";
+// foreach supports continue
+foreach (num in [1,2,3]) {
+    if (num > 1) {
+        continue;
+    }
+    print num;
+}
+
 __END__
 -- expect: --
 1
@@ -67,3 +76,5 @@ nil
 Dave
 Kyle
 Lisa
+
+1
