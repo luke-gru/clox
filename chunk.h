@@ -54,6 +54,7 @@ typedef struct NodeLvl {
 #define MAX_INSN_OPERANDS (MAX_INSN_SIZE-1)
 #define INSN_FL_NUMBER 1
 #define INSN_FL_BREAK 2
+#define INSN_FL_CONTINUE 4
 // single instruction
 typedef struct Insn {
     uint8_t code;

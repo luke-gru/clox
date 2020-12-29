@@ -36,13 +36,21 @@ static const char *compileScopeName(CompileScopeType stype) {
     }
 }
 
+typedef enum eLoopType {
+  LOOP_T_NONE=0,
+  LOOP_T_FOR,
+  LOOP_T_FOREACH,
+  LOOP_T_WHILE,
+  LOOP_T_BLOCK,
+} eLoopType;
+
 static Compiler *current = NULL;
 static Compiler *top = NULL; // compiler for main
 static ClassCompiler *currentClassOrModule = NULL;
 static bool inINBlock = false;
 static Token *curTok = NULL;
 static int loopStart = -1;
-static int inForeach = 0;
+static eLoopType curLoopType = LOOP_T_NONE;
 static int nodeDepth = 0;
 static int nodeWidth = -1;
 static int blockDepth = 0;
@@ -867,11 +875,17 @@ static void patchJump(Insn *toPatch, int jumpoffset, Insn *jumpTo) {
     jumpTo->isLabel = true;
 }
 
-static void patchJumpsBetween(Insn *a, Insn *b) {
+static inline bool isContinue(Insn *in) {
+    return (in->code == OP_JUMP &&
+            (in->flags & INSN_FL_CONTINUE) != 0);
+}
+
+static void patchContinuesBetween(Insn *a, Insn *b) {
   Insn *cur = a;
   while (cur != b) {
-    if (cur->code == OP_JUMP) {
+    if (isContinue(cur)) {
       patchJump(cur, -1, NULL);
+      COMP_TRACE("jump offset found, patching continue");
     }
     cur = cur->next;
   }
@@ -896,14 +910,14 @@ static inline bool isBreak(Insn *in) {
             (in->flags & INSN_FL_BREAK) != 0);
 }
 
-static void patchBreaks(Insn *start, Insn *end) {
+static void patchBreaks(Insn *start, Insn *end, int offset) {
     Insn *cur = start;
     int numFound = 0;
     while (cur != end) {
         if (isBreak(cur) && cur->operands[0] == 0) {
-            int offset = insnOffset(cur, end)+1;
-            COMP_TRACE("jump offset found, patching break: %d", offset);
-            patchJump(cur, offset, end);
+            int off = insnOffset(cur, end)+offset;
+            COMP_TRACE("jump offset found, patching break: %d", off);
+            patchJump(cur, off, end);
             numFound++;
         }
         cur = cur->next;
@@ -1336,7 +1350,10 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
         blockDepth++;
         breakBlock = true;
     }
+    eLoopType oldLoopType = curLoopType;
+    curLoopType = LOOP_T_BLOCK;
     emitChildren(n);
+    curLoopType = oldLoopType;
     if (ftype == FUN_TYPE_BLOCK) {
         blockDepth--;
         breakBlock = oldBreakBlock;
@@ -1698,12 +1715,15 @@ static void emitNode(Node *n) {
         }
         Insn *whileJumpStart = emitJump(OP_JUMP_IF_FALSE);
         whileJumpStart->isLabel = true;
+        eLoopType oldLoopType = curLoopType;
+        curLoopType = LOOP_T_WHILE;
         emitNode(n->children->data[1]); // while block
+        curLoopType = oldLoopType;
         loopLabel->jumpTo = whileJumpStart;
         whileJumpStart->isLabel = true;
         emitLoop(loopStart);
         patchJump(whileJumpStart, -1, NULL);
-        patchBreaks(whileJumpStart, currentIseq()->tail);
+        patchBreaks(whileJumpStart, currentIseq()->tail, 1);
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
         break;
@@ -1726,7 +1746,10 @@ static void emitNode(Node *n) {
         }
         Insn *forJump = emitJump(OP_JUMP_IF_FALSE);
         Node *forBlock = vec_last(n->children);
+        eLoopType lastLoopType = curLoopType;
+        curLoopType = LOOP_T_FOR;
         emitNode(forBlock);
+        curLoopType = lastLoopType;
         Node *incrExpr = n->children->data[2];
         if (incrExpr) {
             emitNode(incrExpr);
@@ -1734,13 +1757,13 @@ static void emitNode(Node *n) {
         emitOp0(OP_POP);
         emitLoop(beforeTest);
         patchJump(forJump, -1, NULL);
-        patchBreaks(forJump, currentIseq()->tail);
+        patchBreaks(forJump, currentIseq()->tail, 1);
         popScope(COMPILE_SCOPE_BLOCK);
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
         break;
     }
-    // FIXME: support breaks/continue in foreach!
+    // FIXME: support breaks in foreach!
     case FOREACH_STMT: {
         pushScope(COMPILE_SCOPE_BLOCK);
         vec_byte_t v_slots;
@@ -1777,10 +1800,12 @@ static void emitNode(Node *n) {
             }
         }
         Insn *beforeForeach = currentIseq()->tail;
-        inForeach++;
+        eLoopType lastLoopType = curLoopType;
+        curLoopType = LOOP_T_FOREACH;
         emitNode(n->children->data[i]); // foreach block
-        inForeach--;
+        curLoopType = lastLoopType;
         Insn *afterForeach = currentIseq()->tail;
+        patchContinuesBetween(beforeForeach, afterForeach);
         if (numVars == 1) {
             emitOp0(OP_POP); // pop the iterator value
         }
@@ -1792,42 +1817,44 @@ static void emitNode(Node *n) {
         }
         emitLoop(beforeIterNext);
         popScope(COMPILE_SCOPE_BLOCK);
-        patchJumpsBetween(beforeForeach, afterForeach);
         patchJump(iterDone, -1, NULL);
+        patchBreaks(beforeForeach, currentIseq()->tail, 0);
         emitOp0(OP_POP); // pop the iterator value
         emitOp0(OP_POP); // pop the iterator
         vec_deinit(&v_slots);
         break;
     }
     case BREAK_STMT: {
-        if (loopStart == -1 && blockDepth == 0) {
-            error("'break' can only be used in loops ('while' or 'for' loops) and blocks");
+        if (curLoopType == LOOP_T_NONE) {
+            error("'break' can only be used in loops ('while', 'for', 'foreach' loops) and blocks");
             return;
         }
-        if (breakBlock) {
+        if (curLoopType == LOOP_T_BLOCK) {
             emitOp0(OP_BLOCK_BREAK);
         } else {
             Insn *in = emitJump(OP_JUMP);
-            in->flags |= INSN_FL_BREAK;
+            in->flags = INSN_FL_BREAK;
         }
         break; // I heard you like break statements, so I put a break in your break
     }
     case CONTINUE_STMT: {
-        if (loopStart == -1 && blockDepth == 0 && inForeach == 0) {
+        if (curLoopType == LOOP_T_NONE) {
             error("'continue' can only be used in loops ('while', 'for', 'foreach' loops) and blocks");
             return;
         }
-        if (breakBlock) {
+        if (curLoopType == LOOP_T_BLOCK) {
             if (current->function->chunk->count == 0) {
                 emitOp0(OP_NIL);
                 emitOp0(OP_POP);
             }
             emitOp0(OP_BLOCK_CONTINUE);
         // TODO: use tag like lastLoop enum { FOREACH, FOR, WHILE }
-        } else if (inForeach > 0) {
-            emitJump(OP_JUMP);
+        } else if (curLoopType == LOOP_T_FOREACH) {
+            Insn *in = emitJump(OP_JUMP);
+            in->flags = INSN_FL_CONTINUE;
         } else {
-            emitLoop(loopStart);
+            ASSERT(curLoopType == LOOP_T_WHILE || curLoopType == LOOP_T_FOR);
+            emitLoop(loopStart); // WHILE or FOR
         }
         break;
     }

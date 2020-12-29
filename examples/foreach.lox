@@ -46,10 +46,19 @@ foreach (student in croom) {
 print "";
 // foreach supports continue
 foreach (num in [1,2,3]) {
-    if (num > 1) {
+    if (num == 2) {
         continue;
     }
     print num;
+}
+
+print "";
+// foreach supports break
+foreach (v in [1,2,3]) {
+    if (v == 2) {
+        break;
+    }
+    print v;
 }
 
 __END__
@@ -76,5 +85,8 @@ nil
 Dave
 Kyle
 Lisa
+
+1
+3
 
 1
