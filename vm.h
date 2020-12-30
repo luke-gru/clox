@@ -27,6 +27,12 @@ extern "C" {
 struct CallInfo; // fwd decls
 struct BlockStackEntry;
 
+typedef struct LocalsTable {
+    int size;
+    int capacity;
+    Value *tbl;
+} LocalsTable;
+
 typedef struct CallFrame {
     // Non-native function fields
     ObjClosure *closure; // if call frame is from compiled code, this is set
@@ -34,6 +40,7 @@ typedef struct CallFrame {
     uint8_t *ip; // ip into closure's bytecode chunk, if callable is not a C function
     int start; // starting instruction offset in parent (for throw/catch)
     Value *slots; // local variables and function arguments
+    LocalsTable localsTable;
     ObjInstance *instance; // if function is a method
     ObjClass *klass; // if function is a method
 
@@ -409,6 +416,8 @@ void debugFrame(CallFrame *frame);
 void runAtExitHooks(void);
 NORETURN void stopVM(int status);
 NORETURN void _stopVM(int status);
+
+void growLocalsTable(CallFrame *frame, int size);
 
 #ifdef __cplusplus
 }

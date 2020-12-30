@@ -22,7 +22,7 @@ static void populateLocalsTable(LxBinding *b) {
     Entry e; int idx = 0;
     TABLE_FOREACH(&func->localsTable, e, idx, {
         int slot = AS_NUMBER(e.value);
-        tableSet(btbl, e.key, b->frame.slots[slot]);
+        tableSet(btbl, e.key, b->frame.localsTable.tbl[slot]);
     });
 }
 
@@ -118,7 +118,7 @@ static Value lxBindingLocalVariableGet(int argCount, Value *args) {
         int res = tableGet(&func->localsTable, name, &slotVal);
         if (!res) { return NIL_VAL; }
         int slot = AS_NUMBER(slotVal);
-        return binding->origFrame->slots[slot];
+        return binding->origFrame->localsTable.tbl[slot];
     }
 }
 
@@ -135,9 +135,13 @@ static Value lxBindingLocalVariableSet(int argCount, Value *args) {
         ObjFunction *func = binding->frame.closure->function;
         Value slotVal;
         int res = tableGet(&func->localsTable, name, &slotVal);
-        if (!res) { return val; }
+        if (!res) {
+          slotVal = NUMBER_VAL(func->localsTable.count+1);
+          tableSet(&func->localsTable, name, slotVal);
+        }
         int slot = AS_NUMBER(slotVal);
-        binding->origFrame->slots[slot] = val;
+        growLocalsTable(binding->origFrame, slot+1);
+        binding->origFrame->localsTable.tbl[slot] = val;
     }
     return val;
 }

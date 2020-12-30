@@ -1288,6 +1288,20 @@ static void unwindErrInfo(CallFrame *frame) {
 
 static void closeUpvalues(Value *last);
 
+static void freeLocals(CallFrame *frame) {
+    if (frame->localsTable.tbl) {
+        ASSERT(!frame->isCCall);
+        VM_DEBUG(2, "freeing locals table for %s: %p size %d, capa %d",
+            callFrameName(frame),
+            frame->localsTable.tbl, frame->localsTable.size,
+                frame->localsTable.capacity);
+        xfree(frame->localsTable.tbl);
+        frame->localsTable.tbl = NULL;
+    }
+    frame->localsTable.size = 0;
+    frame->localsTable.capacity = 0;
+}
+
 void popFrame(void) {
     DBG_ASSERT(vm.inited);
     register LxThread *th = vm.curThread;
@@ -1317,6 +1331,7 @@ void popFrame(void) {
         VM_DEBUG(3, "popping this from popFrame");
         popThis();
     }
+    freeLocals(frame);
     EC->frameCount--;
     frame = getFrameOrNull(); // new frame
     if (LIKELY(frame != NULL)) {
@@ -1355,6 +1370,9 @@ CallFrame *pushFrame(void) {
     if (bentry && bentry->frame == NULL) {
         bentry->frame = frame;
     }
+    frame->localsTable.tbl = NULL;
+    frame->localsTable.size = 0;
+    frame->localsTable.capacity = 0;
     frame->popped = false;
     return frame;
 }
@@ -1440,6 +1458,49 @@ static inline bool checkFunctionArity(ObjFunction *func, int argCount, CallInfo 
         }
     }
     return true;
+}
+
+static void setupLocalsTable(CallFrame *frame) {
+  int localsSize = EC->stackTop - frame->slots;
+  frame->localsTable.size = localsSize;
+  frame->localsTable.capacity = localsSize;
+  if (localsSize > 0) {
+    frame->localsTable.tbl = xmalloc(sizeof(Value) * localsSize);
+    VM_DEBUG(2, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
+    ASSERT_MEM(frame->localsTable.tbl);
+    memcpy(frame->localsTable.tbl, frame->slots, sizeof(Value)*localsSize);
+  }
+}
+
+static void nil_mem(Value *mem, size_t num) {
+  Value nil = NIL_VAL;
+  memcpy(mem, &nil, num);
+}
+
+void growLocalsTable(CallFrame *frame, int size) {
+  if (frame->localsTable.capacity >= size) {
+    frame->localsTable.size = size;
+    return;
+  }
+  int max = size * 2;
+  if (frame->localsTable.capacity == 0) {
+    VM_DEBUG(2, "Growing localsTable (1) for frame %s, size %d, capa new %d, old capa: %d, old size: %d",
+        callFrameName(frame), size, max, frame->localsTable.capacity, frame->localsTable.size);
+    frame->localsTable.size = size;
+    frame->localsTable.capacity = max;
+    frame->localsTable.tbl = xmalloc(sizeof(Value)*max);
+    nil_mem(frame->localsTable.tbl, max);
+    ASSERT_MEM(frame->localsTable.tbl);
+  } else {
+    VM_DEBUG(2, "Growing localsTable (2) for frame %s, size %d, capa new %d, old capa: %d, old size: %d",
+        callFrameName(frame), size, max, frame->localsTable.capacity, frame->localsTable.size);
+    int old_capa = frame->localsTable.capacity;
+    frame->localsTable.size = size;
+    frame->localsTable.capacity = max;
+    frame->localsTable.tbl = realloc(frame->localsTable.tbl, frame->localsTable.capacity*sizeof(Value));
+    nil_mem(frame->localsTable.tbl+old_capa, max-old_capa);
+    ASSERT_MEM(frame->localsTable.tbl);
+  }
 }
 
 // Arguments are expected to be pushed on to stack by caller, including the
@@ -1812,12 +1873,13 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     // +1 to include either the called function (for non-methods) or the receiver (for methods)
     frame->slots = EC->stackTop - (argCountWithRestAry + numDefaultArgsUsed + 1) -
         (func->numKwargs > 0 ? numKwargsNotGiven+1 : 0);
+    setupLocalsTable(frame);
     if (frame->name) {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(frame->name));
     } else {
         tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(vm.anonString));
     }
-    // NOTE: the frame is popped on OP_RETURN
+    // NOTE: the frame is popped on OP_RETURN or non-local jump
     vm_run(); // actually run the function until return
     return true;
 }
@@ -2624,7 +2686,11 @@ vmLoop:
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          frame->slots[slot] = VM_PEEK(0); // locals are popped at end of scope by VM
+          if (slot+1 > frame->localsTable.size) {
+            growLocalsTable(frame, slot+1);
+          }
+          frame->localsTable.tbl[slot] = VM_PEEK(0); // locals are popped at end of scope by VM
+          frame->slots[slot] = VM_PEEK(0);
           DISPATCH_BOTTOM();
       }
       CASE_OP(UNPACK_SET_LOCAL): {
@@ -2646,7 +2712,11 @@ vmLoop:
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          VM_PUSH(frame->slots[slot]);
+          if (frame->localsTable.size > slot) {
+            VM_PUSH(frame->localsTable.tbl[slot]);
+          } else {
+            VM_PUSH(frame->slots[slot]);
+          }
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_UPVALUE): {

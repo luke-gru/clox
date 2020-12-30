@@ -14,12 +14,12 @@ with TCPServer, UnixServer.
 over (not necessary if implementing read_nonblock but still fun to add and
 benchmark).
 * Add negative lookahead to regular expressions
+* Make regular expressions behave correctly for input after a repetition like
+`.*hi` (needs backtracking)
 * Add non-greediness to regular expressions
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in ruby.
 * Dumping/loading values to/from disk (like Ruby's Marshal)
-* Allow getters to be called like methods (when given 0 args) [PARTIAL]
-  works for instances, not classes or modules (ex: Array.name())
 * Allow '?' or '!' at end of method name?
 * Disallow property get/set outside of class like Ruby? Also, make property
 get/set a different sigil maybe, like @prop.
@@ -32,9 +32,10 @@ get/set a different sigil maybe, like @prop.
 
 Improvements
 ------------
+* Get local variable table living on the callframe object, not statically
+implied in the bytecode.
 * Get REPL to allow pasted code that's multiple lines. Right now it reads just
 one line at a time, it needs to account for non-finished statements.
-* Get 'continue' working in nested foreach loops with for and others []
 * Make regular expression library work with bytecodes instead of nodes, and
 benchmark the performance difference
 * Get threads running concurrently even with at least 1 mutex (right now, any
@@ -54,7 +55,7 @@ compiled lookup
 Bugs
 ----
 * A regular expression object that calls #match() will override captures
-of the same regex object in other threads, I think
+of the same regex object in other threads, I think?
 * Undefined init for a class, when object is given parameters the error
 message is Object#init received too many args instead of the original
 method

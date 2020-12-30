@@ -397,23 +397,29 @@ void collectYoungGarbage() {
     GC_TRACE_DEBUG(2, "Marking VM frame functions");
     // gray active function closure objects
     /*int numOpenUpsFound = 0;*/
-    /*VMExecContext *ctx = NULL; int ctxIdx = 0;*/
-    /*thObj = NULL; thIdx = 0;*/
+    VMExecContext *ctx = NULL; int ctxIdx = 0;
+    thObj = NULL; thIdx = 0;
     vec_foreach(&vm.threads, thObj, thIdx) {
         LxThread *th = THREAD_GETHIDDEN(OBJ_VAL(thObj));
         if (th->status == THREAD_ZOMBIE) continue;
-        /*vec_foreach(&th->v_ecs, ctx, ctxIdx) {*/
-            /*grayObject((Obj*)ctx->filename);*/
-            /*if (ctx->lastValue) {*/
-                /*grayValue(*ctx->lastValue);*/
-            /*}*/
-            /*for (int i = 0; i < ctx->frameCount; i++) {*/
-                /*// TODO: gray native function if exists*/
-                /*// XXX: is this necessary, they must be on the stack??*/
-                /*grayObject((Obj*)ctx->frames[i].closure);*/
-                /*grayObject((Obj*)ctx->frames[i].instance);*/
-            /*}*/
-        /*}*/
+        vec_foreach(&th->v_ecs, ctx, ctxIdx) {
+            grayObject((Obj*)ctx->filename);
+            if (ctx->lastValue) {
+                grayValue(*ctx->lastValue);
+            }
+            for (int i = 0; i < ctx->frameCount; i++) {
+                CallFrame *frame = &ctx->frames[i];
+                // TODO: gray native function if exists
+                // XXX: is this necessary, they must be on the stack??
+                grayObject(TO_OBJ(frame->closure));
+                grayObject(TO_OBJ(frame->instance));
+                if (frame->localsTable.tbl) {
+                  for (int i = 0; i < frame->localsTable.size; i++) {
+                    grayValue(frame->localsTable.tbl[i]);
+                  }
+                }
+            }
+        }
         // NOTE: stack frames not grayed, they should be on the VM stack, which is already grayed
         /*if (th->openUpvalues) {*/
             /*ObjUpvalue *up = th->openUpvalues;*/
@@ -1189,6 +1195,7 @@ void collectGarbage(void) {
         VMExecContext *ctx = NULL; int k = 0;
         vec_foreach(&th->v_ecs, ctx, k) {
             grayTable(&ctx->roGlobals);
+            // gray all values on stack
             for (Value *slot = ctx->stack; slot < ctx->stackTop; slot++) {
                 grayValue(*slot);
             }
@@ -1240,10 +1247,16 @@ void collectGarbage(void) {
                 grayValue(*ctx->lastValue);
             }
             for (unsigned i = 0; i < ctx->frameCount; i++) {
+                CallFrame *frame = &ctx->frames[i];
                 // TODO: gray native function if exists
                 // XXX: is this necessary, they must be on the stack??
-                grayObject((Obj*)ctx->frames[i].closure);
-                grayObject((Obj*)ctx->frames[i].instance);
+                grayObject(TO_OBJ(frame->closure));
+                grayObject(TO_OBJ(frame->instance));
+                if (frame->localsTable.tbl) {
+                  for (int i = 0; i < frame->localsTable.size; i++) {
+                    grayValue(frame->localsTable.tbl[i]);
+                  }
+                }
                 numFramesFound++;
             }
         }

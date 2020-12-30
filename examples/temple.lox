@@ -11,7 +11,8 @@ EOS,
 
 t.compile();
 
-print t.eval(%{"greeting": "hi", "name": "Luke"}).inspect();
+var args = %{"greeting": "hi", "name" : "Luke"};
+print t.eval(args).inspect();
 
 __END__
 -- expect: --

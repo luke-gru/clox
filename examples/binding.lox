@@ -71,6 +71,10 @@ b = C().aMethod();
 print b.receiver();
 print b.inspect();
 
+b = Binding();
+b.localVariableSet("my_var", 100);
+print b.localVariableGet("my_var");
+
 __END__
 -- expect: --
 %{"a":1,"b":2}
@@ -91,3 +95,4 @@ nil
 nil
 <instance C>
 #<Binding C#aMethod>
+100

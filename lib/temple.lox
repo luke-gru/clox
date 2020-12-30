@@ -1,9 +1,9 @@
 /*
 
 Ex 1:
-t = Temple("hello %{= name %}", ["name"])
+t = Temple("hello %{= name %}", ["name"]);
 t.compile();
-print t.eval(%{"name": "Luke")
+print t.eval(%{"name": "Luke");
 
 Ex 2:
 t = Temple(<<<EOS
@@ -96,7 +96,7 @@ class Temple {
             }
         }
         fnLines.push('return _buf;');
-        var fn = "fun temple_eval(_args) {\n" + fnLines.join("\n") + "}";
+        var fn = "var f = fun (_args) {\n" + fnLines.join("\n") + "}; f;";
         this._compiledFunction = eval(fn);
     }
 }
