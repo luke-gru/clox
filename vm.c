@@ -15,15 +15,7 @@ VM vm;
 
 volatile pthread_t GVLOwner;
 
-#ifndef NDEBUG
-#define VM_DEBUG(lvl, ...) vm_debug(lvl, __VA_ARGS__)
-#define VM_WARN(...) vm_warn(__VA_ARGS__)
-#else
-#define VM_DEBUG(...) (void)0
-#define VM_WARN(...) (void)0
-#endif
-
-static void vm_debug(int lvl, const char *format, ...) {
+void vm_debug(int lvl, const char *format, ...) {
     if (GET_OPTION(debugVMLvl) < lvl) return;
     va_list ap;
     va_start(ap, format);
@@ -44,7 +36,7 @@ void thread_debug(int lvl, const char *format, ...) {
     fflush(stderr);
 #endif
 }
-static void vm_warn(const char *format, ...) {
+void vm_warn(const char *format, ...) {
     va_list ap;
     va_start(ap, format);
     fprintf(stderr, "[Warning]: ");
@@ -1385,8 +1377,9 @@ CallFrame *pushFrame(void) {
 }
 
 const char *callFrameName(CallFrame *frame) {
-    DBG_ASSERT(frame && frame->closure);
-    ObjString *fnName = frame->closure->function->name;
+    ObjString *fnName = frame->isCCall ? frame->nativeFunc->name :
+      frame->closure->function->name;
+    // TODO: fix, this could just be an anonymous function
     return fnName ? fnName->chars : "<main>";
 }
 
@@ -3464,8 +3457,9 @@ static void setupPerScriptROGlobals(char *filename) {
     }
 }
 
-InterpretResult interpret(Chunk *chunk, char *filename) {
-    ASSERT(chunk);
+InterpretResult interpret(ObjFunction *func, char *filename) {
+    ASSERT(func);
+    Chunk *chunk = func->chunk;
     if (!EC) {
         return INTERPRET_UNINITIALIZED; // call initVM() first!
     }
@@ -3476,9 +3470,8 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(chunk, NULL, FUN_TYPE_TOP_LEVEL, NEWOBJ_FLAG_OLD);
-    hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
+    unhideFromGC(TO_OBJ(func));
     frame->isCCall = false;
     frame->nativeFunc = NULL;
     setupPerScriptROGlobals(filename);
@@ -3494,8 +3487,9 @@ static void *vm_run_protect(void *arg) {
 }
 
 // NOTE: `filename` may be on stack in caller, must be copied to use
-InterpretResult loadScript(Chunk *chunk, char *filename) {
-    ASSERT(chunk);
+InterpretResult loadScript(ObjFunction *func, char *filename) {
+    ASSERT(func);
+    Chunk *chunk = func->chunk;
     CallFrame *oldFrame = getFrame();
     push_EC(true);
     resetStack();
@@ -3507,9 +3501,8 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(chunk, NULL, FUN_TYPE_TOP_LEVEL, NEWOBJ_FLAG_OLD);
-    hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
+    unhideFromGC(TO_OBJ(func));
     frame->isCCall = false;
     frame->nativeFunc = NULL;
 
@@ -3530,7 +3523,13 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
 }
 
 static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
-    CallFrame *oldFrame = getFrame(); // eval() native frame
+    CallFrame *oldFrame = getFrame(); // eval() native frame, if called from there
+    CallFrame *prevFrame = oldFrame;
+    bool oldFrameIsEval = oldFrame->isCCall;
+    if (oldFrameIsEval) {
+      VM_DEBUG(1, "oldFrame is c call: %s", callFrameName(prevFrame));
+      prevFrame = prevFrame->prev;
+    }
     CompileErr err = COMPILE_ERR_NONE;
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
     compilerOpts.noRemoveUnusedExpressions = true;
@@ -3540,14 +3539,19 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     ectx->evalContext = true;
     ectx->stack = oldFrame->slots;
     ectx->stackTop = old_ectx->stackTop;
-    VM_DEBUG(1, "VM eval called in func '%s', ip: %d", callFrameName(oldFrame), oldFrame->ip-oldFrame->closure->function->chunk->code);
-    Chunk *chunk = compile_eval_src(src, &err, oldFrame->closure->function, oldFrame->ip);
+    VM_DEBUG(1, "VM eval called in func '%s', ip: %d", callFrameName(prevFrame),
+        prevFrame->ip - prevFrame->closure->function->chunk->code);
+    LocalVariable *var; int varidx = 0;
+    vec_foreach(&prevFrame->closure->function->variables, var, varidx) {
+        VM_DEBUG(1, "var from fn: %s", var->name->chars);
+    }
+    ObjFunction *func = compile_eval_src(src, &err, prevFrame->closure->function, prevFrame->ip);
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
-    if (err != COMPILE_ERR_NONE || !chunk) {
-        if (chunk) {
-            freeChunk(chunk);
-            FREE(Chunk, chunk);
+    if (err != COMPILE_ERR_NONE || !func) {
+        if (func) {
+            freeChunk(func->chunk);
+            FREE(Chunk, func->chunk);
         }
         VM_DEBUG(1, "compile error in eval");
         pop_EC();
@@ -3562,13 +3566,11 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     ectx->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
     VM_DEBUG(1, "%s", "Pushing initial eval callframe");
     CallFrame *frame = pushFrame();
-    memcpy(&frame->localsTable.tbl, &oldFrame->prev->localsTable.tbl, sizeof(LocalsTable));
-    frame->localsTable.update = &oldFrame->prev->localsTable.tbl;
+    memcpy(&frame->localsTable.tbl, &prevFrame->localsTable.tbl, sizeof(LocalsTable));
+    frame->localsTable.update = &prevFrame->localsTable.tbl;
     frame->start = 0;
-    frame->ip = chunk->code;
+    frame->ip = func->chunk->code;
     frame->slots = ectx->stack; // old frame's slots
-    ObjFunction *func = newFunction(chunk, NULL, FUN_TYPE_EVAL, NEWOBJ_FLAG_OLD);
-    hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     unhideFromGC(TO_OBJ(func));
     frame->isCCall = false;

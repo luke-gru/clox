@@ -8,18 +8,18 @@
 #include "memory.h"
 #include "linenoise.h"
 
-static Chunk *chunk = NULL;
+static ObjFunction *Func = NULL;
 
-static void _freeChunk(void) {
-    if (chunk) {
-        freeChunk(chunk);
-        chunk = NULL;
+static void _freeFunc(void) {
+    if (Func) {
+        freeChunk(Func->chunk);
+        Func = NULL;
     }
 }
 
 static bool evalLines(char *lines[], int numLines) {
     resetStack();
-    _freeChunk();
+    _freeFunc();
     vm.exited = false;
     THREAD()->hadError = false;
     ObjString *buf = hiddenString("", 0, NEWOBJ_FLAG_NONE);
@@ -31,18 +31,18 @@ static bool evalLines(char *lines[], int numLines) {
     char *code = buf->chars;
     CompileErr cerr = COMPILE_ERR_NONE;
     /*fprintf(stderr, "compiling code: '%s'", code);*/
-    chunk = compile_src(code, &cerr);
+    Func = compile_src(code, &cerr);
     unhideFromGC((Obj*)buf);
     if (cerr != COMPILE_ERR_NONE) {
         fprintf(stderr, "%s", "Compilation error\n");
         return false;
     }
     /*fprintf(stderr, "interpreting code\n");*/
-    InterpretResult ires = interpret(chunk, "(repl)");
+    InterpretResult ires = interpret(Func, "(repl)");
     resetStack();
     if (ires != INTERPRET_OK) {
         fprintf(stderr, "%s", "Error evaluating code\n");
-        _freeChunk();
+        _freeFunc();
         return false;
     }
     return true;
@@ -117,7 +117,7 @@ NORETURN void repl(void) {
         // resets the VM, re-inits the code chunk
         if (numLines == 0 && strcmp(line, "reset") == 0) {
             fprintf(stderr, "Resetting VM... ");
-            _freeChunk();
+            _freeFunc();
             freeVM();
             initVM();
             _resetScanner();

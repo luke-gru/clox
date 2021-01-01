@@ -713,11 +713,11 @@ readableCheck:
         return BOOL_VAL(extloaded);
     }
     CompileErr err = COMPILE_ERR_NONE;
-    Chunk *chunk = compile_file(pathbuf, &err);
-    if (!chunk || err != COMPILE_ERR_NONE) {
-        if (chunk) {
-            freeChunk(chunk);
-            FREE(Chunk, chunk);
+    ObjFunction *func = compile_file(pathbuf, &err);
+    if (!func || err != COMPILE_ERR_NONE) {
+        if (func) {
+            freeChunk(func->chunk);
+            FREE(Chunk, func->chunk);
         }
         throwErrorFmt(lxSyntaxErrClass, "%s", "Syntax error");
     }
@@ -725,7 +725,7 @@ readableCheck:
     if (checkLoaded) {
         vec_push(&vm.loadedScripts, OBJ_VAL(fpath));
     }
-    InterpretResult ires = loadScript(chunk, pathbuf);
+    InterpretResult ires = loadScript(func, pathbuf);
     return BOOL_VAL(ires == INTERPRET_OK);
 }
 

@@ -278,8 +278,8 @@ int getSignal(void);
 // high-level API
 void initVM(void);
 void freeVM(void);
-InterpretResult interpret(Chunk *chunk, char *filename);
-InterpretResult loadScript(Chunk *chunk, char *filename);
+InterpretResult interpret(ObjFunction *func, char *filename);
+InterpretResult loadScript(ObjFunction *func, char *filename);
 Value VMEval(char *src, char *filename, int lineno);
 Value VMEvalNoThrow(char *src, char *filename, int lineno);
 Value *getLastValue(void);
@@ -414,6 +414,15 @@ int VMNumStackFrames(void);
 int VMNumCallFrames(void);
 const char *callFrameName(CallFrame *frame);
 void debugFrame(CallFrame *frame);
+#ifndef NDEBUG
+#define VM_DEBUG(lvl, ...) vm_debug(lvl, __VA_ARGS__)
+#define VM_WARN(...) vm_warn(__VA_ARGS__)
+#else
+#define VM_DEBUG(...) (void)0
+#define VM_WARN(...) (void)0
+#endif
+void vm_debug(int lvl, const char *format, ...);
+void vm_warn(const char *format, ...);
 
 // exiting
 void runAtExitHooks(void);

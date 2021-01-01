@@ -1062,9 +1062,9 @@ static void initCompiler(
     compiler->localCount = 0; // NOTE: below, this is increased to 1
     compiler->scopeDepth = scopeDepth;
     compiler->function = newFunction(chunk, NULL, ftype, NEWOBJ_FLAG_OLD);
+    hideFromGC(TO_OBJ(compiler->function));
     initIseq(&compiler->iseq);
     compiler->iseq.constants = compiler->function->chunk->constants;
-    hideFromGC(TO_OBJ(compiler->function)); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = ftype;
     compiler->hadError = false;
     initTable(&compiler->constTbl);
@@ -1157,9 +1157,9 @@ static void initEvalCompiler(
         compiler->scopeDepth = 1;
     }
     compiler->function = newFunction(NULL, NULL, FUN_TYPE_EVAL, NEWOBJ_FLAG_OLD);
+    hideFromGC(TO_OBJ(compiler->function));
     initIseq(&compiler->iseq);
     compiler->iseq.constants = compiler->function->chunk->constants;
-    hideFromGC(TO_OBJ(compiler->function)); // TODO: figure out way to unhide these functions on freeVM()
     compiler->type = FUN_TYPE_EVAL;
     compiler->hadError = false;
     initTable(&compiler->constTbl);
@@ -1189,12 +1189,15 @@ static void initEvalCompiler(
     int bytecode_at = ip_at - in_func->chunk->code;
     LocalVariable *var; int varidx = 0;
     vec_foreach(&in_func->variables, var, varidx) {
+        VM_DEBUG(2, "Maybe adding local %s to eval callframe", var->name->chars);
         if (var->bytecode_declare_start < bytecode_at) {
+            VM_DEBUG(2, "adding local %s to eval callframe", var->name->chars);
             Local *local = &current->locals[current->localCount++];
             local->name.start = var->name->chars;
             local->name.length = strlen(var->name->chars);
             local->depth = current->scopeDepth;
             local->isUpvalue = false;
+        } else {
         }
     }
 
@@ -2327,7 +2330,7 @@ static void emitNode(Node *n) {
     }
 }
 
-Chunk *compile_src(char *src, CompileErr *err) {
+ObjFunction *compile_src(char *src, CompileErr *err) {
     initScanner(&scanner, src);
     Parser p;
     initParser(&p);
@@ -2367,11 +2370,11 @@ Chunk *compile_src(char *src, CompileErr *err) {
     } else {
         *err = COMPILE_ERR_NONE;
         ASSERT(prog->chunk);
-        return prog->chunk;
+        return prog;
     }
 }
 
-Chunk *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_t *ip_at) {
+ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_t *ip_at) {
     initScanner(&scanner, src);
     Parser p;
     initParser(&p);
@@ -2417,11 +2420,11 @@ Chunk *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_
     } else {
         *err = COMPILE_ERR_NONE;
         ASSERT(prog->chunk);
-        return prog->chunk;
+        return prog;
     }
 }
 
-Chunk *compile_file(char *fname, CompileErr *err) {
+ObjFunction *compile_file(char *fname, CompileErr *err) {
     int fd = open(fname, O_RDONLY);
     if (fd == -1) {
         *err = COMPILE_ERR_ERRNO;
@@ -2441,8 +2444,8 @@ Chunk *compile_file(char *fname, CompileErr *err) {
         xfree(buf);
         return NULL;
     }
-    Chunk *chunk = compile_src(buf, err);
-    return chunk;
+    ObjFunction *func = compile_src(buf, err);
+    return func;
 }
 
 void grayCompilerRoots(void) {

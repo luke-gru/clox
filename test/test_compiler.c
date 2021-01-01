@@ -8,18 +8,18 @@
 static Chunk *compNoOpt(char *src, CompileErr *err) {
     bool oldNoOpt = compilerOpts.noOptimize;
     compilerOpts.noOptimize = true;
-    Chunk *ret = compile_src(src, err);
+    ObjFunction *ret = compile_src(src, err);
     compilerOpts.noOptimize = oldNoOpt;
-    return ret;
+    return ret->chunk;
 }
 
 // optimizations applied
 static Chunk *compWithOpt(char *src, CompileErr *err) {
     bool oldNoOpt = compilerOpts.noOptimize;
     compilerOpts.noOptimize = false;
-    Chunk *ret = compile_src(src, err);
+    ObjFunction *ret = compile_src(src, err);
     compilerOpts.noOptimize = oldNoOpt;
-    return ret;
+    return ret->chunk;
 }
 
 static int test_compile_addition(void) {
@@ -60,7 +60,7 @@ cleanup:
 }
 
 static int test_compile_local_variable(void) {
-    char *src = "{ var a = 1; a; }";
+    char *src = "if (true) { var a = 1; a; }";
     CompileErr cerr = COMPILE_ERR_NONE;
     Chunk *chunk = compNoOpt(src, &cerr);
     T_ASSERT_EQ(COMPILE_ERR_NONE, cerr);
@@ -193,7 +193,7 @@ cleanup:
     return 0;
 }
 
-int test_pop_assign_if_parent_stmt(void) {
+static int test_pop_assign_if_parent_stmt(void) {
     char *src = "var i = 0;\n"
                 "while (i < 300) {\n"
                 "  print i;\n"
@@ -226,7 +226,7 @@ cleanup:
 }
 
 // only 1 return emitted per scope level
-int test_spam_return(void) {
+static int test_spam_return(void) {
     char *src = "fun ret() { return \"HI\"; return \"AGAIN\"; }";
     CompileErr cerr = COMPILE_ERR_NONE;
     Chunk *chunk = compNoOpt(src, &cerr);
@@ -251,7 +251,7 @@ cleanup:
     return 0;
 }
 
-int test_upvalues_in_functions(void) {
+static int test_upvalues_in_functions(void) {
     char *src = "var a = 1; fun add(b) { return fun(c) {  return a + b + c; }; }";
     CompileErr cerr = COMPILE_ERR_NONE;
     Chunk *chunk = compNoOpt(src, &cerr);

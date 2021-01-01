@@ -109,12 +109,12 @@ int main(int argc, char *argv[]) {
     }
 
     initVM();
-    Chunk *chunk = compile_file(fname, &err);
+    ObjFunction *func = compile_file(fname, &err);
     if (useStdin) {
         unlink(fname);
     }
 
-    if (err != COMPILE_ERR_NONE || !chunk) {
+    if (err != COMPILE_ERR_NONE || !func) {
         if (err == COMPILE_ERR_SYNTAX) {
             freeVM();
             die("%s", "Syntax error");
@@ -131,13 +131,13 @@ int main(int argc, char *argv[]) {
 
     if (CLOX_OPTION_T(compileOnly)) {
         freeVM();
-        freeChunk(chunk);
-        FREE(Chunk, chunk);
+        freeChunk(func->chunk);
+        FREE(Chunk, func->chunk);
         printf("No compilation errors\n");
         exit(0);
     }
 
-    InterpretResult ires = interpret(chunk, fname);
+    InterpretResult ires = interpret(func, fname);
     if (ires != INTERPRET_OK) {
         // error message was already displayed
         stopVM(1);

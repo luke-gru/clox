@@ -10,12 +10,12 @@ static InterpretResult interp(char *src, bool expectSuccess) {
     InterpretResult ires = INTERPRET_OK;
     if (!vm.inited) initVM();
 
-    Chunk *chunk = compile_src(src, &cerr);
+    ObjFunction *func = compile_src(src, &cerr);
     if (expectSuccess) {
-        T_ASSERT(chunk != NULL);
+        T_ASSERT(func != NULL);
         T_ASSERT_EQ(COMPILE_ERR_NONE, cerr);
     }
-    ires = interpret(chunk, "test");
+    ires = interpret(func, "test");
     resetStack();
     if (expectSuccess) {
         T_ASSERT_EQ(INTERPRET_OK, ires);

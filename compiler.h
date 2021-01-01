@@ -148,9 +148,9 @@ typedef struct CompilerOpts {
 
 extern CompilerOpts compilerOpts;
 
-Chunk *compile_src(char *src, CompileErr *err);
-Chunk *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_t *ip_at);
-Chunk *compile_file(char *fname, CompileErr *err);
+ObjFunction *compile_src(char *src, CompileErr *err);
+ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_t *ip_at);
+ObjFunction *compile_file(char *fname, CompileErr *err);
 
 void grayCompilerRoots(void);
 

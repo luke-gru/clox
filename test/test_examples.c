@@ -119,8 +119,8 @@ static int test_run_example_files(void) {
         CompileErr cerr = COMPILE_ERR_NONE;
         fprintf(stdout, "Compiling file '%s'...\n", ent->d_name);
         initVM();
-        Chunk *chunk = compile_file(fbuf, &cerr);
-        if (cerr != COMPILE_ERR_NONE || !chunk) {
+        ObjFunction *func = compile_file(fbuf, &cerr);
+        if (cerr != COMPILE_ERR_NONE || !func) {
             fprintf(stderr, "Error during compilation\n");
             vec_push(&vfiles_failed, strdup(fbuf));
             _freeVM();
@@ -134,7 +134,7 @@ static int test_run_example_files(void) {
         unhideFromGC((Obj*)outputStr);
         // TODO: instead of passing ent->d_name, it should be the full path to the file
         // so that __DIR__ is populated correctly for the script.
-        InterpretResult ires = interpret(chunk, fbuf);
+        InterpretResult ires = interpret(func, fbuf);
         if (ires != INTERPRET_OK) {
             fprintf(stderr, "Error during interpretation: (%d)\n", ires);
             vec_push(&vfiles_failed, strdup(fbuf));
