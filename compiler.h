@@ -36,6 +36,7 @@ typedef enum {
     COMPILE_SCOPE_IN,
     COMPILE_SCOPE_CLASS,
     COMPILE_SCOPE_MODULE,
+    COMPILE_SCOPE_BLOCK,
 } CompileScopeType;
 
 typedef struct Scope {

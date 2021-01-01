@@ -35,6 +35,7 @@ const char *compileScopeName(CompileScopeType stype) {
     case COMPILE_SCOPE_IN: return "SCOPE_IN";
     case COMPILE_SCOPE_CLASS: return "SCOPE_CLASS";
     case COMPILE_SCOPE_MODULE: return "SCOPE_MODULE";
+    case COMPILE_SCOPE_BLOCK: return "SCOPE_BLOCK";
     default: {
         UNREACHABLE("invalid scope type: %d", stype);
     }
@@ -1849,13 +1850,13 @@ static void emitNode(Node *n) {
         if (incrExpr) {
             emitNode(incrExpr);
         }
-        popScope(COMPILE_SCOPE_FOR);
         emitOp0(OP_POP);
         emitLoop(beforeTest);
         patchJump(forJump, -1, NULL);
         patchBreaks(forJump, currentIseq()->tail, 1);
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
+        popScope(COMPILE_SCOPE_FOR);
         break;
     }
     case FOREACH_STMT: {
@@ -2041,7 +2042,9 @@ static void emitNode(Node *n) {
     }
     case BLOCK_STMT: {
         ASSERT(n->children);
+        /*pushScope(COMPILE_SCOPE_BLOCK);*/
         emitChildren(n); // 1 child, list of statements
+        /*popScope(COMPILE_SCOPE_BLOCK);*/
         break;
     }
     case FUNCTION_STMT: {
