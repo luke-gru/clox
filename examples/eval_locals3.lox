@@ -1,0 +1,9 @@
+fun f() {
+    eval("var i=100; print i;");
+}
+
+f();
+
+__END__
+-- expect: --
+100

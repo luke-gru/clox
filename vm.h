@@ -31,6 +31,7 @@ typedef struct LocalsTable {
     int size;
     int capacity;
     Value *tbl;
+    Value **update;
 } LocalsTable;
 
 typedef struct CallFrame {
@@ -46,6 +47,7 @@ typedef struct CallFrame {
 
     // Native (C) function fields
     bool isCCall; // native call, callframe created for C (native) function call
+    bool isEval; // is the eval frame
     ObjNative *nativeFunc; // only if isCCall is true
 
     int callLine;

@@ -1296,9 +1296,9 @@ static void unwindErrInfo(CallFrame *frame) {
 static void closeUpvalues(Value *last);
 
 static void freeLocals(CallFrame *frame) {
-    if (frame->localsTable.tbl) {
+    if (frame->localsTable.tbl && !frame->isEval && frame->localsTable.capacity > 0) {
         ASSERT(!frame->isCCall);
-        VM_DEBUG(2, "freeing locals table for %s: %p size %d, capa %d",
+        VM_DEBUG(1, "freeing locals table for %s: %p size %d, capa %d",
             callFrameName(frame),
             frame->localsTable.tbl, frame->localsTable.size,
                 frame->localsTable.capacity);
@@ -1371,7 +1371,7 @@ CallFrame *pushFrame(void) {
     CallFrame *frame = &ec->frames[ec->frameCount++];
     memset(frame, 0, sizeof(*frame));
     frame->callLine = curLine;
-    frame->file = EC->filename;
+    frame->file = ec->filename;
     frame->prev = prev;
     BlockStackEntry *bentry = vec_last_or(&vm.curThread->v_blockStack, NULL);
     if (bentry && bentry->frame == NULL) {
@@ -1471,6 +1471,8 @@ static void setupLocalsTable(CallFrame *frame) {
   int localsSize = EC->stackTop - frame->slots;
   frame->localsTable.size = localsSize;
   frame->localsTable.capacity = localsSize;
+  frame->localsTable.update = NULL;
+  VM_DEBUG(1, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
   if (localsSize > 0) {
     frame->localsTable.tbl = xmalloc(sizeof(Value) * localsSize);
     VM_DEBUG(2, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
@@ -1498,6 +1500,9 @@ void growLocalsTable(CallFrame *frame, int size) {
     frame->localsTable.tbl = xmalloc(sizeof(Value)*max);
     nil_mem(frame->localsTable.tbl, max);
     ASSERT_MEM(frame->localsTable.tbl);
+    if (frame->localsTable.update) {
+      *frame->localsTable.update = frame->localsTable.tbl;
+    }
   } else {
     VM_DEBUG(2, "Growing localsTable (2) for frame %s, size %d, capa new %d, old capa: %d, old size: %d",
         callFrameName(frame), size, max, frame->localsTable.capacity, frame->localsTable.size);
@@ -1507,6 +1512,9 @@ void growLocalsTable(CallFrame *frame, int size) {
     frame->localsTable.tbl = realloc(frame->localsTable.tbl, frame->localsTable.capacity*sizeof(Value));
     nil_mem(frame->localsTable.tbl+old_capa, max-old_capa);
     ASSERT_MEM(frame->localsTable.tbl);
+    if (frame->localsTable.update) {
+      *frame->localsTable.update = frame->localsTable.tbl;
+    }
   }
 }
 
@@ -3054,7 +3062,7 @@ vmLoop:
       CASE_OP(RETURN): {
           // this is if we're in a block given by (&block), and we returned
           // (explicitly or implicitly)
-          if (th->v_blockStack.length > 0) {
+          if (!getFrame()->isEval && th->v_blockStack.length > 0) {
               ObjString *key = INTERN("ret");
               VM_POP();
               Value ret;
@@ -3522,7 +3530,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
 }
 
 static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
-    CallFrame *oldFrame = getFrame();
+    CallFrame *oldFrame = getFrame(); // eval() native frame
     CompileErr err = COMPILE_ERR_NONE;
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
     compilerOpts.noRemoveUnusedExpressions = true;
@@ -3551,18 +3559,23 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
             return UNDEF_VAL;
         }
     }
-    EC->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
+    ectx->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
     VM_DEBUG(1, "%s", "Pushing initial eval callframe");
     CallFrame *frame = pushFrame();
+    memcpy(&frame->localsTable.tbl, &oldFrame->prev->localsTable.tbl, sizeof(LocalsTable));
+    frame->localsTable.update = &oldFrame->prev->localsTable.tbl;
     frame->start = 0;
     frame->ip = chunk->code;
-    frame->slots = EC->stack; // old frame's slots
+    frame->slots = ectx->stack; // old frame's slots
     ObjFunction *func = newFunction(chunk, NULL, FUN_TYPE_EVAL, NEWOBJ_FLAG_OLD);
     hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     unhideFromGC(TO_OBJ(func));
     frame->isCCall = false;
+    frame->isEval = true;
     frame->nativeFunc = NULL;
+    frame->instance = NULL;
+    frame->klass = NULL;
 
     setupPerScriptROGlobals(filename);
 
@@ -3574,7 +3587,8 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
         THREAD()->hadError = true;
     }
     Value val = *THREAD()->lastValue;
-    VM_DEBUG(2, "eval finished: error: %d", THREAD()->hadError ? 1 : 0);
+    VM_DEBUG(1, "eval finished: error: %d, result: %s", THREAD()->hadError ? 1 : 0,
+        result == INTERPRET_OK ? "OK" : "RAISE");
     // `EC != ectx` if an error occured in the eval, and propagated out
     // due to being caught in a surrounding context or never being caught.
     if (EC == ectx) pop_EC();
@@ -3676,20 +3690,23 @@ void popBlockEntry(BlockStackEntry *bentry) {
 
 void *vm_protect(vm_cb_func func, void *arg, ObjClass *errClass, ErrTag *status) {
     LxThread *th = THREAD();
+    volatile CallFrame *frame = getFrame();
     addErrInfo(errClass);
-    volatile ErrTagInfo *errInfo = th->errInfo;
+    volatile ErrTagInfo *errInfo = th->errInfo; // recently added
     int jmpres = 0;
     if ((jmpres = setjmp(((ErrTagInfo*)errInfo)->jmpBuf)) == JUMP_SET) {
         *status = TAG_NONE;
-        VM_DEBUG(2, "vm_protect before func");
-        void *res = func(arg);
+        VM_DEBUG(1, "vm_protect before func");
         ErrTagInfo *prev = errInfo->prev;
-        FREE(ErrTagInfo, (ErrTagInfo*)errInfo);
-        th->errInfo = prev;
-        VM_DEBUG(2, "vm_protect after func");
+        void *res = func(arg);
+        if (getFrameOrNull() == frame) { // frame was not popped, so we unwind the errinfo
+          FREE(ErrTagInfo, (ErrTagInfo*)errInfo); // was not freed by popFrame()
+          th->errInfo = prev;
+        }
+        VM_DEBUG(1, "vm_protect after func");
         return res;
     } else if (jmpres == JUMP_PERFORMED) {
-        VM_DEBUG(2, "vm_protect got to longjmp");
+        VM_DEBUG(1, "vm_protect got to longjmp");
         th = THREAD();
         ASSERT(errInfo == th->errInfo);
         unwindJumpRecover((ErrTagInfo*)errInfo);

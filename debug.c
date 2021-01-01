@@ -278,7 +278,9 @@ void printFunctionTables(FILE *f, ObjFunction *func) {
   fprintf(f, "--local table--\n");
   LocalVariable *var; int idx = 0;
   vec_foreach(&func->variables, var, idx) {
+      ASSERT(var->name);
       char *name = var->name->chars;
+      ASSERT(var->scope);
       const char *scope_name = compileScopeName(var->scope->type);
       int slot = var->slot;
       fprintf(f, "%s: %d (%s [%d-%d])\n", name, slot, scope_name,

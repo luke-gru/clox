@@ -1,6 +1,7 @@
 var a = 3;
 eval("print a;");
-eval("var b = 4;");
+var b;
+eval("b = 4;");
 print b;
 try {
   eval("throw Error('hi');");

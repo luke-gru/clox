@@ -1151,7 +1151,11 @@ static void initEvalCompiler(
     vec_init(&compiler->v_errMessages);
     compiler->enclosing = NULL;
     compiler->localCount = 0; // NOTE: below, this is increased to whatever it needs to be
-    compiler->scopeDepth = 0;
+    if (in_func->ftype == FUN_TYPE_TOP_LEVEL) {
+        compiler->scopeDepth = 0;
+    } else {
+        compiler->scopeDepth = 1;
+    }
     compiler->function = newFunction(NULL, NULL, FUN_TYPE_EVAL, NEWOBJ_FLAG_OLD);
     initIseq(&compiler->iseq);
     compiler->iseq.constants = compiler->function->chunk->constants;
@@ -2393,7 +2397,13 @@ Chunk *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_
     Compiler mainCompiler;
     top = &mainCompiler;
     initEvalCompiler(&mainCompiler, func_in, ip_at);
+    CompileScopeType stype = COMPILE_SCOPE_FUNCTION;
+    if (func_in->ftype == FUN_TYPE_TOP_LEVEL) {
+      stype = COMPILE_SCOPE_MAIN;
+    }
+    pushScope(stype);
     emitNode(program);
+    popScope(stype);
     ObjFunction *prog = endCompiler();
     if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
         printFunctionTables(stderr, prog);

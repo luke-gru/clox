@@ -407,7 +407,7 @@ void collectYoungGarbage() {
             if (ctx->lastValue) {
                 grayValue(*ctx->lastValue);
             }
-            for (int i = 0; i < ctx->frameCount; i++) {
+            for (unsigned i = 0; i < ctx->frameCount; i++) {
                 CallFrame *frame = &ctx->frames[i];
                 // TODO: gray native function if exists
                 // XXX: is this necessary, they must be on the stack??

@@ -96,7 +96,8 @@ class Temple {
             }
         }
         fnLines.push('return _buf;');
-        var fn = "var f = fun (_args) {\n" + fnLines.join("\n") + "}; f;";
-        this._compiledFunction = eval(fn);
+        var fn = "fun temple_eval(_args) {\n" + fnLines.join("\n") + "}";
+        eval(fn);
+        this._compiledFunction = temple_eval;
     }
 }
