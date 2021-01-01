@@ -1181,9 +1181,17 @@ static void initEvalCompiler(
         }
     }
 
-    Local *local = &current->locals[current->localCount++];
-    local->name.start = "a";
-    local->name.length = 1;
+    int bytecode_at = ip_at - in_func->chunk->code;
+    LocalVariable *var; int varidx = 0;
+    vec_foreach(&in_func->variables, var, varidx) {
+        if (var->bytecode_declare_start < bytecode_at) {
+            Local *local = &current->locals[current->localCount++];
+            local->name.start = var->name->chars;
+            local->name.length = strlen(var->name->chars);
+            local->depth = current->scopeDepth;
+            local->isUpvalue = false;
+        }
+    }
 
     COMP_TRACE("/initCompiler");
 }
@@ -1841,13 +1849,13 @@ static void emitNode(Node *n) {
         if (incrExpr) {
             emitNode(incrExpr);
         }
+        popScope(COMPILE_SCOPE_FOR);
         emitOp0(OP_POP);
         emitLoop(beforeTest);
         patchJump(forJump, -1, NULL);
         patchBreaks(forJump, currentIseq()->tail, 1);
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
-        popScope(COMPILE_SCOPE_FOR);
         break;
     }
     case FOREACH_STMT: {
