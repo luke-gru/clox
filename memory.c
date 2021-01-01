@@ -745,9 +745,13 @@ void blackenObject(Obj *obj) {
             GC_TRACE_DEBUG(5, "Blackening function %p", obj);
             ObjFunction *func = (ObjFunction*)obj;
             if (func->name) {
-                grayObject((Obj*)func->name);
+                grayObject(TO_OBJ(func->name));
             }
             grayTable(&func->localsTable);
+            LocalVariable *var; int idx = 0;
+            vec_foreach(&func->variables, var, idx) {
+                grayObject(TO_OBJ(var->name));
+            }
             break;
         }
         case OBJ_T_CLOSURE: {

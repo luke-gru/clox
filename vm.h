@@ -81,7 +81,7 @@ typedef struct ErrTagInfo {
 // as well as the script name for the currently executing file.
 // This is per-thread
 typedef struct VMExecContext {
-    Value stack[STACK_MAX]; // stack VM, this is the stack (bottom) of operands
+    Value *stack; // allocated by push_EC()
     Value *stackTop;
     // NOTE: the current callframe contains the closure, which contains the
     // function, which contains the chunk of bytecode for the current function
@@ -93,6 +93,7 @@ typedef struct VMExecContext {
     Value *lastValue;
     bool evalContext; // is executing eval()
     bool loadContext; // is executing 'loadScript' or 'requireScript'
+    bool stackAllocated;
 } VMExecContext;
 
 // thread internals

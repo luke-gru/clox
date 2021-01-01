@@ -269,7 +269,7 @@ static inline void clearObjString(ObjString *string) {
     string->hash = 0;
 }
 
-ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, int flags) {
+ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, FunctionType ftype, int flags) {
     ObjFunction *function = ALLOCATE_OBJ(
         ObjFunction, OBJ_T_FUNCTION, flags|NEWOBJ_FLAG_OLD
     );
@@ -290,6 +290,9 @@ ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, int flags) {
         initChunk(chunk);
     }
     initTable(&function->localsTable);
+    vec_init(&function->scopes);
+    vec_init(&function->variables);
+    function->ftype = ftype;
     function->chunk = chunk;
     GC_PROMOTE(function, GC_GEN_YOUNG_MAX);
     return function;

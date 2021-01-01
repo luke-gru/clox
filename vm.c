@@ -397,11 +397,15 @@ static bool rootVMLoopJumpBufSet = false;
 static int curLine = 1; // TODO: per thread
 
 // Add and use a new execution context
-static inline void push_EC(void) {
+static inline void push_EC(bool allocateStack) {
     LxThread *th = vm.curThread;
     VMExecContext *ectx = ALLOCATE(VMExecContext, 1);
     memset(ectx, 0, sizeof(*ectx));
     initTable(&ectx->roGlobals);
+    if (allocateStack) {
+      ectx->stack = ALLOCATE(Value, STACK_MAX);
+      ectx->stackAllocated = true;
+    }
     vec_push(&th->v_ecs, ectx);
     th->ec = ectx; // EC = ectx
 }
@@ -411,6 +415,9 @@ static inline void pop_EC(void) {
     LxThread *th = vm.curThread;
     ASSERT(th->v_ecs.length > 0);
     VMExecContext *ctx = (VMExecContext*)vec_pop(&th->v_ecs);
+    if (ctx->stackAllocated) {
+      FREE_SIZE(sizeof(Value)*STACK_MAX, ctx->stack);
+    }
     freeTable(&ctx->roGlobals);
     FREE(VMExecContext, ctx);
     if (th->v_ecs.length == 0) {
@@ -485,7 +492,7 @@ void initVM() {
     vec_init(&vm.hiddenObjs);
 
     ObjInstance *mainT = initMainThread();
-    push_EC();
+    push_EC(true);
     resetStack();
 
     vec_init(&vm.loadedScripts);
@@ -3461,7 +3468,7 @@ InterpretResult interpret(Chunk *chunk, char *filename) {
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
+    ObjFunction *func = newFunction(chunk, NULL, FUN_TYPE_TOP_LEVEL, NEWOBJ_FLAG_OLD);
     hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     frame->isCCall = false;
@@ -3482,7 +3489,7 @@ static void *vm_run_protect(void *arg) {
 InterpretResult loadScript(Chunk *chunk, char *filename) {
     ASSERT(chunk);
     CallFrame *oldFrame = getFrame();
-    push_EC();
+    push_EC(true);
     resetStack();
     VMExecContext *ectx = EC;
     EC->loadContext = true;
@@ -3492,7 +3499,7 @@ InterpretResult loadScript(Chunk *chunk, char *filename) {
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
-    ObjFunction *func = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
+    ObjFunction *func = newFunction(chunk, NULL, FUN_TYPE_TOP_LEVEL, NEWOBJ_FLAG_OLD);
     hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     frame->isCCall = false;
@@ -3519,11 +3526,14 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     CompileErr err = COMPILE_ERR_NONE;
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
     compilerOpts.noRemoveUnusedExpressions = true;
-    push_EC();
+    VMExecContext *old_ectx = EC;
+    push_EC(false);
     VMExecContext *ectx = EC;
     ectx->evalContext = true;
-    resetStack();
-    Chunk *chunk = compile_src(src, &err);
+    ectx->stack = oldFrame->slots;
+    ectx->stackTop = old_ectx->stackTop;
+    VM_DEBUG(1, "VM eval called in func '%s', ip: %d", callFrameName(oldFrame), oldFrame->ip-oldFrame->closure->function->chunk->code);
+    Chunk *chunk = compile_eval_src(src, &err, oldFrame->closure->function, oldFrame->ip);
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
     if (err != COMPILE_ERR_NONE || !chunk) {
@@ -3546,8 +3556,8 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     CallFrame *frame = pushFrame();
     frame->start = 0;
     frame->ip = chunk->code;
-    frame->slots = EC->stack;
-    ObjFunction *func = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
+    frame->slots = EC->stack; // old frame's slots
+    ObjFunction *func = newFunction(chunk, NULL, FUN_TYPE_EVAL, NEWOBJ_FLAG_OLD);
     hideFromGC(TO_OBJ(func));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     unhideFromGC(TO_OBJ(func));

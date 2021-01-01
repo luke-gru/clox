@@ -26,17 +26,33 @@ typedef enum {
 } CompileErr;
 
 typedef enum {
-    FUN_TYPE_NAMED = 1,
-    FUN_TYPE_ANON,
-    FUN_TYPE_INIT,
-    FUN_TYPE_METHOD,
-    FUN_TYPE_GETTER,
-    FUN_TYPE_SETTER,
-    FUN_TYPE_CLASS_METHOD,
-    // implementation detail, top-level is compiled as if it was a function
-    FUN_TYPE_TOP_LEVEL,
-    FUN_TYPE_BLOCK,
-} FunctionType;
+    COMPILE_SCOPE_MAIN=1,
+    COMPILE_SCOPE_FUNCTION,
+    COMPILE_SCOPE_IF,
+    COMPILE_SCOPE_WHILE,
+    COMPILE_SCOPE_FOREACH,
+    COMPILE_SCOPE_FOR,
+    COMPILE_SCOPE_TRY,
+    COMPILE_SCOPE_IN,
+    COMPILE_SCOPE_CLASS,
+    COMPILE_SCOPE_MODULE,
+} CompileScopeType;
+
+typedef struct Scope {
+    CompileScopeType type;
+    struct Scope *parent;
+    int line_start;
+    int line_end;
+    int bytecode_start;
+    int bytecode_end;
+} Scope;
+
+typedef struct LocalVariable {
+    struct ObjString *name;
+    Scope *scope;
+    int slot;
+    int bytecode_declare_start;
+} LocalVariable;
 
 typedef struct Local {
   // The name of the local variable.
@@ -93,13 +109,6 @@ typedef struct ClassCompiler {
 } ClassCompiler;
 
 
-typedef enum {
-    COMPILE_SCOPE_BLOCK = 1,
-    COMPILE_SCOPE_FUNCTION,
-    COMPILE_SCOPE_CLASS,
-    COMPILE_SCOPE_IN,
-    COMPILE_SCOPE_MODULE,
-} CompileScopeType;
 
 struct CallInfo; // fwd decl
 #define ITER_FLAG_NONE 0
@@ -139,9 +148,12 @@ typedef struct CompilerOpts {
 extern CompilerOpts compilerOpts;
 
 Chunk *compile_src(char *src, CompileErr *err);
+Chunk *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_t *ip_at);
 Chunk *compile_file(char *fname, CompileErr *err);
 
 void grayCompilerRoots(void);
+
+const char *compileScopeName(CompileScopeType stype);
 
 #ifdef __cplusplus
 }

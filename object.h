@@ -31,6 +31,21 @@ typedef enum ObjType {
   OBJ_T_LAST, // should never happen
 } ObjType;
 
+typedef enum {
+    FUN_TYPE_NAMED = 1,
+    FUN_TYPE_ANON,
+    FUN_TYPE_INIT,
+    FUN_TYPE_METHOD,
+    FUN_TYPE_GETTER,
+    FUN_TYPE_SETTER,
+    FUN_TYPE_CLASS_METHOD,
+    // implementation detail, top-level is compiled as if it was a function
+    FUN_TYPE_TOP_LEVEL,
+    // implementation detail, eval strings are compiled as if they are functions
+    FUN_TYPE_EVAL,
+    FUN_TYPE_BLOCK,
+} FunctionType;
+
 struct ObjAny; // fwd decls
 struct ObjString;
 struct CallFrame;
@@ -108,13 +123,17 @@ typedef struct ObjInternal {
   bool isRealObject; // is allocated in object heap
 } ObjInternal;
 
+
 typedef struct ObjFunction {
   Obj object;
   // NOTE: needs to be a value (non-pointer), as it's saved directly in the parent chunk as a constant value
   // and needs to be read by the VM
   Chunk *chunk;
+  FunctionType ftype;
   struct ObjString *name;
   Table localsTable; // maps variable names to slot indices
+  vec_void_t scopes;
+  vec_void_t variables;
   Obj *klass; // ObjClass* or ObjModule* (if method)
   struct sNode *funcNode;
   struct Upvalue *upvaluesInfo;
@@ -585,7 +604,7 @@ Obj *blockCallableBlock(Value blk); // returns Function/ObjNative
 ObjInstance *getBlockArg(struct CallFrame *frame);
 
 // Object creation functions
-ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, int flags);
+ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, FunctionType ftype, int flags);
 ObjClass *newClass(ObjString *name, ObjClass *superclass, int flags);
 ObjModule *newModule(ObjString *name, int flags);
 ObjIClass *newIClass(ObjClass *klass, ObjModule *mod, int flags);

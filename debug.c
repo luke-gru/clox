@@ -274,6 +274,19 @@ static void disassembleCatchTbl(ObjString *buf, CatchTable *tbl) {
     pushCString(buf, "-- /catch table --\n", 19);
 }
 
+void printFunctionTables(FILE *f, ObjFunction *func) {
+  fprintf(f, "--local table--\n");
+  LocalVariable *var; int idx = 0;
+  vec_foreach(&func->variables, var, idx) {
+      char *name = var->name->chars;
+      const char *scope_name = compileScopeName(var->scope->type);
+      int slot = var->slot;
+      fprintf(f, "%s: %d (%s [%d-%d])\n", name, slot, scope_name,
+          var->bytecode_declare_start, var->scope->bytecode_end);
+  }
+  fprintf(f, "-/local table--\n");
+}
+
 /**
  * Print all operations and operands to the console.
  */
@@ -296,6 +309,7 @@ void printDisassembledChunk(FILE *f, Chunk *chunk, const char *name) {
     vec_foreach(&funcs, func, i) {
         char *name = func->name ? func->name->chars : (char*)"(anon)";
         fprintf(f, "-- Function %s --\n", name);
+        printFunctionTables(f, func);
         printDisassembledChunk(f, func->chunk, name);
         fprintf(f, "----\n");
     }

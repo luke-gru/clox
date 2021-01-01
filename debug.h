@@ -20,6 +20,7 @@ extern "C" {
 typedef vec_t(ObjFunction*) vec_funcp_t;
 
 void printDisassembledChunk(FILE *f, Chunk *chunk, const char *name);
+void printFunctionTables(FILE *f, ObjFunction *func);
 int  printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *funcs);
 // Relies on program being build with -rdynamic for seeing function names (see man 3 backtrace)
 void printCBacktrace(void);

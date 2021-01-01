@@ -23,12 +23,17 @@
 #define COMP_TRACE(...) compiler_trace_debug(__VA_ARGS__)
 #endif
 
-static const char *compileScopeName(CompileScopeType stype) {
+const char *compileScopeName(CompileScopeType stype) {
     switch (stype) {
-    case COMPILE_SCOPE_BLOCK: return "SCOPE_BLOCK"; // in a { } block, NOT language-level function 'block'
+    case COMPILE_SCOPE_MAIN: return "SCOPE_MAIN"; // in a { } block, NOT language-level function 'block'
     case COMPILE_SCOPE_FUNCTION: return "SCOPE_FUNCTION";
-    case COMPILE_SCOPE_CLASS: return "SCOPE_CLASS";
+    case COMPILE_SCOPE_IF: return "SCOPE_IF";
+    case COMPILE_SCOPE_WHILE: return "SCOPE_WHILE";
+    case COMPILE_SCOPE_FOREACH: return "SCOPE_FOREACH";
+    case COMPILE_SCOPE_FOR: return "SCOPE_FOR";
+    case COMPILE_SCOPE_TRY: return "SCOPE_TRY";
     case COMPILE_SCOPE_IN: return "SCOPE_IN";
+    case COMPILE_SCOPE_CLASS: return "SCOPE_CLASS";
     case COMPILE_SCOPE_MODULE: return "SCOPE_MODULE";
     default: {
         UNREACHABLE("invalid scope type: %d", stype);
@@ -55,6 +60,7 @@ static int nodeDepth = 0;
 static int nodeWidth = -1;
 static int blockDepth = 0;
 static bool breakBlock = false;
+static Scope *curScope = NULL;
 
 CompilerOpts compilerOpts; // [external]
 
@@ -202,7 +208,18 @@ static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
 
 // blocks (`{}`) push new scopes
 static void pushScope(CompileScopeType stype) {
+    ObjFunction *func = current->function;
+    Scope *s = xcalloc(1, sizeof(Scope));
+    ASSERT_MEM(s);
+    s->type = stype;
+    s->line_start = curTok ? curTok->line : 0;
+    s->line_end = -1;
+    s->parent = curScope;
+    s->bytecode_start = current->iseq.byteCount;
+    s->bytecode_end = -1;
+    vec_push(&func->scopes, s);
     current->scopeDepth++;
+    curScope = s;
     COMP_TRACE("pushScope: %s (depth=%d)", compileScopeName(stype), current->scopeDepth);
 }
 
@@ -254,9 +271,12 @@ static void popScope(CompileScopeType stype) {
         }
         current->localCount--;
     }
-    if (stype == COMPILE_SCOPE_FUNCTION) {
+    if (stype == COMPILE_SCOPE_FUNCTION || stype == COMPILE_SCOPE_MAIN) {
         emitReturn(current);
     }
+    curScope->bytecode_end = currentIseq()->byteCount;
+    curScope->line_end = curTok ? curTok->line : 0;
+    curScope = curScope->parent;
     current->scopeDepth--;
 }
 
@@ -771,7 +791,7 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
 static ObjFunction *endCompiler() {
     COMP_TRACE("endCompiler");
     ASSERT(current);
-    if (current->type == FUN_TYPE_TOP_LEVEL) {
+    if (current->type == FUN_TYPE_TOP_LEVEL || current->type == FUN_TYPE_EVAL) {
         emitLeave();
     }
     ObjFunction *func = current->function;
@@ -935,9 +955,18 @@ static int addLocal(Token name) {
         .name = name,
         .depth = current->scopeDepth,
     };
-    current->locals[current->localCount] = local;
+    int slot = current->localCount;
+    current->locals[slot] = local;
     current->localCount++;
-    return current->localCount-1;
+    LocalVariable *var = xcalloc(1, sizeof(LocalVariable));
+    ASSERT_MEM(var);
+    var->name = copyString(tokStr(&name), strlen(tokStr(&name)), NEWOBJ_FLAG_OLD);
+    var->scope = curScope;
+    var->slot = slot;
+    var->bytecode_declare_start = currentIseq()->byteCount;
+    ObjFunction *func = currentFunction();
+    vec_push(&func->variables, var);
+    return slot;
 }
 
 static int addFakeLocal() {
@@ -1031,7 +1060,7 @@ static void initCompiler(
     compiler->enclosing = current;
     compiler->localCount = 0; // NOTE: below, this is increased to 1
     compiler->scopeDepth = scopeDepth;
-    compiler->function = newFunction(chunk, NULL, NEWOBJ_FLAG_OLD);
+    compiler->function = newFunction(chunk, NULL, ftype, NEWOBJ_FLAG_OLD);
     initIseq(&compiler->iseq);
     compiler->iseq.constants = compiler->function->chunk->constants;
     hideFromGC(TO_OBJ(compiler->function)); // TODO: figure out way to unhide these functions on freeVM()
@@ -1097,15 +1126,65 @@ static void initCompiler(
         if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
                 ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
                 ftype == FUN_TYPE_CLASS_METHOD) {
-            local->name.start = "";
+            local->name.start = ""; // represents `this`
             local->name.length = 0;
         } else {
-            // In a function, it holds the function, but cannot be referenced, so has
+            // In a function, it holds the function object, but cannot be referenced, so has
             // no name.
             local->name.start = "";
             local->name.length = 0;
         }
     }
+    COMP_TRACE("/initCompiler");
+}
+
+// Initializes a new compiler for a function, and sets it as the `current`
+// function compiler.
+static void initEvalCompiler(
+    Compiler *compiler, // new compiler
+    ObjFunction *in_func,
+    uint8_t *ip_at
+) {
+    COMP_TRACE("initCompiler");
+    memset(compiler, 0, sizeof(*compiler));
+    vec_init(&compiler->v_errMessages);
+    compiler->enclosing = NULL;
+    compiler->localCount = 0; // NOTE: below, this is increased to whatever it needs to be
+    compiler->scopeDepth = 0;
+    compiler->function = newFunction(NULL, NULL, FUN_TYPE_EVAL, NEWOBJ_FLAG_OLD);
+    initIseq(&compiler->iseq);
+    compiler->iseq.constants = compiler->function->chunk->constants;
+    hideFromGC(TO_OBJ(compiler->function)); // TODO: figure out way to unhide these functions on freeVM()
+    compiler->type = FUN_TYPE_EVAL;
+    compiler->hadError = false;
+    initTable(&compiler->constTbl);
+
+    current = compiler;
+    current->function->name = NULL;
+
+    // The first local variable slot is always implicitly declared, unless
+    // we're in the function representing the top-level (main).
+    if (in_func->ftype != FUN_TYPE_TOP_LEVEL) {
+        Local *local = &current->locals[current->localCount++];
+        local->depth = current->scopeDepth;
+        local->isUpvalue = false;
+        if (in_func->ftype == FUN_TYPE_METHOD || in_func->ftype == FUN_TYPE_INIT ||
+                in_func->ftype == FUN_TYPE_GETTER || in_func->ftype == FUN_TYPE_SETTER ||
+                in_func->ftype == FUN_TYPE_CLASS_METHOD) {
+            local->name.start = ""; // represents `this`
+            local->name.length = 0;
+        } else {
+            // In a function, it holds the function object, but cannot be referenced, so has
+            // no name.
+            local->name.start = "";
+            local->name.length = 0;
+        }
+    }
+
+    Local *local = &current->locals[current->localCount++];
+    local->name.start = "a";
+    local->name.length = 1;
+
     COMP_TRACE("/initCompiler");
 }
 
@@ -1279,8 +1358,12 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     Compiler fCompiler;
     int scopeDepth = current->scopeDepth;
     initCompiler(&fCompiler, scopeDepth, ftype, &n->tok, NULL);
+    CompileScopeType stype = COMPILE_SCOPE_FUNCTION;
 
-    pushScope(COMPILE_SCOPE_FUNCTION); // this scope holds the local variable parameters
+    if (ftype == FUN_TYPE_TOP_LEVEL) {
+      stype = COMPILE_SCOPE_MAIN;
+    }
+    pushScope(stype);
     ObjFunction *func = fCompiler.function;
     ASSERT(func);
     func->funcNode = n;
@@ -1358,7 +1441,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
         blockDepth--;
         breakBlock = oldBreakBlock;
     }
-    popScope(COMPILE_SCOPE_FUNCTION);
+    popScope(stype);
     func = endCompiler();
     ASSERT(func->chunk);
 
@@ -1686,6 +1769,7 @@ static void emitNode(Node *n) {
     case IF_STMT: {
         emitNode(n->children->data[0]); // condition
         Insn *ifJumpStart = emitJump(OP_JUMP_IF_FALSE);
+        pushScope(COMPILE_SCOPE_IF);
         emitNode(n->children->data[1]); // then branch
         Node *elseNode = NULL;
         if (n->children->length > 2) {
@@ -1699,6 +1783,7 @@ static void emitNode(Node *n) {
             emitNode(elseNode);
             patchJump(elseJump, -1, NULL);
         }
+        popScope(COMPILE_SCOPE_IF);
         break;
     }
     case WHILE_STMT: {
@@ -1717,6 +1802,7 @@ static void emitNode(Node *n) {
         whileJumpStart->isLabel = true;
         eLoopType oldLoopType = curLoopType;
         curLoopType = LOOP_T_WHILE;
+        pushScope(COMPILE_SCOPE_WHILE);
         emitNode(n->children->data[1]); // while block
         curLoopType = oldLoopType;
         loopLabel->jumpTo = whileJumpStart;
@@ -1726,10 +1812,11 @@ static void emitNode(Node *n) {
         patchBreaks(whileJumpStart, currentIseq()->tail, 1);
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
+        popScope(COMPILE_SCOPE_WHILE);
         break;
     }
     case FOR_STMT: {
-        pushScope(COMPILE_SCOPE_BLOCK);
+        pushScope(COMPILE_SCOPE_FOR);
         Node *init = vec_first(n->children);
         if (init) {
             emitNode(init);
@@ -1758,14 +1845,13 @@ static void emitNode(Node *n) {
         emitLoop(beforeTest);
         patchJump(forJump, -1, NULL);
         patchBreaks(forJump, currentIseq()->tail, 1);
-        popScope(COMPILE_SCOPE_BLOCK);
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
+        popScope(COMPILE_SCOPE_FOR);
         break;
     }
-    // FIXME: support breaks in foreach!
     case FOREACH_STMT: {
-        pushScope(COMPILE_SCOPE_BLOCK);
+        pushScope(COMPILE_SCOPE_FOREACH);
         vec_byte_t v_slots;
         vec_init(&v_slots);
         int numVars = n->children->length - 2;
@@ -1816,7 +1902,7 @@ static void emitNode(Node *n) {
             emitOp0(OP_POP); // pop the iterator value array, for unpack
         }
         emitLoop(beforeIterNext);
-        popScope(COMPILE_SCOPE_BLOCK);
+        popScope(COMPILE_SCOPE_FOREACH);
         patchJump(iterDone, -1, NULL);
         patchBreaks(beforeForeach, currentIseq()->tail, 0);
         emitOp0(OP_POP); // pop the iterator value
@@ -1848,7 +1934,6 @@ static void emitNode(Node *n) {
                 emitOp0(OP_POP);
             }
             emitOp0(OP_BLOCK_CONTINUE);
-        // TODO: use tag like lastLoop enum { FOREACH, FOR, WHILE }
         } else if (curLoopType == LOOP_T_FOREACH) {
             Insn *in = emitJump(OP_JUMP);
             in->flags = INSN_FL_CONTINUE;
@@ -1947,10 +2032,8 @@ static void emitNode(Node *n) {
         break;
     }
     case BLOCK_STMT: {
-        pushScope(COMPILE_SCOPE_BLOCK);
         ASSERT(n->children);
         emitChildren(n); // 1 child, list of statements
-        popScope(COMPILE_SCOPE_BLOCK);
         break;
     }
     case FUNCTION_STMT: {
@@ -2146,7 +2229,7 @@ static void emitNode(Node *n) {
                             iseq, ifrom, ito,
                             itarget, OBJ_VAL(className)
                             );
-                    pushScope(COMPILE_SCOPE_BLOCK);
+                    pushScope(COMPILE_SCOPE_TRY);
                     // given variable expression to bind to (Ex: (catch Error err))
                     if (catchStmt->children->length > 2) {
                         uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
@@ -2169,7 +2252,7 @@ static void emitNode(Node *n) {
                             vec_push(&vjumps, jumpStart);
                         }
                     }
-                    popScope(COMPILE_SCOPE_BLOCK);
+                    popScope(COMPILE_SCOPE_TRY);
                 } else { // ensure or else stmt
                     if (catchStmt->type.kind == TRY_ELSE_STMT) {
                         ASSERT(jumpToEnd);
@@ -2178,9 +2261,9 @@ static void emitNode(Node *n) {
                         jumpToEnd = NULL;
                         tryElseStmt = catchStmt;
                         ASSERT(tryElseStmt->type.kind == TRY_ELSE_STMT);
-                        pushScope(COMPILE_SCOPE_BLOCK);
+                        pushScope(COMPILE_SCOPE_TRY);
                         emitNode(vec_last(tryElseStmt->children)); // else block
-                        popScope(COMPILE_SCOPE_BLOCK);
+                        popScope(COMPILE_SCOPE_TRY);
                     } else { // ensure
                         ensureStmt = catchStmt;
                         ASSERT(ensureStmt->type.kind == ENSURE_STMT);
@@ -2191,10 +2274,10 @@ static void emitNode(Node *n) {
                         vec_clear(&vjumps);
                         double catchTblRowIdx = iseqAddEnsureRow(iseq, ifrom, ito, itarget);
                         uint8_t rethrowIfArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
-                        pushScope(COMPILE_SCOPE_BLOCK);
+                        pushScope(COMPILE_SCOPE_TRY);
                         emitNode(vec_last(ensureStmt->children)); // ensure block
                         emitOp1(OP_RETHROW_IF_ERR, rethrowIfArg);
-                        popScope(COMPILE_SCOPE_BLOCK);
+                        popScope(COMPILE_SCOPE_TRY);
                     }
                 }
             }
@@ -2258,6 +2341,51 @@ Chunk *compile_src(char *src, CompileErr *err) {
     emitNode(program);
     ObjFunction *prog = endCompiler();
     if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
+        printFunctionTables(stderr, prog);
+        printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
+    }
+    if (mainCompiler.hadError) {
+        outputCompilerErrors(&mainCompiler, stderr);
+        freeCompiler(&mainCompiler, true);
+        *err = COMPILE_ERR_SEMANTICS;
+        return NULL;
+    } else {
+        *err = COMPILE_ERR_NONE;
+        ASSERT(prog->chunk);
+        return prog->chunk;
+    }
+}
+
+Chunk *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_t *ip_at) {
+    initScanner(&scanner, src);
+    Parser p;
+    initParser(&p);
+    Node *program = parse(&p);
+    freeScanner(&scanner);
+    if (CLOX_OPTION_T(parseOnly)) {
+        *err = p.hadError ? COMPILE_ERR_SYNTAX :
+            COMPILE_ERR_NONE;
+        if (p.hadError) {
+            outputParserErrors(&p, stderr);
+            freeParser(&p);
+            return NULL;
+        }
+        return 0;
+    } else if (p.hadError) {
+        outputParserErrors(&p, stderr);
+        freeParser(&p); // TODO: throw SyntaxError
+        *err = COMPILE_ERR_SYNTAX;
+        return NULL;
+    }
+    ASSERT(program);
+    freeParser(&p);
+    Compiler mainCompiler;
+    top = &mainCompiler;
+    initEvalCompiler(&mainCompiler, func_in, ip_at);
+    emitNode(program);
+    ObjFunction *prog = endCompiler();
+    if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
+        printFunctionTables(stderr, prog);
         printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
     }
     if (mainCompiler.hadError) {
