@@ -2042,9 +2042,9 @@ static void emitNode(Node *n) {
     }
     case BLOCK_STMT: {
         ASSERT(n->children);
-        /*pushScope(COMPILE_SCOPE_BLOCK);*/
+        pushScope(COMPILE_SCOPE_BLOCK);
         emitChildren(n); // 1 child, list of statements
-        /*popScope(COMPILE_SCOPE_BLOCK);*/
+        popScope(COMPILE_SCOPE_BLOCK);
         break;
     }
     case FUNCTION_STMT: {

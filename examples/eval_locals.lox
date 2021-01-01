@@ -1,0 +1,18 @@
+var a = 1; // global
+fun func() {
+    var a = 2; // slot 1
+    eval("print a;");
+    if (true) {
+        var b = 4;
+        eval("print b;");
+    }
+    print "wow";
+}
+
+func();
+
+__END__
+-- expect: --
+2
+4
+wow
