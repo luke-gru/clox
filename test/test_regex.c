@@ -3,7 +3,7 @@
 #include "debug.h"
 #include "vm.h"
 
-int test_compile_empty(void) {
+static int test_compile_empty(void) {
     Regex re;
     regex_init(&re, "", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -13,7 +13,7 @@ cleanup:
     return 0;
 }
 
-int test_match_empty(void) {
+static int test_match_empty(void) {
     Regex re;
     regex_init(&re, "", NULL);
     (void)regex_compile(&re);
@@ -25,7 +25,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_only_atoms_success(void) {
+static int test_compile_only_atoms_success(void) {
     Regex re;
     regex_init(&re, "abba", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -36,7 +36,7 @@ cleanup:
     return 0;
 }
 
-int test_match_only_atoms_success(void) {
+static int test_match_only_atoms_success(void) {
     Regex re;
     regex_init(&re, "abba", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -50,7 +50,7 @@ cleanup:
     return 0;
 }
 
-int test_match_only_atoms_nomatch(void) {
+static int test_match_only_atoms_nomatch(void) {
     Regex re;
     regex_init(&re, "abba", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -62,7 +62,7 @@ cleanup:
     return 0;
 }
 
-int test_match_only_atoms_with_alts_success(void) {
+static int test_match_only_atoms_with_alts_success(void) {
     Regex re;
     regex_init(&re, "ab(b|a)", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -77,7 +77,7 @@ cleanup:
     return 0;
 }
 
-int test_match_only_atoms_with_alts_no_parens_success(void) {
+static int test_match_only_atoms_with_alts_no_parens_success(void) {
     Regex re;
     regex_init(&re, "abcd|abce", NULL);
     // = ((|(abcde)(abce)))
@@ -93,7 +93,7 @@ cleanup:
     return 0;
 }
 
-int test_match_only_atoms_with_alts_no_parens_repeat_success(void) {
+static int test_match_only_atoms_with_alts_no_parens_repeat_success(void) {
     Regex re;
     regex_init(&re, "abcd|abce*", NULL);
     // = ((|(abcde)(abce)))
@@ -109,7 +109,7 @@ cleanup:
     return 0;
 }
 
-int test_match_only_atoms_with_2_alts_success(void) {
+static int test_match_only_atoms_with_2_alts_success(void) {
     Regex re;
     regex_init(&re, "ab(b|a|c)", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -124,7 +124,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_simple_group(void) {
+static int test_compile_simple_group(void) {
     Regex re;
     regex_init(&re, "(ab)", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -135,7 +135,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_nested_groups(void) {
+static int test_compile_nested_groups(void) {
     Regex re;
     regex_init(&re, "(ab(cd|e))", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -146,7 +146,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_error_unclosed_group(void) {
+static int test_compile_error_unclosed_group(void) {
     Regex re;
     regex_init(&re, "(ab(cd|e)", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -156,7 +156,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_repeat(void) {
+static int test_compile_repeat(void) {
     Regex re;
     regex_init(&re, "ab+", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -167,7 +167,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_repeat2(void) {
+static int test_compile_repeat2(void) {
     Regex re;
     regex_init(&re, "a+", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -179,7 +179,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_repeat_z(void) {
+static int test_compile_repeat_z(void) {
     Regex re;
     regex_init(&re, "ab*", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -190,7 +190,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_repeat_z2(void) {
+static int test_compile_repeat_z2(void) {
     Regex re;
     regex_init(&re, "a*", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -202,7 +202,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_repeat_group(void) {
+static int test_compile_repeat_group(void) {
     Regex re;
     regex_init(&re, "(ab)*", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -213,7 +213,7 @@ cleanup:
     return 0;
 }
 
-int test_match_repeat_simple(void) {
+static int test_match_repeat_simple(void) {
     Regex re;
     regex_init(&re, "ab+", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -227,7 +227,7 @@ cleanup:
     return 0;
 }
 
-int test_match_repeat_z_simple(void) {
+static int test_match_repeat_z_simple(void) {
     Regex re;
     regex_init(&re, "ab*", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -241,7 +241,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_character_class(void) {
+static int test_compile_character_class(void) {
     Regex re;
     regex_init(&re, "[ab]", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -252,7 +252,7 @@ cleanup:
     return 0;
 }
 
-int test_match_character_class_simple(void) {
+static int test_match_character_class_simple(void) {
     Regex re;
     regex_init(&re, "[ab]", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -266,7 +266,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_dot(void) {
+static int test_compile_dot(void) {
     Regex re;
     regex_init(&re, ".", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -277,7 +277,7 @@ cleanup:
     return 0;
 }
 
-int test_match_dot(void) {
+static int test_match_dot(void) {
     Regex re;
     regex_init(&re, ".", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -292,7 +292,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_repeat_n(void) {
+static int test_compile_repeat_n(void) {
     Regex re;
     regex_init(&re, "a.{3}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -304,7 +304,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_repeat_n2(void) {
+static int test_compile_repeat_n2(void) {
     Regex re;
     regex_init(&re, ".{3}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -316,7 +316,7 @@ cleanup:
     return 0;
 }
 
-int test_match_repeat_n(void) {
+static int test_match_repeat_n(void) {
     Regex re;
     regex_init(&re, "a.{3}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -330,7 +330,7 @@ cleanup:
 }
 
 
-int test_match_escapes(void) {
+static int test_match_escapes(void) {
     Regex re;
     regex_init(&re, "\\s*\\d{3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -344,7 +344,7 @@ cleanup:
     return 0;
 }
 
-int test_match_cclass_ranges(void) {
+static int test_match_cclass_ranges(void) {
     Regex re;
     regex_init(&re, "[a-zA-Z]{3}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -358,7 +358,7 @@ cleanup:
     return 0;
 }
 
-int test_match_cclass_hyphen(void) {
+static int test_match_cclass_hyphen(void) {
     Regex re;
     regex_init(&re, "[_-]", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -372,7 +372,7 @@ cleanup:
     return 0;
 }
 
-int test_match_cclass_close_bracket(void) {
+static int test_match_cclass_close_bracket(void) {
     Regex re;
     regex_init(&re, "[\\]]", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -386,7 +386,7 @@ cleanup:
     return 0;
 }
 
-int test_match_eclass_in_cclass(void) {
+static int test_match_eclass_in_cclass(void) {
     Regex re;
     regex_init(&re, "[\\d]{2}", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -400,7 +400,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_line_anchors(void) {
+static int test_compile_line_anchors(void) {
     Regex re;
     regex_init(&re, "^hi$", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -411,7 +411,7 @@ cleanup:
     return 0;
 }
 
-int test_match_bol_anchor(void) {
+static int test_match_bol_anchor(void) {
     Regex re;
     regex_init(&re, "^hi", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -425,7 +425,7 @@ cleanup:
     return 0;
 }
 
-int test_match_bol_anchor_at_line(void) {
+static int test_match_bol_anchor_at_line(void) {
     Regex re;
     regex_init(&re, "^hi", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -439,7 +439,7 @@ cleanup:
     return 0;
 }
 
-int test_nomatch_bol_anchor(void) {
+static int test_nomatch_bol_anchor(void) {
     Regex re;
     regex_init(&re, "^hi", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -452,7 +452,7 @@ cleanup:
     return 0;
 }
 
-int test_match_bos_anchor(void) {
+static int test_match_bos_anchor(void) {
     Regex re;
     regex_init(&re, "\\Ahi", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -466,7 +466,7 @@ cleanup:
     return 0;
 }
 
-int test_nomatch_bos_anchor(void) {
+static int test_nomatch_bos_anchor(void) {
     Regex re;
     regex_init(&re, "\\Ahi", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -479,7 +479,7 @@ cleanup:
     return 0;
 }
 
-int test_match_eol_anchor(void) {
+static int test_match_eol_anchor(void) {
     Regex re;
     regex_init(&re, "hi$", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -493,7 +493,7 @@ cleanup:
     return 0;
 }
 
-int test_match_eol_anchor_at_line(void) {
+static int test_match_eol_anchor_at_line(void) {
     Regex re;
     regex_init(&re, "hi$", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -507,7 +507,7 @@ cleanup:
     return 0;
 }
 
-int test_nomatch_eol_anchor(void) {
+static int test_nomatch_eol_anchor(void) {
     Regex re;
     regex_init(&re, "hi$", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -520,7 +520,7 @@ cleanup:
     return 0;
 }
 
-int test_match_eos_anchor(void) {
+static int test_match_eos_anchor(void) {
     Regex re;
     regex_init(&re, "hi\\Z", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -534,7 +534,7 @@ cleanup:
     return 0;
 }
 
-int test_nomatch_eos_anchor(void) {
+static int test_nomatch_eos_anchor(void) {
     Regex re;
     regex_init(&re, "hi\\Z", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -547,7 +547,7 @@ cleanup:
     return 0;
 }
 
-int test_compile_string_anchors(void) {
+static int test_compile_string_anchors(void) {
     Regex re;
     regex_init(&re, "\\Ahi\\Z", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -558,7 +558,7 @@ cleanup:
     return 0;
 }
 
-int test_capture_groups_nodes(void) {
+static int test_capture_groups_nodes(void) {
     Regex re;
     regex_init(&re, "(hi)", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -581,7 +581,7 @@ cleanup:
     return 0;
 }
 
-int test_capture_groups_nodes_with_nonatom(void) {
+static int test_capture_groups_nodes_with_nonatom(void) {
     Regex re;
     regex_init(&re, "([hi])", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -599,7 +599,7 @@ cleanup:
     return 0;
 }
 
-int test_capture_groups_nodes_with_nonatom2(void) {
+static int test_capture_groups_nodes_with_nonatom2(void) {
     Regex re;
     regex_init(&re, "GET ([\\w/]+) HTTP", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -617,7 +617,7 @@ cleanup:
     return 0;
 }
 
-int test_capture_groups_nodes_with_nonatom3(void) {
+static int test_capture_groups_nodes_with_nonatom3(void) {
     Regex re;
     regex_init(&re, "GET ([\\w/.]+) HTTP", NULL);
     RegexCompileResult comp_res = regex_compile(&re);
@@ -630,6 +630,70 @@ int test_capture_groups_nodes_with_nonatom3(void) {
     T_ASSERT_EQ(NODE_GROUP, re.groups->group->type);
     T_ASSERT_EQ(str+4, re.groups->group->capture_beg);
     T_ASSERT_EQ(str+13, re.groups->group->capture_end);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+static int test_repeat_maximal_munch(void) {
+    Regex re;
+    regex_init(&re, "(.+)hi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    char *str = "wowhihihi";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(9, mdata.match_len);
+    T_ASSERT_EQ(NODE_GROUP, re.groups->group->type);
+    T_ASSERT_EQ(str+0, re.groups->group->capture_beg);
+    T_ASSERT_EQ(str+7, re.groups->group->capture_end);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+static int test_repeat_nomatch_if_next_not_matched(void) {
+    Regex re;
+    regex_init(&re, "(.+)hi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    char *str = "wowhello";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT_EQ(false, mdata.matched);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+static int test_repeatz_maximal_munch(void) {
+    Regex re;
+    regex_init(&re, "(.*)hi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    char *str = "wowhihihi";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(9, mdata.match_len);
+    T_ASSERT_EQ(NODE_GROUP, re.groups->group->type);
+    T_ASSERT_EQ(str+0, re.groups->group->capture_beg);
+    T_ASSERT_EQ(str+7, re.groups->group->capture_end);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+static int test_repeatz_nomatch_if_next_not_matched(void) {
+    Regex re;
+    regex_init(&re, "(.*)hi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    char *str = "wowhello";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT_EQ(false, mdata.matched);
 cleanup:
     regex_free(&re);
     return 0;
@@ -687,5 +751,9 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_capture_groups_nodes_with_nonatom);
     RUN_TEST(test_capture_groups_nodes_with_nonatom2);
     RUN_TEST(test_capture_groups_nodes_with_nonatom3);
+    RUN_TEST(test_repeat_maximal_munch);
+    RUN_TEST(test_repeat_nomatch_if_next_not_matched);
+    RUN_TEST(test_repeatz_maximal_munch);
+    RUN_TEST(test_repeatz_nomatch_if_next_not_matched);
     END_TESTS();
 }

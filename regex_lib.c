@@ -598,7 +598,17 @@ void regex_output_ast(Regex *regex) {
     regex_output_ast_node(regex->node, NULL, 0);
 }
 
-static RNode *NEXT_NODE(RNode *node, char **cptr_p) {
+static RNode *GET_NEXT_NODE(RNode *node) {
+    ASSERT(node);
+    if (node->next) {
+        return node->next;
+    } else {
+        return node->parent ? node->parent->next : NULL;
+    }
+}
+
+static RNode *SET_NEXT_NODE(RNode *node, char **cptr_p) {
+    ASSERT(node);
     if (node->next) {
         return node->next;
     } else {
@@ -608,6 +618,8 @@ static RNode *NEXT_NODE(RNode *node, char **cptr_p) {
     }
     return node->parent->next;
 }
+
+static bool regex_part_match_beg(RNode *node, const char *string);
 
 static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
     DBG_ASSERT(node);
@@ -656,7 +668,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
             ASSERT(node->tok);
             if (node->tok[0] == **cptr_p) {
                 (*cptr_p)++;
-                *nnext = NEXT_NODE(node, cptr_p);
+                *nnext = SET_NEXT_NODE(node, cptr_p);
                 return true;
             } else {
                 return false;
@@ -707,21 +719,61 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
             int count = 0;
             RNode *child = node->children;
             RNode *parent = node;
+            RNode *next = GET_NEXT_NODE(node);
+            char *before = *cptr_p;
+            char *biggest_pre_next_match = NULL;
             while (node_accepts_ch(child, parent, cptr_p, nnext)) {
+                if (next) {
+                    regex_debug(1, "has next");
+                    if (regex_part_match_beg(next, *cptr_p)) {
+                        biggest_pre_next_match = *cptr_p;
+                        regex_debug(1, "matched next: '%s'", biggest_pre_next_match);
+                    }
+                }
                 count += 1;
             }
             if (count >= 1) {
-                *nnext = NEXT_NODE(node, cptr_p);
+                if (next && !biggest_pre_next_match) {
+                    *cptr_p = before;
+                    regex_debug(1, "resetting cptr_p: '%s'", *cptr_p);
+                    return false;
+                } else if (next && biggest_pre_next_match) {
+                    *cptr_p = biggest_pre_next_match;
+                    regex_debug(1, "setting cptr_p: '%s'", *cptr_p);
+                }
+                char *after = *cptr_p;
+                regex_debug(1, "Matched REPEAT (+) for '%.*s'", after-before, before);
+                *nnext = SET_NEXT_NODE(node, cptr_p);
                 return true;
+            } else {
+                return false;
             }
-            return false;
         }
         case NODE_REPEAT_Z: {
             RNode *child = node->children;
             RNode *parent = node;
+            RNode *next = GET_NEXT_NODE(node); // after *
+            char *before = *cptr_p;
+            char *biggest_pre_next_match = NULL;
             while (node_accepts_ch(child, parent, cptr_p, nnext)) {
+              if (next) {
+                  regex_debug(1, "has next");
+                  if (regex_part_match_beg(next, *cptr_p)) {
+                      biggest_pre_next_match = *cptr_p;
+                      regex_debug(1, "matched next: '%s'", biggest_pre_next_match);
+                  }
+              }
             }
-            *nnext = NEXT_NODE(node, cptr_p);
+            if (next && !biggest_pre_next_match) { // matched nothing
+                *cptr_p = before;
+                regex_debug(1, "resetting cptr_p: '%s'", *cptr_p);
+            } else if (next && biggest_pre_next_match) {
+                *cptr_p = biggest_pre_next_match;
+                regex_debug(1, "setting cptr_p: '%s'", *cptr_p);
+            }
+            char *after = *cptr_p;
+            regex_debug(1, "Matched REPEAT_Z (*) for '%.*s'", after-before, before);
+            *nnext = SET_NEXT_NODE(node, cptr_p);
             return true;
         }
         case NODE_REPEAT_N: {
@@ -740,7 +792,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 }
             }
             if (accepted) {
-                *nnext = NEXT_NODE(node, cptr_p);
+                *nnext = SET_NEXT_NODE(node, cptr_p);
             } else {
                 *cptr_p = start;
             }
@@ -751,7 +803,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
             RNode *parent = node;
             if (node_accepts_ch(child, parent, cptr_p, nnext)) {
             }
-            *nnext = NEXT_NODE(node, cptr_p);
+            *nnext = SET_NEXT_NODE(node, cptr_p);
             return true;
         }
         case NODE_CCLASS: {
@@ -767,7 +819,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                     if (rnext == '-' && (rend = *(start+2))) {
                         if (c >= rc && c <= rend) {
                             (*cptr_p)++;
-                            *nnext = NEXT_NODE(node, cptr_p);
+                            *nnext = SET_NEXT_NODE(node, cptr_p);
                             return true;
                         }
                         // skip over range chars
@@ -796,7 +848,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                         }
                         if (accepted) {
                             (*cptr_p)++;
-                            node = NEXT_NODE(node, cptr_p);
+                            node = SET_NEXT_NODE(node, cptr_p);
                             return true;
                         } else {
                             start += 2;
@@ -807,7 +859,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 }
                 if (rc == c) {
                     (*cptr_p)++;
-                    *nnext = NEXT_NODE(node, cptr_p);
+                    *nnext = SET_NEXT_NODE(node, cptr_p);
                     return true;
                 }
                 start++;
@@ -820,7 +872,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 case ECLASS_DIGIT: {
                     if (isdigit(**cptr_p)) {
                         (*cptr_p)++;
-                        *nnext = NEXT_NODE(node, cptr_p);
+                        *nnext = SET_NEXT_NODE(node, cptr_p);
                         return true;
                     }
                     return false;
@@ -828,7 +880,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 case ECLASS_WORD: {
                     if (isalpha(**cptr_p) || **cptr_p == '_') {
                         (*cptr_p)++;
-                        *nnext = NEXT_NODE(node, cptr_p);
+                        *nnext = SET_NEXT_NODE(node, cptr_p);
                         return true;
                     }
                     return false;
@@ -836,7 +888,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 case ECLASS_SPACE: {
                     if (isspace(**cptr_p)) {
                         (*cptr_p)++;
-                        *nnext = NEXT_NODE(node, cptr_p);
+                        *nnext = SET_NEXT_NODE(node, cptr_p);
                         return true;
                     }
                     return false;
@@ -846,15 +898,54 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 }
             }
         }
-        case NODE_DOT: {
+        case NODE_DOT: { // matches any char
+            regex_debug(1, "Matched DOT at %c", **cptr_p);
             (*cptr_p)++;
-            *nnext = NEXT_NODE(node, cptr_p);
+            *nnext = SET_NEXT_NODE(node, cptr_p);
             return true;
         }
         default:
             UNREACHABLE("node type");
             return false;
     }
+}
+
+static RNode *insert_bol_anchor(RNode *prev) {
+    RNode *anch = new_node(NODE_ANCHOR, "^", 1, NULL, NULL);
+    anch->next = prev;
+    prev->prev = anch;
+    return anch;
+}
+
+static RNode *dup_node(RNode *old) {
+    RNode *node = ALLOCATE(RNode, 1);
+    memcpy(node, old, sizeof(*node));
+    return node;
+}
+
+static RNode *new_program_node() {
+    return new_node(NODE_PROGRAM, NULL, 0, NULL, NULL);
+}
+
+static bool regex_part_match_beg(RNode *node, const char *string) {
+    Regex re;
+    regex_init_from(&re, string, NULL); /* HACK: this regex has no source pattern, just use match pattern as the source pattern */
+    RNode *beg = dup_node(node);
+    RNode *bol = insert_bol_anchor(beg);
+    RNode *program = new_program_node();
+    bol->parent = program;
+    beg->parent = program;
+    program->children = bol;
+    re.node = program;
+    MatchData md = regex_match(&re, string);
+    if (md.matched && md.match_start == 0 && md.match_len > 0) {
+        /*regex_output_ast_node(program, NULL, 0);*/
+        regex_debug(1, "regex_part_match matched for string: '%s'", string);
+        regex_debug(1, "regex_part_match matched %d %*.s", md.match_len,
+                md.match_len, string);
+        return true;
+    }
+    return false;
 }
 
 MatchData regex_match(Regex *regex, const char *string) {
