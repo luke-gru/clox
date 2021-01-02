@@ -1,0 +1,7 @@
+class A {
+    this.instanceEval("print this.inspect();");
+}
+
+__END__
+-- expect: --
+A

@@ -791,6 +791,23 @@ Value lxObjectGetObjectId(int argCount, Value *args) {
     return NUMBER_VAL((double)objId);
 }
 
+Value lxObjectInstanceEval(int argCount, Value *args) {
+    CHECK_ARITY("Object#instanceEval", 2, 2, argCount);
+    Value self = args[0];
+    Value src = args[1];
+    CHECK_ARG_IS_A(src, lxStringClass, 1);
+    char *csrc = VAL_TO_STRING(src)->chars;
+    if (strlen(csrc) == 0) {
+        return NIL_VAL;
+    }
+    LxThread *th = THREAD();
+    Obj *oldThis = th->thisObj;
+    th->thisObj = AS_OBJ(self);
+    Value ret = VMEval(csrc, "(eval)", 1);
+    th->thisObj = oldThis;
+    return ret;
+}
+
 // Creates a new object, with the same properties and hidden fields
 // var o = Object(); var o2 = o.dup();
 Value lxObjectDup(int argCount, Value *args) {

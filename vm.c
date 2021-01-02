@@ -165,6 +165,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(objClass, "hasSetter", lxObjectHasSetter);
     addNativeMethod(objClass, "respondsTo", lxObjectRespondsTo);
     addNativeMethod(objClass, "inspect", lxObjectInspect);
+    addNativeMethod(objClass, "instanceEval", lxObjectInstanceEval);
     addNativeGetter(objClass, "class", lxObjectGetClass);
     addNativeGetter(objClass, "singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
@@ -3072,6 +3073,9 @@ vmLoop:
           Value result = VM_POP(); // pop from caller's frame
           ASSERT(!getFrame()->isCCall);
           Value *newTop = getFrame()->slots;
+          if (getFrame()->isEval) {
+            newTop = getFrame()->slots+1;
+          }
           popFrame();
           EC->stackTop = newTop;
           VM_PUSH(result);

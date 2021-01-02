@@ -1,0 +1,11 @@
+class A {
+    meth() {
+      eval("print this;");
+    }
+}
+
+A().meth();
+
+__END__
+-- expect: --
+<instance A>

@@ -82,6 +82,7 @@ Value lxObjectInspect(int argCount, Value *args);
 Value lxObjectGetClass(int argCount, Value *args);
 Value lxObjectGetSingletonClass(int argCount, Value *args);
 Value lxObjectGetObjectId(int argCount, Value *args);
+Value lxObjectInstanceEval(int argCount, Value *args);
 extern ObjNative *nativeObjectInit;
 
 // class Module
