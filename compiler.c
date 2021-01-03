@@ -1206,6 +1206,64 @@ static void initEvalCompiler(
     COMP_TRACE("/initCompiler");
 }
 
+static void initBindingEvalCompiler(
+    Compiler *compiler, // new compiler
+    ObjScope *scope
+) {
+    COMP_TRACE("initCompiler");
+    memset(compiler, 0, sizeof(*compiler));
+    vec_init(&compiler->v_errMessages);
+    compiler->enclosing = NULL;
+    compiler->localCount = 0; // NOTE: below, this is increased to whatever it needs to be
+    if (scope->function->ftype == FUN_TYPE_TOP_LEVEL) {
+        compiler->scopeDepth = 0;
+    } else {
+        compiler->scopeDepth = 1;
+    }
+    compiler->function = newFunction(NULL, NULL, FUN_TYPE_EVAL, NEWOBJ_FLAG_OLD);
+    hideFromGC(TO_OBJ(compiler->function));
+    initIseq(&compiler->iseq);
+    compiler->iseq.constants = compiler->function->chunk->constants;
+    compiler->type = FUN_TYPE_EVAL;
+    compiler->hadError = false;
+    initTable(&compiler->constTbl);
+
+    current = compiler;
+    current->function->name = NULL;
+
+    // The first local variable slot is always implicitly declared, unless
+    // we're in the function representing the top-level (main).
+    if (scope->function->ftype != FUN_TYPE_TOP_LEVEL) {
+        Local *local = &current->locals[current->localCount++];
+        local->depth = current->scopeDepth;
+        local->isUpvalue = false;
+        int ftype = scope->function->ftype;
+        if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
+                ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
+                ftype == FUN_TYPE_CLASS_METHOD) {
+            compiler->function->hasReceiver = true;
+            local->name.start = ""; // represents `this`
+            local->name.length = 0;
+        } else {
+            // In a function, it holds the function object, but cannot be referenced, so has
+            // no name.
+            local->name.start = "";
+            local->name.length = 0;
+        }
+    }
+
+    Entry e; int varidx = 0;
+    TABLE_FOREACH(&scope->function->localsTable, e, varidx, {
+        Local *local = &current->locals[current->localCount++];
+        local->name.start = AS_CSTRING(e.key);
+        local->name.length = strlen(local->name.start);
+        local->depth = current->scopeDepth;
+        local->isUpvalue = false;
+    });
+
+    COMP_TRACE("/initCompiler");
+}
+
 // Define a declared variable in local or global scope (locals MUST be
 // declared before being defined)
 static void defineVariable(Token *name, uint8_t arg, bool checkDecl) {
@@ -2404,6 +2462,56 @@ ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, 
     initEvalCompiler(&mainCompiler, func_in, ip_at);
     CompileScopeType stype = COMPILE_SCOPE_FUNCTION;
     if (func_in->ftype == FUN_TYPE_TOP_LEVEL) {
+      stype = COMPILE_SCOPE_MAIN;
+    }
+    pushScope(stype);
+    emitNode(program);
+    popScope(stype);
+    ObjFunction *prog = endCompiler();
+    if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
+        printFunctionTables(stderr, prog);
+        printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
+    }
+    if (mainCompiler.hadError) {
+        outputCompilerErrors(&mainCompiler, stderr);
+        freeCompiler(&mainCompiler, true);
+        *err = COMPILE_ERR_SEMANTICS;
+        return NULL;
+    } else {
+        *err = COMPILE_ERR_NONE;
+        ASSERT(prog->chunk);
+        return prog;
+    }
+}
+
+ObjFunction *compile_binding_eval_src(char *src, CompileErr *err, ObjScope *scope) {
+    initScanner(&scanner, src);
+    Parser p;
+    initParser(&p);
+    Node *program = parse(&p);
+    freeScanner(&scanner);
+    if (CLOX_OPTION_T(parseOnly)) {
+        *err = p.hadError ? COMPILE_ERR_SYNTAX :
+            COMPILE_ERR_NONE;
+        if (p.hadError) {
+            outputParserErrors(&p, stderr);
+            freeParser(&p);
+            return NULL;
+        }
+        return 0;
+    } else if (p.hadError) {
+        outputParserErrors(&p, stderr);
+        freeParser(&p); // TODO: throw SyntaxError
+        *err = COMPILE_ERR_SYNTAX;
+        return NULL;
+    }
+    ASSERT(program);
+    freeParser(&p);
+    Compiler mainCompiler;
+    top = &mainCompiler;
+    initBindingEvalCompiler(&mainCompiler, scope);
+    CompileScopeType stype = COMPILE_SCOPE_FUNCTION;
+    if (scope->function->ftype == FUN_TYPE_TOP_LEVEL) {
       stype = COMPILE_SCOPE_MAIN;
     }
     pushScope(stype);

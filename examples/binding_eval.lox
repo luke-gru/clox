@@ -1,0 +1,11 @@
+fun makeb() {
+    var a = 3;
+    return Binding();
+}
+
+var b = makeb();
+b.eval("print a;");
+
+__END__
+-- expect: --
+3

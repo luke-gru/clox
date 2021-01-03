@@ -389,15 +389,18 @@ static bool rootVMLoopJumpBufSet = false;
 
 static int curLine = 1; // TODO: per thread
 
-// Add and use a new execution context
+// Add and use a new execution context. Execution contexts
+// hold the value stack.
 static inline void push_EC(bool allocateStack) {
     LxThread *th = vm.curThread;
     VMExecContext *ectx = ALLOCATE(VMExecContext, 1);
     memset(ectx, 0, sizeof(*ectx));
     initTable(&ectx->roGlobals);
+    ectx->frameCount = 0;
     if (allocateStack) {
       ectx->stack = ALLOCATE(Value, STACK_MAX);
       ectx->stackAllocated = true;
+      ectx->stackTop = ectx->stack;
     }
     vec_push(&th->v_ecs, ectx);
     th->ec = ectx; // EC = ectx
@@ -3595,12 +3598,93 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     }
 }
 
+static Value doVMBindingEval(ObjScope *scope, char *src, char *filename, int lineno, bool throwOnErr) {
+    CallFrame *oldFrame = getFrame();
+    CallFrame *prevFrame = oldFrame;
+    CompileErr err = COMPILE_ERR_NONE;
+    int oldOpts = compilerOpts.noRemoveUnusedExpressions;
+    compilerOpts.noRemoveUnusedExpressions = true;
+    VMExecContext *old_ectx = EC;
+    push_EC(true);
+    resetStack();
+    VMExecContext *ectx = EC;
+    ectx->evalContext = true;
+    VM_DEBUG(1, "Calling binding VM eval");
+    ObjFunction *func = compile_binding_eval_src(src, &err, scope);
+    compilerOpts.noRemoveUnusedExpressions = oldOpts;
+
+    if (err != COMPILE_ERR_NONE || !func) {
+        if (func) {
+            freeChunk(func->chunk);
+            FREE(Chunk, func->chunk);
+        }
+        VM_DEBUG(1, "compile error in eval");
+        pop_EC();
+        ASSERT(getFrame() == oldFrame);
+        if (throwOnErr) {
+            throwErrorFmt(lxSyntaxErrClass, "%s", "Syntax error");
+        } else {
+            // TODO: output error messages
+            return UNDEF_VAL;
+        }
+    }
+    ectx->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
+    VM_DEBUG(1, "%s", "Pushing initial binding eval callframe");
+    // TODO: this pushFrame() allocates a new scope, but then just re-uses the parent scope.
+    // We could just skip allocation of scope for this frame.
+    CallFrame *frame = pushFrame(func); // FIXME: wasted a OBJ_T_SCOPE allocation
+    frame->scope = scope;
+    frame->start = 0;
+    frame->ip = func->chunk->code;
+    frame->slots = EC->stack;
+    ASSERT(frame->slots);
+    frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
+    unhideFromGC(TO_OBJ(func));
+    frame->isCCall = false;
+    frame->isEval = true;
+    frame->nativeFunc = NULL;
+    frame->instance = NULL; // should be scope->instance
+    frame->klass = NULL; // should be scope->klass
+
+    setupPerScriptROGlobals(filename);
+
+    ErrTag status = TAG_NONE;
+    InterpretResult result = INTERPRET_OK;
+    vm_protect(vm_run_protect, NULL, NULL, &status);
+    if (status == TAG_RAISE) {
+        result = INTERPRET_RUNTIME_ERROR;
+        THREAD()->hadError = true;
+    }
+    Value val = *THREAD()->lastValue;
+    VM_DEBUG(1, "eval finished: error: %d, result: %s", THREAD()->hadError ? 1 : 0,
+        result == INTERPRET_OK ? "OK" : "RAISE");
+    // `EC != ectx` if an error occured in the eval, and propagated out
+    // due to being caught in a surrounding context or never being caught.
+    if (EC == ectx) pop_EC();
+    ASSERT(getFrame() == oldFrame);
+    if (result == INTERPRET_OK) {
+        return val;
+    } else {
+        if (throwOnErr) {
+            rethrowErrInfo(THREAD()->errInfo);
+            UNREACHABLE_RETURN(UNDEF_VAL);
+        } else {
+            // TODO: output error messages
+            return UNDEF_VAL;
+        }
+    }
+}
+
 Value VMEvalNoThrow(char *src, char *filename, int lineno) {
     return doVMEval(src, filename, lineno, false);
 }
 
 Value VMEval(char *src, char *filename, int lineno) {
     return doVMEval(src, filename, lineno, true);
+}
+
+Value VMBindingEval(ObjScope *scope, char *src, char *filename, int lineno) {
+    return doVMBindingEval(scope, src, filename, lineno, true);
 }
 
 void setPrintBuf(ObjString *buf, bool alsoStdout) {

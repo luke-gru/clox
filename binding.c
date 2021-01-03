@@ -87,7 +87,8 @@ static Value lxBindingLocalVariableSet(int argCount, Value *args) {
     ObjFunction *func = binding->scope->function;
     Value slotVal;
     int res = tableGet(&func->localsTable, name, &slotVal);
-    // FIXME: setting a localVariable shouldn't change the function object itself
+    // FIXME: setting a localVariable shouldn't change the function object itself.
+    // It should only change the current scope's mapping.
     if (!res) {
         slotVal = NUMBER_VAL(func->localsTable.count+1);
         tableSet(&func->localsTable, name, slotVal);
@@ -125,6 +126,18 @@ static Value lxBindingInspect(int argCount, Value *args) {
     return OBJ_VAL(ret);
 }
 
+static Value lxBindingEval(int argCount, Value *args) {
+    CHECK_ARITY("Binding#eval", 2, 2, argCount);
+    Value self = args[0];
+    LxBinding *binding = getBinding(self);
+    Value src = args[1];
+    char *csrc = VAL_TO_STRING(src)->chars;
+    if (strlen(csrc) == 0) {
+        return NIL_VAL;
+    }
+    return VMBindingEval(binding->scope, csrc, "(eval)", 1);
+}
+
 void Init_BindingClass(void) {
     lxBindingClass = addGlobalClass("Binding", lxObjClass);
     addNativeMethod(lxBindingClass, "init", lxBindingInit);
@@ -133,4 +146,5 @@ void Init_BindingClass(void) {
     addNativeMethod(lxBindingClass, "localVariableSet", lxBindingLocalVariableSet);
     addNativeMethod(lxBindingClass, "receiver", lxBindingReceiver);
     addNativeMethod(lxBindingClass, "inspect", lxBindingInspect);
+    addNativeMethod(lxBindingClass, "eval", lxBindingEval);
 }
