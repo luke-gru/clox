@@ -48,6 +48,7 @@ typedef struct Scope {
     int bytecode_end;
 } Scope;
 
+// info on local variable slot lookup
 typedef struct LocalVariable {
     struct ObjString *name;
     Scope *scope;

@@ -210,8 +210,7 @@ static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
 // blocks (`{}`) push new scopes
 static void pushScope(CompileScopeType stype) {
     ObjFunction *func = current->function;
-    Scope *s = xcalloc(1, sizeof(Scope));
-    ASSERT_MEM(s);
+    Scope *s = ALLOCATE(Scope, 1);
     s->type = stype;
     s->line_start = curTok ? curTok->line : 0;
     s->line_end = -1;
@@ -959,8 +958,7 @@ static int addLocal(Token name) {
     int slot = current->localCount;
     current->locals[slot] = local;
     current->localCount++;
-    LocalVariable *var = xcalloc(1, sizeof(LocalVariable));
-    ASSERT_MEM(var);
+    LocalVariable *var = ALLOCATE(LocalVariable, 1);
     var->name = copyString(tokStr(&name), strlen(tokStr(&name)), NEWOBJ_FLAG_OLD);
     var->scope = curScope;
     var->slot = slot;
@@ -1470,6 +1468,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             emitOp0(OP_POP);
             Insn *insnAfter = currentIseq()->tail;
             size_t codeDiff = iseqInsnByteDiff(insnBefore, insnAfter);
+            // TODO: use ALLOCATE, and make sure to free when freeing the node
             ParamNodeInfo *paramNodeInfo = xcalloc(1, sizeof(ParamNodeInfo));
             ASSERT_MEM(paramNodeInfo);
             paramNodeInfo->defaultArgIPOffset = codeDiff;
@@ -2546,6 +2545,7 @@ ObjFunction *compile_file(char *fname, CompileErr *err) {
         *err = COMPILE_ERR_ERRNO;
         return NULL;
     }
+    // TODO: free this buf or have function own it
     char *buf = xcalloc(1, st.st_size+1);
     ASSERT_MEM(buf);
     res = (int)read(fd, buf, st.st_size);

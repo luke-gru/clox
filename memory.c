@@ -959,6 +959,14 @@ void freeObject(Obj *obj) {
             freeChunk(func->chunk);
             FREE(Chunk, func->chunk);
             freeTable(&func->localsTable);
+            Scope *scope; int sidx = 0;
+            vec_foreach(&func->scopes, scope, sidx) {
+                FREE(Scope, scope);
+            }
+            LocalVariable *var; int vidx = 0;
+            vec_foreach(&func->variables, var, vidx) {
+                FREE(LocalVariable, var);
+            }
             vec_deinit(&func->scopes);
             vec_deinit(&func->variables);
             FREE_SIZE(sizeof(Upvalue)*LX_MAX_UPVALUES, func->upvaluesInfo);
