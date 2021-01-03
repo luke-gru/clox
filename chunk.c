@@ -153,7 +153,7 @@ static void freeCatchTable(CatchTable *catchTbl) {
 }
 
 /**
- * Free all internal chunk structures, and reset it to a usable state.
+ * Free all internal chunk structures.
  * Does NOT free the provided pointer.
  */
 void freeChunk(Chunk *chunk) {
@@ -175,8 +175,15 @@ void freeChunk(Chunk *chunk) {
         chunk->catchTbl = NULL;
     }
     freeTable(chunk->varInfo);
-    /*fprintf(stderr, "freeChunk reinit\n");*/
-    initChunk(chunk);
+    FREE(Table, chunk->varInfo);
+    FREE(ValueArray, chunk->constants);
+    chunk->count = 0;
+    chunk->capacity = 0;
+    chunk->code = NULL;
+    chunk->lines = NULL;
+    chunk->ndepths = NULL;
+    chunk->nwidths = NULL;
+    chunk->catchTbl = NULL;
 }
 
 /**

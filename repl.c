@@ -12,7 +12,6 @@ static ObjFunction *Func = NULL;
 
 static void _freeFunc(void) {
     if (Func) {
-        freeChunk(Func->chunk);
         Func = NULL;
     }
 }
@@ -39,6 +38,7 @@ static bool evalLines(char *lines[], int numLines) {
     }
     /*fprintf(stderr, "interpreting code\n");*/
     InterpretResult ires = interpret(Func, "(repl)");
+    unhideFromGC(TO_OBJ(Func));
     resetStack();
     if (ires != INTERPRET_OK) {
         fprintf(stderr, "%s", "Error evaluating code\n");

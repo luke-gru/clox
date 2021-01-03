@@ -1468,9 +1468,8 @@ static void setupLocalsTable(CallFrame *frame) {
     frame->scope->localsTable.capacity = localsSize;
     VM_DEBUG(1, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
     if (localsSize > 0) {
-        frame->scope->localsTable.tbl = xmalloc(sizeof(Value) * localsSize);
+        frame->scope->localsTable.tbl = ALLOCATE(Value, localsSize);
         VM_DEBUG(2, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
-        ASSERT_MEM(frame->scope->localsTable.tbl);
         memcpy(frame->scope->localsTable.tbl, frame->slots, sizeof(Value)*localsSize);
     }
 }
@@ -1487,7 +1486,7 @@ void growLocalsTable(ObjScope *scope, int size) {
         callFrameName(frame), size, max, scope->localsTable.capacity, scope->localsTable.size);
     scope->localsTable.size = size;
     scope->localsTable.capacity = max;
-    scope->localsTable.tbl = xmalloc(sizeof(Value)*max);
+    scope->localsTable.tbl = ALLOCATE(Value, max);
     ASSERT_MEM(scope->localsTable.tbl);
     nil_mem(scope->localsTable.tbl, max);
   } else {
@@ -1497,8 +1496,7 @@ void growLocalsTable(ObjScope *scope, int size) {
     int old_capa = scope->localsTable.capacity;
     scope->localsTable.size = size;
     scope->localsTable.capacity = max;
-    scope->localsTable.tbl = realloc(scope->localsTable.tbl, scope->localsTable.capacity*sizeof(Value));
-    ASSERT_MEM(scope->localsTable.tbl);
+    scope->localsTable.tbl = GROW_ARRAY(scope->localsTable.tbl, Value, old_capa, scope->localsTable.capacity);
     nil_mem(scope->localsTable.tbl+old_capa, max-old_capa);
   }
 }
@@ -3548,10 +3546,6 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
     if (err != COMPILE_ERR_NONE || !func) {
-        if (func) {
-            freeChunk(func->chunk);
-            FREE(Chunk, func->chunk);
-        }
         VM_DEBUG(1, "compile error in eval");
         pop_EC();
         ASSERT(getFrame() == oldFrame);
@@ -3625,10 +3619,6 @@ static Value doVMBindingEval(LxBinding *binding, char *src, char *filename, int 
     compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
     if (err != COMPILE_ERR_NONE || !func) {
-        if (func) {
-            freeChunk(func->chunk);
-            FREE(Chunk, func->chunk);
-        }
         VM_DEBUG(1, "compile error in eval");
         pop_EC();
         ASSERT(getFrame() == oldFrame);

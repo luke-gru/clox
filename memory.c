@@ -955,7 +955,13 @@ void freeObject(Obj *obj) {
             // chunk, due to how chunks are passed around and copied by value
             // (I think this is the reason). Freeing them right now results in
             // double free errors.
-            /*freeChunk(&func->chunk);*/
+            ASSERT(func->chunk);
+            freeChunk(func->chunk);
+            FREE(Chunk, func->chunk);
+            freeTable(&func->localsTable);
+            vec_deinit(&func->scopes);
+            vec_deinit(&func->variables);
+            FREE_SIZE(sizeof(Upvalue)*LX_MAX_UPVALUES, func->upvaluesInfo);
             GC_TRACE_DEBUG(5, "Freeing ObjFunction: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;
@@ -1193,7 +1199,7 @@ void collectGarbage(void) {
         if (GET_OPTION(traceGCLvl > 1)) {
             printGenerationInfo();
         }
-        printVMStack(stderr, THREAD());
+        /*printVMStack(stderr, THREAD());*/
     }
     vec_void_t v_stackObjs;
     vec_init(&v_stackObjs);

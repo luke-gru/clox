@@ -1528,7 +1528,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     }
     // Emit arguments for each upvalue to know whether to capture a local or
     // an upvalue.
-    func->upvaluesInfo = xmalloc(sizeof(Upvalue)*LX_MAX_UPVALUES);
+    func->upvaluesInfo = ALLOCATE(Upvalue, LX_MAX_UPVALUES);
     ASSERT_MEM(func->upvaluesInfo);
     for (int i = 0; i < func->upvalueCount; i++) {
         if (ftype != FUN_TYPE_BLOCK) {

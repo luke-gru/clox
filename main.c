@@ -131,8 +131,6 @@ int main(int argc, char *argv[]) {
 
     if (CLOX_OPTION_T(compileOnly)) {
         freeVM();
-        freeChunk(func->chunk);
-        FREE(Chunk, func->chunk);
         printf("No compilation errors\n");
         exit(0);
     }

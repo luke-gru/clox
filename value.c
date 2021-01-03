@@ -126,7 +126,10 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             }
         } else if (IS_INSTANCE_LIKE(value)) {
             ObjInstance *inst = AS_INSTANCE(value);
-            Obj *callable = instanceFindMethod(inst, INTERNED("toString", 8));
+            Obj *callable = NULL;
+            if (canCallMethods) {
+                callable = instanceFindMethod(inst, INTERNED("toString", 8));
+            }
             if (callable && vm.inited && canCallMethods) {
                 Value stringVal = callVMMethod(inst, OBJ_VAL(callable), 0, NULL, NULL);
                 if (!IS_A_STRING(stringVal)) {
@@ -160,6 +163,12 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
                     return fprintf(file, "]");
                 } else {
                     ObjClass *klass = inst->klass;
+                    // NOTE: this can occur when printValue is called from
+                    // collectGarbage() and the class has been collected
+                    // before the instance of the class
+                    if (klass->object.type == OBJ_T_NONE) {
+                        return fprintf(file, "<instance unknown>");
+                    }
                     ObjString *nameFull = classNameFull(klass);
                     char *klassName = nameFull->chars;
                     return fprintf(file, "<instance %.*s>", PRINTNUM(11, maxLen), klassName);
@@ -195,6 +204,8 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             return fprintf(file, "<method %.*s>", PRINTNUM(9, maxLen), name->chars);
         } else if (OBJ_TYPE(value) == OBJ_T_INTERNAL) {
             return fprintf(file, "%.*s", PRINTNUM(10, maxLen), "<internal>");
+        } else if (OBJ_TYPE(value) == OBJ_T_SCOPE) {
+            return fprintf(file, "%.*s", PRINTNUM(7, maxLen), "<scope>");
         } else {
             UNREACHABLE("Unknown object type: valtype=%s (objtype=%d)",
                 typeOfVal(value),

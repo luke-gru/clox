@@ -707,6 +707,8 @@ const char *typeOfObj(Obj *obj) {
         return "regex";
     case OBJ_T_UPVALUE:
         return "upvalue";
+    case OBJ_T_SCOPE:
+        return "scope";
     default: {
         UNREACHABLE("Unknown object type: (%d)\n", obj->type);
     }

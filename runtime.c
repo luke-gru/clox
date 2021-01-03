@@ -716,8 +716,7 @@ readableCheck:
     ObjFunction *func = compile_file(pathbuf, &err);
     if (!func || err != COMPILE_ERR_NONE) {
         if (func) {
-            freeChunk(func->chunk);
-            FREE(Chunk, func->chunk);
+            unhideFromGC(TO_OBJ(func));
         }
         throwErrorFmt(lxSyntaxErrClass, "%s", "Syntax error");
     }
