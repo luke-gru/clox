@@ -27,13 +27,6 @@ extern "C" {
 struct CallInfo; // fwd decls
 struct BlockStackEntry;
 
-typedef struct LocalsTable {
-    int size;
-    int capacity;
-    Value *tbl;
-    Value **update;
-} LocalsTable;
-
 typedef struct CallFrame {
     // Non-native function fields
     ObjClosure *closure; // if call frame is from compiled code, this is set
@@ -41,7 +34,7 @@ typedef struct CallFrame {
     uint8_t *ip; // ip into closure's bytecode chunk, if callable is not a C function
     int start; // starting instruction offset in parent (for throw/catch)
     Value *slots; // local variables and function arguments
-    LocalsTable localsTable;
+    ObjScope *scope;
     ObjInstance *instance; // if function is a method
     ObjClass *klass; // if function is a method
 
@@ -297,7 +290,7 @@ NORETURN void repl(void);
 
 // call frames
 void popFrame(void);
-CallFrame *pushFrame(void);
+CallFrame *pushFrame(ObjFunction *userFunc);
 static inline CallFrame *getFrame(void) {
     VMExecContext *ctx = EC;
     ASSERT(ctx->frameCount >= 1);
@@ -429,7 +422,7 @@ void runAtExitHooks(void);
 NORETURN void stopVM(int status);
 NORETURN void _stopVM(int status);
 
-void growLocalsTable(CallFrame *frame, int size);
+void growLocalsTable(ObjScope *scope, int size);
 
 #ifdef __cplusplus
 }

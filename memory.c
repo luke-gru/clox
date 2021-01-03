@@ -413,10 +413,8 @@ void collectYoungGarbage() {
                 // XXX: is this necessary, they must be on the stack??
                 grayObject(TO_OBJ(frame->closure));
                 grayObject(TO_OBJ(frame->instance));
-                if (frame->localsTable.tbl) {
-                  for (int i = 0; i < frame->localsTable.size; i++) {
-                    grayValue(frame->localsTable.tbl[i]);
-                  }
+                if (frame->scope) {
+                    grayObject(TO_OBJ(frame->scope));
                 }
             }
         }
@@ -612,6 +610,13 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     return ret;
 }
 
+void nil_mem(Value *mem, size_t num) {
+    Value nil = NIL_VAL;
+    for (size_t i = 0; i < num; i++) {
+        memcpy(mem+i, &nil, sizeof(Value));
+    }
+}
+
 static inline void INC_GEN(Obj *obj) {
     if (obj->GCGen < GC_GEN_MAX) {
         obj->GCGen++;
@@ -760,6 +765,15 @@ void blackenObject(Obj *obj) {
             grayObject((Obj*)closure->function);
             for (int i = 0; i < closure->upvalueCount; i++) {
                 grayObject((Obj*)closure->upvalues[i]); // closed upvalues
+            }
+            break;
+        }
+        case OBJ_T_SCOPE: {
+            GC_TRACE_DEBUG(5, "Blackening scope %p", obj);
+            ObjScope *scope = (ObjScope*)obj;
+            grayObject(TO_OBJ(scope->function));
+            for (int i = 0; i < scope->localsTable.size; i++) {
+                grayValue(scope->localsTable.tbl[i]);
             }
             break;
         }
@@ -950,6 +964,15 @@ void freeObject(Obj *obj) {
             ObjClosure *closure = (ObjClosure*)obj;
             GC_TRACE_DEBUG(5, "Freeing ObjClosure: p=%p", closure);
             FREE_ARRAY(Value, closure->upvalues, closure->upvalueCount);
+            obj->type = OBJ_T_NONE;
+            break;
+        }
+        case OBJ_T_SCOPE: {
+            ObjScope *scope = (ObjScope*)obj;
+            GC_TRACE_DEBUG(5, "Freeing ObjScope: p=%p", scope);
+            if (scope->localsTable.tbl && scope->localsTable.capacity) {
+                FREE_ARRAY(Value, scope->localsTable.tbl, scope->localsTable.capacity);
+            }
             obj->type = OBJ_T_NONE;
             break;
         }
@@ -1256,10 +1279,8 @@ void collectGarbage(void) {
                 // XXX: is this necessary, they must be on the stack??
                 grayObject(TO_OBJ(frame->closure));
                 grayObject(TO_OBJ(frame->instance));
-                if (frame->localsTable.tbl) {
-                  for (int i = 0; i < frame->localsTable.size; i++) {
-                    grayValue(frame->localsTable.tbl[i]);
-                  }
+                if (frame->scope) {
+                    grayObject(TO_OBJ(frame->scope));
                 }
                 numFramesFound++;
             }

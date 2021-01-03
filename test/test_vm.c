@@ -44,7 +44,7 @@ static int test_vm_protect1(void) {
     int arg = 3;
     ErrTag status = TAG_NONE;
     EC->frameCount = 0;
-    CallFrame *frame = pushFrame();
+    CallFrame *frame = pushFrame(NULL);
     frame->start = 0;
     frame->ip = 0;
     frame->slots = EC->stack;
@@ -69,7 +69,7 @@ static int test_vm_protect2(void) {
     int arg = 4;
     ErrTag status = TAG_NONE;
     EC->frameCount = 0;
-    CallFrame *frame = pushFrame();
+    CallFrame *frame = pushFrame(NULL);
     frame->start = 0;
     frame->ip = 0;
     frame->slots = EC->stack;
@@ -94,7 +94,7 @@ static int test_vm_protect3(void) {
     int arg = 4;
     ErrTag status = TAG_NONE;
     EC->frameCount = 0;
-    CallFrame *frame = pushFrame();
+    CallFrame *frame = pushFrame(NULL);
     frame->start = 0;
     frame->ip = 0;
     frame->slots = EC->stack;

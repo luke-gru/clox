@@ -8,47 +8,20 @@
 ObjClass *lxBindingClass;
 
 typedef struct LxBinding {
-    CallFrame frame;
-    CallFrame *origFrame;
-    long origFrameCookie;
-    Table localsTable;
+    ObjScope *scope;
 } LxBinding;
-
-static void populateLocalsTable(LxBinding *b) {
-    Table *btbl = &b->localsTable;
-    ASSERT(b->frame.closure);
-    ObjFunction *func = b->frame.closure->function;
-    ASSERT(func);
-    Entry e; int idx = 0;
-    TABLE_FOREACH(&func->localsTable, e, idx, {
-        int slot = AS_NUMBER(e.value);
-        tableSet(btbl, e.key, b->frame.localsTable.tbl[slot]);
-    });
-}
 
 static void markInternalBinding(Obj *obj) {
     ASSERT(obj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)obj;
     LxBinding *b = (LxBinding*)internal->data;
-    grayObject(TO_OBJ(b->frame.closure));
-    grayObject(TO_OBJ(b->frame.name));
-    if (b->frame.instance) {
-      grayObject(TO_OBJ(b->frame.instance));
-    }
-    if (b->frame.klass) {
-      grayObject(TO_OBJ(b->frame.klass));
-    }
-    if (b->frame.file) {
-      grayObject(TO_OBJ(b->frame.file));
-    }
-    grayTable(&b->localsTable);
+    grayObject(TO_OBJ(b->scope));
 }
 
 static void freeInternalBinding(Obj *obj) {
     ASSERT(obj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)obj;
     LxBinding *b = (LxBinding*)internal->data;
-    freeTable(&b->localsTable);
     FREE(LxBinding, b);
 }
 
@@ -59,12 +32,10 @@ static Value lxBindingInit(int argCount, Value *args) {
     ObjInternal *internalObj = newInternalObject(false, NULL, sizeof(LxBinding), markInternalBinding, freeInternalBinding,
             NEWOBJ_FLAG_NONE);
     LxBinding *binding = ALLOCATE(LxBinding, 1);
-    binding->frame = *getFrame()->prev; // copy frame object
-    ASSERT(!binding->frame.isCCall);
-    binding->origFrame = getFrame()->prev;
-    binding->origFrameCookie = getFrame()->prev->cookie;
-    initTable(&binding->localsTable);
-    populateLocalsTable(binding);
+    CallFrame *frame = getFrame()->prev;
+    binding->scope = frame->scope;
+    ASSERT(!frame->isCCall);
+    ASSERT(frame->scope);
 
     internalObj->data = binding;
     bindObj->internal = internalObj;
@@ -83,19 +54,12 @@ static Value lxBindingLocalVariables(int argCount, Value *args) {
     Value self = *args;
     LxBinding *binding = getBinding(self);
     Value ret = newMap();
-    Entry e; int i = 0;
-    if (binding->origFrame->popped || binding->origFrameCookie != binding->origFrame->cookie) {
-        TABLE_FOREACH(&binding->localsTable, e, i, {
-            mapSet(ret, e.key, e.value);
-        });
-    } else {
-        ObjFunction *func = binding->frame.closure->function;
-        int idx = 0;
-        TABLE_FOREACH(&func->localsTable, e, idx, {
-            int slot = AS_NUMBER(e.value);
-            mapSet(ret, e.key, binding->origFrame->slots[slot]);
-        });
-    }
+    ObjFunction *func = binding->scope->function;
+    Entry e; int idx = 0;
+    TABLE_FOREACH(&func->localsTable, e, idx, {
+        int slot = AS_NUMBER(e.value);
+        mapSet(ret, e.key, binding->scope->localsTable.tbl[slot]);
+    });
     return ret;
 }
 
@@ -105,21 +69,12 @@ static Value lxBindingLocalVariableGet(int argCount, Value *args) {
     Value name = args[1];
     CHECK_ARG_IS_A(name, lxStringClass, 1);
     LxBinding *binding = getBinding(self);
-    Value val;
-    if (binding->origFrame->popped || binding->origFrameCookie != binding->origFrame->cookie) {
-        if (tableGet(&binding->localsTable, name, &val)) {
-            return val;
-        } else {
-            return NIL_VAL;
-        }
-    } else {
-        ObjFunction *func = binding->frame.closure->function;
-        Value slotVal;
-        int res = tableGet(&func->localsTable, name, &slotVal);
-        if (!res) { return NIL_VAL; }
-        int slot = AS_NUMBER(slotVal);
-        return binding->origFrame->localsTable.tbl[slot];
-    }
+    ObjFunction *func = binding->scope->function;
+    Value slotVal;
+    int res = tableGet(&func->localsTable, name, &slotVal);
+    if (!res) { return NIL_VAL; }
+    int slot = AS_NUMBER(slotVal);
+    return binding->scope->localsTable.tbl[slot];
 }
 
 static Value lxBindingLocalVariableSet(int argCount, Value *args) {
@@ -129,20 +84,17 @@ static Value lxBindingLocalVariableSet(int argCount, Value *args) {
     CHECK_ARG_IS_A(name, lxStringClass, 1);
     Value val = args[2];
     LxBinding *binding = getBinding(self);
-    if (binding->origFrame->popped || binding->origFrameCookie != binding->origFrame->cookie) {
-        tableSet(&binding->localsTable, name, val);
-    } else {
-        ObjFunction *func = binding->frame.closure->function;
-        Value slotVal;
-        int res = tableGet(&func->localsTable, name, &slotVal);
-        if (!res) {
-          slotVal = NUMBER_VAL(func->localsTable.count+1);
-          tableSet(&func->localsTable, name, slotVal);
-        }
-        int slot = AS_NUMBER(slotVal);
-        growLocalsTable(binding->origFrame, slot+1);
-        binding->origFrame->localsTable.tbl[slot] = val;
+    ObjFunction *func = binding->scope->function;
+    Value slotVal;
+    int res = tableGet(&func->localsTable, name, &slotVal);
+    // FIXME: setting a localVariable shouldn't change the function object itself
+    if (!res) {
+        slotVal = NUMBER_VAL(func->localsTable.count+1);
+        tableSet(&func->localsTable, name, slotVal);
     }
+    int slot = AS_NUMBER(slotVal);
+    growLocalsTable(binding->scope, slot+1);
+    binding->scope->localsTable.tbl[slot] = val;
     return val;
 }
 
@@ -150,8 +102,9 @@ static Value lxBindingReceiver(int argCount, Value *args) {
     CHECK_ARITY("Binding#receiver", 1, 1, argCount);
     Value self = *args;
     LxBinding *binding = getBinding(self);
-    if (binding->frame.instance) {
-        return OBJ_VAL(binding->frame.instance);
+    ObjFunction *func = binding->scope->function;
+    if (func->hasReceiver) {
+        return binding->scope->localsTable.tbl[0];
     } else {
         return NIL_VAL;
     }
@@ -163,8 +116,8 @@ static Value lxBindingInspect(int argCount, Value *args) {
     LxBinding *binding = getBinding(self);
     ObjString *ret = emptyString();
     pushCString(ret, "#<Binding ", 10);
-    if (binding->frame.name) {
-        pushCStringFmt(ret, "%s", binding->frame.name->chars);
+    if (binding->scope->function->name) {
+        pushCStringFmt(ret, "%s", binding->scope->function->name->chars);
     } else {
         pushCStringFmt(ret, "%s", "(anon)");
     }

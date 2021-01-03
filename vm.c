@@ -520,7 +520,7 @@ void initVM() {
     vm.opEqualsString = INTERNED("opEquals", 8);
     vm.opCmpString = INTERNED("opCmp", 5);
 
-    pushFrame();
+    pushFrame(NULL);
 
     defineNativeFunctions();
     defineNativeClasses();
@@ -1288,20 +1288,6 @@ static void unwindErrInfo(CallFrame *frame) {
 
 static void closeUpvalues(Value *last);
 
-static void freeLocals(CallFrame *frame) {
-    if (frame->localsTable.tbl && !frame->isEval && frame->localsTable.capacity > 0) {
-        ASSERT(!frame->isCCall);
-        VM_DEBUG(1, "freeing locals table for %s: %p size %d, capa %d",
-            callFrameName(frame),
-            frame->localsTable.tbl, frame->localsTable.size,
-                frame->localsTable.capacity);
-        xfree(frame->localsTable.tbl);
-        frame->localsTable.tbl = NULL;
-    }
-    frame->localsTable.size = 0;
-    frame->localsTable.capacity = 0;
-}
-
 void popFrame(void) {
     DBG_ASSERT(vm.inited);
     register LxThread *th = vm.curThread;
@@ -1331,7 +1317,7 @@ void popFrame(void) {
         VM_DEBUG(3, "popping this from popFrame");
         popThis();
     }
-    freeLocals(frame);
+    frame->scope = NULL;
     EC->frameCount--;
     frame = getFrameOrNull(); // new frame
     if (LIKELY(frame != NULL)) {
@@ -1353,7 +1339,7 @@ void popFrame(void) {
     ASSERT_VALID_STACK();
 }
 
-CallFrame *pushFrame(void) {
+CallFrame *pushFrame(ObjFunction *userFunc) {
     DBG_ASSERT(vm.inited);
     register VMExecContext *ec = EC;
     if (UNLIKELY(ec->frameCount >= FRAMES_MAX)) {
@@ -1370,10 +1356,11 @@ CallFrame *pushFrame(void) {
     if (bentry && bentry->frame == NULL) {
         bentry->frame = frame;
     }
-    frame->localsTable.tbl = NULL;
-    frame->localsTable.size = 0;
-    frame->localsTable.capacity = 0;
-    frame->popped = false;
+    if (userFunc) {
+        frame->scope = newScope(userFunc);
+    } else {
+        frame->scope = NULL;
+    }
     return frame;
 }
 
@@ -1398,7 +1385,7 @@ static void pushNativeFrame(ObjNative *native) {
         return;
     }
     CallFrame *prevFrame = getFrame();
-    CallFrame *newFrame = pushFrame();
+    CallFrame *newFrame = pushFrame(NULL);
     newFrame->closure = prevFrame->closure;
     newFrame->ip = prevFrame->ip;
     newFrame->start = 0;
@@ -1461,54 +1448,48 @@ static inline bool checkFunctionArity(ObjFunction *func, int argCount, CallInfo 
     return true;
 }
 
+// TODO: fixme, this leaks memory right now. The scope is already allocated
+// with a given size, we shouldn't reallocate. Once scopes are working I need to
+// fix this.
 static void setupLocalsTable(CallFrame *frame) {
-  int localsSize = EC->stackTop - frame->slots;
-  frame->localsTable.size = localsSize;
-  frame->localsTable.capacity = localsSize;
-  frame->localsTable.update = NULL;
-  VM_DEBUG(1, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
-  if (localsSize > 0) {
-    frame->localsTable.tbl = xmalloc(sizeof(Value) * localsSize);
-    VM_DEBUG(2, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
-    ASSERT_MEM(frame->localsTable.tbl);
-    memcpy(frame->localsTable.tbl, frame->slots, sizeof(Value)*localsSize);
-  }
+    int localsSize = EC->stackTop - frame->slots;
+    ASSERT(frame->scope);
+    frame->scope->localsTable.size = localsSize;
+    frame->scope->localsTable.capacity = localsSize;
+    VM_DEBUG(1, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
+    if (localsSize > 0) {
+        frame->scope->localsTable.tbl = xmalloc(sizeof(Value) * localsSize);
+        VM_DEBUG(2, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
+        ASSERT_MEM(frame->scope->localsTable.tbl);
+        memcpy(frame->scope->localsTable.tbl, frame->slots, sizeof(Value)*localsSize);
+    }
 }
 
-static void nil_mem(Value *mem, size_t num) {
-  Value nil = NIL_VAL;
-  memcpy(mem, &nil, num);
-}
-
-void growLocalsTable(CallFrame *frame, int size) {
-  if (frame->localsTable.capacity >= size) {
-    frame->localsTable.size = size;
+void growLocalsTable(ObjScope *scope, int size) {
+  if (scope->localsTable.capacity >= size) {
+    scope->localsTable.size = size;
     return;
   }
   int max = size * 2;
-  if (frame->localsTable.capacity == 0) {
+  if (scope->localsTable.capacity == 0) {
+    CallFrame *frame = getFrame();
     VM_DEBUG(2, "Growing localsTable (1) for frame %s, size %d, capa new %d, old capa: %d, old size: %d",
-        callFrameName(frame), size, max, frame->localsTable.capacity, frame->localsTable.size);
-    frame->localsTable.size = size;
-    frame->localsTable.capacity = max;
-    frame->localsTable.tbl = xmalloc(sizeof(Value)*max);
-    nil_mem(frame->localsTable.tbl, max);
-    ASSERT_MEM(frame->localsTable.tbl);
-    if (frame->localsTable.update) {
-      *frame->localsTable.update = frame->localsTable.tbl;
-    }
+        callFrameName(frame), size, max, scope->localsTable.capacity, scope->localsTable.size);
+    scope->localsTable.size = size;
+    scope->localsTable.capacity = max;
+    scope->localsTable.tbl = xmalloc(sizeof(Value)*max);
+    ASSERT_MEM(scope->localsTable.tbl);
+    nil_mem(scope->localsTable.tbl, max);
   } else {
+    CallFrame *frame = getFrame();
     VM_DEBUG(2, "Growing localsTable (2) for frame %s, size %d, capa new %d, old capa: %d, old size: %d",
-        callFrameName(frame), size, max, frame->localsTable.capacity, frame->localsTable.size);
-    int old_capa = frame->localsTable.capacity;
-    frame->localsTable.size = size;
-    frame->localsTable.capacity = max;
-    frame->localsTable.tbl = realloc(frame->localsTable.tbl, frame->localsTable.capacity*sizeof(Value));
-    nil_mem(frame->localsTable.tbl+old_capa, max-old_capa);
-    ASSERT_MEM(frame->localsTable.tbl);
-    if (frame->localsTable.update) {
-      *frame->localsTable.update = frame->localsTable.tbl;
-    }
+        callFrameName(frame), size, max, scope->localsTable.capacity, scope->localsTable.size);
+    int old_capa = scope->localsTable.capacity;
+    scope->localsTable.size = size;
+    scope->localsTable.capacity = max;
+    scope->localsTable.tbl = realloc(scope->localsTable.tbl, scope->localsTable.capacity*sizeof(Value));
+    ASSERT_MEM(scope->localsTable.tbl);
+    nil_mem(scope->localsTable.tbl+old_capa, max-old_capa);
   }
 }
 
@@ -1850,7 +1831,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
 
     // add frame
     VM_DEBUG(2, "%s", "Pushing callframe (non-native)");
-    CallFrame *frame = pushFrame();
+    CallFrame *frame = pushFrame(func);
     frame->instance = TO_INSTANCE(instance);
     if (instance) {
         th->thisObj = TO_OBJ(instance);
@@ -2327,6 +2308,7 @@ static InterpretResult vm_run() {
     register Chunk *ch = currentChunk();
     register Value *constantSlots = ch->constants->values;
     register CallFrame *frame = getFrame();
+    ObjScope *scope = frame->scope;
     register VMExecContext *ctx = EC;
     th->vmRunLvl++;
     if (ch->catchTbl != NULL) {
@@ -2695,10 +2677,10 @@ vmLoop:
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          if (slot+1 > frame->localsTable.size) {
-            growLocalsTable(frame, slot+1);
+          if (slot+1 > scope->localsTable.size) {
+            growLocalsTable(scope, slot+1);
           }
-          frame->localsTable.tbl[slot] = VM_PEEK(0); // locals are popped at end of scope by VM
+          scope->localsTable.tbl[slot] = VM_PEEK(0); // locals are popped at end of scope by VM
           frame->slots[slot] = VM_PEEK(0);
           DISPATCH_BOTTOM();
       }
@@ -2721,8 +2703,8 @@ vmLoop:
           uint8_t slot = READ_BYTE();
           uint8_t varName = READ_BYTE(); // for debugging
           (void)varName;
-          if (frame->localsTable.size > slot) {
-            VM_PUSH(frame->localsTable.tbl[slot]);
+          if (scope->localsTable.size > slot) {
+            VM_PUSH(scope->localsTable.tbl[slot]);
           } else {
             VM_PUSH(frame->slots[slot]);
           }
@@ -3470,7 +3452,7 @@ InterpretResult interpret(ObjFunction *func, char *filename) {
     EC->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
     EC->frameCount = 0;
     VM_DEBUG(1, "%s", "Pushing initial callframe");
-    CallFrame *frame = pushFrame();
+    CallFrame *frame = pushFrame(func);
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
@@ -3501,7 +3483,7 @@ InterpretResult loadScript(ObjFunction *func, char *filename) {
     EC->loadContext = true;
     EC->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
     VM_DEBUG(1, "%s", "Pushing initial callframe");
-    CallFrame *frame = pushFrame();
+    CallFrame *frame = pushFrame(func);
     frame->start = 0;
     frame->ip = chunk->code;
     frame->slots = EC->stack;
@@ -3569,9 +3551,10 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     }
     ectx->filename = copyString(filename, strlen(filename), NEWOBJ_FLAG_OLD);
     VM_DEBUG(1, "%s", "Pushing initial eval callframe");
-    CallFrame *frame = pushFrame();
-    memcpy(&frame->localsTable.tbl, &prevFrame->localsTable.tbl, sizeof(LocalsTable));
-    frame->localsTable.update = &prevFrame->localsTable.tbl;
+    // TODO: this pushFrame() allocates a new scope, but then just re-uses the parent scope.
+    // We could just skip allocation of scope for this frame.
+    CallFrame *frame = pushFrame(func);
+    frame->scope = prevFrame->scope;
     frame->start = 0;
     frame->ip = func->chunk->code;
     frame->slots = ectx->stack; // old frame's slots

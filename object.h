@@ -23,6 +23,7 @@ typedef enum ObjType {
   OBJ_T_MODULE,
   OBJ_T_ICLASS, // included module
   OBJ_T_FUNCTION,
+  OBJ_T_SCOPE,
   OBJ_T_NATIVE_FUNCTION,
   OBJ_T_BOUND_METHOD,
   OBJ_T_UPVALUE,
@@ -145,7 +146,20 @@ typedef struct ObjFunction {
   bool hasRestArg;
   bool hasBlockArg;
   bool isBlock;
+  bool hasReceiver;
 } ObjFunction;
+
+typedef struct LocalsTable {
+    int size;
+    int capacity;
+    Value *tbl;
+} LocalsTable;
+
+typedef struct ObjScope {
+  Obj object;
+  LocalsTable localsTable;
+  ObjFunction *function;
+} ObjScope;
 
 typedef struct ObjUpvalue {
   Obj object;
@@ -370,6 +384,7 @@ typedef struct LxMatchData {
 #define IS_MAP(value)           (isObjType(value, OBJ_T_MAP))
 #define IS_REGEX(value)         (isObjType(value, OBJ_T_REGEX))
 #define IS_FUNCTION(value)      (isObjType(value, OBJ_T_FUNCTION))
+#define IS_SCOPE(value)         (isObjType(value, OBJ_T_SCOPE))
 #define IS_CLOSURE(value)       (isObjType(value, OBJ_T_CLOSURE))
 #define IS_NATIVE_FUNCTION(value) (isObjType(value, OBJ_T_NATIVE_FUNCTION))
 #define IS_CLASS(value)         (isObjType(value, OBJ_T_CLASS))
@@ -616,6 +631,7 @@ ObjBoundMethod *newBoundMethod(ObjInstance *receiver, Obj *callable, int flags);
 ObjInternal *newInternalObject(bool isRealObject, void *data, size_t dataSz, GCMarkFunc markFn, GCFreeFunc freeFn, int flags);
 ObjClosure *newClosure(ObjFunction *function, int flags);
 ObjUpvalue *newUpvalue(Value *slot, int flags);
+ObjScope *newScope(ObjFunction *userFunc);
 
 // Object destruction functions
 void freeClassInfo(ClassInfo *cinfo);

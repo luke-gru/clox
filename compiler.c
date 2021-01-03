@@ -1127,6 +1127,7 @@ static void initCompiler(
         if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
                 ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
                 ftype == FUN_TYPE_CLASS_METHOD) {
+            current->function->hasReceiver = true;
             local->name.start = ""; // represents `this`
             local->name.length = 0;
         } else {
@@ -1176,6 +1177,7 @@ static void initEvalCompiler(
         if (in_func->ftype == FUN_TYPE_METHOD || in_func->ftype == FUN_TYPE_INIT ||
                 in_func->ftype == FUN_TYPE_GETTER || in_func->ftype == FUN_TYPE_SETTER ||
                 in_func->ftype == FUN_TYPE_CLASS_METHOD) {
+            in_func->hasReceiver = true;
             local->name.start = ""; // represents `this`
             local->name.length = 0;
         } else {

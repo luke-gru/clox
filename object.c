@@ -285,6 +285,7 @@ ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, FunctionType ftyp
     function->hasRestArg = false;
     function->hasBlockArg = false;
     function->upvaluesInfo = NULL;
+    function->hasReceiver = false;
     if (chunk == NULL) {
         chunk = ALLOCATE(Chunk, 1);
         initChunk(chunk);
@@ -328,6 +329,18 @@ ObjUpvalue *newUpvalue(Value *slot, int flags) {
     upvalue->value = slot; // stack slot
     upvalue->next = NULL; // it's the caller's responsibility to link it
     return upvalue;
+}
+
+ObjScope *newScope(ObjFunction *userFunc) {
+    ObjScope *scope = ALLOCATE_OBJ(ObjScope, OBJ_T_SCOPE, NEWOBJ_FLAG_NONE);
+    Value *tbl = NULL;
+    /*ASSERT_MEM(tbl);*/
+    /*nil_mem(tbl, userFunc->localCount);*/
+    scope->localsTable.size = 0;
+    scope->localsTable.capacity = 0;
+    scope->localsTable.tbl = tbl;
+    scope->function = userFunc;
+    return scope;
 }
 
 static ClassInfo* newClassInfo(ObjString *name) {
@@ -1242,6 +1255,8 @@ size_t sizeofObjType(ObjType type) {
             return sizeof(ObjClosure);
         case OBJ_T_INTERNAL:
             return sizeof(ObjInternal);
+        case OBJ_T_SCOPE:
+            return sizeof(ObjScope);
         default:
             UNREACHABLE_RETURN(0);
     }
@@ -1277,6 +1292,8 @@ const char *objTypeName(ObjType type) {
             return "T_UPVALUE";
         case OBJ_T_INTERNAL:
             return "T_INTERNAL";
+        case OBJ_T_SCOPE:
+            return "T_SCOPE";
         case OBJ_T_NONE:
             return "T_NONE";
         default:

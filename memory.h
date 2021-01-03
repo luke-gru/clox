@@ -67,6 +67,7 @@ struct sGCStats {
 extern struct sGCStats GCStats;
 
 void *reallocate(void *previous, size_t oldSize, size_t newSize);
+void nil_mem(Value *mem, size_t num);
 
 void grayObject(Obj *obj); // non-recursively mark object as live
 void grayValue(Value val); // non-recursively mark object in value as live
