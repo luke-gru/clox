@@ -371,6 +371,12 @@ typedef struct LxMatchData {
     Value captures;
 } LxMatchData;
 
+typedef struct LxBinding {
+    ObjScope *scope;
+    vec_void_t v_crefStack; // class or module we're currently in, for constant lookup
+    Obj *thisObj;
+} LxBinding;
+
 #define TO_OBJ(obj) ((Obj*)(obj))
 #define TO_CLASS(obj) ((ObjClass*)(obj))
 #define TO_INSTANCE(obj) ((ObjInstance*)(obj))

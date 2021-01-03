@@ -275,7 +275,7 @@ InterpretResult interpret(ObjFunction *func, char *filename);
 InterpretResult loadScript(ObjFunction *func, char *filename);
 Value VMEval(char *src, char *filename, int lineno);
 Value VMEvalNoThrow(char *src, char *filename, int lineno);
-Value VMBindingEval(ObjScope *scope, char *src, char *filename, int lineno);
+Value VMBindingEval(LxBinding *binding, char *src, char *filename, int lineno);
 Value *getLastValue(void);
 
 // script loading

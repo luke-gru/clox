@@ -7,21 +7,25 @@
 
 ObjClass *lxBindingClass;
 
-typedef struct LxBinding {
-    ObjScope *scope;
-} LxBinding;
-
 static void markInternalBinding(Obj *obj) {
     ASSERT(obj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)obj;
     LxBinding *b = (LxBinding*)internal->data;
     grayObject(TO_OBJ(b->scope));
+    ObjClass *klass; int kidx = 0;
+    vec_foreach(&b->v_crefStack, klass, kidx) {
+        grayObject(TO_OBJ(klass));
+    }
+    if (b->thisObj) {
+        grayObject(b->thisObj);
+    }
 }
 
 static void freeInternalBinding(Obj *obj) {
     ASSERT(obj->type == OBJ_T_INTERNAL);
     ObjInternal *internal = (ObjInternal*)obj;
     LxBinding *b = (LxBinding*)internal->data;
+    vec_deinit(&b->v_crefStack);
     FREE(LxBinding, b);
 }
 
@@ -34,6 +38,21 @@ static Value lxBindingInit(int argCount, Value *args) {
     LxBinding *binding = ALLOCATE(LxBinding, 1);
     CallFrame *frame = getFrame()->prev;
     binding->scope = frame->scope;
+
+    LxThread *th = THREAD();
+    vec_init(&binding->v_crefStack);
+    ObjClass *klass; int kidx = 0;
+    vec_foreach(&th->v_crefStack, klass, kidx) {
+        vec_push(&binding->v_crefStack, klass);
+    }
+    (void)vec_pop(&binding->v_crefStack); // funny enough, `Binding` is atop the cref stack right now, we want it popped
+    // Right now, `instance Binding` is the th->thisObj, so we get the one before that
+    if (th->v_thisStack.length > 1) {
+        binding->thisObj = th->v_thisStack.data[th->v_thisStack.length-2];
+    } else {
+        binding->thisObj = NULL;
+    }
+
     ASSERT(!frame->isCCall);
     ASSERT(frame->scope);
 
@@ -135,7 +154,7 @@ static Value lxBindingEval(int argCount, Value *args) {
     if (strlen(csrc) == 0) {
         return NIL_VAL;
     }
-    return VMBindingEval(binding->scope, csrc, "(eval)", 1);
+    return VMBindingEval(binding, csrc, "(eval)", 1);
 }
 
 void Init_BindingClass(void) {

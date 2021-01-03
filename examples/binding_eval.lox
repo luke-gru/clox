@@ -1,11 +1,33 @@
+// ex: 1
+
 fun makeb() {
     var a = 3;
     return Binding();
 }
 
 var b = makeb();
-b.eval("print a;");
+b.eval("print a;"); // 3
+
+// ex: 2:
+
+class A {
+    Inner = 1;
+    b = Binding();
+}
+
+class B {
+    Inner = 4;
+    b.eval("print Inner; print this.name;"); // 1, A
+    print Inner; // 4
+    print this.name; // B
+}
+print this;
 
 __END__
 -- expect: --
 3
+1
+A
+4
+B
+nil

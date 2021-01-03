@@ -755,6 +755,13 @@ static inline void setThis(unsigned n) {
     DBG_ASSERT(th->thisObj);
 }
 
+static inline void pushThis(Obj *this) {
+    register LxThread *th = vm.curThread;
+    th->thisObj = this;
+    getFrame()->instance = (ObjInstance*)th->thisObj;
+    vec_push(&th->v_thisStack, th->thisObj);
+}
+
 static inline void popThis() {
     register LxThread *th = vm.curThread;
     ASSERT(th->v_thisStack.length > 0);
@@ -2985,8 +2992,11 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_THIS): {
-          ASSERT(th->thisObj);
-          VM_PUSH(OBJ_VAL(th->thisObj));
+          if (!th->thisObj) {
+              VM_PUSH(NIL_VAL);
+          } else {
+              VM_PUSH(OBJ_VAL(th->thisObj));
+          }
           DISPATCH_BOTTOM();
       }
       CASE_OP(SPLAT_ARRAY): {
@@ -3598,9 +3608,10 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     }
 }
 
-static Value doVMBindingEval(ObjScope *scope, char *src, char *filename, int lineno, bool throwOnErr) {
+static Value doVMBindingEval(LxBinding *binding, char *src, char *filename, int lineno, bool throwOnErr) {
     CallFrame *oldFrame = getFrame();
     CallFrame *prevFrame = oldFrame;
+    ObjScope *scope = binding->scope;
     CompileErr err = COMPILE_ERR_NONE;
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
     compilerOpts.noRemoveUnusedExpressions = true;
@@ -3637,20 +3648,31 @@ static Value doVMBindingEval(ObjScope *scope, char *src, char *filename, int lin
     frame->start = 0;
     frame->ip = func->chunk->code;
     frame->slots = EC->stack;
-    ASSERT(frame->slots);
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     unhideFromGC(TO_OBJ(func));
     frame->isCCall = false;
     frame->isEval = true;
     frame->nativeFunc = NULL;
-    frame->instance = NULL; // should be scope->instance
+    if (binding->thisObj) {
+        pushThis(binding->thisObj);
+    }
+    frame->instance = TO_INSTANCE(binding->thisObj); // should be scope->instance
     frame->klass = NULL; // should be scope->klass
+
+    LxThread *th = THREAD();
+    vec_void_t old_cref_stack;
+    memcpy(&old_cref_stack, &th->v_crefStack, sizeof(vec_void_t));
+    memcpy(&th->v_crefStack, &binding->v_crefStack, sizeof(vec_void_t));
 
     setupPerScriptROGlobals(filename);
 
     ErrTag status = TAG_NONE;
     InterpretResult result = INTERPRET_OK;
+
     vm_protect(vm_run_protect, NULL, NULL, &status);
+
+    memcpy(&th->v_crefStack, &old_cref_stack, sizeof(vec_void_t));
+
     if (status == TAG_RAISE) {
         result = INTERPRET_RUNTIME_ERROR;
         THREAD()->hadError = true;
@@ -3683,8 +3705,8 @@ Value VMEval(char *src, char *filename, int lineno) {
     return doVMEval(src, filename, lineno, true);
 }
 
-Value VMBindingEval(ObjScope *scope, char *src, char *filename, int lineno) {
-    return doVMBindingEval(scope, src, filename, lineno, true);
+Value VMBindingEval(LxBinding *b, char *src, char *filename, int lineno) {
+    return doVMBindingEval(b, src, filename, lineno, true);
 }
 
 void setPrintBuf(ObjString *buf, bool alsoStdout) {
