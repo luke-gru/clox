@@ -11,7 +11,9 @@ typedef enum RNodeType {
     NODE_GROUP, // ()
     NODE_OR, // |
     NODE_REPEAT, // +
+    NODE_REPEAT_NONGREEDY, // +?
     NODE_REPEAT_Z, // *
+    NODE_REPEAT_Z_NONGREEDY, // *?
     NODE_MAYBE, // ?
     NODE_REPEAT_N, // {n[,m]}
     NODE_CCLASS, // [aeiou]

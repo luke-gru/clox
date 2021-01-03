@@ -122,9 +122,9 @@ static char *outputLiteralExpr(Node *n, int indentLevel) {
             return buf;
         }
         case STRING_TYPE: {
-            char *buf = calloc(1, strlen(tokStr(&n->tok))+1);
+            char *buf = calloc(1, strlen(tokStr(&n->tok))+3);
             ASSERT_MEM(buf);
-            sprintf(buf, "%s", tokStr(&n->tok));
+            sprintf(buf, "\"%s\"", tokStr(&n->tok));
             return buf;
         }
         default: {

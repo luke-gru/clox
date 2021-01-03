@@ -282,7 +282,13 @@ static RNode *regex_parse_node(Regex *regex, RNode *parent, RNode *prev, char **
                 return NULL;
             }
             (*src_p)++;
-            RNode *repeat = new_node(NODE_REPEAT, *src_p, 1, parent, prev->prev);
+            RNode *repeat;
+            if (**src_p == '?') {
+                (*src_p)++;
+                repeat = new_node(NODE_REPEAT_NONGREEDY, *src_p, 2, parent, prev->prev);
+            } else {
+                repeat = new_node(NODE_REPEAT, *src_p, 1, parent, prev->prev);
+            }
             if (prev->prev == NULL) {
                 parent->children = repeat;
             }
@@ -297,7 +303,13 @@ static RNode *regex_parse_node(Regex *regex, RNode *parent, RNode *prev, char **
                 return NULL;
             }
             (*src_p)++;
-            RNode *repeat = new_node(NODE_REPEAT_Z, *src_p, 1, parent, prev->prev);
+            RNode *repeat;
+            if (**src_p == '?') {
+                (*src_p)++;
+                repeat = new_node(NODE_REPEAT_Z_NONGREEDY, *src_p, 2, parent, prev->prev);
+            } else {
+                repeat = new_node(NODE_REPEAT_Z, *src_p, 1, parent, prev->prev);
+            }
             if (prev->prev == NULL) {
                 parent->children = repeat;
             }
@@ -551,12 +563,29 @@ static void regex_output_ast_node(RNode *node, RNode *parent, int indent) {
             break;
         }
         case NODE_REPEAT:
+        case NODE_REPEAT_NONGREEDY:
         case NODE_REPEAT_Z:
+        case NODE_REPEAT_Z_NONGREEDY:
         case NODE_REPEAT_N: {
-            fprintf(stderr, "%s%s", i(indent),
-                    node->type == NODE_REPEAT ? "(repeat\n" :
-                    (node->type == NODE_REPEAT_Z ? "(repeat-z\n" :
-                     "(repeat-n "));
+            switch (node->type) {
+                case NODE_REPEAT:
+                    fprintf(stderr, "%s(repeat\n", i(indent));
+                    break;
+                case NODE_REPEAT_NONGREEDY:
+                    fprintf(stderr, "%s(repeat?\n", i(indent));
+                    break;
+                case NODE_REPEAT_Z:
+                    fprintf(stderr, "%s(repeat-z\n", i(indent));
+                    break;
+                case NODE_REPEAT_Z_NONGREEDY:
+                    fprintf(stderr, "%s(repeat-z?\n", i(indent));
+                    break;
+                case NODE_REPEAT_N:
+                    fprintf(stderr, "%s(repeat-n ", i(indent));
+                    break;
+                default:
+                    break;
+            }
             if (node->type == NODE_REPEAT_N) {
                 fprintf(stderr, "%ld-%ld\n", node->repeat_min, node->repeat_max);
             }
@@ -749,6 +778,42 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 return false;
             }
         }
+        case NODE_REPEAT_NONGREEDY: { // +?
+            int count = 0;
+            RNode *child = node->children;
+            RNode *parent = node;
+            RNode *next = GET_NEXT_NODE(node);
+            char *before = *cptr_p;
+            char *biggest_pre_next_match = NULL;
+            while (node_accepts_ch(child, parent, cptr_p, nnext)) {
+                if (next) {
+                    regex_debug(1, "has next");
+                    if (regex_part_match_beg(next, *cptr_p)) {
+                        biggest_pre_next_match = *cptr_p;
+                        count += 1;
+                        regex_debug(1, "matched next: '%s'", biggest_pre_next_match);
+                        break;
+                    }
+                }
+                count += 1;
+            }
+            if (count >= 1) {
+                if (next && !biggest_pre_next_match) {
+                    *cptr_p = before;
+                    regex_debug(1, "resetting cptr_p: '%s'", *cptr_p);
+                    return false;
+                } else if (next && biggest_pre_next_match) {
+                    *cptr_p = biggest_pre_next_match;
+                    regex_debug(1, "setting cptr_p: '%s'", *cptr_p);
+                }
+                char *after = *cptr_p;
+                regex_debug(1, "Matched REPEAT_NONGREEDY (+?) for '%.*s'", after-before, before);
+                *nnext = SET_NEXT_NODE(node, cptr_p);
+                return true;
+            } else {
+                return false;
+            }
+        }
         case NODE_REPEAT_Z: {
             RNode *child = node->children;
             RNode *parent = node;
@@ -773,6 +838,34 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
             }
             char *after = *cptr_p;
             regex_debug(1, "Matched REPEAT_Z (*) for '%.*s'", after-before, before);
+            *nnext = SET_NEXT_NODE(node, cptr_p);
+            return true;
+        }
+        case NODE_REPEAT_Z_NONGREEDY: {
+            RNode *child = node->children;
+            RNode *parent = node;
+            RNode *next = GET_NEXT_NODE(node); // after *?
+            char *before = *cptr_p;
+            char *biggest_pre_next_match = NULL;
+            while (node_accepts_ch(child, parent, cptr_p, nnext)) {
+              if (next) {
+                  regex_debug(1, "has next");
+                  if (regex_part_match_beg(next, *cptr_p)) {
+                      biggest_pre_next_match = *cptr_p;
+                      regex_debug(1, "matched next: '%s'", biggest_pre_next_match);
+                      break;
+                  }
+              }
+            }
+            if (next && !biggest_pre_next_match) { // matched nothing
+                *cptr_p = before;
+                regex_debug(1, "resetting cptr_p: '%s'", *cptr_p);
+            } else if (next && biggest_pre_next_match) {
+                *cptr_p = biggest_pre_next_match;
+                regex_debug(1, "setting cptr_p: '%s'", *cptr_p);
+            }
+            char *after = *cptr_p;
+            regex_debug(1, "Matched REPEAT_Z_NONGREEDY (*?) for '%.*s'", after-before, before);
             *nnext = SET_NEXT_NODE(node, cptr_p);
             return true;
         }
@@ -1064,8 +1157,12 @@ const char *nodeTypeName(RNodeType nodeType) {
             return "OR";
         case NODE_REPEAT:
             return "REPEAT";
+        case NODE_REPEAT_NONGREEDY:
+            return "REPEAT_NONGREEDY";
         case NODE_REPEAT_Z:
             return "REPEAT_Z";
+        case NODE_REPEAT_Z_NONGREEDY:
+            return "REPEAT_Z_NONGREEDY";
         case NODE_REPEAT_N:
             return "REPEAT_N";
         case NODE_CCLASS:

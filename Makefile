@@ -113,12 +113,13 @@ build_test_regex: build
 run_test_regex:
 	@ ./bin/test_regex
 
+# NOTE: test_nodes and test_compiler aren't in the default tests right now
 .PHONY: build_tests
-build_tests: build build_test_object build_test_nodes build_test_compiler build_test_vm build_test_gc build_test_examples
+build_tests: build build_test_regex build_test_object build_test_vm build_test_gc build_test_examples
 
 .PHONY: run_tests
-run_tests: run_test_object run_test_vm run_test_gc run_test_examples
+run_tests: run_test_regex run_test_object run_test_vm run_test_gc run_test_examples
 
 .PHONY: test
-test: build build_test_object build_test_vm build_test_gc build_test_examples run_tests
+test: build_tests run_tests
 

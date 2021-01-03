@@ -8,49 +8,45 @@ Features
 --------
 
 * Add more socket classes, like UnixSocket, TCPSocket, etc, along
-with TCPServer, UnixServer.
-* Add write_nonblock() to io
-* Add IO read buffer, per-thread to avoid releasing and acquiring GVL over and
-over (not necessary if implementing read_nonblock but still fun to add and
-benchmark).
-* Add negative lookahead to regular expressions
-* Make regular expressions behave correctly for input after a repetition like
-`.*hi` (needs backtracking)
-* Add non-greediness to regular expressions
+with TCPServer, UnixServer. [MEDIUM]
+* Add write_nonblock() to io [SMALL]
+* Add negative lookahead to regular expressions [MEDIUM]
 * Make it so that global variables aren't accessible everywhere, or that
 the syntax is different for them, like in ruby.
-* Dumping/loading values to/from disk (like Ruby's Marshal)
-* Allow '?' or '!' at end of method name?
+* Dumping/loading values to/from disk (like Ruby's Marshal) [BIG]
+* Allow '?' or '!' at end of method name? [SMALL]
 * Disallow property get/set outside of class like Ruby? Also, make property
-get/set a different sigil maybe, like @prop.
-* Add method privacy (private/public)
-* Saving/loading bytecode to disk
-* Add tracing/coverage information
-* Get binding object to eval() strings
-* Add profiler
-* Add guilds, with per-guild VM lock and restricted guild to guild sharing
+get/set a different sigil maybe, like @prop. [BIG]
+* Add method privacy (private/public) [MEDIUM]
+* Saving/loading bytecode to disk [BIG]
+* Add coverage information (which lines were called, which lines
+weren't). [MEDIUM]
+* Get binding object to eval() strings [BIG]
+* Add profiler (which functions take the longest, how long they take, how many
+times they were called, percentage of total time, etc). [MEDIUM]
+* Add guilds, with per-guild VM lock and restricted guild to guild sharing [HUGE]
 
 Improvements
 ------------
 * Get local variable table living on the callframe object, not statically
-implied in the bytecode.
+implied in the bytecode. [SORT OF]
 * Get REPL to allow pasted code that's multiple lines. Right now it reads just
-one line at a time, it needs to account for non-finished statements.
+one line at a time, it needs to account for non-finished statements. [BIG]
 * Make regular expression library work with bytecodes instead of nodes, and
-benchmark the performance difference
+benchmark the performance difference [BIG]
 * Get threads running concurrently even with at least 1 mutex (right now, any
-mutex held blocks release of GVL for a thread)
-* Allow more constants in a chunk (more than 256 bytes)
-* Allow bigger jumps (more than 1 byte offsets) [GIT BRANCH]
-* Allow debugger (first, native functions maybe?) to list local variables, global variables, etc.
-* Throw SyntaxError from invalid compile/parse if given flag
-* Make variable lookup work as lookup in Environment tables, not statically
-compiled lookup
-* Allow giving keyword args to native functions
-* Change string representation to UTF8 (maybe use iconv)
-* Make autoloading thread-safe
-* Make op stack growable, not fixed at 256
-* Make call stack growable, not fixed at 64
+mutex held blocks release of GVL for a thread) [BIG]
+* Allow more constants in a chunk (more than 256 bytes) [MEDIUM]
+* Allow bigger jumps (more than 1 byte offsets) [GIT BRANCH] [MEDIUM]
+* Allow debugger to list global variables [SMALL]
+* Get debugger listing of local variables to use frame function's variables
+info instead of chunk's [MEDIUM]
+* Throw SyntaxError from invalid compile/parse if given flag [MEDIUM]
+* Allow giving keyword args to native functions [MEDIUM]
+* Change string representation to UTF8 (maybe use iconv) [HUGE]
+* Make autoloading thread-safe [MEDIUM]
+* Make op stack growable, not fixed at 256 [MEDIUM]
+* Make call stack growable, not fixed at 64 [MEDIUM]
 
 Bugs
 ----

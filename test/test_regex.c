@@ -667,6 +667,25 @@ cleanup:
     return 0;
 }
 
+static int test_repeat_nongreedy_minimal_munch(void) {
+    Regex re;
+    regex_init(&re, "(.+?)hi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    char *str = "wowhihihi";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT_EQ(true, mdata.matched);
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(5, mdata.match_len);
+    T_ASSERT_EQ(NODE_GROUP, re.groups->group->type);
+    T_ASSERT_EQ(str+0, re.groups->group->capture_beg);
+    T_ASSERT_EQ(str+3, re.groups->group->capture_end);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
 static int test_repeatz_maximal_munch(void) {
     Regex re;
     regex_init(&re, "(.*)hi", NULL);
@@ -694,6 +713,25 @@ static int test_repeatz_nomatch_if_next_not_matched(void) {
     char *str = "wowhello";
     MatchData mdata = regex_match(&re, str);
     T_ASSERT_EQ(false, mdata.matched);
+cleanup:
+    regex_free(&re);
+    return 0;
+}
+
+static int test_repeatz_nongreedy_minimal_munch(void) {
+    Regex re;
+    regex_init(&re, "(.*?)hi", NULL);
+    RegexCompileResult comp_res = regex_compile(&re);
+    T_ASSERT_EQ(REGEX_COMPILE_SUCCESS, comp_res);
+    /*regex_output_ast(&re);*/
+    char *str = "wowhihihi";
+    MatchData mdata = regex_match(&re, str);
+    T_ASSERT_EQ(true, mdata.matched);
+    T_ASSERT_EQ(0, mdata.match_start);
+    T_ASSERT_EQ(5, mdata.match_len);
+    T_ASSERT_EQ(NODE_GROUP, re.groups->group->type);
+    T_ASSERT_EQ(str+0, re.groups->group->capture_beg);
+    T_ASSERT_EQ(str+3, re.groups->group->capture_end);
 cleanup:
     regex_free(&re);
     return 0;
@@ -753,7 +791,9 @@ int main(int argc, char *argv[]) {
     RUN_TEST(test_capture_groups_nodes_with_nonatom3);
     RUN_TEST(test_repeat_maximal_munch);
     RUN_TEST(test_repeat_nomatch_if_next_not_matched);
+    RUN_TEST(test_repeat_nongreedy_minimal_munch);
     RUN_TEST(test_repeatz_maximal_munch);
     RUN_TEST(test_repeatz_nomatch_if_next_not_matched);
+    RUN_TEST(test_repeatz_nongreedy_minimal_munch);
     END_TESTS();
 }

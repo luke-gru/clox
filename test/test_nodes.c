@@ -51,8 +51,8 @@ static int test_output_node_literal_string(void) {
     };
     Token strTok = {
         .type = TOKEN_STRING_DQUOTE,
-        .start = "\"testing\n\"",
-        .length = strlen("\"testing\n\"")+1,
+        .start = "testing\n",
+        .length = strlen("testing\n")+1,
         .line = 1
     };
     n = createNode(nType, strTok, NULL);
