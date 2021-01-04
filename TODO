@@ -21,10 +21,11 @@ get/set a different sigil maybe, like @prop. [BIG]
 * Saving/loading bytecode to disk [BIG]
 * Add coverage information (which lines were called, which lines
 weren't). [MEDIUM]
-* Get binding object to eval() strings [BIG]
 * Add profiler (which functions take the longest, how long they take, how many
 times they were called, percentage of total time, etc). [MEDIUM]
 * Add guilds, with per-guild VM lock and restricted guild to guild sharing [HUGE]
+* Add better VM introspection when doing per-instruction debugging. Be able to view
+all VM stacks, ex: cref stack, this stack, etc. [MEDIUM]
 
 Improvements
 ------------
@@ -38,9 +39,6 @@ benchmark the performance difference [BIG]
 mutex held blocks release of GVL for a thread) [BIG]
 * Allow more constants in a chunk (more than 256 bytes) [MEDIUM]
 * Allow bigger jumps (more than 1 byte offsets) [GIT BRANCH] [MEDIUM]
-* Allow debugger to list global variables [SMALL]
-* Get debugger listing of local variables to use frame function's variables
-info instead of chunk's [MEDIUM]
 * Throw SyntaxError from invalid compile/parse if given flag [MEDIUM]
 * Allow giving keyword args to native functions [MEDIUM]
 * Change string representation to UTF8 (maybe use iconv) [HUGE]
@@ -58,17 +56,11 @@ method
 * super bug for getters/setters (examples/super_setter.lox)
 * Bug in repl, inspect on last value doesn't work right when inspect()
 is a lox defined method instead of a native
-* Nodes created during parsing are never freed. This results in memory leak
-when evaling.
 * loadScript/requireScript should use pwd of lox process during startup for
 file lookup, not pwd when calling loadScript/requireScript
 * +=, -=, etc. doesn't work for non-variables/propsetters, like arg[0] += 1, or other lvalues
 * GC stress=full (full GC after every allocation) fails for certain scripts in examples/ with 'thread' or
 'mutex' in their name. See test/test_stress_gc.rb for details.
-* Eval() doesn't evaluate local variables, because there isn't a chunk
-hierarchy, and we don't pass the current chunk as the environment when
-evaling. The best solution might be to used named locals in the bytecode
-instead of indexed. Would fix issues with the debugger as well.
 
 Optimizations
 -------------

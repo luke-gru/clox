@@ -2398,7 +2398,7 @@ vmLoop:
       if (byteCount > 0) {
           lastLine = ch->lines[byteCount-1];
       }
-      if (UNLIKELY(curLine != lastLine && shouldEnterDebugger(&vm.debugger, "", curLine, lastLine, ndepth, nwidth))) {
+      if (UNLIKELY(shouldEnterDebugger(&vm.debugger, "", curLine, lastLine, ndepth, nwidth))) {
           enterDebugger(&vm.debugger, "", curLine, ndepth, nwidth);
       }
 

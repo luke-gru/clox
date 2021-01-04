@@ -3,6 +3,7 @@
 #include <errno.h>
 #include "debugger.h"
 #include "vm.h"
+#include "compiler.h"
 #include "memory.h"
 
 #define DBG_PROMPT " > "
@@ -201,15 +202,24 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
             }
         } else if (strcmp(buf, "locals") == 0 || strcmp(buf, "l") == 0) {
             CallFrame *frame = &th->ec->frames[th->ec->frameCount-1];
-            Chunk *ch = frame->closure->function->chunk;
-            Entry e;
-            int idx = 0;
-            TABLE_FOREACH(ch->varInfo, e, idx, {
-                    fprintf(stdout, "%s: ", AS_CSTRING(e.key));
-                    int slot = (int)AS_NUMBER(e.value);
-                    Value val = frame->slots[slot];
+            ObjFunction *func = frame->closure->function;
+            int ipAt = frame->ip - func->chunk->code;
+            LocalVariable *var; int vidx = 0;
+            vec_foreach(&func->variables, var, vidx) {
+                if (var->bytecode_declare_start <= ipAt && ipAt <= var->scope->bytecode_end) {
+                    fprintf(stdout, "%s: ", var->name->chars);
+                    int slot = var->slot;
+                    Value val = frame->scope->localsTable.tbl[slot];
                     printValue(stdout, val, true, -1);
                     fprintf(stdout, " [%d]\n", slot);
+                }
+            }
+        } else if (strcmp(buf, "globals") == 0) {
+            Entry e; int gidx = 0;
+            TABLE_FOREACH(&vm.globals, e, gidx, {
+                fprintf(stdout, "%s: ", AS_CSTRING(e.key));
+                printValue(stdout, e.value, true, -1);
+                fprintf(stdout, "\n");
             });
         } else {
             fprintf(stderr, "Unrecognized command: '%s'\n", buf);
