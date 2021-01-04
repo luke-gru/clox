@@ -528,8 +528,8 @@ static void regex_output_ast_node(RNode *node, RNode *parent, int indent) {
         }
         case NODE_ATOM: {
             fprintf(stderr, "%s(atom %.*s)", i(indent), 1, node->tok);
-            fprintf(stderr, "  parent = %s, next = %s\n", nodeTypeName(parent->type),
-                node->next == NULL ? "NULL" : nodeTypeName(node->next->type));
+            fprintf(stderr, "  parent = %s, next = %s\n", rnodeTypeName(parent->type),
+                node->next == NULL ? "NULL" : rnodeTypeName(node->next->type));
             break;
         }
         case NODE_OR: {
@@ -1071,7 +1071,7 @@ MatchData regex_match(Regex *regex, const char *string) {
     bool bolAnchor = false;
     bool lastAccept = false;
     while (**cptr_p) {
-        regex_debug(1, "matching '%c' at nodetype=%s", **cptr_p, nodeTypeName(node->type));
+        regex_debug(1, "matching '%c' at nodetype=%s", **cptr_p, rnodeTypeName(node->type));
         RNode *nnext = NULL;
         char *match_start = *cptr_p;
         (void)match_start;
@@ -1147,7 +1147,7 @@ MatchData regex_match(Regex *regex, const char *string) {
 }
 
 
-const char *nodeTypeName(RNodeType nodeType) {
+const char *rnodeTypeName(RNodeType nodeType) {
     switch (nodeType) {
         case NODE_ATOM:
             return "ATOM";

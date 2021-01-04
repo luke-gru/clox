@@ -2417,6 +2417,7 @@ ObjFunction *compile_src(char *src, CompileErr *err) {
     initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, NULL);
     emitNode(program);
     ObjFunction *prog = endCompiler();
+    prog->programNode = program;
     if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
         printFunctionTables(stderr, prog);
         printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
@@ -2467,6 +2468,7 @@ ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, 
     emitNode(program);
     popScope(stype);
     ObjFunction *prog = endCompiler();
+    prog->programNode = program;
     if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
         printFunctionTables(stderr, prog);
         printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
@@ -2517,6 +2519,7 @@ ObjFunction *compile_binding_eval_src(char *src, CompileErr *err, ObjScope *scop
     emitNode(program);
     popScope(stype);
     ObjFunction *prog = endCompiler();
+    prog->programNode = program;
     if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
         printFunctionTables(stderr, prog);
         printDisassembledChunk(stderr, prog->chunk, "Bytecode:");

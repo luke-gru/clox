@@ -13,6 +13,7 @@ Node *createNode(node_type_t type, Token tok, vec_nodep_t *children) {
     n->type = type;
     n->tok = tok;
     n->data = NULL;
+    n->freeDataCb = NULL;
     if (children == NULL) {
         n->children = ALLOCATE(vec_nodep_t, 1);
         vec_init(n->children);
@@ -32,6 +33,7 @@ void nodeAddChild(Node *node, Node *child) {
 void nodeForeachChild(Node *node, NodeCallback cb) {
     int i = 0;
     Node *n = NULL;
+    ASSERT(node->children);
     vec_foreach(node->children, n, i) {
         cb(n, i);
     }
@@ -41,7 +43,10 @@ void nodeForeachChild(Node *node, NodeCallback cb) {
 void freeNode(Node *node, bool freeChildren);
 
 static void freeChildNodeCb(Node *node, int idx) {
-    if (node) freeNode(node, true);
+    (void)idx;
+    if (node) {
+        freeNode(node, true);
+    }
 }
 
 void freeNode(Node *node, bool freeChildren) {
@@ -49,6 +54,12 @@ void freeNode(Node *node, bool freeChildren) {
         nodeForeachChild(node, freeChildNodeCb);
         vec_deinit(node->children);
         FREE(vec_nodep_t, node->children);
+    } else if (!freeChildren && node->children) {
+        vec_deinit(node->children);
+        FREE(vec_nodep_t, node->children);
+    }
+    if (node->data && node->freeDataCb) {
+        node->freeDataCb(node);
     }
     FREE(Node, node);
 }

@@ -719,6 +719,14 @@ void scanAllPrint(Scanner *scan, char *src) {
 char *tokStr(Token *tok) {
     if (tok->lexeme != NULL) return tok->lexeme;
     ASSERT(tok->length >= 0);
+    if (tok->length == 0 && !tok->start) {
+        char *buf = (char*)calloc(1, 1);
+        ASSERT_MEM(buf);
+        buf[0] = '\0';
+        tok->lexeme = buf;
+        tok->alloced = true;
+        return buf;
+    }
     ASSERT(tok->start);
     char *buf = (char*)calloc(1, tok->length+1);
     ASSERT_MEM(buf);

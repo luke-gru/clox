@@ -137,6 +137,7 @@ typedef struct ObjFunction {
   vec_void_t variables;
   Obj *klass; // ObjClass* or ObjModule* (if method)
   struct sNode *funcNode;
+  struct sNode *programNode;
   struct Upvalue *upvaluesInfo;
   unsigned short arity; // number of required args
   unsigned short numDefaultArgs; // number of optional default args

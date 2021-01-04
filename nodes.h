@@ -13,6 +13,7 @@ extern "C" {
 struct sNode;
 typedef vec_t(struct sNode*) vec_nodep_t;
 
+#define EXPR_TYPE_ENUM_FIRST 1
 typedef enum eExprType {
     BINARY_EXPR = 1,
     LOGICAL_EXPR,
@@ -52,6 +53,7 @@ static const char *exprTypeNames[] = {
     "UNARY_EXPR",
     "VARIABLE_EXPR",
     "CONSTANT_EXPR",
+    "CONSTANT_LOOKUP_EXPR",
     "ASSIGN_EXPR",
     "CALL_EXPR",
     "CALL_BLOCK_EXPR",
@@ -59,6 +61,7 @@ static const char *exprTypeNames[] = {
     "ANON_FN_EXPR",
     "PROP_ACCESS_EXPR",
     "PROP_SET_EXPR",
+    "PROP_SET_BINOP_EXPR",
     "THIS_EXPR",
     "SUPER_EXPR",
     "SPLAT_EXPR",
@@ -108,6 +111,10 @@ static const char *stmtTypeNames[] = {
     "CONTINUE_STMT",
     "BREAK_STMT",
     "FUNCTION_STMT",
+    "METHOD_STMT",
+    "CLASS_METHOD_STMT",
+    "GETTER_STMT",
+    "SETTER_STMT",
     "RETURN_STMT",
     "CLASS_STMT",
     "MODULE_STMT",
@@ -122,6 +129,7 @@ static const char *stmtTypeNames[] = {
     NULL
 };
 
+#define OTHER_TYPE_ENUM_FIRST 1
 typedef enum eOtherType {
     PARAM_NODE_REGULAR = 1,
     PARAM_NODE_DEFAULT_ARG,
@@ -131,6 +139,16 @@ typedef enum eOtherType {
     TOKEN_NODE
 } OtherType;
 
+static const char *otherTypeNames[] = {
+    "PARAM_NODE_REGULAR",
+    "PARAM_NODE_DEFAULT_ARG",
+    "PARAM_NODE_KWARG",
+    "PARAM_NODE_SPLAT",
+    "PARAM_NODE_BLOCK",
+    "TOKEN_NODE",
+    NULL
+};
+
 typedef struct ParamNodeInfo {
     size_t defaultArgIPOffset;
 } ParamNodeInfo;
@@ -138,7 +156,7 @@ typedef struct ParamNodeInfo {
 typedef enum eNodeType {
     NODE_EXPR = 1,
     NODE_STMT,
-    NODE_OTHER // ex: param nodes
+    NODE_OTHER, // ex: param nodes
 } NodeType;
 
 typedef enum eLiteralType {
@@ -161,12 +179,16 @@ typedef struct sNodeType {
     int litKind; // if a literal expr, what kind?
 } node_type_t;
 
+struct sNode;
+typedef void (*NodeFreeDataCallback)(struct sNode *node);
+
 typedef struct sNode {
-    void *data; // used in some circumstances, but try to avoid it
     node_type_t type;
     Token tok;
     vec_nodep_t *children;
     struct sNode *parent;
+    void *data; // used in some circumstances, but try to avoid it
+    NodeFreeDataCallback freeDataCb;
 } Node;
 
 extern int astDetailLevel; // for printing AST
@@ -178,9 +200,7 @@ void nodeAddChild(Node *node, Node *child);
 static inline void *nodeGetData(Node *node) {
     return node->data;
 }
-static inline void nodeAddData(Node *node, void *data) {
-    node->data = data;
-}
+void nodeAddData(Node *node, void *data, NodeFreeDataCallback freeDataCb);
 void nodeForeachChild(Node *node, NodeCallback cb);
 void freeNode(Node *node, bool freeChildren);
 
@@ -201,6 +221,19 @@ static inline const char *nodeKindStr(int nKind) {
         return stmtTypeNames[nKind-STMT_TYPE_ENUM_FIRST];
     } else {
         return exprTypeNames[nKind-1];
+    }
+}
+
+static inline const char *nodeTypeName(Node *node) {
+    switch (node->type.type) {
+        case NODE_EXPR:
+            return exprTypeNames[node->type.kind-EXPR_TYPE_ENUM_FIRST];
+        case NODE_STMT:
+            return stmtTypeNames[node->type.kind-STMT_TYPE_ENUM_FIRST];
+        case NODE_OTHER:
+            return otherTypeNames[node->type.kind-OTHER_TYPE_ENUM_FIRST];
+        default:
+            UNREACHABLE_RETURN("unknown");
     }
 }
 

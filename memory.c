@@ -250,7 +250,7 @@ void addHeap() {
             fprintf(stderr, "can't alloc new heap list\n");
             _exit(1);
         }
-        GCStats.totalAllocated += newHeapListSz;
+        GCStats.totalAllocated += (HEAPLIST_INCREMENT*sizeof(ObjAny*));
     }
 
     size_t heapSz = sizeof(ObjAny)*HEAP_SLOTS;
@@ -970,6 +970,9 @@ void freeObject(Obj *obj) {
             vec_deinit(&func->scopes);
             vec_deinit(&func->variables);
             FREE_SIZE(sizeof(Upvalue)*LX_MAX_UPVALUES, func->upvaluesInfo);
+            if (func->programNode) {
+                freeNode(func->programNode, true);
+            }
             GC_TRACE_DEBUG(5, "Freeing ObjFunction: p=%p", obj);
             obj->type = OBJ_T_NONE;
             break;

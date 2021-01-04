@@ -206,6 +206,8 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
             return fprintf(file, "%.*s", PRINTNUM(10, maxLen), "<internal>");
         } else if (OBJ_TYPE(value) == OBJ_T_SCOPE) {
             return fprintf(file, "%.*s", PRINTNUM(7, maxLen), "<scope>");
+        } else if (OBJ_TYPE(value) == OBJ_T_ICLASS) {
+            return fprintf(file, "%.*s", PRINTNUM(8, maxLen), "<iclass>");
         } else {
             UNREACHABLE("Unknown object type: valtype=%s (objtype=%d)",
                 typeOfVal(value),

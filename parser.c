@@ -249,6 +249,16 @@ Node *parse(Parser *p) {
     return ret;
 }
 
+void nodeAddData(Node *node, void *data, NodeFreeDataCallback freeDataCb) {
+    node->data = data;
+    node->freeDataCb = freeDataCb;
+}
+
+static void freeSuperTokenCallback(Node *node) {
+    ASSERT(node->data);
+    FREE(Token, node->data);
+}
+
 static Node *declaration(void) {
     TRACE_START("declaration");
     if (match(TOKEN_VAR)) {
@@ -276,7 +286,7 @@ static Node *declaration(void) {
         if (match(TOKEN_LESS)) {
             consume(TOKEN_IDENTIFIER, "Expected class name after '<' in class declaration");
             Token superName = current->previous;
-            nodeAddData(classNode, (void*)copyToken(&superName));
+            nodeAddData(classNode, (void*)copyToken(&superName), freeSuperTokenCallback);
         }
 
         consume(TOKEN_LEFT_BRACE, "Expected '{' after class name");
@@ -779,9 +789,19 @@ static Node *expression(void) {
 
 static vec_nodep_t *createNodeVec(void) {
     vec_nodep_t *paramNodes = ALLOCATE(vec_nodep_t, 1);
-    ASSERT_MEM(paramNodes);
     vec_init(paramNodes);
     return paramNodes;
+}
+
+static void freeParamNodesDataCb(Node *node) {
+    ASSERT(node->data);
+    vec_nodep_t *params = (vec_nodep_t*)node->data;
+    Node *param; int pidx = 0;
+    vec_foreach(params, param, pidx) {
+        freeNode(param, true);
+    }
+    vec_deinit(params);
+    FREE(vec_nodep_t, params);
 }
 
 // FUN keyword has already been parsed, for regular functions
@@ -930,7 +950,7 @@ static Node *funDeclaration(ParseFunctionType fnType) {
         ASSERT(0);
     }
     Node *funcNode = createNode(funcType, nameTok, NULL);
-    nodeAddData(funcNode, (void*)paramNodes);
+    nodeAddData(funcNode, (void*)paramNodes, freeParamNodesDataCb);
     nodeAddChild(funcNode, blockNode);
     TRACE_END("funDeclaration");
     return funcNode;
@@ -996,6 +1016,7 @@ static Node *assignment() {
             ret = createNode(propsetT, lval->tok, NULL);
             nodeAddChild(ret, vec_first(lval->children));
             nodeAddChild(ret, rval);
+            freeNode(lval, false);
             TRACE_END("propAccessExpr");
         } else if (nodeKind(lval) == INDEX_GET_EXPR) {
             TRACE_START("indexGetExpr");
@@ -1007,6 +1028,7 @@ static Node *assignment() {
             nodeAddChild(ret, vec_first(lval->children));
             nodeAddChild(ret, lval->children->data[1]);
             nodeAddChild(ret, rval);
+            freeNode(lval, false);
             TRACE_END("indexGetExpr");
         } else if (nodeKind(lval) == SUPER_EXPR) {
             ASSERT(0); // FIXME
@@ -1018,6 +1040,7 @@ static Node *assignment() {
             ret = createNode(propsetT, lval->tok, NULL);
             nodeAddChild(ret, vec_first(lval->children));
             nodeAddChild(ret, rval);
+            freeNode(lval, false);
             TRACE_END("propAccessExpr (super.)");
             // TODO turn into propset
         } else {

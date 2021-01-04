@@ -281,6 +281,7 @@ ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, FunctionType ftyp
     function->name = NULL;
     function->klass = NULL;
     function->funcNode = funcNode;
+    function->programNode = NULL;
     function->isSingletonMethod = false;
     function->hasRestArg = false;
     function->hasBlockArg = false;
@@ -699,6 +700,8 @@ const char *typeOfObj(Obj *obj) {
         return "closure";
     case OBJ_T_INTERNAL:
         return "internal";
+    case OBJ_T_ICLASS:
+        return "iclass";
     case OBJ_T_FUNCTION:
     case OBJ_T_NATIVE_FUNCTION:
     case OBJ_T_BOUND_METHOD:

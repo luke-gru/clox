@@ -98,7 +98,7 @@ void regex_free(Regex *regex);
 RegexCompileResult regex_compile(Regex *regex);
 MatchData regex_match(Regex *regex, const char *string);
 void regex_output_ast(Regex *regex);
-const char *nodeTypeName(RNodeType nodeType);
+const char *rnodeTypeName(RNodeType nodeType);
 
 #ifdef __cplusplus
 }
