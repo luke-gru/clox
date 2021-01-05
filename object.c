@@ -278,6 +278,7 @@ ObjFunction *newFunction(Chunk *chunk, struct sNode *funcNode, FunctionType ftyp
     function->numDefaultArgs = 0;
     function->numKwargs = 0;
     function->upvalueCount = 0;
+    function->localCount = 0;
     function->name = NULL;
     function->klass = NULL;
     function->funcNode = funcNode;
@@ -334,12 +335,13 @@ ObjUpvalue *newUpvalue(Value *slot, int flags) {
 
 ObjScope *newScope(ObjFunction *userFunc) {
     ObjScope *scope = ALLOCATE_OBJ(ObjScope, OBJ_T_SCOPE, NEWOBJ_FLAG_NONE);
-    Value *tbl = NULL;
-    /*ASSERT_MEM(tbl);*/
-    /*nil_mem(tbl, userFunc->localCount);*/
-    scope->localsTable.size = 0;
-    scope->localsTable.capacity = 0;
-    scope->localsTable.tbl = tbl;
+    scope->localsTable.size = userFunc->localCount;
+    scope->localsTable.capacity = userFunc->localCount;
+    if (userFunc->localCount > 0) {
+        Value *tbl = ALLOCATE(Value, userFunc->localCount);
+        nil_mem(tbl, userFunc->localCount);
+        scope->localsTable.tbl = tbl;
+    }
     scope->function = userFunc;
     return scope;
 }

@@ -91,6 +91,7 @@ typedef struct Compiler {
   // The number of local variables declared/defined in this scope (including
   // function parameters).
   int localCount;
+  int localCountMax;
 
   // The current level of block scope nesting. Zero is the outermost local
   // scope (global scope)

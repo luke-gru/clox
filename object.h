@@ -143,6 +143,7 @@ typedef struct ObjFunction {
   unsigned short numDefaultArgs; // number of optional default args
   unsigned short numKwargs;
   unsigned short upvalueCount;
+  int localCount;
   bool isSingletonMethod;
   bool hasRestArg;
   bool hasBlockArg;

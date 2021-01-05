@@ -1460,17 +1460,14 @@ static inline bool checkFunctionArity(ObjFunction *func, int argCount, CallInfo 
     return true;
 }
 
-// TODO: fixme, this leaks memory right now. The scope is already allocated
-// with a given size, we shouldn't reallocate. Once scopes are working I need to
-// fix this.
 static void setupLocalsTable(CallFrame *frame) {
     int localsSize = EC->stackTop - frame->slots;
-    ASSERT(frame->scope);
-    frame->scope->localsTable.size = localsSize;
-    frame->scope->localsTable.capacity = localsSize;
+    // this shouldn't occur, but just in case
+    if (frame->scope->localsTable.size < localsSize) {
+        growLocalsTable(frame->scope, localsSize);
+    }
     VM_DEBUG(1, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
     if (localsSize > 0) {
-        frame->scope->localsTable.tbl = ALLOCATE(Value, localsSize);
         VM_DEBUG(2, "Setting up localsTable for frame %s, size %d", callFrameName(frame), localsSize);
         memcpy(frame->scope->localsTable.tbl, frame->slots, sizeof(Value)*localsSize);
     }
@@ -2722,7 +2719,9 @@ vmLoop:
               VM_PUSH(NIL_VAL);
               peekIdx++;
           }
-          frame->slots[slot] = unpackValue(peek(peekIdx+unpackIdx), unpackIdx); // locals are popped at end of scope by VM
+          Value val = unpackValue(peek(peekIdx+unpackIdx), unpackIdx);
+          frame->slots[slot] = val; // locals are popped at end of scope by VM
+          frame->scope->localsTable.tbl[slot] = val;
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_LOCAL): {
@@ -3621,12 +3620,10 @@ static Value doVMEval(char *src, char *filename, int lineno, ObjInstance *instan
 
 static Value doVMBindingEval(LxBinding *binding, char *src, char *filename, int lineno, bool throwOnErr) {
     CallFrame *oldFrame = getFrame();
-    CallFrame *prevFrame = oldFrame;
     ObjScope *scope = binding->scope;
     CompileErr err = COMPILE_ERR_NONE;
     int oldOpts = compilerOpts.noRemoveUnusedExpressions;
     compilerOpts.noRemoveUnusedExpressions = true;
-    VMExecContext *old_ectx = EC;
     push_EC(true);
     resetStack();
     VMExecContext *ectx = EC;

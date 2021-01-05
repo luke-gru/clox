@@ -799,6 +799,7 @@ static ObjFunction *endCompiler() {
     copyIseqToChunk(currentIseq(), currentChunk());
     freeTable(&current->constTbl);
     freeIseq(&current->iseq);
+    func->localCount = current->localCountMax;
 
     current = current->enclosing;
     COMP_TRACE("/endCompiler");
@@ -946,6 +947,15 @@ static void patchBreaks(Insn *start, Insn *end, int offset) {
     COMP_TRACE("Patched %d breaks", numFound);
 }
 
+static int incrLocalCount(Compiler *compiler) {
+    int oldCount = compiler->localCount;
+    compiler->localCount++;
+    if (compiler->localCount > compiler->localCountMax) {
+        compiler->localCountMax = compiler->localCount;
+    }
+    return oldCount;
+}
+
 // adds local variable to current compiler's table, returns var slot
 static int addLocal(Token name) {
     if (current->localCount >= UINT8_MAX) {
@@ -959,7 +969,7 @@ static int addLocal(Token name) {
     };
     int slot = current->localCount;
     current->locals[slot] = local;
-    current->localCount++;
+    incrLocalCount(current);
     LocalVariable *var = ALLOCATE(LocalVariable, 1);
     var->name = copyString(tokStr(&name), strlen(tokStr(&name)), NEWOBJ_FLAG_OLD);
     var->scope = curScope;
@@ -983,7 +993,7 @@ static int addFakeLocal(bool popOnScopeEnd) {
         .popOnScopeEnd = popOnScopeEnd
     };
     current->locals[current->localCount] = local;
-    current->localCount++;
+    incrLocalCount(current);
     return current->localCount-1;
 }
 
@@ -1061,6 +1071,7 @@ static void initCompiler(
     }
     compiler->enclosing = current;
     compiler->localCount = 0; // NOTE: below, this is increased to 1
+    compiler->localCountMax = 0;
     compiler->scopeDepth = scopeDepth;
     compiler->function = newFunction(chunk, NULL, ftype, NEWOBJ_FLAG_OLD);
     hideFromGC(TO_OBJ(compiler->function));
@@ -1122,7 +1133,7 @@ static void initCompiler(
     // The first local variable slot is always implicitly declared, unless
     // we're in the function representing the top-level (main).
     if (ftype != FUN_TYPE_TOP_LEVEL) {
-        Local *local = &current->locals[current->localCount++];
+        Local *local = &current->locals[incrLocalCount(current)];
         local->depth = current->scopeDepth;
         local->isUpvalue = false;
         local->popOnScopeEnd = true;
@@ -1154,6 +1165,7 @@ static void initEvalCompiler(
     vec_init(&compiler->v_errMessages);
     compiler->enclosing = NULL;
     compiler->localCount = 0; // NOTE: below, this is increased to whatever it needs to be
+    compiler->localCountMax = 0;
     if (in_func->ftype == FUN_TYPE_TOP_LEVEL) {
         compiler->scopeDepth = 0;
     } else {
@@ -1173,7 +1185,7 @@ static void initEvalCompiler(
     // The first local variable slot is always implicitly declared, unless
     // we're in the function representing the top-level (main).
     if (in_func->ftype != FUN_TYPE_TOP_LEVEL) {
-        Local *local = &current->locals[current->localCount++];
+        Local *local = &current->locals[incrLocalCount(current)];
         local->depth = current->scopeDepth;
         local->isUpvalue = false;
         local->popOnScopeEnd = true;
@@ -1197,7 +1209,7 @@ static void initEvalCompiler(
         VM_DEBUG(2, "Maybe adding local %s to eval callframe", var->name->chars);
         if (var->bytecode_declare_start < bytecode_at) {
             VM_DEBUG(2, "adding local %s to eval callframe", var->name->chars);
-            Local *local = &current->locals[current->localCount++];
+            Local *local = &current->locals[incrLocalCount(current)];
             local->name.start = var->name->chars;
             local->name.length = strlen(var->name->chars);
             local->depth = current->scopeDepth;
@@ -1219,6 +1231,7 @@ static void initBindingEvalCompiler(
     vec_init(&compiler->v_errMessages);
     compiler->enclosing = NULL;
     compiler->localCount = 0; // NOTE: below, this is increased to whatever it needs to be
+    compiler->localCountMax = 0;
     if (scope->function->ftype == FUN_TYPE_TOP_LEVEL) {
         compiler->scopeDepth = 0;
     } else {
@@ -1238,7 +1251,7 @@ static void initBindingEvalCompiler(
     // The first local variable slot is always implicitly declared, unless
     // we're in the function representing the top-level (main).
     if (scope->function->ftype != FUN_TYPE_TOP_LEVEL) {
-        Local *local = &current->locals[current->localCount++];
+        Local *local = &current->locals[incrLocalCount(current)];
         local->depth = current->scopeDepth;
         local->isUpvalue = false;
         local->popOnScopeEnd = true;
@@ -1259,7 +1272,7 @@ static void initBindingEvalCompiler(
 
     Entry e; int varidx = 0;
     TABLE_FOREACH(&scope->function->localsTable, e, varidx, {
-        Local *local = &current->locals[current->localCount++];
+        Local *local = &current->locals[incrLocalCount(current)];
         local->name.start = AS_CSTRING(e.key);
         local->name.length = strlen(local->name.start);
         local->depth = current->scopeDepth;
@@ -1464,6 +1477,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     // optional arguments gets pushed in order so we can skip the local var set code when necessary
     // (when the argument is given during the call).
     int numParams = params->length;
+    bool hasKwarg = false;
     param = NULL; i = 0;
     vec_foreach(params, param, i) {
         if (param->type.kind == PARAM_NODE_DEFAULT_ARG) {
@@ -1488,6 +1502,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             defineVariable(&param->tok, localSlot, true);
             func->hasRestArg = true;
         } else if (param->type.kind == PARAM_NODE_KWARG) {
+            hasKwarg = true;
             uint8_t localSlot = declareVariable(&param->tok);
             defineVariable(&param->tok, localSlot, true);
             emitOp2(OP_CHECK_KEYWORD,
@@ -1512,6 +1527,11 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             UNREACHABLE("Unknown parameter type (kind): %d", param->type.kind);
         }
     }
+
+    if (hasKwarg) {
+        addFakeLocal(true);
+    }
+
     bool oldBreakBlock = breakBlock;
     if (ftype == FUN_TYPE_BLOCK) {
         blockDepth++;
