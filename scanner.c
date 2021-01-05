@@ -425,10 +425,12 @@ static Token heredocString(void) {
         scanLine(line, LINE_MAX, &lineLen);
 #undef LINE_MAX
         if (strncmp(line, patBuf, patBufi) == 0) { // end of heredoc
+            int extraLen = lineLen-patBufi;
             Token tok = makeToken(TOKEN_STRING_DQUOTE);
-            tok.length -= patBufi+1;
+            tok.length -= (extraLen+patBufi);
             ASSERT(tok.length > 0);
-            current->current -= (lineLen-patBufi); // unscan the ';' after the pattern, if on the same line
+            // unscan the ';' or ');' after the pattern, if on the same line
+            current->current -= extraLen;
 
             // replace \" with "
             char *newBuf = (char*)calloc(1, tok.length+1);

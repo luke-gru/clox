@@ -357,7 +357,7 @@ Value createIterator(Value iterable) {
         callVMMethod(iterObj, OBJ_VAL(nativeIteratorInit), 1, &iterable, NULL);
         return pop();
     } else if (IS_INSTANCE(iterable)) {
-        ObjString *iterId = INTERNED("iter", 4);
+        ObjString *iterId = INTERN("iter");
         ObjInstance *instance = AS_INSTANCE(iterable);
         Obj *iterMethod = instanceFindMethod(instance, iterId);
         Value ret;
@@ -365,7 +365,7 @@ Value createIterator(Value iterable) {
             callVMMethod(instance, OBJ_VAL(iterMethod), 0, NULL, NULL);
             ret = pop();
         } else {
-            ObjString *iterNextId = INTERNED("iterNext", 8);
+            ObjString *iterNextId = INTERN("iterNext");
             Obj *iterNextMethod = instanceFindMethodOrRaise(instance, iterNextId);
             (void)iterNextMethod; // just check for existence of iterNext method
             ObjInstance *iterObj = newInstance(lxIteratorClass, NEWOBJ_FLAG_NONE);
@@ -506,22 +506,22 @@ void initVM() {
     vm.inited = true; // NOTE: VM has to be inited before creation of strings
     vm.exited = false;
     vm.exiting = false;
-    vm.initString = INTERNED("init", 4);
-    vm.fileString = INTERNED("__FILE__", 8);
-    vm.dirString  = INTERNED("__DIR__", 7);
-    vm.funcString = INTERNED("__FUNC__",  8);
-    vm.mainString = INTERNED("(main)",  6);
-    vm.anonString = INTERNED("(anon)",  6);
-    vm.opAddString = INTERNED("opAdd", 5);
-    vm.opDiffString = INTERNED("opDiff", 6);
-    vm.opMulString = INTERNED("opMul", 5);
-    vm.opDivString = INTERNED("opDiv", 5);
-    vm.opShovelLString = INTERNED("opShovelLeft", 12);
-    vm.opShovelRString = INTERNED("opShovelRight", 13);
-    vm.opIndexGetString = INTERNED("opIndexGet", 10);
-    vm.opIndexSetString = INTERNED("opIndexSet", 10);
-    vm.opEqualsString = INTERNED("opEquals", 8);
-    vm.opCmpString = INTERNED("opCmp", 5);
+    vm.initString = INTERN("init");
+    vm.fileString = INTERN("__FILE__");
+    vm.dirString  = INTERN("__DIR__");
+    vm.funcString = INTERN("__FUNC__");
+    vm.mainString = INTERN("(main)");
+    vm.anonString = INTERN("(anon)");
+    vm.opAddString = INTERN("opAdd");
+    vm.opDiffString = INTERN("opDiff");
+    vm.opMulString = INTERN("opMul");
+    vm.opDivString = INTERN("opDiv");
+    vm.opShovelLString = INTERN("opShovelLeft");
+    vm.opShovelRString = INTERN("opShovelRight");
+    vm.opIndexGetString = INTERN("opIndexGet");
+    vm.opIndexSetString = INTERN("opIndexSet");
+    vm.opEqualsString = INTERN("opEquals");
+    vm.opCmpString = INTERN("opCmp");
 
     pushFrame(NULL);
 
@@ -957,12 +957,12 @@ static void showUncaughtError(Value err) {
     } else {
         className = "(anon)";
     }
-    Value msg = getProp(err, INTERNED("message", 7));
+    Value msg = getProp(err, INTERN("message"));
     char *msgStr = NULL;
     if (!IS_NIL(msg)) {
         msgStr = VAL_TO_STRING(msg)->chars;
     }
-    Value bt = getProp(err, INTERNED("backtrace", 9));
+    Value bt = getProp(err, INTERN("backtrace"));
     ASSERT(!IS_NIL(bt));
     int btSz = ARRAY_SIZE(bt);
     fprintf(stderr, "Uncaught error, class: %s\n", className);
@@ -992,7 +992,7 @@ void setBacktrace(Value err) {
     LxThread *th = vm.curThread;
     DBG_ASSERT(IS_AN_ERROR(err));
     Value ret = newArray();
-    setProp(err, INTERNED("backtrace", 9), ret);
+    setProp(err, INTERN("backtrace"), ret);
     int numECs = th->v_ecs.length;
     VMExecContext *ctx;
     for (int i = numECs-1; i >= 0; i--) {
@@ -1329,7 +1329,8 @@ void popFrame(void) {
     }
     frame->scope = NULL;
     EC->frameCount--;
-    frame = getFrameOrNull(); // new frame
+    frame = getFrameOrNull(); // prev frame
+    VM_DEBUG(3, "setting roglobals");
     if (LIKELY(frame != NULL)) {
         if (frame->name) {
             tableSet(&EC->roGlobals, OBJ_VAL(vm.funcString), OBJ_VAL(frame->name));
@@ -1346,6 +1347,7 @@ void popFrame(void) {
             }
         }
     }
+    VM_DEBUG(3, "/popframe");
     ASSERT_VALID_STACK();
 }
 
@@ -1412,7 +1414,7 @@ static void pushNativeFrame(ObjNative *native) {
     vm.curThread->inCCall++;
 }
 
-// sets up VM/C call jumpbuf if not set
+// sets up VM/C call jumpbuf if not set, and calls the native function
 static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args, CallInfo *cinfo) {
     LxThread *th = vm.curThread;
     if (cinfo && cinfo->blockInstance) {
@@ -1510,6 +1512,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     LxThread *th = vm.curThread;
     Value blockInstance = NIL_VAL;
     bool blockInstancePopped = false;
+    Value poppedBlockInstance = NIL_VAL;
     if (argCount > 0 && callInfo) {
         if (IS_A_BLOCK(peek(0))) {
             Value blkObj = peek(0);
@@ -1571,7 +1574,6 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                 DBG_ASSERT(instance);
                 newFrame->instance = TO_INSTANCE(instance);
                 vec_push(&th->v_thisStack, TO_OBJ(instance));
-                th->thisObj = TO_OBJ(instance);
                 newFrame->klass = frameClass;
                 if (newFrame->klass) {
                     pushCref(newFrame->klass);
@@ -1589,15 +1591,17 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
                         popFrame();
                     }
                     ASSERT(th->inCCall == 0);
-                    VM_DEBUG(2, "Rethrowing inside VM");
+                    VM_DEBUG(2, "Rethrowing inside VM loop");
                     throwError(th->lastErrorThrown); // re-throw inside VM
                     return false;
                 } else {
                     VM_DEBUG(2, "native initializer returned");
-                    EC->stackTop = getFrame()->slots;
+                    EC->stackTop = newFrame->slots;
+                    hideFromGC(AS_OBJ(val));
                     popFrame();
                     ASSERT(IS_INSTANCE_LIKE(val));
                     push(val);
+                    unhideFromGC(AS_OBJ(val));
                     return true;
                 }
             }
@@ -1654,7 +1658,7 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
         th = vm.curThread;
         newFrame->slots = ec->stackTop - argcActuali;
         if (th->returnedFromNativeErr) {
-            VM_DEBUG(2, "Returned from native function with error");
+            VM_DEBUG(2, "Returned from native function %s with error", native->name->chars);
             th->returnedFromNativeErr = false;
             while (getFrame() >= newFrame) {
                 popFrame();
@@ -1664,11 +1668,18 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
             throwError(th->lastErrorThrown); // re-throw inside VM
             return false;
         } else {
-            VM_DEBUG(2, "Returned from native function without error");
-            ec->stackTop = getFrame()->slots;
+            VM_DEBUG(2, "Returned from native function %s without error", native->name->chars);
+            ec->stackTop = newFrame->slots;
+            if (IS_OBJ(val)) {
+                hideFromGC(AS_OBJ(val));
+            }
             popFrame();
             ASSERT(!IS_UNDEF(val));
             push(val);
+            if (IS_OBJ(val)) {
+                unhideFromGC(AS_OBJ(val));
+                ASSERT(AS_OBJ(val)->type != OBJ_T_NONE);
+            }
         }
         return true;
     } else {
@@ -1698,10 +1709,12 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     if (func->numKwargs > 0 && callInfo) {
         if (!IS_NIL(blockInstance) && IS_A_BLOCK(peek(0))) {
             argCount--;
-            pop();
+            poppedBlockInstance = pop();
+            hideFromGC(AS_OBJ(poppedBlockInstance));
             blockInstancePopped = true;
         }
         kwargsMap = newMap();
+        hideFromGC(AS_OBJ(kwargsMap));
         Node *param = NULL;
         int pi = 0;
         vec_foreach_rev(params, param, pi) {
@@ -1721,7 +1734,8 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     }
 
     if (func->numDefaultArgs > 0 && !IS_NIL(blockInstance) && !blockInstancePopped && IS_A_BLOCK(peek(0))) {
-        pop();
+        poppedBlockInstance = pop();
+        hideFromGC(AS_OBJ(poppedBlockInstance));
         argCount--;
         blockInstancePopped = true;
     }
@@ -1820,8 +1834,10 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     if (func->hasBlockArg && callInfo->blockFunction && IS_NIL(blockInstance)) {
         // TODO: get closure created here with upvals!
         Value blockClosure = OBJ_VAL(newClosure(callInfo->blockFunction, NEWOBJ_FLAG_NONE));
+        hideFromGC(AS_OBJ(blockClosure));
         Obj *blkClosure = AS_OBJ(blockClosure);
         push(newBlock(blkClosure));
+        unhideFromGC(AS_OBJ(blockClosure));
         argCountWithRestAry++;
     } else if (func->hasBlockArg && IS_NIL(blockInstance)) {
         push(NIL_VAL);
@@ -1830,11 +1846,13 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
 
     if (blockInstancePopped) {
         push(blockInstance);
+        unhideFromGC(AS_OBJ(poppedBlockInstance));
         argCountWithRestAry++;
     }
 
     if (func->numKwargs > 0) {
         push(kwargsMap);
+        unhideFromGC(AS_OBJ(kwargsMap));
     }
 
     // add frame
@@ -2075,7 +2093,7 @@ NORETURN void throwError(Value self) {
     ASSERT(IS_INSTANCE(self));
     LxThread *th = vm.curThread;
     th->lastErrorThrown = self;
-    if (IS_NIL(getProp(self, INTERNED("backtrace", 9)))) {
+    if (IS_NIL(getProp(self, INTERN("backtrace")))) {
         setBacktrace(self);
     }
     // error from VM
@@ -2914,7 +2932,8 @@ vmLoop:
       CASE_OP(CALL): {
           uint8_t numArgs = READ_BYTE();
           if (th->lastSplatNumArgs >= 0) {
-              numArgs += (th->lastSplatNumArgs-1);
+              numArgs += th->lastSplatNumArgs;
+              numArgs--;
               th->lastSplatNumArgs = -1;
           }
           Value callableVal = VM_PEEK(numArgs);
@@ -2950,9 +2969,8 @@ vmLoop:
           Value callInfoVal = READ_CONSTANT();
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           if (th->lastSplatNumArgs >= 0) {
-              if (th->lastSplatNumArgs > 0) {
-                  numArgs += (th->lastSplatNumArgs-1);
-              }
+              numArgs += th->lastSplatNumArgs;
+              numArgs--; // the splat arg counts as an argument in `numArgs`
               th->lastSplatNumArgs = -1;
           }
           Value instanceVal = VM_PEEK(numArgs);
@@ -3519,7 +3537,7 @@ InterpretResult loadScript(ObjFunction *func, char *filename) {
     }
 }
 
-static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
+static Value doVMEval(char *src, char *filename, int lineno, ObjInstance *instance, bool throwOnErr) {
     CallFrame *oldFrame = getFrame(); // eval() native frame, if called from there
     CallFrame *prevFrame = oldFrame;
     bool oldFrameIsEval = oldFrame->isCCall;
@@ -3538,13 +3556,10 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     ectx->stackTop = old_ectx->stackTop;
     VM_DEBUG(1, "VM eval called in func '%s', ip: %d", callFrameName(prevFrame),
         prevFrame->ip - prevFrame->closure->function->chunk->code);
-    LocalVariable *var; int varidx = 0;
-    vec_foreach(&prevFrame->closure->function->variables, var, varidx) {
-        VM_DEBUG(1, "var from fn: %s", var->name->chars);
-    }
-    ObjFunction *func = compile_eval_src(src, &err, prevFrame->closure->function, prevFrame->ip);
-    compilerOpts.noRemoveUnusedExpressions = oldOpts;
 
+    ObjFunction *func = compile_eval_src(src, &err, instance, prevFrame->closure->function, prevFrame->ip);
+
+    compilerOpts.noRemoveUnusedExpressions = oldOpts;
     if (err != COMPILE_ERR_NONE || !func) {
         VM_DEBUG(1, "compile error in eval");
         pop_EC();
@@ -3565,6 +3580,8 @@ static Value doVMEval(char *src, char *filename, int lineno, bool throwOnErr) {
     frame->start = 0;
     frame->ip = func->chunk->code;
     frame->slots = ectx->stack; // old frame's slots
+    if (instance)
+        push(OBJ_VAL(instance));
     frame->closure = newClosure(func, NEWOBJ_FLAG_OLD);
     unhideFromGC(TO_OBJ(func));
     frame->isCCall = false;
@@ -3687,12 +3704,12 @@ static Value doVMBindingEval(LxBinding *binding, char *src, char *filename, int 
     }
 }
 
-Value VMEvalNoThrow(char *src, char *filename, int lineno) {
-    return doVMEval(src, filename, lineno, false);
+Value VMEvalNoThrow(char *src, char *filename, int lineno, ObjInstance *instance) {
+    return doVMEval(src, filename, lineno, instance, false);
 }
 
-Value VMEval(char *src, char *filename, int lineno) {
-    return doVMEval(src, filename, lineno, true);
+Value VMEval(char *src, char *filename, int lineno, ObjInstance *instance) {
+    return doVMEval(src, filename, lineno, instance, true);
 }
 
 Value VMBindingEval(LxBinding *b, char *src, char *filename, int lineno) {

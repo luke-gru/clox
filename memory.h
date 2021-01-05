@@ -103,6 +103,7 @@ extern bool inYoungGC;
 extern bool inFullGC;
 extern bool inFinalFree;
 
+bool isInGC(void);
 bool turnGCOff(void);
 bool turnGCOn(void);
 void setGCOnOff(bool turnOn);

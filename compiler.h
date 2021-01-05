@@ -65,6 +65,7 @@ typedef struct Local {
   // top level code. One is the scope within that, etc.
   int depth;
   bool isUpvalue;
+  bool popOnScopeEnd;
 } Local;
 
 typedef struct Upvalue {
@@ -110,8 +111,6 @@ typedef struct ClassCompiler {
   bool isModule;
 } ClassCompiler;
 
-
-
 struct CallInfo; // fwd decl
 #define ITER_FLAG_NONE 0
 #define ITER_FLAG_STOP 1
@@ -150,7 +149,7 @@ typedef struct CompilerOpts {
 extern CompilerOpts compilerOpts;
 
 ObjFunction *compile_src(char *src, CompileErr *err);
-ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_t *ip_at);
+ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjInstance *instance, ObjFunction *func_in, uint8_t *ip_at);
 ObjFunction *compile_binding_eval_src(char *src, CompileErr *err, ObjScope *scope);
 ObjFunction *compile_file(char *fname, CompileErr *err);
 

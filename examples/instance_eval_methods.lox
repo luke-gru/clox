@@ -1,0 +1,12 @@
+class A {
+    var methodName = "method";
+    this.instanceEval(<<<EOS
+    ${methodName}() { return this; }
+EOS);
+}
+
+print A().method();
+
+__END__
+-- expect: --
+<instance A>

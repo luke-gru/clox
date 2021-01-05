@@ -260,11 +260,12 @@ static void emitCloseUpvalue(void) {
 static void popScope(CompileScopeType stype) {
     COMP_TRACE("popScope: %s (depth=%d)", compileScopeName(stype), current->scopeDepth);
     while (current->localCount > 0 && current->locals[current->localCount - 1].depth >= current->scopeDepth) {
-        if (current->locals[current->localCount - 1].isUpvalue) {
+        Local *local = &current->locals[current->localCount-1];
+        if (local->isUpvalue) {
             COMP_TRACE("popScope closing upvalue");
             emitCloseUpvalue();
         } else {
-            if (current->type != FUN_TYPE_BLOCK) {
+            if (current->type != FUN_TYPE_BLOCK && local->popOnScopeEnd) {
                 COMP_TRACE("popScope emitting OP_POP");
                 emitOp0(OP_POP);
             }
@@ -828,7 +829,7 @@ static uint8_t makeConstant(Value value, ConstType ctype) {
 }
 
 // Add constant to constant pool from the token's lexeme, return index to it
-static uint8_t identifierConstant(Token* name) {
+static uint8_t identifierConstant(Token *name) {
     DBG_ASSERT(vm.inited);
     ObjString *ident = INTERNED(name->start, name->length);
     STRING_SET_STATIC(ident);
@@ -954,6 +955,7 @@ static int addLocal(Token name) {
     Local local = {
         .name = name,
         .depth = current->scopeDepth,
+        .popOnScopeEnd = true
     };
     int slot = current->localCount;
     current->locals[slot] = local;
@@ -968,7 +970,7 @@ static int addLocal(Token name) {
     return slot;
 }
 
-static int addFakeLocal() {
+static int addFakeLocal(bool popOnScopeEnd) {
     ASSERT(current->scopeDepth > 0);
     if (current->localCount >= UINT8_MAX) {
         error("Too many local variables");
@@ -978,6 +980,7 @@ static int addFakeLocal() {
     Local local = {
         .name = name,
         .depth = current->scopeDepth,
+        .popOnScopeEnd = popOnScopeEnd
     };
     current->locals[current->localCount] = local;
     current->localCount++;
@@ -1122,6 +1125,7 @@ static void initCompiler(
         Local *local = &current->locals[current->localCount++];
         local->depth = current->scopeDepth;
         local->isUpvalue = false;
+        local->popOnScopeEnd = true;
         if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
                 ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
                 ftype == FUN_TYPE_CLASS_METHOD) {
@@ -1172,6 +1176,7 @@ static void initEvalCompiler(
         Local *local = &current->locals[current->localCount++];
         local->depth = current->scopeDepth;
         local->isUpvalue = false;
+        local->popOnScopeEnd = true;
         if (in_func->ftype == FUN_TYPE_METHOD || in_func->ftype == FUN_TYPE_INIT ||
                 in_func->ftype == FUN_TYPE_GETTER || in_func->ftype == FUN_TYPE_SETTER ||
                 in_func->ftype == FUN_TYPE_CLASS_METHOD) {
@@ -1196,6 +1201,7 @@ static void initEvalCompiler(
             local->name.start = var->name->chars;
             local->name.length = strlen(var->name->chars);
             local->depth = current->scopeDepth;
+            local->popOnScopeEnd = true;
             local->isUpvalue = false;
         } else {
         }
@@ -1235,6 +1241,7 @@ static void initBindingEvalCompiler(
         Local *local = &current->locals[current->localCount++];
         local->depth = current->scopeDepth;
         local->isUpvalue = false;
+        local->popOnScopeEnd = true;
         int ftype = scope->function->ftype;
         if (ftype == FUN_TYPE_METHOD || ftype == FUN_TYPE_INIT ||
                 ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
@@ -1257,6 +1264,7 @@ static void initBindingEvalCompiler(
         local->name.length = strlen(local->name.start);
         local->depth = current->scopeDepth;
         local->isUpvalue = false;
+        local->popOnScopeEnd = true;
     });
 
     COMP_TRACE("/initCompiler");
@@ -1297,6 +1305,7 @@ static void emitClass(Node *n) {
         emitOp1(OP_CLASS, nameConstant); // VM gets the class name
     }
 
+    addFakeLocal(false); // fake local corresponds to `this` (slot 0)
     emitChildren(n); // block node with methods and other declarations
 
     popScope(COMPILE_SCOPE_CLASS);
@@ -1568,7 +1577,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
 }
 
 static void pushVarSlots() {
-    addFakeLocal();
+    addFakeLocal(true);
 }
 
 static void emitBinaryOp(Token tok) {
@@ -2434,11 +2443,18 @@ ObjFunction *compile_src(char *src, CompileErr *err) {
     }
 }
 
-ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, uint8_t *ip_at) {
+ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjInstance *instance, ObjFunction *func_in, uint8_t *ip_at) {
     initScanner(&scanner, src);
     Parser p;
     initParser(&p);
-    Node *program = parse(&p);
+    Node *program;
+    bool compilingClassBody = false;
+    if (instance && TO_OBJ(instance)->type == OBJ_T_CLASS) {
+        program = parseClass(&p);
+        compilingClassBody = true;
+    } else {
+        program = parse(&p);
+    }
     freeScanner(&scanner);
     if (CLOX_OPTION_T(parseOnly)) {
         *err = p.hadError ? COMPILE_ERR_SYNTAX :
@@ -2459,7 +2475,15 @@ ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjFunction *func_in, 
     freeParser(&p);
     Compiler mainCompiler;
     top = &mainCompiler;
+    ClassCompiler classCompiler;
     initEvalCompiler(&mainCompiler, func_in, ip_at);
+    if (compilingClassBody) {
+        currentClassOrModule = &classCompiler;
+        classCompiler.name = syntheticToken(instance->klass->classInfo->name->chars);
+        classCompiler.hasSuperclass = false;
+        classCompiler.isModule = false;
+        classCompiler.enclosing = NULL;
+    }
     CompileScopeType stype = COMPILE_SCOPE_FUNCTION;
     if (func_in->ftype == FUN_TYPE_TOP_LEVEL) {
       stype = COMPILE_SCOPE_MAIN;

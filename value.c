@@ -169,21 +169,33 @@ int printValue(FILE *file, Value value, bool canCallMethods, int maxLen) {
                     if (klass->object.type == OBJ_T_NONE) {
                         return fprintf(file, "<instance unknown>");
                     }
-                    ObjString *nameFull = classNameFull(klass);
-                    char *klassName = nameFull->chars;
-                    return fprintf(file, "<instance %.*s>", PRINTNUM(11, maxLen), klassName);
+                    if (isInGC()) {
+                        return fprintf(file, "<instance %s>", klass->classInfo->name ? klass->classInfo->name->chars : "?");
+                    } else {
+                        ObjString *nameFull = classNameFull(klass);
+                        char *klassName = nameFull->chars;
+                        return fprintf(file, "<instance %.*s>", PRINTNUM(11, maxLen), klassName);
+                    }
                 }
             }
         } else if (OBJ_TYPE(value) == OBJ_T_CLASS) {
             ObjClass *klass = AS_CLASS(value);
-            ObjString *nameFull = classNameFull(klass);
-            char *klassName = nameFull->chars;
-            return fprintf(file, "<class %.*s>", PRINTNUM(8, maxLen), klassName);
+            if (isInGC()) {
+                return fprintf(file, "<class %s>", klass->classInfo->name ? klass->classInfo->name->chars : "?");
+            } else {
+                ObjString *nameFull = classNameFull(klass);
+                char *klassName = nameFull->chars;
+                return fprintf(file, "<class %.*s>", PRINTNUM(8, maxLen), klassName);
+            }
         } else if (OBJ_TYPE(value) == OBJ_T_MODULE) {
             ObjModule *mod = AS_MODULE(value);
-            ObjString *nameFull = classNameFull(TO_CLASS(mod));
-            char *modName = nameFull->chars;
-            return fprintf(file, "<module %.*s>", PRINTNUM(9, maxLen), modName);
+            if (isInGC()) {
+                return fprintf(file, "<module %s>", mod->classInfo->name ? mod->classInfo->name->chars : "?");
+            } else {
+                ObjString *nameFull = classNameFull(TO_CLASS(mod));
+                char *modName = nameFull->chars;
+                return fprintf(file, "<module %.*s>", PRINTNUM(9, maxLen), modName);
+            }
         } else if (OBJ_TYPE(value) == OBJ_T_NATIVE_FUNCTION) {
             ObjNative *native = AS_NATIVE_FUNCTION(value);
             ObjString *name = native->name;

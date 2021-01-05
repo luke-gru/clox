@@ -1,0 +1,19 @@
+requireScript("delegate");
+
+class A {
+    this.delegate("hi", to: "this.delegate");
+    init(greeter) {
+        this.delegate = greeter;
+    }
+}
+
+class Greeter {
+    hi() { print "HI"; }
+}
+
+var a = A(Greeter());
+a.hi();
+
+__END__
+-- expect: --
+HI

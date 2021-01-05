@@ -192,7 +192,7 @@ void enterDebugger(Debugger *dbg, char *filename, int lineno, int ndepth, int nw
                 src = idx+2;
             }
             fprintf(stderr, "Executing '%s'\n", src);
-            Value val = VMEvalNoThrow(src, "(eval)", 1);
+            Value val = VMEvalNoThrow(src, "(eval)", 1, NULL);
             if (!IS_UNDEF(val)) {
                 printValue(stdout, val, true, -1);
                 fprintf(stdout, "\n");

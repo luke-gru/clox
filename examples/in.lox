@@ -9,7 +9,7 @@ print o.choo();
 
 __END__
 -- expect: --
-<class <instance Object> (meta)>
+<instance Class>
 <method #choo>
 <instance Object>
 choochoo

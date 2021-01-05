@@ -712,6 +712,8 @@ const char *typeOfObj(Obj *obj) {
         return "upvalue";
     case OBJ_T_SCOPE:
         return "scope";
+    case OBJ_T_NONE:
+        return "none";
     default: {
         UNREACHABLE("Unknown object type: (%d)\n", obj->type);
     }
@@ -875,6 +877,7 @@ Value stringIndexSet(Value self, size_t index, char c) {
 }
 
 bool stringEquals(Value a, Value b) {
+    ASSERT(IS_STRING(a));
     if (!IS_STRING(b)) return false;
     return objStringEquals(AS_STRING(a), AS_STRING(b));
 }

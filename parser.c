@@ -203,6 +203,17 @@ Node *parseExpression(Parser *p) {
     return ret;
 }
 
+Node *parseClass(Parser *p) {
+    Parser *oldCurrent = current;
+    current = p;
+    advance(); // prime parser with parser.current
+    TRACE_START("parseClass");
+    Node *ret = classOrModuleBody("classBody");
+    TRACE_END("parseClass");
+    current = oldCurrent;
+    return ret;
+}
+
 static bool isAtEnd(void) {
     return current->previous.type == TOKEN_EOF || check(TOKEN_EOF);
 }
@@ -291,6 +302,7 @@ static Node *declaration(void) {
 
         consume(TOKEN_LEFT_BRACE, "Expected '{' after class name");
         Node *body = classOrModuleBody("classBody"); // block node
+        consume(TOKEN_RIGHT_BRACE, "Expected '}' to end class body");
         nodeAddChild(classNode, body);
         TRACE_END("declaration");
         return classNode;
@@ -308,6 +320,7 @@ static Node *declaration(void) {
         Node *modNode = createNode(modType, nameTok, NULL);
         consume(TOKEN_LEFT_BRACE, "Expected '{' after module name");
         Node *body = classOrModuleBody("moduleBody"); // block node
+        consume(TOKEN_RIGHT_BRACE, "Expected '}' to end module body");
         nodeAddChild(modNode, body);
         TRACE_END("declaration");
         return modNode;
@@ -633,6 +646,7 @@ static Node *statement() {
         consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'in' expression");
         consume(TOKEN_LEFT_BRACE, "Expected '{' after 'in' expression");
         Node *body = classOrModuleBody("inBody");
+        consume(TOKEN_RIGHT_BRACE, "Expected '}' to end in body");
         nodeAddChild(inNode, body);
         TRACE_END("statement");
         return inNode;
@@ -715,7 +729,6 @@ static Node *classOrModuleBody(const char *debugName) {
         }
         nodeAddChild(stmtListNode, decl);
     }
-    consume(TOKEN_RIGHT_BRACE, "Expected '}' to end class/module body");
     node_type_t blockType = {
         .type = NODE_STMT,
         .kind = BLOCK_STMT,

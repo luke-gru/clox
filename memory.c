@@ -39,6 +39,10 @@ bool inYoungGC = false;
 bool inFullGC = false;
 bool inFinalFree = false;
 
+bool isInGC(void) {
+    return inGC;
+}
+
 // debugging
 static ObjType lastNewObjectRequestType = OBJ_T_NONE;
 static ObjType curNewObjectRequestType = OBJ_T_NONE;
@@ -168,12 +172,9 @@ void GCPromoteOnce(Obj *obj) {
 static void gc_trace_mark(int lvl, Obj *obj) {
     if (GET_OPTION(traceGCLvl) < lvl) return;
     fprintf(stderr, "[GC]: marking %s object at %p (gen %d)", typeOfObj(obj), obj, obj->GCGen);
-    if (obj->type != OBJ_T_UPVALUE && obj->type != OBJ_T_INTERNAL) {
+    if (obj->type != OBJ_T_UPVALUE && obj->type != OBJ_T_INTERNAL && obj->type != OBJ_T_SCOPE) {
         fprintf(stderr, ", value => ");
-        bool oldGC = inGC;
-        inGC = false;
         printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`
-        inGC = oldGC;
     }
     fprintf(stderr, "\n");
 }
@@ -185,9 +186,7 @@ static void gc_trace_free(int lvl, Obj *obj) {
         fprintf(stderr, "type => upvalue");
     } else {
         fprintf(stderr, "type => %s, value => ", typeOfObj(obj));
-        bool oldGC = inGC;
-        inGC = false;
-        printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`
+        /*printValue(stderr, OBJ_VAL(obj), false, -1); // can allocate objects, must be `inGC`*/
         if (obj->type == OBJ_T_INSTANCE) {
             const char *className = "(anon)";
             if (CLASSINFO(((ObjInstance*) obj)->klass)->name) {
@@ -195,7 +194,6 @@ static void gc_trace_free(int lvl, Obj *obj) {
             }
             fprintf(stderr, ", class => %s", className);
         }
-        inGC = oldGC;
     }
     fprintf(stderr, "\n");
 }
@@ -351,6 +349,9 @@ void collectYoungGarbage() {
         if (th->tlsMap) {
             grayObject(TO_OBJ(th->tlsMap));
         }
+        if (th->thisObj) {
+            grayObject(th->thisObj);
+        }
         grayValue(th->lastErrorThrown);
         VMExecContext *ctx = NULL; int k = 0;
         vec_foreach(&th->v_ecs, ctx, k) {
@@ -411,8 +412,10 @@ void collectYoungGarbage() {
                 CallFrame *frame = &ctx->frames[i];
                 // TODO: gray native function if exists
                 // XXX: is this necessary, they must be on the stack??
-                grayObject(TO_OBJ(frame->closure));
-                grayObject(TO_OBJ(frame->instance));
+                if (frame->closure)
+                    grayObject(TO_OBJ(frame->closure));
+                if (frame->instance)
+                    grayObject(TO_OBJ(frame->instance));
                 if (frame->scope) {
                     grayObject(TO_OBJ(frame->scope));
                 }
@@ -552,6 +555,7 @@ retry:
 #endif
         return obj;
     }
+    // ran out of freelist space, try to GC or add another heap, then retry
     if (!triedYoungCollect && !noGC) {
         collectYoungGarbage();
         triedYoungCollect = true;
@@ -580,9 +584,11 @@ void *reallocate(void *previous, size_t oldSize, size_t newSize) {
     if (newSize > oldSize) {
         GCStats.totalAllocated += (newSize - oldSize);
         GC_TRACE_DEBUG(12, "reallocate added %lu bytes", newSize-oldSize);
+        GC_TRACE_DEBUG(13, "totalAllocated: %lu bytes", GCStats.totalAllocated);
     } else {
         GCStats.totalAllocated -= (oldSize - newSize);
         GC_TRACE_DEBUG(12, "reallocate freed %lu bytes", oldSize-newSize);
+        GC_TRACE_DEBUG(13, "totalAllocated: %lu bytes", GCStats.totalAllocated);
     }
 
     if (newSize == 0) { // freeing
@@ -878,12 +884,10 @@ void blackenObject(Obj *obj) {
                 grayObject((Obj*)str->finalizerFunc);
             }
             grayTable(str->fields);
-            GC_TRACE_DEBUG(5, "Blackening internal string %p", obj);
+            GC_TRACE_DEBUG(5, "Blackening string %p", obj);
             break;
         }
         default: {
-            // XXX: this does happen sometimes when calling GC.collect() multiple times (4+).
-            // Until I fix this, this return is necessary.
             UNREACHABLE("Unknown object type: %d", obj->type);
         }
     }
@@ -1228,7 +1232,7 @@ void collectGarbage(void) {
         grayObject(thObj);
         ASSERT(th);
         /* th->thisObj should be on stack, no need for marking, and it causes errors */
-        /*grayObject(th->thisObj);*/
+        grayObject(th->thisObj);
         if (th->lastValue) {
             grayValue(*th->lastValue);
         }
@@ -1292,12 +1296,21 @@ void collectGarbage(void) {
             }
             for (unsigned i = 0; i < ctx->frameCount; i++) {
                 CallFrame *frame = &ctx->frames[i];
-                // TODO: gray native function if exists
-                // XXX: is this necessary, they must be on the stack??
-                grayObject(TO_OBJ(frame->closure));
-                grayObject(TO_OBJ(frame->instance));
-                if (frame->scope) {
+                if (frame->closure)
+                    grayObject(TO_OBJ(frame->closure));
+                if (frame->instance)
+                    grayObject(TO_OBJ(frame->instance));
+                if (frame->klass)
+                    grayObject(TO_OBJ(frame->klass));
+                if (frame->scope)
                     grayObject(TO_OBJ(frame->scope));
+                if (frame->nativeFunc)
+                    grayObject(TO_OBJ(frame->nativeFunc));
+                if (frame->callInfo && frame->callInfo->blockInstance) {
+                    grayObject(TO_OBJ(frame->callInfo->blockInstance));
+                }
+                if (frame->callInfo && frame->callInfo->blockFunction) {
+                    grayObject(TO_OBJ(frame->callInfo->blockFunction));
                 }
                 numFramesFound++;
             }
@@ -1606,6 +1619,7 @@ freeLoop:
         vm.grayCapacity = 0;
     }
     GC_TRACE_DEBUG(2, "/freeObjects");
+    GC_TRACE_DEBUG(2, "freeObjects GC allocated: %ld B", GCStats.totalAllocated);
     numRootsLastGC = 0;
     stopGCRunProfileTimer(&tRunStart, &GCProf.totalGCFullTime);
     GCProf.runsFull++;

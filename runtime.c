@@ -245,7 +245,7 @@ Value lxEval(int argCount, Value *args) {
     if (strlen(csrc) == 0) {
         return NIL_VAL;
     }
-    return VMEval(csrc, "(eval)", 1);
+    return VMEval(csrc, "(eval)", 1, NULL);
 }
 
 static void threadSleep(LxThread *th, int secs) {
@@ -802,7 +802,7 @@ Value lxObjectInstanceEval(int argCount, Value *args) {
     LxThread *th = THREAD();
     Obj *oldThis = th->thisObj;
     th->thisObj = AS_OBJ(self);
-    Value ret = VMEval(csrc, "(eval)", 1);
+    Value ret = VMEval(csrc, "(eval)", 1, AS_INSTANCE(self));
     th->thisObj = oldThis;
     return ret;
 }
@@ -1126,8 +1126,7 @@ Value lxClassAliasMethod(int argCount, Value *args) {
     if (!method) {
         throwErrorFmt(lxArgErrClass, "Method '%s' not found for aliasMethod", AS_CSTRING(oldName));
     }
-    Table *mtable = CLASS_METHOD_TBL(AS_OBJ(klass));
-    tableSet(mtable, newName, OBJ_VAL(method));
+    defineMethod(klass, AS_STRING(newName), OBJ_VAL(method));
     return NIL_VAL;
 }
 

@@ -273,8 +273,8 @@ void initVM(void);
 void freeVM(void);
 InterpretResult interpret(ObjFunction *func, char *filename);
 InterpretResult loadScript(ObjFunction *func, char *filename);
-Value VMEval(char *src, char *filename, int lineno);
-Value VMEvalNoThrow(char *src, char *filename, int lineno);
+Value VMEval(char *src, char *filename, int lineno, ObjInstance *instance);
+Value VMEvalNoThrow(char *src, char *filename, int lineno, ObjInstance *instance);
 Value VMBindingEval(LxBinding *binding, char *src, char *filename, int lineno);
 Value *getLastValue(void);
 

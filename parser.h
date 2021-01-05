@@ -28,6 +28,7 @@ typedef struct sParser {
 void initParser(Parser *p);
 void freeParser(Parser *p); // frees parser, but NOT the nodes
 Node *parse(Parser *p);
+Node *parseClass(Parser *p);
 Node *parseExpression(Parser *p);
 void outputParserErrors(Parser *p, FILE *f);
 

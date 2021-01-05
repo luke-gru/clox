@@ -1,0 +1,9 @@
+class Class {
+    delegate(fn, to: 'this.delegate') {
+        this.instanceEval(<<<LOX
+        ${fn}(*args) {
+            return ${to}.${fn}(*args);
+        }
+LOX);
+    }
+}

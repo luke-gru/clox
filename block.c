@@ -54,11 +54,13 @@ static Value lxBlockInit(int argCount, Value *args) {
     Value callableVal = args[1];
     ObjInstance *selfObj = AS_INSTANCE(self);
     ObjInternal *internalObj = newInternalObject(false, NULL, 0, markInternalBlock, NULL, NEWOBJ_FLAG_NONE);
+    hideFromGC(TO_OBJ(internalObj));
     LxBlock *blk = ALLOCATE(LxBlock, 1);
     blk->callable = AS_OBJ(callableVal);
     internalObj->data = blk;
     internalObj->dataSz = sizeof(LxBlock);
     selfObj->internal = internalObj;
+    unhideFromGC(TO_OBJ(internalObj));
     return self;
 }
 
@@ -75,7 +77,7 @@ static Value lxBlockYield(int argCount, Value *args) {
     Obj *block = blockCallableBlock(self);
     volatile LxThread *th = THREAD();
     volatile BlockStackEntry *bentry = NULL;
-    SETUP_BLOCK(block, bentry, status, THREAD()->errInfo)
+    SETUP_BLOCK(block, bentry, status, th->errInfo)
     if (status == TAG_NONE) {
     } else if (status == TAG_RAISE) {
         ObjInstance *errInst = AS_INSTANCE(th->lastErrorThrown);
@@ -83,9 +85,9 @@ static Value lxBlockYield(int argCount, Value *args) {
         if (errInst->klass == lxBreakBlockErrClass) {
             return NIL_VAL;
         } else if (errInst->klass == lxContinueBlockErrClass) { // continue
-            return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+            return getProp(th->lastErrorThrown, INTERN("ret"));
         } else if (errInst->klass == lxReturnBlockErrClass) {
-            return getProp(THREAD()->lastErrorThrown, INTERN("ret"));
+            return getProp(th->lastErrorThrown, INTERN("ret"));
         } else {
             throwError(th->lastErrorThrown);
         }
