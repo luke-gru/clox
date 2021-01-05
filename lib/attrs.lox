@@ -1,0 +1,28 @@
+class Class {
+    attrAccessor(*names) {
+        foreach (name in names) {
+            this.attrReader(name);
+            this.attrWriter(name);
+        }
+    }
+
+    attrReader(*names) {
+        foreach (name in names) {
+            this.instanceEval(<<<LOX
+${name} {
+    return this._${name};
+}
+LOX);
+        }
+    }
+
+    attrWriter(*names) {
+        foreach (name in names) {
+            this.instanceEval(<<<LOX
+${name}=(val) {
+    return this._${name}=val;
+}
+LOX);
+        }
+    }
+}

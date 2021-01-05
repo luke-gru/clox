@@ -1,0 +1,27 @@
+requireScript("attrs");
+
+class A {
+    this.attrAccessor('a', 'b');
+    init(a, b) {
+        this._a = a;
+        this._b = b;
+    }
+}
+
+var a = A(1, 2);
+print a.a();
+print a.a;
+print a._a;
+a.a = 2;
+print a.a();
+print a.a;
+print a._a;
+
+__END__
+-- expect: --
+1
+1
+1
+2
+2
+2
