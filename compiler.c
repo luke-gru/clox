@@ -1055,6 +1055,52 @@ static void namedVariable(Token name, VarOp getSet) {
     }
 }
 
+static char *fullClassNameFromCompiler(ClassCompiler *compiler) {
+    ClassCompiler *cur = compiler;
+    vec_void_t v_compilers;
+    vec_init(&v_compilers);
+    while (cur) {
+        vec_push(&v_compilers, cur);
+        cur = cur->enclosing;
+    }
+    char *ret = NULL;
+    int idx = 0;
+    ClassCompiler *comp;
+    vec_foreach_rev(&v_compilers, comp, idx) {
+        char *buf = tokStr(&comp->name);
+        size_t old_ret_size = 0;
+        if (ret) {
+            old_ret_size = strlen(ret)+1;
+        }
+        size_t new_size = old_ret_size + strlen(buf)+1;
+        if (idx != 0) {
+            new_size += 2; // '::'
+        }
+        ASSERT(new_size > 0);
+        if (ret) {
+            ret = realloc(ret, new_size);
+        } else {
+            ret = malloc(new_size);
+        }
+        ASSERT_MEM(ret);
+        if (old_ret_size > 0) {
+            memcpy(ret+old_ret_size-1, buf, strlen(buf));
+        } else {
+            memcpy(ret, buf, strlen(buf));
+        }
+        if (idx != 0) {
+            ret[new_size-2] = ':';
+            ret[new_size-3] = ':';
+        }
+        ret[new_size-1] = '\0';
+        /*fprintf(stderr, "buf: '%s', old_ret_size: %d, idx: %d, v_compilers.length %d\n", buf, old_ret_size,*/
+                /*idx, v_compilers.length);*/
+        /*fprintf(stderr, "ret: '%s'\n", ret);*/
+    }
+    vec_deinit(&v_compilers);
+    return ret;
+}
+
 // Initializes a new compiler for a function, and sets it as the `current`
 // function compiler.
 static void initCompiler(
@@ -1099,7 +1145,7 @@ static void initCompiler(
         ASSERT(currentClassOrModule || inINBlock);
         char *className = "";
         if (currentClassOrModule) {
-            className = tokStr(&currentClassOrModule->name);
+            className = fullClassNameFromCompiler(currentClassOrModule);
         }
         char *funcName = tokStr(fTok);
         size_t methodNameBuflen = strlen(className)+1+strlen(funcName)+1; // +1 for '.' in between
@@ -1116,6 +1162,9 @@ static void initCompiler(
         current->function->name = methodName;
         OBJ_WRITE(OBJ_VAL(current->function), OBJ_VAL(methodName));
         xfree(methodNameBuf);
+        if (strlen(className) > 0) {
+            xfree(className);
+        }
         break;
     }
     case FUN_TYPE_ANON:
@@ -1310,7 +1359,6 @@ static void emitClass(Node *n) {
     currentClassOrModule = &cComp;
 
     pushScope(COMPILE_SCOPE_CLASS);
-    // TODO: add 'this' as upvalue or local var in class
     if (cComp.hasSuperclass) {
         namedVariable(*superClassTok, VAR_GET);
         emitOp1(OP_SUBCLASS, nameConstant); // VM peeks the superclass and gets the class name
