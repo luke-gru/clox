@@ -12,18 +12,6 @@
 extern "C" {
 #endif
 
-#define CHECK_ARITY(func, min, max, actual) do {\
-    if (UNLIKELY(!checkArity(min, max, actual))) {\
-        if (min == max) {\
-            throwArgErrorFmt("Error in %s, expected %d arg%s, got %d",\
-                func, min, max == 1 ? "" : "s", actual);\
-        } else {\
-            throwArgErrorFmt("Error in %s, expected %d to %d args, got %d",\
-                func, min, max, actual); \
-        }\
-        return NIL_VAL;\
-    }\
-    } while (0)
 
 // ex: CHECK_ARG_BUILTIN_TYPE(value, IS_BOOL_FUNC, "bool", 1);
 #define CHECK_ARG_BUILTIN_TYPE(value, typechk_p, typenam, argnum) checkBuiltinArgType(value, typechk_p, typenam, argnum)
@@ -38,6 +26,36 @@ bool checkArity(int min, int max, int actual);
 void checkBuiltinArgType(Value arg, value_type_p typechk_p, const char *typeExpect, int argnum);
 void checkArgIsInstanceOf(Value arg, ObjClass *klass, int argnum);
 void checkArgIsA(Value arg, ObjClass *klass, int argnum);
+
+static inline void CHECK_ARITY(const char *func, int min, int max, int actual) {
+    (void)func;
+    CallFrame *frame = NULL;
+    if (vm.inited) {
+        frame = getFrame();
+    }
+    if (UNLIKELY(!checkArity(min, max, actual))) {
+        if (frame && frame->instance) {
+            min--; max--; actual--;
+        }
+        if (min == max) {
+            if (frame && frame->klass) {
+                throwArgErrorFmt("Error in %s#%s, expected %d arg%s, got %d",
+                    classNameFull(frame->klass)->chars, frame->name->chars, min, max == 1 ? "" : "s", actual);
+            } else {
+                throwArgErrorFmt("Error in %s, expected %d arg%s, got %d",
+                    (frame && frame->name) ? frame->name->chars : func, min, max == 1 ? "" : "s", actual);
+            }
+        } else {
+            if (frame && frame->klass) {
+                throwArgErrorFmt("Error in %s#%s, expected %d to %d args, got %d",
+                    classNameFull(frame->klass), frame->name->chars, min, max, actual);
+            } else {
+                throwArgErrorFmt("Error in %s, expected %d to %d args, got %d",
+                    (frame && frame->name) ? frame->name->chars : func, min, max, actual);
+            }
+        }
+    }
+}
 
 // builtin (native) functions
 Value lxClock(int argCount, Value *args);
@@ -160,8 +178,8 @@ LxFile *fileGetInternal(Value io);
 LxFile *initIOAfterOpen(Value io, ObjString *fname, int fd, int mode, int oflags);
 size_t IOWrite(Value io, const void *buf, size_t count);
 void IOClose(Value io);
-ObjString *IORead(Value io, size_t bytesMax, bool untilEOF);
-ObjString *IOReadFd(int fd, size_t bytesMax, bool untilEOF);
+ObjString *IORead(Value io, size_t bytesMax, bool untilEOF, bool nonblock);
+ObjString *IOReadFd(int fd, size_t bytesMax, bool untilEOF, bool nonblock);
 //ObjString *IOGetline(Value io, size_t bytesMax);
 //ObjString *IOGetchar(Value io);
 

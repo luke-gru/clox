@@ -1,0 +1,16 @@
+var a = Class();
+a.instanceEval(<<<LOX
+  meth() { print "hi"; }
+LOX);
+var aa = a();
+aa.meth();
+
+class B < a {
+}
+
+B().meth();
+
+__END__
+-- expect: --
+hi
+hi

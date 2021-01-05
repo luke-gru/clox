@@ -924,23 +924,26 @@ void errorPrintScriptBacktrace(const char *format, ...) {
     va_end(args);
     fputs("\n", stderr);
 
-    // TODO: go over all execution contexts
-    for (int i = EC->frameCount - 1; i >= 0; i--) {
-        CallFrame *frame = &EC->frames[i];
-        if (frame->isCCall) {
-            ObjNative *nativeFunc = frame->nativeFunc;
-            ASSERT(nativeFunc);
-            fprintf(stderr, "in native function %s()\n", nativeFunc->name->chars);
-        } else {
-            ObjFunction *function = frame->closure->function;
-            // -1 because the IP is sitting on the next instruction to be executed.
-            size_t instruction = frame->ip - function->chunk->code - 1;
-            fprintf(stderr, "[line %d] in ", function->chunk->lines[instruction]);
-            if (function->name == NULL) {
-                fprintf(stderr, "script\n"); // top-level
+    LxThread *th = THREAD();
+    VMExecContext *ectx = EC; int eidx;
+    vec_foreach_rev(&th->v_ecs, ectx, eidx) {
+        for (int i = ectx->frameCount - 1; i >= 0; i--) {
+            CallFrame *frame = &EC->frames[i];
+            ObjString *file = frame->file;
+            int line = frame->callLine;
+            if (frame->isCCall) {
+                ObjNative *nativeFunc = frame->nativeFunc;
+                ASSERT(nativeFunc);
+                fprintf(stderr, "%s:%d <%s>\n", file->chars, line, nativeFunc->name->chars);
             } else {
-                char *fnName = function->name ? function->name->chars : "(anon)";
-                fprintf(stderr, "%s()\n", fnName);
+                ObjFunction *function = frame->closure->function;
+                fprintf(stderr, "%s:%d in ", file->chars, line);
+                if (function->name == NULL) {
+                    fprintf(stderr, "script\n"); // top-level
+                } else {
+                    char *fnName = function->name ? function->name->chars : "(anon)";
+                    fprintf(stderr, "%s()\n", fnName);
+                }
             }
         }
     }
@@ -1447,14 +1450,18 @@ static Value captureNativeError(ObjNative *nativeFunc, int argCount, Value *args
 static inline bool checkFunctionArity(ObjFunction *func, int argCount, CallInfo *cinfo) {
     int arityMin = func->arity;
     int arityMax = arityMin + func->numDefaultArgs + func->numKwargs + (func->hasBlockArg ? 1 : 0);
+    char *funcName = "(anon)";
+    if (func->name) {
+        funcName = func->name->chars;
+    }
     if (func->hasRestArg) arityMax = 20; // TODO: make a #define
     if (UNLIKELY(argCount < arityMin || argCount > arityMax)) {
         if (arityMin == arityMax) {
-            throwArgErrorFmt("Expected %d arguments but got %d.",
-                    arityMin, argCount);
+            throwArgErrorFmt("%s: Expected %d arguments but got %d.",
+                    funcName, arityMin, argCount);
         } else {
-            throwArgErrorFmt("Expected %d-%d arguments but got %d.",
-                    arityMin, arityMax, argCount);
+            throwArgErrorFmt("%s: Expected %d-%d arguments but got %d.",
+                    funcName, arityMin, arityMax, argCount);
         }
     }
     return true;
@@ -3031,6 +3038,7 @@ vmLoop:
           ASSERT(th->thisObj);
           Value instanceVal = OBJ_VAL(th->thisObj);
           ASSERT(IS_INSTANCE_LIKE(instanceVal));
+          // FIXME: should be frame->closure->klass, functions can be used in multiple classes
           ObjClass *klass = (ObjClass*)frame->closure->function->klass; // NOTE: class or module
           ASSERT(klass);
           ObjIClass *iclassFound = NULL;

@@ -34,8 +34,9 @@ Make it polymorphic, and measure the difference.
 
 Improvements
 ------------
-* Get local variable table living on the callframe object, not statically
-implied in the bytecode. [SORT OF]
+* Get ObjScopes to have their own table of local variable indexes, for
+Binding#localVariableSet and Binding#localVariableGet. This could also live on
+the binding object itself.
 * Get REPL to allow pasted code that's multiple lines. Right now it reads just
 one line at a time, it needs to account for non-finished statements. [BIG]
 * Make regular expression library work with bytecodes instead of nodes, and
