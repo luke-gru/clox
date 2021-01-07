@@ -166,6 +166,7 @@ static void defineNativeClasses(void) {
     addNativeMethod(objClass, "respondsTo", lxObjectRespondsTo);
     addNativeMethod(objClass, "inspect", lxObjectInspect);
     addNativeMethod(objClass, "instanceEval", lxObjectInstanceEval);
+    addNativeMethod(objClass, "methodMissing", lxObjectMethodMissing);
     addNativeGetter(objClass, "class", lxObjectGetClass);
     addNativeGetter(objClass, "singletonClass", lxObjectGetSingletonClass);
     addNativeGetter(objClass, "objectId", lxObjectGetObjectId);
@@ -2997,10 +2998,30 @@ vmLoop:
           }
           Value instanceVal = VM_PEEK(numArgs);
           if (IS_CLASS(instanceVal) || IS_MODULE(instanceVal)) {
+              bool methodMissingTried = false;
               ObjClass *klass = AS_CLASS(instanceVal);
-              Obj *callable = classFindStaticMethod(klass, mname);
+              Obj *callable;
+find_class_method:
+              callable = classFindStaticMethod(klass, mname);
               if (!callable && numArgs == 0) {
                   callable = instanceFindGetter((ObjInstance*)klass, mname);
+              }
+              if (!callable && !methodMissingTried) {
+                  vec_void_t v_args;
+                  vec_init(&v_args);
+                  for (int i = 0; i < numArgs; i++) {
+                      vec_push(&v_args, (void*)pop());
+                  }
+                  push(methodName);
+                  for (int i = numArgs-1; i >= 0; i--) {
+                      push((Value)v_args.data[i]);
+                  }
+                  vec_deinit(&v_args);
+
+                  numArgs++;
+                  mname = INTERN("methodMissing");
+                  methodMissingTried = true;
+                  goto find_class_method;
               }
               if (UNLIKELY(!callable)) {
                   ObjString *className = CLASSINFO(klass)->name;
@@ -3012,10 +3033,30 @@ vmLoop:
               EC->stackTop[-numArgs-1] = instanceVal;
               callCallable(OBJ_VAL(callable), numArgs, true, callInfo);
           } else if (IS_INSTANCE_LIKE(instanceVal)) {
+              bool methodMissingTried = false;
               ObjInstance *inst = AS_INSTANCE(instanceVal);
-              Obj *callable = instanceFindMethod(inst, mname);
+              Obj *callable;
+find_instance_method:
+              callable = instanceFindMethod(inst, mname);
               if (!callable && numArgs == 0) {
                   callable = instanceFindGetter(inst, mname);
+              }
+              if (!callable && !methodMissingTried) {
+                  vec_void_t v_args;
+                  vec_init(&v_args);
+                  for (int i = 0; i < numArgs; i++) {
+                      vec_push(&v_args, (void*)pop());
+                  }
+                  push(methodName);
+                  for (int i = numArgs-1; i >= 0; i--) {
+                      push((Value)v_args.data[i]);
+                  }
+                  vec_deinit(&v_args);
+
+                  numArgs++;
+                  mname = INTERN("methodMissing");
+                  methodMissingTried = true;
+                  goto find_instance_method;
               }
               if (UNLIKELY(!callable)) {
                   ObjString *className = CLASSINFO(inst->klass)->name;

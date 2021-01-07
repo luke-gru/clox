@@ -48,7 +48,7 @@ static inline void CHECK_ARITY(const char *func, int min, int max, int actual) {
         } else {
             if (frame && frame->klass) {
                 throwArgErrorFmt("Error in %s#%s, expected %d to %d args, got %d",
-                    classNameFull(frame->klass), frame->name->chars, min, max, actual);
+                    classNameFull(frame->klass)->chars, frame->name->chars, min, max, actual);
             } else {
                 throwArgErrorFmt("Error in %s, expected %d to %d args, got %d",
                     (frame && frame->name) ? frame->name->chars : func, min, max, actual);
@@ -101,6 +101,7 @@ Value lxObjectGetClass(int argCount, Value *args);
 Value lxObjectGetSingletonClass(int argCount, Value *args);
 Value lxObjectGetObjectId(int argCount, Value *args);
 Value lxObjectInstanceEval(int argCount, Value *args);
+Value lxObjectMethodMissing(int argCount, Value *args);
 extern ObjNative *nativeObjectInit;
 
 // class Module

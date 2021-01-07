@@ -807,6 +807,16 @@ Value lxObjectInstanceEval(int argCount, Value *args) {
     return ret;
 }
 
+Value lxObjectMethodMissing(int argCount, Value *args) {
+    CHECK_ARITY("Object#methodMissing", 2, -1, argCount);
+    Value self = args[0];
+    Value methName = args[1];
+    CHECK_ARG_IS_A(methName, lxStringClass, 2);
+    ObjClass *klass = AS_INSTANCE(self)->klass;
+    throwErrorFmt(lxNameErrClass, "Undefined method %s for %s",
+            AS_CSTRING(methName), classNameFull(klass)->chars);
+}
+
 // Creates a new object, with the same properties and hidden fields
 // var o = Object(); var o2 = o.dup();
 Value lxObjectDup(int argCount, Value *args) {

@@ -1,0 +1,22 @@
+class M {
+    methodMissing(name, *args, &blk) {
+        print name;
+        print args;
+        print blk;
+    }
+}
+
+var m = M();
+m.wow();
+print "";
+m.again("cool") -> {};
+
+__END__
+-- expect: --
+wow
+[]
+nil
+
+again
+[cool]
+<instance Block>

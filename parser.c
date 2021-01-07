@@ -950,6 +950,9 @@ static Node *funDeclaration(ParseFunctionType fnType) {
                 vec_push(paramNodes, n);
                 numParams++;
                 lastParamKind = nType.kind;
+                if (!match(TOKEN_COMMA)) {
+                    break;
+                }
             } else if (match(TOKEN_AMP)) { // block param
                 consume(TOKEN_IDENTIFIER, "Expect block parameter to have a name");
                 Token paramTok = current->previous;
