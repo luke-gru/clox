@@ -1502,9 +1502,9 @@ static Node *primary() {
             strncpy(contents, interpBegin+2, (end-interpBegin)-2);
             /*fprintf(stderr, "Interplation contents: '%s'\n", contents);*/
             /*fprintf(stderr, "Interplation before: '%s'\n", before);*/
-            Scanner newScan;
-            initScanner(&newScan, contents);
-            setScanner(&newScan);
+            Scanner *newScan = ALLOCATE(Scanner, 1);
+            initScanner(newScan, contents);
+            setScanner(newScan);
             Parser newParser;
             initParser(&newParser);
             int jmpres = 0;

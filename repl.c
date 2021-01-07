@@ -20,17 +20,17 @@ static void _freeFunc(void) {
     }
 }
 
-// Adds copied chars in `src` to `scanner.source`
-static void scannerAddSrc(char *src) {
+static void scannerAddLine(Scanner *scan, char *src) {
     ASSERT(src);
-    ASSERT(scanner.source);
-    size_t newsz = strlen(scanner.source)+1+strlen(src);
+    ASSERT(scan->source);
+    size_t newsz = strlen(scan->source)+1+strlen(src)+1;
     char *buf = calloc(1, newsz);
     ASSERT_MEM(buf);
-    strcpy(buf, scanner.source);
+    strcpy(buf, scan->source);
     strcat(buf, src);
-    xfree(scanner.source);
-    scanner.source = buf;
+    strcat(buf, "\n");
+    xfree(scan->source);
+    scan->source = buf;
 }
 
 static void getMoreSourceFn(Scanner *scan, Parser *p) {
@@ -43,7 +43,7 @@ static void getMoreSourceFn(Scanner *scan, Parser *p) {
     }
     linenoiseHistoryAdd(line);
     /*fprintf(stderr, "add src called\n");*/
-    scannerAddSrc(line);
+    scannerAddLine(scan, line);
     /*fprintf(stderr, "/add src called\n");*/
     lines[numLines++] = line;
 }
@@ -79,11 +79,14 @@ static void freeLines(char *lines[], int numLines) {
 }
 
 static void _resetScanner(void) {
-    if (scanner.source) xfree(scanner.source);
-    initScanner(&scanner, strdup(""));
+    Scanner *scan = getScanner();
+    if (scan->source) xfree(scan->source);
+    initScanner(scan, strdup(""));
+    scannerSetMoreSourceFn(scan, getMoreSourceFn);
 }
 
 NORETURN void repl(void) {
+    setScanner(&scanner);
     _resetScanner();
     initVM();
     linenoiseHistorySetMaxLen(500);
@@ -125,7 +128,7 @@ NORETURN void repl(void) {
             ASSERT(0); // FIXME: don't just error out
         }
         lines[numLines++] = line;
-        scannerAddSrc(line);
+        scannerAddLine(getScanner(), line);
         Parser p;
         initParser(&p);
         Node *n = parseMaybePartialStatement(&p, getMoreSourceFn);

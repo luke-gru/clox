@@ -14,7 +14,7 @@ class MyTests < TestUnit {
     this.assertMatch("hi", %"bye");
   }
 }
-MyTests.runTests(outputReport: false);
+MyTests.runTests(outputReport: false, outputProgress: false);
 print MyTests.successes();
 print MyTests.failures();
 

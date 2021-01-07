@@ -1,0 +1,79 @@
+fun f(a:1, b:2) {
+    print a;
+    print b;
+}
+
+f(); // 1 2
+f(1, 2); // 1 2
+f(a: 2, b: 1); // 2 1
+f(b: 1, a: 2); // 2 1
+
+fun f2(outputProgress: true, outputReport: true) {
+    print outputProgress;
+    print outputReport;
+}
+
+print "";
+f2(); // true true
+f2(outputReport: false); // true false
+f2(outputProgress: false); // false true
+f2(outputReport: false, outputProgress: true); // true false
+
+class C {
+    class r(outputProgress: true, outputReport: true) {
+        print outputProgress;
+        print outputReport;
+    }
+}
+
+print "";
+C.r(); // true true
+C.r(outputReport: false); // true false
+C.r(outputProgress: false); // false true
+C.r(outputReport: false, outputProgress: true); // true false
+
+class D < C { }
+
+print "";
+D.r(); // true true
+D.r(outputReport: false); // true false
+D.r(outputProgress: false); // false true
+D.r(outputReport: false, outputProgress: true); // true false
+
+__END__
+-- expect: --
+1
+2
+1
+2
+2
+1
+2
+1
+
+true
+true
+true
+false
+false
+true
+true
+false
+
+true
+true
+true
+false
+false
+true
+true
+false
+
+true
+true
+true
+false
+false
+true
+true
+false

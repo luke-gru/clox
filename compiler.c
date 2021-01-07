@@ -1445,7 +1445,6 @@ static CallInfo *emitCall(Node *n) {
             emitNode(arg);
         }
         callInfoData = ALLOCATE(CallInfo, 1);
-        ASSERT_MEM(callInfoData);
         memset(callInfoData, 0, sizeof(CallInfo));
         callInfoData->nameTok = n->tok;
         callInfoData->argc = argc;

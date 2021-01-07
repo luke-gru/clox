@@ -90,24 +90,31 @@ typedef enum {
     FUNCTION_TYPE_BLOCK
 } ParseFunctionType;
 
+struct Scanner;
 typedef struct Token {
   TokenType type;
-  char *source; // points to scanner->source
+  struct Scanner *scanner; // the current scanner at the point the token was created
+  // start idx into source, not a pointer because source can change (be  `realloc`ed)
   size_t startIdx;
-  char *lexeme; // lazily computed, could be NULL. See `tokStr()`
   int length; // not including NULL byte
+  char *lexeme; // lazily computed, could be NULL. See `tokStr()`
   int line;
   bool alloced; // is lexeme allocated separately? If so, can be freed
 } Token;
 
+struct sParser;
+struct Scanner;
+typedef void (*GetMoreSourceFn)(struct Scanner *scan, struct sParser *parser);
+
 typedef struct Scanner {
-  char *source;
+  char *source; // can be `realloced`.
   size_t tokenStartIdx;
   size_t currentIndex;
   int line;
   int indent;
   bool scriptEnded; // seen `__END__` keyword
   bool afterDot; // last token seen was TOKEN_PERIOD, to allow keywords as property names
+  GetMoreSourceFn getMoreSourceFn;
 } Scanner;
 
 extern Scanner scanner; // main scanner
@@ -121,6 +128,7 @@ Token scanToken(void);
 void scanAllPrint(Scanner *scan, char *src);
 Scanner *getScanner(void);
 void setScanner(Scanner *scan);
+void scannerSetMoreSourceFn(Scanner *scan, GetMoreSourceFn fn);
 
 Token emptyTok(void);
 char *tokStr(Token *tok);

@@ -32,8 +32,6 @@ Node *parse(Parser *p);
 Node *parseClass(Parser *p);
 Node *parseExpression(Parser *p);
 
-typedef void (*GetMoreSourceFn)(Scanner *scan, Parser *parser);
-
 Node *parseMaybePartialStatement(Parser *p, GetMoreSourceFn fn);
 
 void outputParserErrors(Parser *p, FILE *f);

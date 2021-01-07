@@ -81,7 +81,20 @@ static bool isAlphaNumeric(char c) {
 }
 
 static bool isAtEnd() {
-  return current->scriptEnded || current->source[current->currentIndex] == '\0';
+  bool isEnd = current->scriptEnded || current->source[current->currentIndex] == '\0';
+  return isEnd;
+}
+
+static bool isAtEndGetMore() {
+    if (current->scriptEnded) return true;
+    bool isEnd = current->source[current->currentIndex] == '\0';
+    if (!isEnd) return false;
+    if (current->getMoreSourceFn) {
+        current->getMoreSourceFn(current, NULL);
+        isEnd = current->source[current->currentIndex] == '\0';
+        return isEnd;
+    }
+    return true;
 }
 
 static char advance() {
@@ -135,7 +148,7 @@ static void strReplace(char *str, char *substr, char replace) {
 
 static Token makeToken(TokenType type) {
     Token token;
-    token.source = current->source;
+    token.scanner = current;
     token.type = type;
     token.startIdx = current->tokenStartIdx;
     token.length = current->currentIndex - current->tokenStartIdx;
@@ -143,7 +156,6 @@ static Token makeToken(TokenType type) {
     token.lexeme = NULL; // only created on demand, see tokStr()
     token.line = current->line;
     token.alloced = false;
-    //tokStr(&token);
     if (CLOX_OPTION_T(debugTokens)) {
         fprintf(stderr, "Tok: %s -> '%s'\n", tokTypeStr(type), tokStr(&token));
     }
@@ -162,6 +174,7 @@ static Token makeToken(TokenType type) {
 static Token errorToken(const char *message) {
     Token token;
     token.type = TOKEN_ERROR;
+    token.scanner = current;
     token.startIdx = 0;
     token.length = (int)strlen(message);
     token.line = current->line;
@@ -204,7 +217,7 @@ static void skipWhitespace() {
         } else if (peekNext() == '*') { // multiline comment /* */
             advance(); advance();
             char c;
-            while (!isAtEnd()) {
+            while (!isAtEndGetMore()) {
                 c = peek();
                 if (c == '*' && peekNext() == '/') {
                     advance(); advance();
@@ -294,7 +307,7 @@ static Token number(char cur) {
 
 static Token doubleQuotedString() {
   char last = '\0';
-  while (!isAtEnd()) {
+  while (!isAtEndGetMore()) {
     if (peek() == '"' && last == '\\') {
         last = advance();
     } else if (peek() == '"') {
@@ -346,7 +359,7 @@ static Token doubleQuotedString() {
 
 static Token singleQuotedString(bool isStatic) {
     char last = '\0';
-    while (!isAtEnd()) {
+    while (!isAtEndGetMore()) {
         if (peek() == '\'' && last == '\\') {
             last = advance();
         } else if (peek() == '\'') {
@@ -421,7 +434,7 @@ static Token heredocString(void) {
     }
     current->tokenStartIdx = current->currentIndex;
     // scan the lines of the string
-    while (!isAtEnd()) {
+    while (!isAtEndGetMore()) {
         scanLine(line, LINE_MAX, &lineLen);
 #undef LINE_MAX
         if (strncmp(line, patBuf, patBufi) == 0) { // end of heredoc
@@ -551,6 +564,7 @@ void initScanner(Scanner *scan, char *src) {
   scan->indent = 0;
   scan->scriptEnded = false;
   scan->afterDot = false;
+  scan->getMoreSourceFn = NULL;
   setScanner(scan);
 }
 
@@ -566,12 +580,17 @@ void setScanner(Scanner *scan) {
     current = scan;
 }
 
+void scannerSetMoreSourceFn(Scanner *scan, GetMoreSourceFn fn) {
+    scan->getMoreSourceFn = fn;
+}
+
 void resetScanner(Scanner *scan) {
   scan->tokenStartIdx = 0;
   scan->currentIndex = 0;
   scan->line = 1;
   scan->indent = 0;
   scan->scriptEnded = false;
+  scan->afterDot = false;
   setScanner(scan);
 }
 
@@ -721,16 +740,11 @@ char *tokStr(Token *tok) {
     if (tok->lexeme != NULL) return tok->lexeme;
     ASSERT(tok->length >= 0);
     if (tok->length == 0) {
-        char *buf = (char*)calloc(1, 1);
-        ASSERT_MEM(buf);
-        buf[0] = '\0';
-        tok->lexeme = buf;
-        tok->alloced = true;
-        return buf;
+        return (char*)"";
     }
     char *buf = (char*)calloc(1, tok->length+1);
     ASSERT_MEM(buf);
-    memcpy(buf, tok->source+tok->startIdx, tok->length);
+    memcpy(buf, tok->scanner->source+tok->startIdx, tok->length);
     buf[tok->length] = '\0';
     tok->lexeme = buf;
     tok->alloced = true;
@@ -745,6 +759,7 @@ Token emptyTok(void) {
         .length = 0,
         .line = 0,
         .alloced = false,
+        .scanner = current,
     };
     return t;
 }
@@ -759,6 +774,7 @@ Token *copyToken(Token *tok) {
 
 Token syntheticToken(const char *lexeme) {
     Token tok;
+    tok.scanner = current;
     tok.startIdx = 0;
     tok.length = strlen(lexeme);
     tok.lexeme = (char*)lexeme;

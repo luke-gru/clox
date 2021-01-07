@@ -1734,21 +1734,21 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
             blockInstancePopped = true;
         }
         kwargsMap = newMap();
-        hideFromGC(AS_OBJ(kwargsMap));
+        hideFromGC(AS_OBJ(kwargsMap)); // unhidden when pushed below
         Node *param = NULL;
         int pi = 0;
-        vec_foreach_rev(params, param, pi) {
-            if (param->type.kind == PARAM_NODE_KWARG) {
-                char *kwname = tokStr(&param->tok);
-                ObjString *kwStr = INTERN(kwname);
-                for (int i = 0; i < callInfo->numKwargs; i++) {
+        for (int i = callInfo->numKwargs-1; i >= 0; i--) {
+            vec_foreach(params, param, pi) {
+                if (param->type.kind == PARAM_NODE_KWARG) {
+                    char *kwname = tokStr(&param->tok);
+                    ObjString *kwStr = INTERN(kwname);
                     // keyword argument given, is on stack, we pop it off
                     if (strcmp(kwname, tokStr(callInfo->kwargNames+i)) == 0) {
                         mapSet(kwargsMap, OBJ_VAL(kwStr), pop());
                     }
+                    // when keyword argument not given, we need to add UNDEF_VAL to
+                    // stack later
                 }
-                // when keyword argument not given, we need to add UNDEF_VAL to
-                // stack later
             }
         }
     }
