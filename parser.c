@@ -74,7 +74,7 @@ static void errorAt(Token *token, const char *message) {
     } else if (token->type == TOKEN_ERROR) {
         // Nothing.
     } else {
-        pushCStringFmt(str, " at '%.*s'", token->length, token->start);
+        pushCStringFmt(str, " at '%.*s'", token->length, tokStr(token));
     }
 
     pushCStringFmt(str, ": %s\n", message);
@@ -128,7 +128,7 @@ static void advance() {
     }
 
     fprintf(stderr, "Error\n");
-    errorAtCurrent(current->current.start);
+    errorAtCurrent(tokStr(&current->current));
   }
 }
 
@@ -169,7 +169,7 @@ static bool match(TokenType type) {
   if (current->aborted) return false;
   if (current->current.type == TOKEN_EOF && getMoreSourceFn) {
       /*fprintf(stderr, "getMoreSource called from match\n");*/
-      getMoreSourceFn(current);
+      getMoreSourceFn(&scanner, current);
       /*fprintf(stderr, "/getMoreSource called from match\n");*/
       if (current->aborted) {
           return false;
@@ -263,7 +263,7 @@ static bool isAtEnd(void) {
         return true;
     } else if (isEnd && getMoreSourceFn) {
         /*fprintf(stderr, "getMoreSource called from isAtEnd\n");*/
-        getMoreSourceFn(current);
+        getMoreSourceFn(&scanner, current);
         /*fprintf(stderr, "/getMoreSource called from isAtEnd\n");*/
         if (current->aborted) {
             return true;
@@ -346,7 +346,7 @@ static Node *declaration(void) {
     if (match(TOKEN_CLASS)) {
         consume(TOKEN_IDENTIFIER, "Expected class name (identifier) after keyword 'class'");
         Token nameTok = current->previous;
-        if (!isCapital(*nameTok.start)) {
+        if (!isCapital(*tokStr(&nameTok))) {
             error("Class name must be a constant (start with a capital letter)");
         }
         node_type_t classType = {
@@ -370,7 +370,7 @@ static Node *declaration(void) {
     if (match(TOKEN_MODULE)) {
         consume(TOKEN_IDENTIFIER, "Expected module name (identifier) after keyword 'module'");
         Token nameTok = current->previous;
-        if (!isCapital(*nameTok.start)) {
+        if (!isCapital(*tokStr(&nameTok))) {
             error("Module name must be a constant (start with a capital letter)");
         }
         node_type_t modType = {
@@ -433,7 +433,7 @@ static Node *statement() {
         };
         while (match(TOKEN_IDENTIFIER)) {
             Token varTok = current->previous;
-            if (isCapital(*varTok.start)) {
+            if (isCapital(*tokStr(&varTok))) {
                 error("Can't set constants in a foreach loop");
             }
             Node *varNode = createNode(varTokT, varTok, NULL);
@@ -804,7 +804,7 @@ static Node *varDeclaration(void) {
     TRACE_START("varDeclaration");
     consume(TOKEN_IDENTIFIER, "Expected identifier after keyword 'var'");
     Token identTok = current->previous;
-    if (isCapital(*identTok.start)) {
+    if (isCapital(*tokStr(&identTok))) {
         error("Variable names cannot start with a capital letter. That's for constants.");
     }
     node_type_t nType = {
@@ -1458,9 +1458,10 @@ static Node *stringTogetherNodesBinop(vec_void_t *nodes, TokenType ttype, char *
             Token tok;
             tok.line = getScanner()->line;
             tok.lexeme = lexeme;
-            tok.start = lexeme;
+            tok.startIdx = 0;
             tok.length = strlen(lexeme);
             tok.type = ttype;
+            tok.alloced = false;
             Node *binop = createNode(binop_T, tok, NULL);
             nodeAddChild(binop, n);
             if (last) {
@@ -1528,11 +1529,12 @@ static Node *primary() {
                 .litKind = STRING_TYPE,
             };
             Token litTok;
-            litTok.start = before;
+            litTok.startIdx = 0;
             litTok.length = strlen(before);
             litTok.line = strTok.line;
             litTok.type = TOKEN_STRING_DQUOTE;
             litTok.lexeme = before;
+            litTok.alloced = true;
             Node *litNode = createNode(nType, litTok, NULL);
             vec_push(&vnodes, litNode);
             node_type_t callT = {
@@ -1558,11 +1560,12 @@ static Node *primary() {
             ASSERT_MEM(rest);
             strncpy(rest, restStart, restLen);
             Token litTok;
-            litTok.start = rest;
+            litTok.startIdx = 0;
             litTok.length = strlen(rest);
             litTok.line = strTok.line;
             litTok.type = TOKEN_STRING_DQUOTE;
             litTok.lexeme = rest;
+            litTok.alloced = true;
             /*fprintf(stderr, "Interpolation after: '%s'\n", rest);*/
             node_type_t nType = {
                 .type = NODE_EXPR,
@@ -1654,7 +1657,7 @@ static Node *primary() {
         TRACE_START("varExpr");
         Token varName = current->previous;
         node_type_t nType;
-        if (isCapital(*varName.start)) {
+        if (isCapital(*tokStr(&varName))) {
             nType = (node_type_t){
                 .type = NODE_EXPR,
                 .kind = CONSTANT_EXPR,

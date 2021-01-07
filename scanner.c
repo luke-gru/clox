@@ -135,13 +135,15 @@ static void strReplace(char *str, char *substr, char replace) {
 
 static Token makeToken(TokenType type) {
     Token token;
+    token.source = current->source;
     token.type = type;
-    token.start = current->tokenStart;
-    token.length = (int)((current->source+current->currentIndex) - current->tokenStart);
+    token.startIdx = current->tokenStartIdx;
+    token.length = current->currentIndex - current->tokenStartIdx;
     ASSERT(token.length >= 0);
     token.lexeme = NULL; // only created on demand, see tokStr()
     token.line = current->line;
     token.alloced = false;
+    //tokStr(&token);
     if (CLOX_OPTION_T(debugTokens)) {
         fprintf(stderr, "Tok: %s -> '%s'\n", tokTypeStr(type), tokStr(&token));
     }
@@ -160,10 +162,10 @@ static Token makeToken(TokenType type) {
 static Token errorToken(const char *message) {
     Token token;
     token.type = TOKEN_ERROR;
-    token.start = message;
+    token.startIdx = 0;
     token.length = (int)strlen(message);
     token.line = current->line;
-    token.lexeme = NULL;
+    token.lexeme = (char*)message;
     token.alloced = false;
     return token;
 }
@@ -230,23 +232,23 @@ static Token identifier() {
     TokenType type = TOKEN_IDENTIFIER;
 
     // See if the identifier is a reserved word.
-    size_t length = (current->source+current->currentIndex) - current->tokenStart;
+    size_t length = current->currentIndex - current->tokenStartIdx;
     if (!current->afterDot) {
         for (Keyword *keyword = keywords; keyword->name != NULL; keyword++) {
             if (length == keyword->length &&
-                    memcmp(current->tokenStart, keyword->name, length) == 0) {
+                    memcmp(current->source+current->tokenStartIdx, keyword->name, length) == 0) {
                 type = keyword->type;
                 break;
             }
         }
     }
 
-    if (type == TOKEN_IDENTIFIER && memcmp(current->tokenStart, "__LINE__", length) == 0) {
+    if (type == TOKEN_IDENTIFIER && memcmp(current->source+current->tokenStartIdx, "__LINE__", length) == 0) {
         Token token = makeToken(TOKEN_NUMBER);
         char *numBuf = (char*)calloc(1, 8);
         ASSERT_MEM(numBuf);
         sprintf(numBuf, "%d", current->line);
-        token.start = numBuf;
+        token.startIdx = current->tokenStartIdx;
         token.length = strlen(numBuf);
         token.lexeme = numBuf;
         token.alloced = true;
@@ -310,13 +312,13 @@ static Token doubleQuotedString() {
   advance();
   Token tok = makeToken(TOKEN_STRING_DQUOTE);
 
-  tok.start++; // past the first '"' char
+  tok.startIdx++; // past the first '"' char
   tok.length-=2; // the 2 '"' chars
   // replace \" with "
   char *newBuf = (char*)calloc(1, tok.length+1);
   ASSERT_MEM(newBuf);
   newBuf[tok.length] = '\0';
-  strncpy(newBuf, tok.start, tok.length);
+  strncpy(newBuf, current->source+tok.startIdx, tok.length);
   strReplace(newBuf, "\\\"", '"');
   strReplace(newBuf, "\\n", '\n');
   strReplace(newBuf, "\\t", '\t');
@@ -333,7 +335,6 @@ static Token doubleQuotedString() {
       /*beforeStart = interpEnd+1;*/
   /*}*/
 
-  tok.start = newBuf;
   tok.length = strlen(newBuf);
   tok.lexeme = newBuf;
   tok.alloced = true;
@@ -370,14 +371,13 @@ static Token singleQuotedString(bool isStatic) {
     // replace \" with "
     char *newBuf = (char*)calloc(1, tok.length+1);
     ASSERT_MEM(newBuf);
-    const char *start = tok.start+1;
+    const char *start = current->source+tok.startIdx+1;
     size_t len = tok.length-2; // the two ' chars
     if (isStatic) {
       start++; len--; // the 's' char
     }
     strncpy(newBuf, start, len);
     strReplace(newBuf, "\\\'", '\'');
-    tok.start = newBuf;
     tok.length = strlen(newBuf);
     tok.lexeme = newBuf;
     tok.alloced = true;
@@ -419,7 +419,7 @@ static Token heredocString(void) {
     if (strlen(patBuf) == 0) {
         return errorToken("Heredoc needs a pattern after <<<");
     }
-    current->tokenStart = (current->source+current->currentIndex);
+    current->tokenStartIdx = current->currentIndex;
     // scan the lines of the string
     while (!isAtEnd()) {
         scanLine(line, LINE_MAX, &lineLen);
@@ -435,14 +435,13 @@ static Token heredocString(void) {
             // replace \" with "
             char *newBuf = (char*)calloc(1, tok.length+1);
             ASSERT_MEM(newBuf);
-            strncpy(newBuf, tok.start, tok.length);
+            strncpy(newBuf, current->source+tok.startIdx, tok.length);
             newBuf[tok.length] = '\0';
             strReplace(newBuf, "\\\"", '"');
             strReplace(newBuf, "\\n", '\n');
             strReplace(newBuf, "\\t", '\t');
             strReplace(newBuf, "\\r", '\r');
 
-            tok.start = newBuf;
             tok.length = strlen(newBuf);
             tok.lexeme = newBuf;
             tok.alloced = true;
@@ -462,7 +461,7 @@ Token scanToken(void) {
   again:
   skipWhitespace();
 
-  current->tokenStart = current->source+current->currentIndex;
+  current->tokenStartIdx = current->currentIndex;
   if (isAtEnd()) return makeToken(TOKEN_EOF);
 
   char c = advance();
@@ -546,7 +545,7 @@ Token scanToken(void) {
 
 void initScanner(Scanner *scan, char *src) {
   scan->source = src;
-  scan->tokenStart = src;
+  scan->tokenStartIdx = 0;
   scan->currentIndex = 0;
   scan->line = 1;
   scan->indent = 0;
@@ -568,7 +567,7 @@ void setScanner(Scanner *scan) {
 }
 
 void resetScanner(Scanner *scan) {
-  scan->tokenStart = scan->source;
+  scan->tokenStartIdx = 0;
   scan->currentIndex = 0;
   scan->line = 1;
   scan->indent = 0;
@@ -711,7 +710,7 @@ void scanAllPrint(Scanner *scan, char *src) {
         } else {
             printf("   | ");
         }
-        printf("%10s '%.*s'\n", tokTypeStr(token.type), token.length, token.start);
+        printf("%10s '%.*s'\n", tokTypeStr(token.type), token.length, scan->source+token.startIdx);
 
         if (token.type == TOKEN_EOF) break;
     }
@@ -721,7 +720,7 @@ void scanAllPrint(Scanner *scan, char *src) {
 char *tokStr(Token *tok) {
     if (tok->lexeme != NULL) return tok->lexeme;
     ASSERT(tok->length >= 0);
-    if (tok->length == 0 && !tok->start) {
+    if (tok->length == 0) {
         char *buf = (char*)calloc(1, 1);
         ASSERT_MEM(buf);
         buf[0] = '\0';
@@ -729,10 +728,9 @@ char *tokStr(Token *tok) {
         tok->alloced = true;
         return buf;
     }
-    ASSERT(tok->start);
     char *buf = (char*)calloc(1, tok->length+1);
     ASSERT_MEM(buf);
-    memcpy(buf, tok->start, tok->length);
+    memcpy(buf, tok->source+tok->startIdx, tok->length);
     buf[tok->length] = '\0';
     tok->lexeme = buf;
     tok->alloced = true;
@@ -742,7 +740,7 @@ char *tokStr(Token *tok) {
 Token emptyTok(void) {
     Token t = {
         .type = TOKEN_EMPTY,
-        .start = NULL,
+        .startIdx = 0,
         .lexeme = NULL,
         .length = 0,
         .line = 0,
@@ -761,7 +759,7 @@ Token *copyToken(Token *tok) {
 
 Token syntheticToken(const char *lexeme) {
     Token tok;
-    tok.start = lexeme;
+    tok.startIdx = 0;
     tok.length = strlen(lexeme);
     tok.lexeme = (char*)lexeme;
     tok.alloced = false;

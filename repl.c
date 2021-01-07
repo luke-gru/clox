@@ -24,7 +24,6 @@ static void _freeFunc(void) {
 static void scannerAddSrc(char *src) {
     ASSERT(src);
     ASSERT(scanner.source);
-    size_t tokenStartIdx = scanner.tokenStart-scanner.source;
     size_t newsz = strlen(scanner.source)+1+strlen(src);
     char *buf = calloc(1, newsz);
     ASSERT_MEM(buf);
@@ -32,14 +31,13 @@ static void scannerAddSrc(char *src) {
     strcat(buf, src);
     xfree(scanner.source);
     scanner.source = buf;
-    scanner.tokenStart = scanner.source+tokenStartIdx;
 }
 
-static void getMoreSourceFn(Parser *p) {
+static void getMoreSourceFn(Scanner *scan, Parser *p) {
     char *line = NULL;
 
     line = linenoise(prompt);
-    if (!line) { // CTRL-D
+    if (!line && p) { // CTRL-D
         p->aborted = true;
         return;
     }

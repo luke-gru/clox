@@ -315,7 +315,7 @@ static int addUpvalue(Compiler *compiler, uint8_t index, bool isLocal) {
 
 static bool identifiersEqual(Token *a, Token *b) {
     if (a->length != b->length) return false;
-    return memcmp(a->start, b->start, a->length) == 0;
+    return memcmp(tokStr(a), tokStr(b), a->length) == 0;
 }
 
 // returns -1 if local variable not found, otherwise returns slot index
@@ -832,7 +832,7 @@ static uint8_t makeConstant(Value value, ConstType ctype) {
 // Add constant to constant pool from the token's lexeme, return index to it
 static uint8_t identifierConstant(Token *name) {
     DBG_ASSERT(vm.inited);
-    ObjString *ident = INTERNED(name->start, name->length);
+    ObjString *ident = INTERNED(tokStr(name), name->length);
     STRING_SET_STATIC(ident);
     return makeConstant(OBJ_VAL(ident), CONST_T_STRLIT);
 }
@@ -1191,12 +1191,12 @@ static void initCompiler(
                 ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
                 ftype == FUN_TYPE_CLASS_METHOD) {
             current->function->hasReceiver = true;
-            local->name.start = ""; // represents `this`
+            local->name.lexeme = ""; // represents `this`
             local->name.length = 0;
         } else {
             // In a function, it holds the function object, but cannot be referenced, so has
             // no name.
-            local->name.start = "";
+            local->name.lexeme = "";
             local->name.length = 0;
         }
     }
@@ -1243,12 +1243,12 @@ static void initEvalCompiler(
                 in_func->ftype == FUN_TYPE_GETTER || in_func->ftype == FUN_TYPE_SETTER ||
                 in_func->ftype == FUN_TYPE_CLASS_METHOD) {
             in_func->hasReceiver = true;
-            local->name.start = ""; // represents `this`
+            local->name.lexeme = ""; // represents `this`
             local->name.length = 0;
         } else {
             // In a function, it holds the function object, but cannot be referenced, so has
             // no name.
-            local->name.start = "";
+            local->name.lexeme = "";
             local->name.length = 0;
         }
     }
@@ -1260,7 +1260,7 @@ static void initEvalCompiler(
         if (var->bytecode_declare_start < bytecode_at) {
             VM_DEBUG(2, "adding local %s to eval callframe", var->name->chars);
             Local *local = &current->locals[incrLocalCount(current)];
-            local->name.start = var->name->chars;
+            local->name.lexeme = var->name->chars;
             local->name.length = strlen(var->name->chars);
             local->depth = current->scopeDepth;
             local->popOnScopeEnd = true;
@@ -1310,12 +1310,12 @@ static void initBindingEvalCompiler(
                 ftype == FUN_TYPE_GETTER || ftype == FUN_TYPE_SETTER ||
                 ftype == FUN_TYPE_CLASS_METHOD) {
             compiler->function->hasReceiver = true;
-            local->name.start = ""; // represents `this`
+            local->name.lexeme = ""; // represents `this`
             local->name.length = 0;
         } else {
             // In a function, it holds the function object, but cannot be referenced, so has
             // no name.
-            local->name.start = "";
+            local->name.lexeme = "";
             local->name.length = 0;
         }
     }
@@ -1323,8 +1323,8 @@ static void initBindingEvalCompiler(
     Entry e; int varidx = 0;
     TABLE_FOREACH(&scope->function->localsTable, e, varidx, {
         Local *local = &current->locals[incrLocalCount(current)];
-        local->name.start = AS_CSTRING(e.key);
-        local->name.length = strlen(local->name.start);
+        local->name.lexeme = AS_CSTRING(e.key);
+        local->name.length = strlen(local->name.lexeme);
         local->depth = current->scopeDepth;
         local->isUpvalue = false;
         local->popOnScopeEnd = true;
@@ -1821,21 +1821,21 @@ static void emitNode(Node *n) {
             numberLiteral(n, true);
         } else if (n->type.litKind == REGEX_TYPE) {
             Token *regex = &n->tok;
-            ObjString *reStr = INTERNED(regex->start, regex->length);
+            ObjString *reStr = INTERNED(tokStr(regex), regex->length);
             STRING_SET_STATIC(reStr);
             uint8_t strSlot = makeConstant(OBJ_VAL(reStr), CONST_T_STRLIT);
             emitOp1(OP_REGEX, strSlot);
         // non-static string
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
-            ObjString *str = INTERNED(name->start, name->length);
+            ObjString *str = INTERNED(tokStr(name), name->length);
             STRING_SET_STATIC(str);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 0);
         // static string
         } else if (n->tok.type == TOKEN_STRING_STATIC) {
             Token *name = &n->tok;
-            ObjString *str = INTERNED(name->start, name->length);
+            ObjString *str = INTERNED(tokStr(name), name->length);
             STRING_SET_STATIC(str);
             uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 1);
@@ -2488,7 +2488,6 @@ ObjFunction *compile_src(char *src, CompileErr *err) {
     Parser p;
     initParser(&p);
     Node *program = parse(&p);
-    freeScanner(&scanner);
     if (CLOX_OPTION_T(parseOnly)) {
         *err = p.hadError ? COMPILE_ERR_SYNTAX :
             COMPILE_ERR_NONE;
@@ -2564,7 +2563,6 @@ ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjInstance *instance,
     } else {
         program = parse(&p);
     }
-    freeScanner(&scanner);
     if (CLOX_OPTION_T(parseOnly)) {
         *err = p.hadError ? COMPILE_ERR_SYNTAX :
             COMPILE_ERR_NONE;
@@ -2623,7 +2621,6 @@ ObjFunction *compile_binding_eval_src(char *src, CompileErr *err, ObjScope *scop
     Parser p;
     initParser(&p);
     Node *program = parse(&p);
-    freeScanner(&scanner);
     if (CLOX_OPTION_T(parseOnly)) {
         *err = p.hadError ? COMPILE_ERR_SYNTAX :
             COMPILE_ERR_NONE;

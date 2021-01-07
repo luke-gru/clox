@@ -92,7 +92,8 @@ typedef enum {
 
 typedef struct Token {
   TokenType type;
-  const char *start;
+  char *source; // points to scanner->source
+  size_t startIdx;
   char *lexeme; // lazily computed, could be NULL. See `tokStr()`
   int length; // not including NULL byte
   int line;
@@ -101,7 +102,7 @@ typedef struct Token {
 
 typedef struct Scanner {
   char *source;
-  char *tokenStart;
+  size_t tokenStartIdx;
   size_t currentIndex;
   int line;
   int indent;
