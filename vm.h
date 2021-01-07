@@ -396,7 +396,7 @@ Value execStopRecursion(stopRecursionFn, Value obj, Value arg);
 // TODO: move these from vm.h
 Value propertyGet(ObjInstance *obj, ObjString *propName);
 void propertySet(ObjInstance *obj, ObjString *propName, Value rval);
-bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *methodName, Value *ret, bool lookInGivenClass);
+bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *methodName, MethodType mtype, Value *ret, bool lookInGivenClass);
 Obj *findMethod(Obj *klass, ObjString *methodName);
 void defineMethod(Value classOrMod, ObjString *name, Value method);
 

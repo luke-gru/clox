@@ -102,7 +102,7 @@ typedef struct Token {
 typedef struct Scanner {
   char *source;
   char *tokenStart;
-  char *current;
+  size_t currentIndex;
   int line;
   int indent;
   bool scriptEnded; // seen `__END__` keyword

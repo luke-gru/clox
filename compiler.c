@@ -1056,6 +1056,7 @@ static void namedVariable(Token name, VarOp getSet) {
 }
 
 static char *fullClassNameFromCompiler(ClassCompiler *compiler) {
+    ASSERT(compiler);
     ClassCompiler *cur = compiler;
     vec_void_t v_compilers;
     vec_init(&v_compilers);
@@ -2466,7 +2467,23 @@ static void emitNode(Node *n) {
     }
 }
 
+static void initializeCompiler(void) {
+    current = NULL;
+    top = NULL; // compiler for main
+    currentClassOrModule = NULL;
+    inINBlock = false;
+    curTok = NULL;
+    loopStart = -1;
+    curLoopType = LOOP_T_NONE;
+    nodeDepth = 0;
+    nodeWidth = -1;
+    blockDepth = 0;
+    breakBlock = false;
+    curScope = NULL;
+}
+
 ObjFunction *compile_src(char *src, CompileErr *err) {
+    initializeCompiler();
     initScanner(&scanner, src);
     Parser p;
     initParser(&p);
@@ -2489,6 +2506,30 @@ ObjFunction *compile_src(char *src, CompileErr *err) {
     }
     ASSERT(program);
     freeParser(&p);
+    Compiler mainCompiler;
+    top = &mainCompiler;
+    initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, NULL);
+    emitNode(program);
+    ObjFunction *prog = endCompiler();
+    prog->programNode = program;
+    if (CLOX_OPTION_T(debugBytecode) && !mainCompiler.hadError) {
+        printFunctionTables(stderr, prog);
+        printDisassembledChunk(stderr, prog->chunk, "Bytecode:");
+    }
+    if (mainCompiler.hadError) {
+        outputCompilerErrors(&mainCompiler, stderr);
+        freeCompiler(&mainCompiler, true);
+        *err = COMPILE_ERR_SEMANTICS;
+        return NULL;
+    } else {
+        *err = COMPILE_ERR_NONE;
+        ASSERT(prog->chunk);
+        return prog;
+    }
+}
+
+ObjFunction *compile_node(Node *program, CompileErr *err) {
+    initializeCompiler();
     Compiler mainCompiler;
     top = &mainCompiler;
     initCompiler(&mainCompiler, 0, FUN_TYPE_TOP_LEVEL, NULL, NULL);

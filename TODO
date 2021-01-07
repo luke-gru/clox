@@ -55,10 +55,7 @@ Bugs
 ----
 * A regular expression object that calls #match() will override captures
 of the same regex object in other threads, I think?
-* Undefined init for a class, when object is given parameters the error
-message is Object#init received too many args instead of the original
-method
-* super bug for getters/setters (examples/super_setter.lox)
+* super bug for setters (examples/super_setter.lox)
 * Bug in repl, inspect on last value doesn't work right when inspect()
 is a lox defined method instead of a native
 * loadScript/requireScript should use pwd of lox process during startup for

@@ -81,36 +81,36 @@ static bool isAlphaNumeric(char c) {
 }
 
 static bool isAtEnd() {
-  return current->scriptEnded || *current->current == '\0';
+  return current->scriptEnded || current->source[current->currentIndex] == '\0';
 }
 
 static char advance() {
-  current->current++;
-  return current->current[-1];
+  current->currentIndex++;
+  return current->source[current->currentIndex-1];
 }
 
 static char peek() {
-  return *current->current;
+  return current->source[current->currentIndex];
 }
 
 static char peekNext() {
   if (isAtEnd()) return '\0';
-  return current->current[1];
+  return current->source[current->currentIndex+1];
 }
 
 static bool match(char expected) {
   if (isAtEnd()) return false;
-  if (*current->current != expected) return false;
+  if (current->source[current->currentIndex] != expected) return false;
 
-  current->current++;
+  current->currentIndex++;
   return true;
 }
 
 static bool matchStr(char *str, size_t len) {
   if (isAtEnd()) return false;
-  if (strncmp(current->current, str, len) == 0) {
+  if (strncmp(current->source+current->currentIndex, str, len) == 0) {
     while (len > 0) {
-      current->current++;
+      current->currentIndex++;
       len--;
     }
     return true;
@@ -137,7 +137,7 @@ static Token makeToken(TokenType type) {
     Token token;
     token.type = type;
     token.start = current->tokenStart;
-    token.length = (int)(current->current - current->tokenStart);
+    token.length = (int)((current->source+current->currentIndex) - current->tokenStart);
     ASSERT(token.length >= 0);
     token.lexeme = NULL; // only created on demand, see tokStr()
     token.line = current->line;
@@ -230,7 +230,7 @@ static Token identifier() {
     TokenType type = TOKEN_IDENTIFIER;
 
     // See if the identifier is a reserved word.
-    size_t length = current->current - current->tokenStart;
+    size_t length = (current->source+current->currentIndex) - current->tokenStart;
     if (!current->afterDot) {
         for (Keyword *keyword = keywords; keyword->name != NULL; keyword++) {
             if (length == keyword->length &&
@@ -419,7 +419,7 @@ static Token heredocString(void) {
     if (strlen(patBuf) == 0) {
         return errorToken("Heredoc needs a pattern after <<<");
     }
-    current->tokenStart = current->current;
+    current->tokenStart = (current->source+current->currentIndex);
     // scan the lines of the string
     while (!isAtEnd()) {
         scanLine(line, LINE_MAX, &lineLen);
@@ -430,7 +430,7 @@ static Token heredocString(void) {
             tok.length -= (extraLen+patBufi);
             ASSERT(tok.length > 0);
             // unscan the ';' or ');' after the pattern, if on the same line
-            current->current -= extraLen;
+            current->currentIndex -= extraLen;
 
             // replace \" with "
             char *newBuf = (char*)calloc(1, tok.length+1);
@@ -462,7 +462,7 @@ Token scanToken(void) {
   again:
   skipWhitespace();
 
-  current->tokenStart = current->current;
+  current->tokenStart = current->source+current->currentIndex;
   if (isAtEnd()) return makeToken(TOKEN_EOF);
 
   char c = advance();
@@ -547,7 +547,7 @@ Token scanToken(void) {
 void initScanner(Scanner *scan, char *src) {
   scan->source = src;
   scan->tokenStart = src;
-  scan->current = src;
+  scan->currentIndex = 0;
   scan->line = 1;
   scan->indent = 0;
   scan->scriptEnded = false;
@@ -569,7 +569,7 @@ void setScanner(Scanner *scan) {
 
 void resetScanner(Scanner *scan) {
   scan->tokenStart = scan->source;
-  scan->current = scan->source;
+  scan->currentIndex = 0;
   scan->line = 1;
   scan->indent = 0;
   scan->scriptEnded = false;

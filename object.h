@@ -241,6 +241,12 @@ typedef struct ObjModule {
 #define CLASS_GETTER_TBL(klass) (((klass)->type == OBJ_T_CLASS || (klass)->type == OBJ_T_MODULE) ? (CLASSINFO((klass))->getters) : (CLASSINFO(((ObjIClass*) (klass))->mod)->getters))
 #define CLASS_SETTER_TBL(klass) (((klass)->type == OBJ_T_CLASS || (klass)->type == OBJ_T_MODULE) ? (CLASSINFO((klass))->setters) : (CLASSINFO(((ObjIClass*) (klass))->mod)->setters))
 
+typedef enum MethodType {
+    METHOD_TYPE_METHOD,
+    METHOD_TYPE_GETTER,
+    METHOD_TYPE_SETTER,
+} MethodType;
+
 // included module "class"
 typedef struct ObjIClass {
     Obj object;

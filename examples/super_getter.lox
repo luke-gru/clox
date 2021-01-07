@@ -1,0 +1,19 @@
+class B {
+    get {
+        print "in b";
+    }
+}
+
+class A < B {
+    get {
+        print "in a";
+        super.get;
+    }
+}
+
+var g = A().get;
+
+__END__
+-- expect: --
+in a
+in b

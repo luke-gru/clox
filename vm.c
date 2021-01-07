@@ -1040,7 +1040,7 @@ static inline bool isThrowable(Value val) {
     return IS_AN_ERROR(val);
 }
 
-bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, Value *ret, bool lookInGivenClass) {
+bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, MethodType mtype, Value *ret, bool lookInGivenClass) {
     Obj *givenClass = klass;
     if (klass == TO_OBJ(obj->klass) && obj->singletonKlass) {
         klass = TO_OBJ(obj->singletonKlass);
@@ -1052,7 +1052,15 @@ bool lookupMethod(ObjInstance *obj, Obj *klass, ObjString *propName, Value *ret,
             classLookup = CLASS_SUPER(classLookup);
             continue;
         }
-        Table *mtable = CLASS_METHOD_TBL(classLookup);
+        Table *mtable;
+        if (mtype == METHOD_TYPE_METHOD) {
+            mtable = CLASS_METHOD_TBL(classLookup);
+        } else if (mtype == METHOD_TYPE_GETTER) {
+            mtable = CLASS_GETTER_TBL(classLookup);
+        } else {
+            ASSERT(mtype == METHOD_TYPE_SETTER);
+            mtable = CLASS_SETTER_TBL(classLookup);
+        }
         if (tableGet(mtable, key, ret)) {
             return true;
         }
@@ -1178,6 +1186,10 @@ static void defineGetter(ObjString *name) {
     ASSERT(IS_CLOSURE(method));
     Value classOrMod = peek(1);
     ASSERT(IS_CLASS(classOrMod) || IS_MODULE(classOrMod));
+    ObjFunction *func = AS_CLOSURE(method)->function;
+    if (func) {
+      func->klass = AS_OBJ(classOrMod);
+    }
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG(2, "defining getter '%s'", name->chars);
@@ -1198,6 +1210,10 @@ static void defineSetter(ObjString *name) {
     Value method = peek(0); // function
     ASSERT(IS_CLOSURE(method));
     Value classOrMod = peek(1);
+    ObjFunction *func = AS_CLOSURE(method)->function;
+    if (func) {
+      func->klass = AS_OBJ(classOrMod);
+    }
     if (IS_CLASS(classOrMod)) {
         ObjClass *klass = AS_CLASS(classOrMod);
         VM_DEBUG(2, "defining setter '%s'", name->chars);
@@ -3058,12 +3074,17 @@ vmLoop:
               ASSERT(iclass == TO_OBJ(mod));
               klass = (ObjClass*)iclassFound;
           }
+          bool found;
           Value method;
-          bool found = lookupMethod(
-              AS_INSTANCE(instanceVal), TO_OBJ(klass),
-              AS_STRING(methodName), &method, false);
+          enum MethodType mtype = METHOD_TYPE_METHOD;
+          if (frame->closure->function->ftype == FUN_TYPE_GETTER) {
+              mtype = METHOD_TYPE_GETTER;
+          }
+          found = lookupMethod(
+                  AS_INSTANCE(instanceVal), TO_OBJ(klass),
+                  AS_STRING(methodName), mtype, &method, false);
           if (UNLIKELY(!found)) {
-              throwErrorFmt(lxErrClass, "Could not find method '%s' for 'super': %s",
+              throwErrorFmt(lxErrClass, "Could not find method '%s' for 'super'",
                       AS_CSTRING(methodName));
           }
           ObjBoundMethod *bmethod = newBoundMethod(AS_INSTANCE(instanceVal), AS_OBJ(method), NEWOBJ_FLAG_NONE);

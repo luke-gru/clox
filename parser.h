@@ -22,6 +22,7 @@ typedef struct sParser {
   vec_void_t v_errMessages; // list of ObjStrings
   bool hadError;
   bool panicMode;
+  bool aborted;
   jmp_buf errJmpBuf;
 } Parser;
 
@@ -30,6 +31,11 @@ void freeParser(Parser *p); // frees parser, but NOT the nodes
 Node *parse(Parser *p);
 Node *parseClass(Parser *p);
 Node *parseExpression(Parser *p);
+
+typedef void (*GetMoreSourceFn)(Parser *parser);
+
+Node *parseMaybePartialStatement(Parser *p, GetMoreSourceFn fn);
+
 void outputParserErrors(Parser *p, FILE *f);
 
 #ifdef __cplusplus

@@ -923,7 +923,8 @@ Value lxObjectRespondsTo(int argCount, Value *args) {
     Value methodName = args[1];
     CHECK_ARG_IS_A(methodName, lxStringClass, 1);
     Value methodFound;
-    bool found = lookupMethod(AS_INSTANCE(self), (Obj*)AS_INSTANCE(self)->klass, AS_STRING(methodName), &methodFound, true);
+    bool found = lookupMethod(AS_INSTANCE(self), (Obj*)AS_INSTANCE(self)->klass, AS_STRING(methodName),
+            METHOD_TYPE_METHOD, &methodFound, true);
     return BOOL_VAL(found);
 }
 

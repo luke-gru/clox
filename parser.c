@@ -17,6 +17,7 @@
 
 static int traceLvl = 0;
 const char traceNesting[] = "  ";
+static GetMoreSourceFn getMoreSourceFn = NULL;
 
 static void printTraceNesting() {
     for (int i = 0; i < traceLvl; i++) {
@@ -45,6 +46,7 @@ static Parser *current = NULL;
 void initParser(Parser *p) {
     p->hadError = false;
     p->panicMode = false;
+    p->aborted = false;
     memset(&p->errJmpBuf, 0, sizeof(jmp_buf));
     memset(&p->current, 0, sizeof(Token));
     memset(&p->previous, 0, sizeof(Token));
@@ -164,6 +166,24 @@ static Token peekTokN(int n) {
 // If current token is of given type, advance to next.
 // Otherwise returns false.
 static bool match(TokenType type) {
+  if (current->aborted) return false;
+  if (current->current.type == TOKEN_EOF && getMoreSourceFn) {
+      /*fprintf(stderr, "getMoreSource called from match\n");*/
+      getMoreSourceFn(current);
+      /*fprintf(stderr, "/getMoreSource called from match\n");*/
+      if (current->aborted) {
+          return false;
+      }
+      /*fprintf(stderr, "advance\n");*/
+      advance();
+      if (current->current.type == TOKEN_EOF) {
+          current->aborted = true;
+          return false;
+      }
+      /*fprintf(stderr, "/advance\n");*/
+      if (!check(type)) return false;
+      return true;
+  }
   if (!check(type)) return false;
   advance();
   return true;
@@ -192,6 +212,7 @@ static Node *printStatement(void);
 static Node *blockStatements(void);
 static Node *expressionStatement(void);
 
+
 Node *parseExpression(Parser *p) {
     Parser *oldCurrent = current;
     current = p;
@@ -200,6 +221,26 @@ Node *parseExpression(Parser *p) {
     Node *ret = expression();
     TRACE_END("parseExpression");
     current = oldCurrent;
+    return ret;
+}
+
+Node *parseMaybePartialStatement(Parser *p, GetMoreSourceFn fn) {
+    getMoreSourceFn = fn;
+    Parser *oldCurrent = current;
+    current = p;
+    advance(); // prime parser with parser.current
+    TRACE_START("parseStatement");
+    int jumpRes = setjmp(current->errJmpBuf);
+    if (jumpRes == JUMP_PERFORMED) { // jumped, had error
+        ASSERT(current->panicMode);
+        current = (Parser*)oldCurrent;
+        TRACE_END("parse (error)");
+        return NULL;
+    }
+    Node *ret = declaration();
+    TRACE_END("parseStatement");
+    current = oldCurrent;
+    getMoreSourceFn = NULL;
     return ret;
 }
 
@@ -215,7 +256,26 @@ Node *parseClass(Parser *p) {
 }
 
 static bool isAtEnd(void) {
-    return current->previous.type == TOKEN_EOF || check(TOKEN_EOF);
+    if (current->aborted) return true;
+    bool isEnd = current->previous.type == TOKEN_EOF || check(TOKEN_EOF);
+    if (!isEnd) return false;
+    if (isEnd && getMoreSourceFn == NULL) {
+        return true;
+    } else if (isEnd && getMoreSourceFn) {
+        /*fprintf(stderr, "getMoreSource called from isAtEnd\n");*/
+        getMoreSourceFn(current);
+        /*fprintf(stderr, "/getMoreSource called from isAtEnd\n");*/
+        if (current->aborted) {
+            return true;
+        }
+        /*fprintf(stderr, "advance\n");*/
+        advance();
+        /*fprintf(stderr, "/advance\n");*/
+        if (current->current.type == TOKEN_EOF) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // returns program node that contains list of statement nodes
@@ -1051,9 +1111,8 @@ static Node *assignment() {
                 .kind = PROP_SET_EXPR,
             };
             ret = createNode(propsetT, lval->tok, NULL);
-            nodeAddChild(ret, vec_first(lval->children));
+            nodeAddChild(ret, lval);
             nodeAddChild(ret, rval);
-            freeNode(lval, false);
             TRACE_END("propAccessExpr (super.)");
             // TODO turn into propset
         } else {

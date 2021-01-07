@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "vm.h"
+#include "parser.h"
 #include "compiler.h"
 #include "scanner.h"
 #include "object.h"
@@ -9,6 +10,9 @@
 #include "linenoise.h"
 
 static ObjFunction *Func = NULL;
+static char *lines[50];
+static int numLines = 0;
+static const char *prompt = ">  ";
 
 static void _freeFunc(void) {
     if (Func) {
@@ -16,22 +20,44 @@ static void _freeFunc(void) {
     }
 }
 
-static bool evalLines(char *lines[], int numLines) {
+// Adds copied chars in `src` to `scanner.source`
+static void scannerAddSrc(char *src) {
+    ASSERT(src);
+    ASSERT(scanner.source);
+    size_t tokenStartIdx = scanner.tokenStart-scanner.source;
+    size_t newsz = strlen(scanner.source)+1+strlen(src);
+    char *buf = calloc(1, newsz);
+    ASSERT_MEM(buf);
+    strcpy(buf, scanner.source);
+    strcat(buf, src);
+    xfree(scanner.source);
+    scanner.source = buf;
+    scanner.tokenStart = scanner.source+tokenStartIdx;
+}
+
+static void getMoreSourceFn(Parser *p) {
+    char *line = NULL;
+
+    line = linenoise(prompt);
+    if (!line) { // CTRL-D
+        p->aborted = true;
+        return;
+    }
+    linenoiseHistoryAdd(line);
+    /*fprintf(stderr, "add src called\n");*/
+    scannerAddSrc(line);
+    /*fprintf(stderr, "/add src called\n");*/
+    lines[numLines++] = line;
+}
+
+static bool evalNode(Node *program) {
     resetStack();
     _freeFunc();
     vm.exited = false;
     THREAD()->hadError = false;
-    ObjString *buf = hiddenString("", 0, NEWOBJ_FLAG_NONE);
-    for (int i = 0; i < numLines; i++) {
-        char *line = lines[i];
-        ASSERT(line);
-        pushCString(buf, line, strlen(line));
-    }
-    char *code = buf->chars;
     CompileErr cerr = COMPILE_ERR_NONE;
     /*fprintf(stderr, "compiling code: '%s'", code);*/
-    Func = compile_src(code, &cerr);
-    unhideFromGC((Obj*)buf);
+    Func = compile_node(program, &cerr);
     if (cerr != COMPILE_ERR_NONE) {
         fprintf(stderr, "%s", "Compilation error\n");
         return false;
@@ -54,41 +80,12 @@ static void freeLines(char *lines[], int numLines) {
     }
 }
 
-static bool scanToEnd(void) {
-    Token tok;
-    resetScanner(&scanner);
-    while (true) {
-        tok = scanToken();
-        if (tok.type == TOKEN_EOF) {
-            return true;
-        } else if (tok.type == TOKEN_ERROR) {
-            return false;
-        }
-        // otherwise continue
-    }
-    ASSERT(0);
-}
-
-// Adds copied chars in `src` to `scanner.source`
-static void scannerAddSrc(char *src) {
-    ASSERT(src);
-    ASSERT(scanner.source);
-    size_t newsz = strlen(scanner.source)+1+strlen(src);
-    char *buf = calloc(1, newsz);
-    ASSERT_MEM(buf);
-    strcpy(buf, scanner.source);
-    strcat(buf, src);
-    xfree(scanner.source);
-    scanner.source = buf;
-}
-
 static void _resetScanner(void) {
     if (scanner.source) xfree(scanner.source);
     initScanner(&scanner, strdup(""));
 }
 
 NORETURN void repl(void) {
-    const char *prompt = ">  ";
     _resetScanner();
     initVM();
     linenoiseHistorySetMaxLen(500);
@@ -97,8 +94,6 @@ NORETURN void repl(void) {
     // expression or statement.
     compilerOpts.noRemoveUnusedExpressions = true;
 
-    char *lines[50];
-    int numLines = 0;
     char *line = NULL;
 
     while ((line = linenoise(prompt)) != NULL) { // NOTE: chomps newline
@@ -133,45 +128,47 @@ NORETURN void repl(void) {
         }
         lines[numLines++] = line;
         scannerAddSrc(line);
-        bool isOk = scanToEnd();
-        if (!isOk) {
-            fprintf(stderr, "%s", "Lexical error\n");
+        Parser p;
+        initParser(&p);
+        Node *n = parseMaybePartialStatement(&p, getMoreSourceFn);
+        if (p.hadError) {
+            fprintf(stderr, "%s", "Parser error\n");
+            outputParserErrors(&p, stderr);
+            freeParser(&p);
             freeLines(lines, numLines);
             numLines = 0;
             _resetScanner();
             line = NULL;
             continue;
         }
-        if (scanner.indent == 0) { // evaluate the statement/expression
-            xfree(scanner.source);
-            if (!evalLines(lines, numLines)) {
-                freeLines(lines, numLines);
-                numLines = 0;
-                _resetScanner();
-                line = NULL;
-                continue;
-            }
-            Value *val = getLastValue();
-            fprintf(stderr, "%s", "  => ");
-            if (val) {
-                // Add first callframe in case there are none, because
-                // printValue may call native methods (toString()), which
-                // rely on the framecount to be at least 1.
-                if (THREAD()->ec->frameCount == 0) {
-                    THREAD()->ec->frameCount++;
-                }
-                printInspectValue(stderr, *val);
-            } else {
-                printValue(stderr, NIL_VAL, false, -1);
-            }
-            fprintf(stderr, "%s", "\n");
+        freeParser(&p);
+        ASSERT(n);
+        bool compileOk = evalNode(n);
+        if (!compileOk) {
             freeLines(lines, numLines);
             numLines = 0;
             _resetScanner();
-        } else {
-            /*fprintf(stderr, "(waiting for more input)\n");*/
-            // wait until more input
+            line = NULL;
+            continue;
         }
+        Value *val = getLastValue();
+        fprintf(stderr, "%s", "  => ");
+        if (val) {
+            // Add first callframe in case there are none, because
+            // printValue may call native methods (toString()), which
+            // rely on the framecount to be at least 1.
+            if (THREAD()->ec->frameCount == 0) {
+                THREAD()->ec->frameCount++;
+            }
+            printInspectValue(stderr, *val);
+        } else {
+            printValue(stderr, NIL_VAL, false, -1);
+        }
+
+        fprintf(stderr, "%s", "\n");
+        freeLines(lines, numLines);
+        numLines = 0;
+        _resetScanner();
         line = NULL;
     }
     stopVM(0);
