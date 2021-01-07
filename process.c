@@ -223,7 +223,7 @@ static void *reapProcess(void *pidArg) {
 }
 
 static Value lxProcessDetachStatic(int argCount, Value *args) {
-    CHECK_ARITY("Process.signal", 2, 2, argCount);
+    CHECK_ARITY("Process.detach", 2, 2, argCount);
     CHECK_ARG_BUILTIN_TYPE(args[1], IS_NUMBER_FUNC, "number", 1);
     long pid = (long)AS_NUMBER(args[1]);
     if (pid <= 0) {

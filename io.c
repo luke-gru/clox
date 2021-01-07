@@ -11,6 +11,7 @@
 #include "memory.h"
 
 ObjClass *lxIOClass;
+ObjClass *lxEWouldBlockClass;
 #define READBUF_SZ 4092
 #define WRITEBUF_SZ 4092
 
@@ -78,7 +79,16 @@ static void NORETURN throwIOSyserr(int err, int last, const char *desc) {
     throwErrorFmt(sysErrClass(err), "IO Error during %s: %s", desc, strerror(err));
 }
 
-ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
+static int fd_set_nonblock(int fd) {
+    int oflags = fcntl(fd, F_GETFL);
+    if (oflags == -1) return -1;
+    if (oflags & O_NONBLOCK) return 0;
+    oflags |= O_NONBLOCK;
+    return fcntl(fd, F_SETFL, oflags);
+    return 0;
+}
+
+ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF, bool nonBlock) {
     ASSERT(fd >= 0);
     ObjString *retBuf = copyString("", 0, NEWOBJ_FLAG_NONE);
     size_t nread = 0;
@@ -86,7 +96,12 @@ ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
     char fileReadBuf[READBUF_SZ];
     size_t maxRead = untilEOF ? READBUF_SZ-1 : (numBytes > (READBUF_SZ-1) ? (READBUF_SZ-1) : numBytes);
     int last = errno;
+    if (nonBlock) {
+      fd_set_nonblock(fd);
+    }
+    if (!nonBlock) {
     releaseGVL(THREAD_STOPPED);
+    }
     /*fprintf(stderr, "read from %d with max %d\n", fd, (int)maxRead);*/
     while ((justRead = read(fd, fileReadBuf, maxRead)) > 0) {
         /*fprintf(stderr, "Just read: '%s'", fileReadBuf);*/
@@ -96,8 +111,17 @@ ObjString *IOReadFd(int fd, size_t numBytes, bool untilEOF) {
         numBytes -= justRead;
         maxRead = untilEOF ? READBUF_SZ : (numBytes > READBUF_SZ ? READBUF_SZ : numBytes);
     }
-    acquireGVL();
+    if (!nonBlock) {
+        acquireGVL();
+    }
     if (justRead == -1) {
+        if (nonBlock && errno == EWOULDBLOCK) {
+            if (nread == 0) {
+                return NULL;
+            } else {
+                return retBuf;
+            }
+        }
         throwIOSyserr(errno, last, "read");
     }
 
@@ -124,7 +148,7 @@ static ObjString *IOReadlineFd(int fd, size_t maxLen) {
     return retBuf;
 }
 
-ObjString *IORead(Value io, size_t numBytes, bool untilEOF) {
+ObjString *IORead(Value io, size_t numBytes, bool untilEOF, bool nonBlock) {
     LxFile *f = FILE_GETHIDDEN(io);
     if (!f->isOpen) {
         throwErrorFmt(lxErrClass, "IO error: cannot read from closed fd: %d", f->fd);
@@ -132,7 +156,11 @@ ObjString *IORead(Value io, size_t numBytes, bool untilEOF) {
     if (f->fd == STDOUT_FILENO || f->fd == STDERR_FILENO) {
         throwErrorFmt(lxErrClass, "Cannot read from stdout/stdin");
     }
-    return IOReadFd(f->fd, numBytes, untilEOF);
+    return IOReadFd(f->fd, numBytes, untilEOF, nonBlock);
+}
+
+static ObjString *IOReadNonBlock(Value io, size_t numBytes, bool untilEOF) {
+    return IORead(io, numBytes, untilEOF, true);
 }
 
 static ObjString *IOReadline(Value io, size_t maxBytes) {
@@ -197,7 +225,7 @@ static Value lxIORead(int argCount, Value *args) {
     } else {
         untilEOF = true;
     }
-    ObjString *buf = IORead(self, numBytes, untilEOF);
+    ObjString *buf = IORead(self, numBytes, untilEOF, false);
     ASSERT(buf);
     return OBJ_VAL(buf);
 }
@@ -344,6 +372,8 @@ static Value lxIOWriteStatic(int argCount, Value *args) {
     return NUMBER_VAL(written);
 }
 
+
+
 static Value lxIOReadStatic(int argCount, Value *args) {
     CHECK_ARITY("IO.read", 2, 3, argCount);
     Value ioVal = args[1];
@@ -363,7 +393,33 @@ static Value lxIOReadStatic(int argCount, Value *args) {
     } else {
         untilEOF = true;
     }
-    ObjString *buf = IORead(ioVal, bytes, untilEOF);
+    ObjString *buf = IORead(ioVal, bytes, untilEOF, false);
+    return OBJ_VAL(buf);
+}
+
+static Value lxIOReadNonBlockStatic(int argCount, Value *args) {
+    CHECK_ARITY("IO.readNonBock", 2, 3, argCount);
+    Value ioVal = args[1];
+    CHECK_ARG_IS_A(ioVal, lxIOClass, 1);
+    size_t bytes = 0;
+    bool untilEOF = false;
+    if (argCount == 3) {
+        Value numBytes = args[2];
+        CHECK_ARG_BUILTIN_TYPE(numBytes, IS_NUMBER_FUNC, "number", 2);
+        double numBytesd = AS_NUMBER(numBytes);
+        if (numBytesd <= 0) {
+            bytes = 0;
+            untilEOF = true;
+        } else {
+            bytes = (size_t)numBytesd;
+        }
+    } else {
+        untilEOF = true;
+    }
+    ObjString *buf = IOReadNonBlock(ioVal, bytes, untilEOF);
+    if (!buf) {
+        return OBJ_VAL(lxEWouldBlockClass);
+    }
     return OBJ_VAL(buf);
 }
 
@@ -438,6 +494,7 @@ void Init_IOClass(void) {
     ObjClass *ioStatic = singletonClass((Obj*)ioClass);
 
     addNativeMethod(ioStatic, "read", lxIOReadStatic);
+    addNativeMethod(ioStatic, "readNonBlock", lxIOReadNonBlockStatic);
     addNativeMethod(ioStatic, "write", lxIOWriteStatic);
     addNativeMethod(ioStatic, "close", lxIOCloseStatic);
     addNativeMethod(ioStatic, "pipe", lxIOPipeStatic);
@@ -480,8 +537,13 @@ void Init_IOClass(void) {
     addConstantUnder("F_GETFL", NUMBER_VAL(F_SETFL), ioClassVal);
     addConstantUnder("F_SETFL", NUMBER_VAL(F_GETFL), ioClassVal);
     addConstantUnder("O_NONBLOCK", NUMBER_VAL(O_NONBLOCK), ioClassVal);
+
 #ifndef O_DIRECT
 #define O_DIRECT 0
 #endif
     addConstantUnder("O_DIRECT", NUMBER_VAL(O_DIRECT), ioClassVal);
+
+    ObjClass *eWouldBlockClass = createClass("EWouldBlock", lxSystemErrClass);
+    lxEWouldBlockClass = eWouldBlockClass;
+    addConstantUnder("EWouldBlock", OBJ_VAL(eWouldBlockClass), ioClassVal);
 }

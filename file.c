@@ -99,7 +99,7 @@ static Value lxFileReadStatic(int argCount, Value *args) {
     ObjString *fnameStr = VAL_TO_STRING(fname);
     checkFileExists(fnameStr->chars);
     FILE *f = checkFopen(fnameStr->chars, "r");
-    ObjString *buf = IOReadFd(fileno(f), 0, true);
+    ObjString *buf = IOReadFd(fileno(f), 0, true, false);
     checkFclose(f);
     return OBJ_VAL(buf);
 }

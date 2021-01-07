@@ -51,10 +51,10 @@ class HTTPServer {
                 if (gotCR == 2) {
                     break; // headers over
                 }
-                var b = clisock.read(1);
+                var b = IO.readNonBlock(clisock, 1);
                 if (b == "\r") {
                     gotCR += 1;
-                    clisock.read(1); // \n
+                    IO.readNonBlock(clisock, 1); // \n
                     if (header.size() > 0) {
                         headers.push(header);
                     }
