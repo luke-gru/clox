@@ -2945,6 +2945,9 @@ vmLoop:
       }
       CASE_OP(TO_BLOCK): {
           Value func = VM_PEEK(0);
+          if (IS_NIL(func)) { // &nil works fine, just returns nil
+              DISPATCH_BOTTOM();
+          }
           if (UNLIKELY(!isCallable(func))) {
               VM_POP();
               throwErrorFmt(lxTypeErrClass, "Cannot use '&' operator on a non-function");

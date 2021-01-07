@@ -1,0 +1,9 @@
+requireScript("openstruct");
+
+var c = OpenStruct();
+c.something = 1;
+print c.something();
+
+__END__
+-- expect: --
+1
