@@ -533,6 +533,8 @@ void setObjectFinalizer(ObjInstance *obj, Obj *callable);
 
 // arrays
 Value  newArray(void);
+Value  arrayFirst(Value aryVal);
+Value  arrayLast(Value aryVal);
 void   arrayPush(Value aryVal, Value el);
 Value  arrayPop(Value aryVal);
 void   arrayPushFront(Value aryVal, Value el);

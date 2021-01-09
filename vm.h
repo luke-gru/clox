@@ -31,7 +31,7 @@ typedef struct CallFrame {
     // Non-native function fields
     ObjClosure *closure; // if call frame is from compiled code, this is set
     ObjString *name; // name of function
-    uint8_t *ip; // ip into closure's bytecode chunk, if callable is not a C function
+    uint32_t *ip; // ip into closure's bytecode chunk, if callable is not a C function
     int start; // starting instruction offset in parent (for throw/catch)
     Value *slots; // local variables and function arguments
     ObjScope *scope;

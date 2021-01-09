@@ -1,0 +1,33 @@
+class Scanner {
+    init(str) {
+        this.str = str;
+        this.len = str.size();
+        this.idx = 0;
+        this._captures = [];
+    }
+
+    done() {
+        return this.idx >= this.len;
+    }
+
+    scan(re) {
+        var str = this.str.substr(this.idx, this.len);
+        var md = re.match(str, true);
+        if (md) {
+            this.idx += (md.start + md.length);
+            this._captures = md.captures();
+            return str.substr(md.start, md.length);
+        } else {
+            this._captures = [];
+            return nil;
+        }
+    }
+
+    captures() {
+        return this._captures;
+    }
+
+    rest() {
+        return this.str.substr(this.idx, this.len);
+    }
+}

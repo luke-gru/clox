@@ -14,12 +14,6 @@ static char *lines[50];
 static int numLines = 0;
 static const char *prompt = ">  ";
 
-static void _freeFunc(void) {
-    if (Func) {
-        Func = NULL;
-    }
-}
-
 static void scannerAddLine(Scanner *scan, char *src) {
     ASSERT(src);
     ASSERT(scan->source);
@@ -50,7 +44,6 @@ static void getMoreSourceFn(Scanner *scan, Parser *p) {
 
 static bool evalNode(Node *program) {
     resetStack();
-    _freeFunc();
     vm.exited = false;
     THREAD()->hadError = false;
     CompileErr cerr = COMPILE_ERR_NONE;
@@ -66,7 +59,6 @@ static bool evalNode(Node *program) {
     resetStack();
     if (ires != INTERPRET_OK) {
         fprintf(stderr, "%s", "Error evaluating code\n");
-        _freeFunc();
         return false;
     }
     return true;
@@ -113,7 +105,6 @@ NORETURN void repl(void) {
         // resets the VM, re-inits the code chunk
         if (numLines == 0 && strcmp(line, "reset") == 0) {
             fprintf(stderr, "Resetting VM... ");
-            _freeFunc();
             freeVM();
             initVM();
             _resetScanner();

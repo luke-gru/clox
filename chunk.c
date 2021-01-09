@@ -19,7 +19,7 @@ void initChunk(Chunk *chunk) {
 
 void initIseq(Iseq *seq) {
     seq->count = 0;
-    seq->byteCount = 0;
+    seq->wordCount = 0;
     seq->constants = NULL; // share constants with chunk
     seq->catchTbl = NULL; // share catchTbl with chunk
     seq->tail = NULL;
@@ -41,7 +41,7 @@ void freeIseq(Iseq *seq) {
     }
     seq->insns = NULL;
     seq->count = 0;
-    seq->byteCount = 0;
+    seq->wordCount = 0;
     seq->tail = NULL;
     // catchtbl is shared with chunk, don't free it
     seq->catchTbl = NULL;
@@ -60,7 +60,7 @@ void iseqAddInsn(Iseq *seq, Insn *toAdd) {
     toAdd->next = NULL;
     seq->tail = toAdd;
     seq->count++;
-    seq->byteCount += (toAdd->numOperands+1);
+    seq->wordCount += (toAdd->numOperands+1);
 }
 
 int iseqInsnIndex(Iseq *seq, Insn *insn) {
@@ -101,12 +101,12 @@ bool iseqRmInsn(Iseq *seq, Insn *toRm) {
         seq->insns = NULL;
     }
     seq->count--;
-    seq->byteCount -= (toRm->numOperands+1);
+    seq->wordCount -= (toRm->numOperands+1);
     xfree(toRm);
     return true;
 }
 
-size_t iseqInsnByteDiff(Insn *prev, Insn *after) {
+size_t iseqInsnWordDiff(Insn *prev, Insn *after) {
     ASSERT(after);
     if (prev == after) return 0;
     size_t diff = 0;
@@ -123,18 +123,18 @@ size_t iseqInsnByteDiff(Insn *prev, Insn *after) {
  * Write 1 byte of bytecode operation/data to chunk. Chunk
  * grows automatically if no more space.
  */
-void writeChunk(Chunk *chunk, uint8_t byte, int line, int nDepth, int nWidth) {
+void writeChunkWord(Chunk *chunk, uint32_t word, int line, int nDepth, int nWidth) {
     int prevCapa = chunk->capacity;
     if (chunk->count == prevCapa) {
         int capa = prevCapa;
         capa = GROW_CAPACITY(capa);
-        chunk->code = GROW_ARRAY(chunk->code, uint8_t, prevCapa, capa);
+        chunk->code = GROW_ARRAY(chunk->code, uint32_t, prevCapa, capa);
         chunk->lines = GROW_ARRAY(chunk->lines, int, prevCapa, capa);
         chunk->ndepths = GROW_ARRAY(chunk->ndepths, int, prevCapa, capa);
         chunk->nwidths = GROW_ARRAY(chunk->nwidths, int, prevCapa, capa);
         chunk->capacity = capa;
     }
-    chunk->code[chunk->count] = byte;
+    chunk->code[chunk->count] = word;
     chunk->lines[chunk->count] = line;
     chunk->ndepths[chunk->count] = nDepth;
     chunk->nwidths[chunk->count] = nWidth;
@@ -285,14 +285,14 @@ void debugInsn(Insn *insn) {
     }
 }
 
-Insn *insnAtOffset(Iseq *seq, int offset) {
+Insn *insnAtOffset(Iseq *seq, int wordOffset) {
     Insn *cur = seq->insns;
     int i = 0;
-    while (cur && i < offset) {
+    while (cur && i < wordOffset) {
         i += cur->numOperands+1;
         cur = cur->next;
     }
-    if (i == offset) {
+    if (i == wordOffset) {
         return cur;
     } else {
         return NULL;

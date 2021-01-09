@@ -34,7 +34,7 @@ typedef struct CatchTable {
 typedef struct Chunk {
     int count; // number of bytes written to chunk
     int capacity;
-    uint8_t *code; // bytecode written to chunk
+    uint32_t *code; // bytecode written to chunk
     // parallel array with `code`, ex: byte chunk->code[i] comes from line
     // chunk->lines[i]
     int *lines; // lineno associated with bytecode instruction
@@ -57,8 +57,8 @@ typedef struct NodeLvl {
 #define INSN_FL_CONTINUE 4
 // single instruction
 typedef struct Insn {
-    uint8_t code;
-    uint8_t operands[MAX_INSN_OPERANDS];
+    uint32_t code;
+    uint32_t operands[MAX_INSN_OPERANDS];
     int numOperands;
     int lineno;
     unsigned flags;
@@ -75,7 +75,7 @@ typedef struct Insn {
 // Iseqs, then at the end compiles them into Chunks.
 typedef struct Iseq {
     int count; // # of Insns
-    int byteCount;
+    int wordCount;
     ValueArray *constants;
     CatchTable *catchTbl;
     Insn *tail; // tail of insns list
@@ -83,7 +83,7 @@ typedef struct Iseq {
 } Iseq;
 
 void initChunk(Chunk *chunk);
-void writeChunk(Chunk *chunk, uint8_t byte, int lineno, int nodeDepth, int nodeWidth);
+void writeChunkWord(Chunk *chunk, uint32_t word, int lineno, int nodeDepth, int nodeWidth);
 void freeChunk(Chunk *chunk);
 
 int addConstant(Chunk *chunk, Value value);
@@ -102,7 +102,7 @@ void iseqAddInsn(Iseq *seq, Insn *toAdd);
 bool iseqRmInsn(Iseq *seq, Insn *toRm);
 void freeIseq(Iseq *seq);
 int iseqAddConstant(Iseq *seq, Value value);
-size_t iseqInsnByteDiff(Insn *prev, Insn *after);
+size_t iseqInsnWordDiff(Insn *prev, Insn *after);
 int iseqInsnIndex(Iseq *seq, Insn *insn);
 Insn *insnAtOffset(Iseq *seq, int offset);
 int iseqAddCatchRow(

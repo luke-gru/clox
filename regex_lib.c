@@ -653,8 +653,12 @@ static bool regex_part_match_beg(RNode *node, const char *string);
 static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **nnext) {
     DBG_ASSERT(node);
     DBG_ASSERT(*cptr_p);
-    if (**cptr_p == '\0') {
-        return false;
+    if (!**cptr_p) {
+        if (node->type == NODE_ANCHOR || node->type == NODE_PROGRAM) {
+        } else {
+            regex_debug(1, "NO MATCH, !**cptr_p");
+            return false;
+        }
     }
     switch (node->type) {
         case NODE_PROGRAM:
@@ -665,41 +669,55 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 if (node->type == NODE_GROUP) {
                     node->capture_beg = start;
                 }
+                regex_debug(1, "matched program");
                 return true;
             } else {
+                regex_debug(1, "no match for program");
                 return false;
             }
         case NODE_ANCHOR: {
             if (node->anchor_type == ANCHOR_EOL) { // end of line (or string)
                 if (!**cptr_p || **cptr_p == '\n' || **cptr_p == '\r') {
                     *nnext = node->next; // NULL
+                    regex_debug(1, "matched EOL");
                     return true;
                 } else {
+                    regex_debug(1, "no match for EOL: '%c' (%d)", **cptr_p, (int)**cptr_p);
                     return false;
                 }
             } else if (node->anchor_type == ANCHOR_BOL) { // ^
+                regex_debug(1, "matched BOL");
                 *nnext = node->next;
                 return true;
             } else if (node->anchor_type == ANCHOR_EOS) { // \Z
-              if (!**cptr_p) {
+              if (**cptr_p == '\0') {
+                regex_debug(1, "matched EOS");
                 *nnext = node->next; // NULL
                 return true;
               } else {
+                regex_debug(1, "no match for EOS");
                 return false;
               }
-            } else { // \A
-              *nnext = node->next;
-              return true;
+            } else if (node->anchor_type == ANCHOR_BOS) { // \A
+                regex_debug(1, "match BOS");
+                *nnext = node->next;
+                return true;
+            } else {
+                UNREACHABLE_RETURN(false);
             }
+            UNREACHABLE_RETURN(false);
             break;
         }
         case NODE_ATOM:
+            ASSERT(**cptr_p);
             ASSERT(node->tok);
             if (node->tok[0] == **cptr_p) {
                 (*cptr_p)++;
+                regex_debug(1, "matched ATOM %c", **cptr_p);
                 *nnext = SET_NEXT_NODE(node, cptr_p);
                 return true;
             } else {
+                regex_debug(1, "no match for ATOM");
                 return false;
             }
         case NODE_OR: { // | (2 children)
@@ -814,7 +832,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
                 return false;
             }
         }
-        case NODE_REPEAT_Z: {
+        case NODE_REPEAT_Z: { // *
             RNode *child = node->children;
             RNode *parent = node;
             RNode *next = GET_NEXT_NODE(node); // after *
@@ -822,9 +840,11 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
             char *biggest_pre_next_match = NULL;
             while (node_accepts_ch(child, parent, cptr_p, nnext)) {
               if (next) {
-                  regex_debug(1, "has next");
+                  regex_debug(1, "has next (*)");
+                  char *pre = *cptr_p;
                   if (regex_part_match_beg(next, *cptr_p)) {
                       biggest_pre_next_match = *cptr_p;
+                      *cptr_p = pre;
                       regex_debug(1, "matched next: '%s'", biggest_pre_next_match);
                   }
               }
@@ -847,7 +867,13 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
             RNode *next = GET_NEXT_NODE(node); // after *?
             char *before = *cptr_p;
             char *biggest_pre_next_match = NULL;
-            while (node_accepts_ch(child, parent, cptr_p, nnext)) {
+            if (next) {
+                if (regex_part_match_beg(next, *cptr_p)) {
+                    biggest_pre_next_match = *cptr_p;
+                    regex_debug(1, "matched next: '%s'", biggest_pre_next_match);
+                }
+            }
+            while (!biggest_pre_next_match && node_accepts_ch(child, parent, cptr_p, nnext)) {
               if (next) {
                   regex_debug(1, "has next");
                   if (regex_part_match_beg(next, *cptr_p)) {
@@ -1005,6 +1031,7 @@ static bool node_accepts_ch(RNode *node, RNode *parent, char **cptr_p, RNode **n
 
 static RNode *insert_bol_anchor(RNode *prev) {
     RNode *anch = new_node(NODE_ANCHOR, "^", 1, NULL, NULL);
+    anch->anchor_type = ANCHOR_BOL;
     anch->next = prev;
     prev->prev = anch;
     return anch;
@@ -1030,9 +1057,10 @@ static bool regex_part_match_beg(RNode *node, const char *string) {
     beg->parent = program;
     program->children = bol;
     re.node = program;
+    /*regex_output_ast_node(program, NULL, 0);*/
+    regex_debug(1, "Matching part match: '%s'", string);
     MatchData md = regex_match(&re, string);
-    if (md.matched && md.match_start == 0 && md.match_len > 0) {
-        /*regex_output_ast_node(program, NULL, 0);*/
+    if (md.matched && md.match_start == 0) {
         regex_debug(1, "regex_part_match matched for string: '%s'", string);
         regex_debug(1, "regex_part_match matched %d %*.s", md.match_len,
                 md.match_len, string);
@@ -1058,8 +1086,7 @@ MatchData regex_match(Regex *regex, const char *string) {
     char **cptr_p = &cptr;
     RNode *node = regex->node;
     // empty regex: always matches at 0
-    // empty string: always matches at 0
-    if (strlen(cptr) == 0 || !node->children) {
+    if (!node->children) {
         mres.matched = true;
         mres.match_start = 0;
         mres.match_len = 0;
@@ -1101,26 +1128,11 @@ MatchData regex_match(Regex *regex, const char *string) {
             }
             nparent = node->parent;
         // No match on node
-        } else if (bosAnchor) {
+        } else if (bosAnchor || bolAnchor) {
+            regex_debug(1, "no match");
             return mres; // no match period if no first match
         } else {
             regex_debug(1, "no match for '%c'", **cptr_p);
-            if (bolAnchor) {
-              char beg = **cptr_p;
-              if (beg == '\r' || beg == '\n') {
-                  // continue
-              } else {
-                  // advance cursor until hits beginning of line
-                  while (beg != '\r' && beg != '\n') {
-                      (*cptr_p)++;
-                      beg = **cptr_p;
-                      if (!beg) {
-                        return mres; // no match, end of string
-                      }
-                  }
-              }
-            }
-
             (*cptr_p)++;
             start = *cptr_p;
         }
@@ -1132,7 +1144,7 @@ MatchData regex_match(Regex *regex, const char *string) {
             return mres; // no match
         }
         if (node->anchor_type == ANCHOR_EOL) {
-            if (**cptr_p == '\n' || **cptr_p == '\r' || !**cptr_p) {
+            if (**cptr_p == '\n' || **cptr_p == '\r' || **cptr_p == '\0') {
                 // continue
             } else {
                 return mres; // no match
@@ -1142,6 +1154,32 @@ MatchData regex_match(Regex *regex, const char *string) {
         mres.matched = true;
         mres.match_start = start - string;
         mres.match_len = match_end - start;
+    }
+
+    /* empty string, should match anchors */
+    if (!lastAccept && !**cptr_p && node && node->type == NODE_PROGRAM) {
+        regex_debug(1, "Trying to match anchors: '%s'", *cptr_p);
+        /*regex_output_ast_node(node, NULL, 0);*/
+        bool matchAnchors = false;
+        bool lastAccept = false;
+        RNode *nnext = NULL;
+        while (node) {
+            if ((lastAccept = node_accepts_ch(node, nparent, cptr_p, &nnext))) {
+                node = nnext;
+            } else {
+                break;
+            }
+        }
+        if (lastAccept && node == NULL) {
+            matchAnchors = true;
+        }
+        if (matchAnchors) {
+            regex_debug(1, "Successful match of anchors");
+            mres.matched = true;
+            mres.match_start = 0;
+            mres.match_len = 0;
+            return mres;
+        }
     }
     return mres;
 }

@@ -42,14 +42,10 @@ NORETURN extern void diePrintCBacktrace(const char *fmt, ...);
     } while (0)
 
 // FIXME: when throwing errors always longjmps, get rid of this guard
-#if 0
 #define UNREACHABLE_RETURN(ret) do {\
     UNREACHABLE("return reached!");\
     return ret;\
 } while (0)
-#else
-#define UNREACHABLE_RETURN(ret) return ret
-#endif
 
 #ifndef NDEBUG
 #define DBG_ASSERT(expr) ASSERT(expr)

@@ -68,6 +68,18 @@ static Value lxArrayInspect(int argCount, Value *args) {
     return OBJ_VAL(buf);
 }
 
+static Value lxArrayFirst(int argCount, Value *args) {
+    CHECK_ARITY("Array#first", 1, 1, argCount);
+    Value self = args[0];
+    return arrayFirst(self);
+}
+
+static Value lxArrayLast(int argCount, Value *args) {
+    CHECK_ARITY("Array#last", 1, 1, argCount);
+    Value self = args[0];
+    return arrayLast(self);
+}
+
 // ex: a.push(1);
 static Value lxArrayPush(int argCount, Value *args) {
     CHECK_ARITY("Array#push", 2, 2, argCount);
@@ -566,6 +578,8 @@ void Init_ArrayClass() {
     // methods
     addNativeMethod(arrayClass, "dup", lxArrayDup);
     addNativeMethod(arrayClass, "inspect", lxArrayInspect);
+    addNativeMethod(arrayClass, "first", lxArrayFirst);
+    addNativeMethod(arrayClass, "last", lxArrayLast);
     addNativeMethod(arrayClass, "push", lxArrayPush);
     addNativeMethod(arrayClass, "opShovelLeft", lxArrayPush);
     addNativeMethod(arrayClass, "pop", lxArrayPop);

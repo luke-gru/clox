@@ -151,7 +151,7 @@ extern CompilerOpts compilerOpts;
 
 ObjFunction *compile_src(char *src, CompileErr *err);
 ObjFunction *compile_node(Node *n, CompileErr *err);
-ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjInstance *instance, ObjFunction *func_in, uint8_t *ip_at);
+ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjInstance *instance, ObjFunction *func_in, uint32_t *ip_at);
 ObjFunction *compile_binding_eval_src(char *src, CompileErr *err, ObjScope *scope);
 ObjFunction *compile_file(char *fname, CompileErr *err);
 

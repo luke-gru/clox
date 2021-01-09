@@ -740,6 +740,24 @@ Value newArrayConstant(void) {
     return OBJ_VAL(ary);
 }
 
+Value arrayFirst(Value ary) {
+    ValueArray *vary = &AS_ARRAY(ary)->valAry;
+    if (vary->count >= 1) {
+        return vary->values[0];
+    } else {
+        return NIL_VAL;
+    }
+}
+
+Value arrayLast(Value ary) {
+    ValueArray *vary = &AS_ARRAY(ary)->valAry;
+    if (vary->count >= 1) {
+        return vary->values[vary->count-1];
+    } else {
+        return NIL_VAL;
+    }
+}
+
 // NOTE: doesn't call 'dup' function, just duplicates entries
 Value arrayDup(Value otherVal) {
     ObjArray *other = AS_ARRAY(otherVal);

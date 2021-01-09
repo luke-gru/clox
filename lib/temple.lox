@@ -3,7 +3,7 @@
 Ex 1:
 t = Temple("hello %{= name %}", ["name"]);
 t.compile();
-print t.eval(%{"name": "Luke");
+print t.eval(%{"name": "Luke"});
 
 Ex 2:
 t = Temple(<<<EOS

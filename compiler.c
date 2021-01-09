@@ -168,7 +168,7 @@ static Insn *emitInsn(Insn in) {
     return inHeap;
 }
 
-static Insn *emitOp0(uint8_t code) {
+static Insn *emitOp0(uint32_t code) {
     Insn in;
     memset(&in, 0, sizeof(Insn));
     in.code = code;
@@ -176,7 +176,7 @@ static Insn *emitOp0(uint8_t code) {
     in.flags = 0;
     return emitInsn(in);
 }
-static Insn *emitOp1(uint8_t code, uint8_t op1) {
+static Insn *emitOp1(uint32_t code, uint32_t op1) {
     Insn in;
     memset(&in, 0, sizeof(Insn));
     in.code = code;
@@ -185,7 +185,7 @@ static Insn *emitOp1(uint8_t code, uint8_t op1) {
     in.flags = 0;
     return emitInsn(in);
 }
-static Insn *emitOp2(uint8_t code, uint8_t op1, uint8_t op2) {
+static Insn *emitOp2(uint32_t code, uint32_t op1, uint32_t op2) {
     Insn in;
     memset(&in, 0, sizeof(Insn));
     in.code = code;
@@ -195,7 +195,7 @@ static Insn *emitOp2(uint8_t code, uint8_t op1, uint8_t op2) {
     in.flags = 0;
     return emitInsn(in);
 }
-static Insn *emitOp3(uint8_t code, uint8_t op1, uint8_t op2, uint8_t op3) {
+static Insn *emitOp3(uint32_t code, uint32_t op1, uint32_t op2, uint32_t op3) {
     Insn in;
     memset(&in, 0, sizeof(Insn));
     in.code = code;
@@ -215,7 +215,7 @@ static void pushScope(CompileScopeType stype) {
     s->line_start = curTok ? curTok->line : 0;
     s->line_end = -1;
     s->parent = curScope;
-    s->bytecode_start = current->iseq.byteCount;
+    s->bytecode_start = current->iseq.wordCount;
     s->bytecode_end = -1;
     vec_push(&func->scopes, s);
     current->scopeDepth++;
@@ -275,7 +275,7 @@ static void popScope(CompileScopeType stype) {
     if (stype == COMPILE_SCOPE_FUNCTION || stype == COMPILE_SCOPE_MAIN) {
         emitReturn(current);
     }
-    curScope->bytecode_end = currentIseq()->byteCount;
+    curScope->bytecode_end = currentIseq()->wordCount;
     curScope->line_end = curTok ? curTok->line : 0;
     curScope = curScope->parent;
     current->scopeDepth--;
@@ -374,12 +374,8 @@ static int resolveUpvalue(Compiler *compiler, Token *name) {
     return -1;
 }
 
-static inline void writeChunkByte(Chunk *chunk, uint8_t byte, int lineno, int nDepth, int nWidth) {
-    writeChunk(chunk, byte, lineno, nDepth, nWidth);
-}
-
 static bool isBinOp(Insn *in) {
-    uint8_t code = in->code;
+    uint32_t code = in->code;
     switch (code) {
         case OP_ADD:
         case OP_SUBTRACT:
@@ -401,7 +397,7 @@ static bool isNumConstOp(Insn *in) {
     return in->code == OP_CONSTANT && ((in->flags & INSN_FL_NUMBER) != 0);
 }
 
-static Value iseqGetConstant(Iseq *seq, uint8_t idx) {
+static Value iseqGetConstant(Iseq *seq, uint32_t idx) {
     return seq->constants->values[idx];
 }
 
@@ -447,8 +443,8 @@ static Value foldConstant(Iseq *seq, Insn *cur, Insn *bin, Insn *ain) {
     }
 }
 
-static void changeConstant(Iseq *seq, uint8_t constIdx, Value newVal) {
-    ASSERT(constIdx < seq->constants->count);
+static void changeConstant(Iseq *seq, uint32_t constIdx, Value newVal) {
+    ASSERT((int)constIdx < seq->constants->count);
     seq->constants->values[constIdx] = newVal;
 }
 
@@ -474,7 +470,7 @@ static inline bool isJumpNextInsn(Insn *in) {
 }
 
 static void patchJumpInsnWithOffset(Insn *jump, int offset) {
-    if (jump->operands[0]+offset > UINT8_MAX) {
+    if (jump->operands[0]+offset > UINT32_MAX) {
         ASSERT(0); // TODO: error out
     }
     if (jump->operands[0]+offset <= 0) {
@@ -487,7 +483,6 @@ static void rmInsnAndPatchJumps(Iseq *seq, Insn *insn) {
     int insnIdx = iseqInsnIndex(seq, insn);
     ASSERT(insnIdx >= 0);
     OPT_DEBUG(2, "rmInsnAndPatchLabels insnIdx: %d\n", insnIdx);
-    ASSERT(insnIdx >= 0);
     if (insnIdx == 0) {
         OPT_DEBUG(2, "insnIdx == 0\n");
         iseqRmInsn(seq, insn);
@@ -611,14 +606,14 @@ static inline bool isJumpTarget(Insn *insn) {
     return insn->isLabel;
 }
 
-static void addInsnOperand(Iseq *seq, Insn *insn, uint8_t operand) {
+static void addInsnOperand(Iseq *seq, Insn *insn, uint32_t operand) {
     ASSERT(insn->numOperands >= 0);
     if (insn->numOperands == MAX_INSN_OPERANDS) {
         ASSERT(0); // TODO: error out
     }
     insn->operands[insn->numOperands] = operand;
     insn->numOperands+=1;
-    seq->byteCount += 1;
+    seq->wordCount += 1;
     int insnIdx = iseqInsnIndex(seq, insn);
     ASSERT(insnIdx >= 0);
     Insn *in = seq->insns;
@@ -771,7 +766,7 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
     if (!compilerOpts.noOptimize) {
         optimizeIseq(iseq);
     }
-    COMP_TRACE("copyIseqToChunk (%d insns, bytecount: %d)", iseq->count, iseq->byteCount);
+    COMP_TRACE("copyIseqToChunk (%d insns, wordcount: %d)", iseq->count, iseq->wordCount);
     chunk->catchTbl = iseq->catchTbl;
     chunk->constants = iseq->constants;
     ASSERT(chunk->constants);
@@ -779,9 +774,9 @@ static void copyIseqToChunk(Iseq *iseq, Chunk *chunk) {
     int idx = 0;
     while (in) {
         idx++;
-        writeChunkByte(chunk, in->code, in->lineno, in->nlvl.depth, in->nlvl.width);
+        writeChunkWord(chunk, in->code, in->lineno, in->nlvl.depth, in->nlvl.width);
         for (int i = 0; i < in->numOperands; i++) {
-            writeChunkByte(chunk, in->operands[i], in->lineno, in->nlvl.depth, in->nlvl.width);
+            writeChunkWord(chunk, in->operands[i], in->lineno, in->nlvl.depth, in->nlvl.width);
         }
         in = in->next;
     }
@@ -808,16 +803,16 @@ static ObjFunction *endCompiler() {
 
 // Adds a constant to the current instruction sequence's constant pool
 // and returns an index to it.
-static uint8_t makeConstant(Value value, ConstType ctype) {
+static uint32_t makeConstant(Value value, ConstType ctype) {
     Value existingIdx;
     bool canMemoize = ctype == CONST_T_STRLIT;
     if (canMemoize) {
         if (tableGet(&current->constTbl, value, &existingIdx)) {
-            return (uint8_t)AS_NUMBER(existingIdx);
+            return (uint32_t)AS_NUMBER(existingIdx);
         }
     }
     int constant = iseqAddConstant(currentIseq(), value);
-    if (constant > UINT8_MAX) {
+    if ((uint32_t)constant > UINT32_MAX) {
         error("Too many constants in one chunk.");
         return 0;
     }
@@ -826,11 +821,11 @@ static uint8_t makeConstant(Value value, ConstType ctype) {
             tableSet(&current->constTbl, value, NUMBER_VAL(constant))
         );
     }
-    return (uint8_t)constant;
+    return (uint32_t)constant;
 }
 
 // Add constant to constant pool from the token's lexeme, return index to it
-static uint8_t identifierConstant(Token *name) {
+static uint32_t identifierConstant(Token *name) {
     DBG_ASSERT(vm.inited);
     ObjString *ident = INTERNED(tokStr(name), name->length);
     STRING_SET_STATIC(ident);
@@ -871,7 +866,7 @@ static int insnOffset(Insn *start, Insn *end) {
     int offset = 0;
     Insn *cur = start;
     while (cur && cur != end) {
-        offset += (cur->numOperands+1);
+        offset += (cur->numOperands)+1;
         cur = cur->next;
     }
     if (cur != end) {
@@ -917,8 +912,8 @@ static void patchContinuesBetween(Insn *a, Insn *b) {
 // TODO: make the offset bigger than 1 byte!
 static void emitLoop(int loopStart) {
 
-  int offset = (currentIseq()->byteCount - loopStart)+2;
-  if (offset > UINT8_MAX) error("Loop body too large.");
+  int offset = (currentIseq()->wordCount - loopStart)+2;
+  if ((uint32_t)offset > UINT32_MAX) error("Loop body too large.");
   ASSERT(offset >= 0);
 
   Insn *loopInsn = emitOp1(OP_LOOP, offset);
@@ -974,7 +969,7 @@ static int addLocal(Token name) {
     var->name = copyString(tokStr(&name), strlen(tokStr(&name)), NEWOBJ_FLAG_OLD);
     var->scope = curScope;
     var->slot = slot;
-    var->bytecode_declare_start = currentIseq()->byteCount;
+    var->bytecode_declare_start = currentIseq()->wordCount;
     ObjFunction *func = currentFunction();
     vec_push(&func->variables, var);
     return slot;
@@ -1025,7 +1020,7 @@ static int declareVariable(Token *name) {
 
 // emit GET/SET global or local for named variable
 static void namedVariable(Token name, VarOp getSet) {
-    uint8_t getOp, setOp;
+    uint32_t getOp, setOp;
     int arg = resolveLocal(current, &name);
     bool varNameUsed = false;
     if (arg != -1) {
@@ -1040,17 +1035,17 @@ static void namedVariable(Token name, VarOp getSet) {
         getOp = OP_GET_GLOBAL;
         setOp = OP_SET_GLOBAL;
     }
-    uint8_t op = getOp;
+    uint32_t op = getOp;
     if (getSet == VAR_SET) { op = setOp; }
     if (varNameUsed) {
-        emitOp1(op, (uint8_t)arg);
+        emitOp1(op, (uint32_t)arg);
     } else {
-        uint8_t varNameSlot = identifierConstant(&name);
-        emitOp2(op, (uint8_t)arg, varNameSlot);
+        uint32_t varNameSlot = identifierConstant(&name);
+        emitOp2(op, (uint32_t)arg, varNameSlot);
         // TODO: get upvalues working
         if (op == OP_SET_LOCAL) {
             char *varName = tokStr(&name);
-            addVarInfo(currentChunk(), INTERN(varName), (int)arg);
+            addVarInfo(currentChunk(), INTERN(varName), arg);
         }
     }
 }
@@ -1208,7 +1203,7 @@ static void initCompiler(
 static void initEvalCompiler(
     Compiler *compiler, // new compiler
     ObjFunction *in_func,
-    uint8_t *ip_at
+    uint32_t *ip_at
 ) {
     COMP_TRACE("initCompiler");
     memset(compiler, 0, sizeof(*compiler));
@@ -1335,7 +1330,7 @@ static void initBindingEvalCompiler(
 
 // Define a declared variable in local or global scope (locals MUST be
 // declared before being defined)
-static void defineVariable(Token *name, uint8_t arg, bool checkDecl) {
+static void defineVariable(Token *name, uint32_t arg, bool checkDecl) {
   (void)name;
   if (current->scopeDepth == 0) {
     emitOp1(OP_DEFINE_GLOBAL, arg);
@@ -1349,7 +1344,7 @@ static void defineVariable(Token *name, uint8_t arg, bool checkDecl) {
 }
 
 static void emitClass(Node *n) {
-    uint8_t nameConstant = identifierConstant(&n->tok);
+    uint32_t nameConstant = identifierConstant(&n->tok);
     ClassCompiler cComp;
     memset(&cComp, 0, sizeof(cComp));
     cComp.name = n->tok;
@@ -1377,7 +1372,7 @@ static void emitClass(Node *n) {
 }
 
 static void emitModule(Node *n) {
-    uint8_t nameConstant = identifierConstant(&n->tok);
+    uint32_t nameConstant = identifierConstant(&n->tok);
 
     ClassCompiler cComp;
     memset(&cComp, 0, sizeof(cComp));
@@ -1432,7 +1427,7 @@ static CallInfo *emitCall(Node *n) {
     CallInfo *callInfoData;
     if (nodeKind(lhs) == PROP_ACCESS_EXPR) {
         emitChildren(lhs); // the instance
-        uint8_t methodNameArg = identifierConstant(&lhs->tok);
+        uint32_t methodNameArg = identifierConstant(&lhs->tok);
         vec_foreach(n->children, arg, i) {
             if (i == 0) continue;
             if (arg->type.kind == KWARG_IN_CALL_STMT) {
@@ -1459,7 +1454,7 @@ static CallInfo *emitCall(Node *n) {
         }
         ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_OLD);
         hideFromGC(TO_OBJ(callInfoObj));
-        uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
+        uint32_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
         emitOp3(OP_INVOKE, methodNameArg, nArgs, callInfoConstSlot);
     } else {
         emitNode(lhs); // the function itself
@@ -1491,8 +1486,8 @@ static CallInfo *emitCall(Node *n) {
         }
         ObjInternal *callInfoObj = newInternalObject(true, callInfoData, sizeof(CallInfo), NULL, NULL, NEWOBJ_FLAG_OLD);
         hideFromGC(TO_OBJ(callInfoObj));
-        uint8_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
-        emitOp2(OP_CALL, (uint8_t)nArgs, callInfoConstSlot);
+        uint32_t callInfoConstSlot = makeConstant(OBJ_VAL(callInfoObj), CONST_T_CALLINFO);
+        emitOp2(OP_CALL, (uint32_t)nArgs, callInfoConstSlot);
     }
     return callInfoData;
 }
@@ -1517,7 +1512,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
     Node *param = NULL; int i = 0;
     vec_foreach(params, param, i) {
         if (param->type.kind == PARAM_NODE_REGULAR) {
-            uint8_t localSlot = declareVariable(&param->tok);
+            uint32_t localSlot = declareVariable(&param->tok);
             defineVariable(&param->tok, localSlot, true);
             func->arity++;
         }
@@ -1535,10 +1530,10 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             Insn *insnBefore = currentIseq()->tail; // NOTE: can be NULL
             emitNode(vec_first(param->children)); // default arg
             // the VM skips these instructions if the argument is supplied
-            emitOp2(OP_SET_LOCAL, (uint8_t)localSlot, identifierConstant(&param->tok));
+            emitOp2(OP_SET_LOCAL, (uint32_t)localSlot, identifierConstant(&param->tok));
             emitOp0(OP_POP);
             Insn *insnAfter = currentIseq()->tail;
-            size_t codeDiff = iseqInsnByteDiff(insnBefore, insnAfter);
+            size_t codeDiff = iseqInsnWordDiff(insnBefore, insnAfter);
             // TODO: use ALLOCATE, and make sure to free when freeing the node
             ParamNodeInfo *paramNodeInfo = xcalloc(1, sizeof(ParamNodeInfo));
             ASSERT_MEM(paramNodeInfo);
@@ -1554,7 +1549,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
             uint8_t localSlot = declareVariable(&param->tok);
             defineVariable(&param->tok, localSlot, true);
             emitOp2(OP_CHECK_KEYWORD,
-                localSlot /* slot of keyword argument */,
+                (uint32_t)localSlot /* slot of keyword argument */,
                 // NOTE: if a function is called with a block argument, the VM
                 // must adjust its OP_CHECK_KEYWORD stack check by 1
                 numParams+1 /* slot of keyword map */
@@ -1599,7 +1594,7 @@ static ObjFunction *emitFunction(Node *n, FunctionType ftype) {
 
     // save the chunk as a constant in the parent (now current) chunk
     if (ftype != FUN_TYPE_BLOCK) {
-        uint8_t funcIdx = makeConstant(OBJ_VAL(func), CONST_T_CODE);
+        uint32_t funcIdx = makeConstant(OBJ_VAL(func), CONST_T_CODE);
         emitOp1(OP_CLOSURE, funcIdx);
     }
     // Emit arguments for each upvalue to know whether to capture a local or
@@ -1822,21 +1817,21 @@ static void emitNode(Node *n) {
             Token *regex = &n->tok;
             ObjString *reStr = INTERNED(tokStr(regex), regex->length);
             STRING_SET_STATIC(reStr);
-            uint8_t strSlot = makeConstant(OBJ_VAL(reStr), CONST_T_STRLIT);
+            uint32_t strSlot = makeConstant(OBJ_VAL(reStr), CONST_T_STRLIT);
             emitOp1(OP_REGEX, strSlot);
         // non-static string
         } else if (n->tok.type == TOKEN_STRING_SQUOTE || n->tok.type == TOKEN_STRING_DQUOTE) {
             Token *name = &n->tok;
             ObjString *str = INTERNED(tokStr(name), name->length);
             STRING_SET_STATIC(str);
-            uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
+            uint32_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 0);
         // static string
         } else if (n->tok.type == TOKEN_STRING_STATIC) {
             Token *name = &n->tok;
             ObjString *str = INTERNED(tokStr(name), name->length);
             STRING_SET_STATIC(str);
-            uint8_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
+            uint32_t strSlot = makeConstant(OBJ_VAL(str), CONST_T_STRLIT);
             emitOp2(OP_STRING, strSlot, 1);
         } else if (n->tok.type == TOKEN_TRUE) {
             emitOp0(OP_TRUE);
@@ -1866,7 +1861,7 @@ static void emitNode(Node *n) {
         if (!allConst) {
             vec_reverse(n->children);
             emitChildren(n);
-            emitOp1(OP_ARRAY, (uint8_t)n->children->length);
+            emitOp1(OP_ARRAY, (uint32_t)n->children->length);
         } else {
             elNode = NULL; elIdx = 0;
             Value ary = newArrayConstant();
@@ -1876,7 +1871,7 @@ static void emitNode(Node *n) {
             vec_foreach(n->children, elNode, elIdx) {
                 arrayPush(ary, valueFromConstNode(elNode));
             }
-            uint8_t arySlot = makeConstant(ary, CONST_T_ARYLIT);
+            uint32_t arySlot = makeConstant(ary, CONST_T_ARYLIT);
             emitOp1(OP_DUPARRAY, arySlot);
         }
         break;
@@ -1900,7 +1895,7 @@ static void emitNode(Node *n) {
         if (!allConst) {
             vec_reverse(n->children);
             emitChildren(n);
-            emitOp1(OP_MAP, (uint8_t)n->children->length);
+            emitOp1(OP_MAP, (uint32_t)n->children->length);
         } else {
             elNode = NULL; elIdx = 0;
             Value map = newMapConstant();
@@ -1912,7 +1907,7 @@ static void emitNode(Node *n) {
                 }
                 lastNode = elNode;
             }
-            uint8_t mapSlot = makeConstant(map, CONST_T_MAPLIT);
+            uint32_t mapSlot = makeConstant(map, CONST_T_MAPLIT);
             emitOp1(OP_DUPMAP, mapSlot);
         }
 
@@ -1943,7 +1938,7 @@ static void emitNode(Node *n) {
         bool oldBreakBlock = breakBlock;
         breakBlock = false;
         Insn *loopLabel = currentIseq()->tail;
-        loopStart = currentIseq()->byteCount + 2;
+        loopStart = currentIseq()->wordCount+2;
         emitNode(vec_first(n->children)); // cond
         if (loopLabel) {
             loopLabel = loopLabel->next; // beginning of conditional
@@ -1976,7 +1971,7 @@ static void emitNode(Node *n) {
         int oldLoopStart = loopStart;
         bool oldBreakBlock = breakBlock;
         Node *test = n->children->data[1];
-        int beforeTest = currentIseq()->byteCount+2;
+        int beforeTest = currentIseq()->wordCount+2;
         loopStart = beforeTest;
         if (test) {
             emitNode(test);
@@ -2022,19 +2017,19 @@ static void emitNode(Node *n) {
         i++;
 
         emitOp0(OP_ITER); // push iterator to stack
-        int beforeIterNext = currentIseq()->byteCount+2;
+        int beforeIterNext = currentIseq()->wordCount+2;
         emitOp0(OP_ITER_NEXT);
         // TODO: op_jump_if_undef? Otherwise, nil or false marks end of iteration
         Insn *iterDone = emitJump(OP_JUMP_IF_FALSE_PEEK);
-        uint8_t slotNum = 0; int slotIdx = 0;
+        uint32_t slotNum = 0; int slotIdx = 0;
         int setOp = numVars > 1 ? OP_UNPACK_SET_LOCAL : OP_SET_LOCAL;
         vec_foreach(&v_slots, slotNum, slotIdx) {
             Token name = n->children->data[slotIdx]->tok;
-            uint8_t nameIdx = identifierConstant(&name);
+            uint32_t nameIdx = identifierConstant(&name);
             if (setOp == OP_SET_LOCAL) {
                 emitOp2(setOp, slotNum, nameIdx);
             } else { // SET_UNPACK
-                emitOp3(setOp, slotNum, (uint8_t)slotIdx, nameIdx);
+                emitOp3(setOp, slotNum, (uint32_t)slotIdx, nameIdx);
             }
         }
         Insn *beforeForeach = currentIseq()->tail;
@@ -2124,7 +2119,7 @@ static void emitNode(Node *n) {
             pushVarSlots(); // for array
         }
 
-        uint8_t slotIdx = 0;
+        uint32_t slotIdx = 0;
         for (int i = 0; i < numVarsSet; i++) {
             Node *varNode = NULL;
             if (i == 0) {
@@ -2136,16 +2131,16 @@ static void emitNode(Node *n) {
             if (arg == -1) return; // error already printed
             if (current->scopeDepth == 0) {
                 if (numVarsSet == 1 || uninitialized) {
-                    emitOp1(OP_DEFINE_GLOBAL, (uint8_t)arg);
+                    emitOp1(OP_DEFINE_GLOBAL, (uint32_t)arg);
                 } else {
-                    emitOp2(OP_UNPACK_DEFINE_GLOBAL, (uint8_t)arg, slotIdx);
+                    emitOp2(OP_UNPACK_DEFINE_GLOBAL, (uint32_t)arg, slotIdx);
                     slotIdx++;
                 }
             } else {
                 if (numVarsSet == 1 || uninitialized) {
-                    emitOp2(OP_SET_LOCAL, (uint8_t)arg, identifierConstant(&varNode->tok));
+                    emitOp2(OP_SET_LOCAL, (uint32_t)arg, identifierConstant(&varNode->tok));
                 } else {
-                    emitOp3(OP_UNPACK_SET_LOCAL, (uint8_t)arg, slotIdx, identifierConstant(&varNode->tok));
+                    emitOp3(OP_UNPACK_SET_LOCAL, (uint32_t)arg, slotIdx, identifierConstant(&varNode->tok));
                     slotIdx++;
                 }
             }
@@ -2158,7 +2153,7 @@ static void emitNode(Node *n) {
         break;
     }
     case CONSTANT_EXPR: {
-        uint8_t arg = identifierConstant(&n->tok);
+        uint32_t arg = identifierConstant(&n->tok);
         emitOp1(OP_GET_CONST, arg);
         break;
     }
@@ -2168,7 +2163,7 @@ static void emitNode(Node *n) {
         }  else {
             emitOp0(OP_NIL); // resolve from top-level
         }
-        uint8_t arg = identifierConstant(&n->tok);
+        uint32_t arg = identifierConstant(&n->tok);
         emitOp1(OP_GET_CONST_UNDER, arg);
         break;
     }
@@ -2176,7 +2171,7 @@ static void emitNode(Node *n) {
         emitNode(n->children->data[1]); // rval
         Node *varNode = vec_first(n->children);
         if (varNode->type.kind == CONSTANT_EXPR) {
-            uint8_t arg = identifierConstant(&varNode->tok);
+            uint32_t arg = identifierConstant(&varNode->tok);
             emitOp1(OP_SET_CONST, arg);
         } else {
             namedVariable(varNode->tok, VAR_SET);
@@ -2303,7 +2298,7 @@ static void emitNode(Node *n) {
     }
     case SUPER_EXPR: {
         Node *tokNode = vec_last(n->children);
-        uint8_t methodNameArg = identifierConstant(&tokNode->tok);
+        uint32_t methodNameArg = identifierConstant(&tokNode->tok);
         emitOp1(OP_GET_SUPER, methodNameArg);
         break;
     }
@@ -2335,7 +2330,7 @@ static void emitNode(Node *n) {
         Iseq *iseq = currentIseq();
         vec_void_t vjumps;
         vec_init(&vjumps);
-        int ifrom = iseq->byteCount; // start of try block
+        int ifrom = iseq->wordCount; // start of try block
         emitNode(n->children->data[0]); // try block
         bool skipJumpToEnd = false;
         if (n->children->length == 2) {
@@ -2349,14 +2344,14 @@ static void emitNode(Node *n) {
             jumpToEnd = emitJump(OP_JUMP);
             vec_push(&vjumps, jumpToEnd);
         }
-        int ito = iseq->byteCount; // end of try { } block, start of catch or ensure
+        int ito = iseq->wordCount; // end of try { } block, start of catch or ensure
         Node *catchStmt = NULL; int i = 0;
         Node *ensureStmt = NULL;
         Node *tryElseStmt = NULL;
         if (n->children->length > 1) {
             vec_foreach(n->children, catchStmt, i) {
                 if (i == 0) continue; // already emitted
-                int itarget = iseq->byteCount; // start of this catch block
+                int itarget = iseq->wordCount; // start of this catch block
                 if (catchStmt->type.kind == CATCH_STMT) {
                     Node *catchConstant = vec_first(catchStmt->children);
                     ObjString *className = hiddenString("", 0, NEWOBJ_FLAG_NONE);
@@ -2386,7 +2381,7 @@ static void emitNode(Node *n) {
                     pushScope(COMPILE_SCOPE_TRY);
                     // given variable expression to bind to (Ex: (catch Error err))
                     if (catchStmt->children->length > 2) {
-                        uint8_t getThrownArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
+                        uint32_t getThrownArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
                         emitOp1(OP_GET_THROWN, getThrownArg);
                         Token varTok = catchStmt->children->data[1]->tok;
                         declareVariable(&varTok);
@@ -2427,7 +2422,7 @@ static void emitNode(Node *n) {
                         }
                         vec_clear(&vjumps);
                         double catchTblRowIdx = iseqAddEnsureRow(iseq, ifrom, ito, itarget);
-                        uint8_t rethrowIfArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
+                        uint32_t rethrowIfArg = makeConstant(NUMBER_VAL(catchTblRowIdx), CONST_T_NUMLIT);
                         pushScope(COMPILE_SCOPE_TRY);
                         emitNode(vec_last(ensureStmt->children)); // ensure block
                         emitOp1(OP_RETHROW_IF_ERR, rethrowIfArg);
@@ -2550,7 +2545,7 @@ ObjFunction *compile_node(Node *program, CompileErr *err) {
     }
 }
 
-ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjInstance *instance, ObjFunction *func_in, uint8_t *ip_at) {
+ObjFunction *compile_eval_src(char *src, CompileErr *err, ObjInstance *instance, ObjFunction *func_in, uint32_t *ip_at) {
     initScanner(&scanner, src);
     Parser p;
     initParser(&p);

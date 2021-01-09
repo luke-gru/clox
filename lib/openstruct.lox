@@ -1,0 +1,8 @@
+class OpenStruct {
+    methodMissing(name, *args, &blk) {
+        if (args.size == 0 and !blk) {
+            return this.getProperty(name);
+        }
+        return super.methodMissing(name, *args, &blk);
+    }
+}

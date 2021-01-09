@@ -1,14 +1,18 @@
 requireScript("pp");
+
 pp(%{1:"2", 2: [1,2,3, [4,5]], 3: %"regex"});
 
+// avoid infinite recursion
 var a = [1,2,3];
 a.push(a);
 pp(a);
 
+// avoid infinite recursion in hashes
 var m = %{1:2};
 m[2] = m;
 pp(m);
 
+// avoid infinite recursion in arrays
 a = [1,2,3];
 var b = [2,3,4];
 a.push(b);
