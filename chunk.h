@@ -9,6 +9,10 @@
 extern "C" {
 #endif
 
+typedef uint32_t bytecode_t;
+#define BYTECODE_MAX UINT32_MAX
+#define BYTES_IN_INSTRUCTION 4
+
 struct ObjString; // fwd decl
 
 typedef struct CatchTable {
@@ -34,7 +38,7 @@ typedef struct CatchTable {
 typedef struct Chunk {
     int count; // number of bytes written to chunk
     int capacity;
-    uint32_t *code; // bytecode written to chunk
+    bytecode_t *code; // bytecode written to chunk
     // parallel array with `code`, ex: byte chunk->code[i] comes from line
     // chunk->lines[i]
     int *lines; // lineno associated with bytecode instruction
@@ -57,8 +61,8 @@ typedef struct NodeLvl {
 #define INSN_FL_CONTINUE 4
 // single instruction
 typedef struct Insn {
-    uint32_t code;
-    uint32_t operands[MAX_INSN_OPERANDS];
+    bytecode_t code;
+    bytecode_t operands[MAX_INSN_OPERANDS];
     int numOperands;
     int lineno;
     unsigned flags;
@@ -83,7 +87,7 @@ typedef struct Iseq {
 } Iseq;
 
 void initChunk(Chunk *chunk);
-void writeChunkWord(Chunk *chunk, uint32_t word, int lineno, int nodeDepth, int nodeWidth);
+void writeChunkWord(Chunk *chunk, bytecode_t word, int lineno, int nodeDepth, int nodeWidth);
 void freeChunk(Chunk *chunk);
 
 int addConstant(Chunk *chunk, Value value);

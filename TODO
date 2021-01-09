@@ -33,6 +33,7 @@ Make it polymorphic, and measure the difference.
 * Add Clox::AST lib
 * Add clacc yacc compiler
 * Add optparse lib
+* Add make install target
 
 Improvements
 ------------
@@ -51,8 +52,6 @@ mutex held blocks release of GVL for a thread) [BIG]
 
 Bugs
 ----
-* A regular expression object that calls #match() will override captures
-of the same regex object in other threads, I think?
 * super bug for setters (examples/super_setter.lox)
 * Bug in repl, inspect on last value doesn't work right when inspect()
 is a lox defined method instead of a native

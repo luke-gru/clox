@@ -123,12 +123,12 @@ size_t iseqInsnWordDiff(Insn *prev, Insn *after) {
  * Write 1 byte of bytecode operation/data to chunk. Chunk
  * grows automatically if no more space.
  */
-void writeChunkWord(Chunk *chunk, uint32_t word, int line, int nDepth, int nWidth) {
+void writeChunkWord(Chunk *chunk, bytecode_t word, int line, int nDepth, int nWidth) {
     int prevCapa = chunk->capacity;
     if (chunk->count == prevCapa) {
         int capa = prevCapa;
         capa = GROW_CAPACITY(capa);
-        chunk->code = GROW_ARRAY(chunk->code, uint32_t, prevCapa, capa);
+        chunk->code = GROW_ARRAY(chunk->code, bytecode_t, prevCapa, capa);
         chunk->lines = GROW_ARRAY(chunk->lines, int, prevCapa, capa);
         chunk->ndepths = GROW_ARRAY(chunk->ndepths, int, prevCapa, capa);
         chunk->nwidths = GROW_ARRAY(chunk->nwidths, int, prevCapa, capa);

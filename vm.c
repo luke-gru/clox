@@ -805,7 +805,7 @@ static inline Value falseValue() {
 #endif
 }
 
-static inline bool canCmpValues(Value lhs, Value rhs, uint32_t cmpOp) {
+static inline bool canCmpValues(Value lhs, Value rhs, bytecode_t cmpOp) {
     if ( (IS_NUMBER(lhs) && IS_NUMBER(rhs)) ||
         (IS_STRING(lhs) && IS_STRING(rhs)) ) {
         return true;
@@ -819,7 +819,7 @@ static inline bool canCmpValues(Value lhs, Value rhs, uint32_t cmpOp) {
 }
 
 // returns -1, 0, 1, or -2 on error
-static int cmpValues(Value lhs, Value rhs, uint32_t cmpOp) {
+static int cmpValues(Value lhs, Value rhs, bytecode_t cmpOp) {
     if (IS_NUMBER(lhs) && IS_NUMBER(rhs)) {
         double numA = AS_NUMBER(lhs);
         double numB = AS_NUMBER(rhs);
@@ -1993,7 +1993,7 @@ Value callSuper(int argCount, Value *args, CallInfo *cinfo) {
  * When thrown (OP_THROW), find any surrounding try { } catch { } block with
  * the proper class to catch.
  */
-static bool findThrowJumpLoc(ObjClass *klass, uint32_t **ipOut, CatchTable **rowFound) {
+static bool findThrowJumpLoc(ObjClass *klass, bytecode_t **ipOut, CatchTable **rowFound) {
     LxThread *th = vm.curThread;
     CatchTable *tbl = currentChunk()->catchTbl;
     CatchTable *row = tbl;
@@ -2119,7 +2119,7 @@ NORETURN void throwError(Value self) {
     ObjInstance *obj = AS_INSTANCE(self);
     ObjClass *klass = obj->klass;
     CatchTable *catchRow;
-    uint32_t *ipNew = NULL;
+    bytecode_t *ipNew = NULL;
     ErrTagInfo *errInfo = NULL;
     if ((errInfo = findErrTag(klass))) {
         VM_DEBUG(2, "longjmping to errinfo tag");
@@ -2293,9 +2293,9 @@ static void closeUpvalues(Value *last) {
     }
 }
 
-static Value unpackValue(Value val, uint32_t idx) {
+static Value unpackValue(Value val, bytecode_t idx) {
     if (IS_AN_ARRAY(val)) {
-        if (idx < ARRAY_SIZE(val)) {
+        if ((int)idx < ARRAY_SIZE(val)) {
             return ARRAY_GET(val, idx);
         } else {
             return NIL_VAL;
@@ -2482,7 +2482,7 @@ vmLoop:
     #define DISPATCH_BOTTOM() goto vmLoop
 #endif
 
-    uint32_t instruction = READ_WORD();
+    bytecode_t instruction = READ_WORD();
 #ifndef NDEBUG
     th->lastOp = instruction;
 #endif
@@ -2658,7 +2658,7 @@ vmLoop:
       }
       CASE_OP(UNPACK_DEFINE_GLOBAL): {
           Value varName = READ_CONSTANT();
-          uint32_t unpackIdx = READ_WORD();
+          bytecode_t unpackIdx = READ_WORD();
           Value val = unpackValue(peek(0), unpackIdx);
           tableSet(&vm.globals, varName, val);
           DISPATCH_BOTTOM();
@@ -2719,20 +2719,20 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_LOCAL): {
-          uint32_t slot = READ_WORD();
-          uint32_t varName = READ_WORD(); // for debugging
+          bytecode_t slot = READ_WORD();
+          bytecode_t varName = READ_WORD(); // for debugging
           (void)varName;
-          if (slot+1 > scope->localsTable.size) {
-            growLocalsTable(scope, slot+1);
+          if ((int)slot+1 > scope->localsTable.size) {
+            growLocalsTable(scope, (int)slot+1);
           }
           scope->localsTable.tbl[slot] = VM_PEEK(0); // locals are popped at end of scope by VM
           frame->slots[slot] = VM_PEEK(0);
           DISPATCH_BOTTOM();
       }
       CASE_OP(UNPACK_SET_LOCAL): {
-          uint32_t slot = READ_WORD();
-          uint32_t unpackIdx = READ_WORD();
-          uint32_t varName = READ_WORD(); // for debugging
+          bytecode_t slot = READ_WORD();
+          bytecode_t unpackIdx = READ_WORD();
+          bytecode_t varName = READ_WORD(); // for debugging
           (void)varName;
           // make sure we don't clobber the unpack array with the setting of
           // this variable
@@ -2747,10 +2747,10 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_LOCAL): {
-          uint32_t slot = READ_WORD();
-          uint32_t varName = READ_WORD(); // for debugging
+          bytecode_t slot = READ_WORD();
+          bytecode_t varName = READ_WORD(); // for debugging
           (void)varName;
-          if (scope->localsTable.size > slot) {
+          if (scope->localsTable.size > (int)slot) {
             VM_PUSH(scope->localsTable.tbl[slot]);
           } else {
             VM_PUSH(frame->slots[slot]);
@@ -2758,15 +2758,15 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(GET_UPVALUE): {
-          uint32_t slot = READ_WORD();
-          uint32_t varName = READ_WORD(); // for debugging
+          bytecode_t slot = READ_WORD();
+          bytecode_t varName = READ_WORD(); // for debugging
           (void)varName;
           VM_PUSH(*frame->closure->upvalues[slot]->value);
           DISPATCH_BOTTOM();
       }
       CASE_OP(SET_UPVALUE): {
-          uint32_t slot = READ_WORD();
-          uint32_t varName = READ_WORD(); // for debugging
+          bytecode_t slot = READ_WORD();
+          bytecode_t varName = READ_WORD(); // for debugging
           (void)varName;
           *frame->closure->upvalues[slot]->value = peek(0);
           DISPATCH_BOTTOM();
@@ -2846,8 +2846,8 @@ vmLoop:
           VM_PUSH(OBJ_VAL(closure));
 
           for (int i = 0; i < closure->upvalueCount; i++) {
-              uint32_t isLocal = READ_WORD();
-              uint32_t index = READ_WORD();
+              bytecode_t isLocal = READ_WORD();
+              bytecode_t index = READ_WORD();
               if (isLocal) {
                   // Make an new upvalue to close over the parent's local variable.
                   closure->upvalues[i] = captureUpvalue(getFrame()->slots + index);
@@ -2860,7 +2860,7 @@ vmLoop:
       }
       CASE_OP(JUMP_IF_FALSE): {
           Value cond = VM_POP();
-          uint32_t ipOffset = READ_WORD();
+          bytecode_t ipOffset = READ_WORD();
           if (!isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
@@ -2870,7 +2870,7 @@ vmLoop:
       }
       CASE_OP(JUMP_IF_TRUE): {
           Value cond = VM_POP();
-          uint32_t ipOffset = READ_WORD();
+          bytecode_t ipOffset = READ_WORD();
           if (isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
@@ -2880,7 +2880,7 @@ vmLoop:
       }
       CASE_OP(JUMP_IF_FALSE_PEEK): {
           Value cond = VM_PEEK(0);
-          uint32_t ipOffset = READ_WORD();
+          bytecode_t ipOffset = READ_WORD();
           if (!isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
@@ -2890,7 +2890,7 @@ vmLoop:
       }
       CASE_OP(JUMP_IF_TRUE_PEEK): {
           Value cond = VM_PEEK(0);
-          uint32_t ipOffset = READ_WORD();
+          bytecode_t ipOffset = READ_WORD();
           if (isTruthy(cond)) {
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
@@ -2899,14 +2899,14 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP): {
-          uint32_t ipOffset = READ_WORD();
+          bytecode_t ipOffset = READ_WORD();
           ASSERT(ipOffset > 0);
           frame->ip += (ipOffset-1);
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
       CASE_OP(LOOP): {
-          uint32_t ipOffset = READ_WORD();
+          bytecode_t ipOffset = READ_WORD();
           ASSERT(ipOffset > 0);
           // add 1 for the instruction we just read, and 1 to go 1 before the
           // instruction we want to execute next.
@@ -2954,7 +2954,7 @@ vmLoop:
           DISPATCH_BOTTOM();
       }
       CASE_OP(CALL): {
-          uint32_t numArgs = READ_WORD();
+          bytecode_t numArgs = READ_WORD();
           if (th->lastSplatNumArgs >= 0) {
               numArgs += th->lastSplatNumArgs;
               numArgs--;
@@ -2962,7 +2962,7 @@ vmLoop:
           }
           Value callableVal = VM_PEEK(numArgs);
           if (UNLIKELY(!isCallable(callableVal))) {
-              for (int i = 0; i < numArgs; i++) {
+              for (int i = 0; i < (int)numArgs; i++) {
                   VM_POP();
               }
               throwErrorFmt(lxTypeErrClass, "Tried to call uncallable object (type=%s)", typeOfVal(callableVal));
@@ -2976,8 +2976,8 @@ vmLoop:
       CASE_OP(CHECK_KEYWORD): {
           Value kwMap = VM_PEEK(0);
           ASSERT(IS_T_MAP(kwMap));
-          uint32_t kwSlot = READ_WORD();
-          uint32_t mapSlot = READ_WORD();
+          bytecode_t kwSlot = READ_WORD();
+          bytecode_t mapSlot = READ_WORD();
           (void)mapSlot; // unused
           if (IS_UNDEF(getFrame()->slots[kwSlot])) {
               VM_PUSH(BOOL_VAL(false));
@@ -2989,7 +2989,7 @@ vmLoop:
       CASE_OP(INVOKE): { // invoke methods (includes static methods)
           Value methodName = READ_CONSTANT();
           ObjString *mname = AS_STRING(methodName);
-          uint32_t numArgs = READ_WORD();
+          bytecode_t numArgs = READ_WORD();
           Value callInfoVal = READ_CONSTANT();
           CallInfo *callInfo = internalGetData(AS_INTERNAL(callInfoVal));
           if (th->lastSplatNumArgs >= 0) {
@@ -3010,7 +3010,7 @@ find_class_method:
               if (!callable && !methodMissingTried) {
                   vec_void_t v_args;
                   vec_init(&v_args);
-                  for (int i = 0; i < numArgs; i++) {
+                  for (int i = 0; i < (int)numArgs; i++) {
                       vec_push(&v_args, (void*)pop());
                   }
                   push(methodName);
@@ -3045,7 +3045,7 @@ find_instance_method:
               if (!callable && !methodMissingTried) {
                   vec_void_t v_args;
                   vec_init(&v_args);
-                  for (int i = 0; i < numArgs; i++) {
+                  for (int i = 0; i < (int)numArgs; i++) {
                       vec_push(&v_args, (void*)pop());
                   }
                   push(methodName);
@@ -3420,7 +3420,7 @@ find_instance_method:
       CASE_OP(STRING): {
           Value strLit = READ_CONSTANT();
           DBG_ASSERT(IS_STRING(strLit));
-          uint32_t isStatic = READ_WORD();
+          bytecode_t isStatic = READ_WORD();
           VM_PUSH(OBJ_VAL(lxStringClass));
           ObjString *buf = AS_STRING(strLit);
           if (UNLIKELY(isStatic)) {
@@ -3437,11 +3437,11 @@ find_instance_method:
           DISPATCH_BOTTOM();
       }
       CASE_OP(ARRAY): {
-          uint32_t numEls = READ_WORD();
+          bytecode_t numEls = READ_WORD();
           Value aryVal = newArray();
           hideFromGC(AS_OBJ(aryVal));
           ValueArray *ary = &AS_ARRAY(aryVal)->valAry;
-          for (int i = 0; i < numEls; i++) {
+          for (int i = 0; i < (int)numEls; i++) {
               Value el = VM_POP();
               writeValueArrayEnd(ary, el);
               OBJ_WRITE(aryVal, el);
@@ -3458,12 +3458,12 @@ find_instance_method:
           DISPATCH_BOTTOM();
       }
       CASE_OP(MAP): {
-          uint32_t numKeyVals = READ_WORD();
+          bytecode_t numKeyVals = READ_WORD();
           DBG_ASSERT(numKeyVals % 2 == 0);
           Value mapVal = newMap();
           hideFromGC(AS_OBJ(mapVal));
           Table *map = AS_MAP(mapVal)->table;
-          for (int i = 0; i < numKeyVals; i+=2) {
+          for (int i = 0; i < (int)numKeyVals; i+=2) {
               Value key = VM_POP();
               Value val = VM_POP();
               tableSet(map, key, val);
