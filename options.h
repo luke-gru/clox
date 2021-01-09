@@ -35,6 +35,8 @@ typedef struct sCloxOptions {
     char *initialScript;
 
     bool _inited; // internal use, if singleton is inited
+    bool end; // if hit end of options (--)
+    int index; // index into ARGV
 } CloxOptions; // [singleton]
 
 extern int origArgc;

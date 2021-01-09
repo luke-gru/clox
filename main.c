@@ -33,14 +33,20 @@ int main(int argc, char *argv[]) {
             continue;
         }
         if (strncmp(argvp[i], "-i", 2) == 0) {
+            getOptions()->index += 1;
             interactive = true;
             i+=1;
         } else if (strncmp(argvp[i], "-", 1) == 0 && strlen(argvp[i]) == 1) {
+            getOptions()->index += 1;
             useStdin = true;
             i+=1;
         } else {
-            fprintf(stderr, "Invalid option: %s\n", argvp[i]);
-            usage(1);
+            if (strncmp(argvp[i], "-", 1) == 0 && !getOptions()->end) {
+                fprintf(stderr, "Invalid option: %s\n", argvp[i]);
+                usage(1);
+            }
+            i+=1;
+            continue;
         }
     }
 

@@ -326,13 +326,11 @@ static void defineGlobalVariables(void) {
     ASSERT(tableSet(&vm.constants, OBJ_VAL(argvStr), argvVal));
     ASSERT(origArgv);
     ASSERT(origArgc >= 1);
-    for (int i = 0; i < origArgc; i++) {
+    for (int i = getOptions()->index; i < origArgc; i++) {
         ObjString *argStr = copyString(origArgv[i], strlen(origArgv[i]), NEWOBJ_FLAG_OLD);
         Value arg = OBJ_VAL(argStr);
         arrayPush(OBJ_VAL(lxArgv), arg);
     }
-    hideFromGC(TO_OBJ(lxArgv));
-    hideFromGC(TO_OBJ(lxLoadPath));
 }
 
 static bool isIterableType(Value val) {

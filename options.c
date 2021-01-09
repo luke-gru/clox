@@ -81,6 +81,8 @@ void initOptions(int argc, char **argv) {
     options.debugOptimizerLvl = 0;
 
     options._inited = true;
+    options.index = 1;
+    options.end = false;
 }
 
 CloxOptions *getOptions(void) {
@@ -136,6 +138,7 @@ static void help(FILE *f) {
   fprintf(f, "- (read script code from stdin)\n");
   fprintf(f, "--parse-only (check syntax of file)\n");
   fprintf(f, "--compile-only (check syntax and semantics)\n");
+  fprintf(f, "-- (end of clox options)\n");
   fprintf(f, "-DTRACE_PARSER_CALLS (debug option)\n");
   fprintf(f, "-DTRACE_COMPILER (debug option)\n");
   fprintf(f, "-DTRACE_VM_EXECUTION (debug option)\n");
@@ -162,7 +165,11 @@ static void help(FILE *f) {
 
 // Assumes *argv is not NULL. Returns the amount to increment
 // idx by in the caller's code.
-int parseOption(char **argv, int i) {
+static int doParseOption(char **argv, int i) {
+    if (options.end) {
+        return 0;
+    }
+
     if (strcmp(argv[i], "-L") == 0) {
         if (argv[i+1]) {
             char *path = calloc(1, strlen(argv[i+1])+2);
@@ -187,6 +194,11 @@ int parseOption(char **argv, int i) {
             fprintf(stderr, "[WARN]: Path to script file not given with -f flag\n");
             return 1;
         }
+    }
+
+    if (strcmp(argv[i], "--") == 0) {
+        options.end = true;
+        return 1;
     }
 
     if (strcmp(argv[i], "-DTRACE_PARSER_CALLS") == 0) {
@@ -224,7 +236,7 @@ int parseOption(char **argv, int i) {
         SET_OPTION(debugTokens, true);
         return 1;
     }
-    if (strcmp(argv[i], "--print-ast") == 0) {
+    if (strcmp(argv[i], "--print-AST") == 0) {
         astDetailLevel++;
         SET_OPTION(printAST, true);
         return 1;
@@ -293,4 +305,12 @@ int parseOption(char **argv, int i) {
       exit(0);
     }
     return 0;
+}
+
+int parseOption(char **argv, int i) {
+    int ret = doParseOption(argv, i);
+    if (ret > 0) {
+        options.index += ret;
+    }
+    return ret;
 }
