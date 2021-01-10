@@ -2914,6 +2914,17 @@ vmLoop:
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }
+      CASE_OP(BREAK): {
+          bytecode_t ipOffset = READ_WORD();
+          ASSERT(ipOffset > 0);
+          int numPops = READ_WORD();
+          while (numPops > 0) {
+              VM_POP(); numPops--;
+          }
+          frame->ip += (ipOffset-2);
+          VM_CHECK_INTS(vm.curThread);
+          DISPATCH_BOTTOM();
+      }
       CASE_OP(BLOCK_BREAK): {
           Value err = newError(lxBreakBlockErrClass, NIL_VAL);
           throwError(err); // blocks catch this, not propagated

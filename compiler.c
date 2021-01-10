@@ -62,6 +62,8 @@ static int nodeWidth = -1;
 static int blockDepth = 0;
 static bool breakBlock = false;
 static Scope *curScope = NULL;
+static int loopLocalCount; // for continue statement
+static int nextInsnIsLabel = false;
 
 CompilerOpts compilerOpts; // [external]
 
@@ -164,6 +166,10 @@ static Insn *emitInsn(Insn in) {
     Insn *inHeap = xcalloc(1, sizeof(Insn));
     ASSERT_MEM(inHeap);
     memcpy(inHeap, &in, sizeof(Insn));
+    if (nextInsnIsLabel) {
+        inHeap->isLabel = true;
+        nextInsnIsLabel = false;
+    }
     iseqAddInsn(currentIseq(), inHeap);
     return inHeap;
 }
@@ -173,7 +179,6 @@ static Insn *emitOp0(bytecode_t code) {
     memset(&in, 0, sizeof(Insn));
     in.code = code;
     in.numOperands = 0;
-    in.flags = 0;
     return emitInsn(in);
 }
 static Insn *emitOp1(bytecode_t code, bytecode_t op1) {
@@ -182,7 +187,6 @@ static Insn *emitOp1(bytecode_t code, bytecode_t op1) {
     in.code = code;
     in.operands[0] = op1;
     in.numOperands = 1;
-    in.flags = 0;
     return emitInsn(in);
 }
 static Insn *emitOp2(bytecode_t code, bytecode_t op1, bytecode_t op2) {
@@ -192,7 +196,6 @@ static Insn *emitOp2(bytecode_t code, bytecode_t op1, bytecode_t op2) {
     in.operands[0] = op1;
     in.operands[1] = op2;
     in.numOperands = 2;
-    in.flags = 0;
     return emitInsn(in);
 }
 static Insn *emitOp3(bytecode_t code, bytecode_t op1, bytecode_t op2, bytecode_t op3) {
@@ -203,7 +206,6 @@ static Insn *emitOp3(bytecode_t code, bytecode_t op1, bytecode_t op2, bytecode_t
     in.operands[1] = op2;
     in.operands[2] = op3;
     in.numOperands = 3;
-    in.flags = 0;
     return emitInsn(in);
 }
 
@@ -860,6 +862,11 @@ static inline Insn *emitJump(OpCode jumpOp) {
     return emitOp1(jumpOp, 0); // patched later
 }
 
+static inline Insn *emitBreak(void) {
+    Insn *br = emitOp2(OP_BREAK, 0, current->localCount - loopLocalCount); // patched later
+    return br;
+}
+
 static int insnOffset(Insn *start, Insn *end) {
     ASSERT(start);
     ASSERT(end);
@@ -897,12 +904,24 @@ static inline bool isContinue(Insn *in) {
             (in->flags & INSN_FL_CONTINUE) != 0);
 }
 
+static Insn *getInsnTail(int tail_index) {
+    Insn *cur = currentIseq()->tail;
+    int idx = tail_index;
+    while (cur && idx > 0) {
+        cur = cur->prev;
+        idx--;
+    }
+    return cur;
+}
+
 static void patchContinuesBetween(Insn *a, Insn *b) {
   Insn *cur = a;
   while (cur != b) {
     if (isContinue(cur)) {
-      patchJump(cur, -1, NULL);
-      COMP_TRACE("jump offset found, patching continue");
+      int insn_tail_index = cur->extra; // number of pops to keep
+      Insn *jumpTo = getInsnTail(insn_tail_index);
+      patchJump(cur, -1, jumpTo);
+      COMP_TRACE("jump offset found, patching continue (pops=%d)", insn_tail_index);
     }
     cur = cur->next;
   }
@@ -923,8 +942,14 @@ static void emitLoop(int loopStart) {
 }
 
 static inline bool isBreak(Insn *in) {
-    return (in->code == OP_JUMP &&
-            (in->flags & INSN_FL_BREAK) != 0);
+    return (in->code == OP_BREAK);
+}
+
+static void patchBreak(Insn *br, int offset, Insn *label) {
+    br->operands[0] = offset;
+    if (label) {
+        label->isLabel = true;
+    }
 }
 
 static void patchBreaks(Insn *start, Insn *end, int offset) {
@@ -932,9 +957,12 @@ static void patchBreaks(Insn *start, Insn *end, int offset) {
     int numFound = 0;
     while (cur != end) {
         if (isBreak(cur) && cur->operands[0] == 0) {
+            if (offset > 0) {
+                nextInsnIsLabel = true;
+            }
             int off = insnOffset(cur, end)+offset;
-            COMP_TRACE("jump offset found, patching break: %d", off);
-            patchJump(cur, off, end);
+            COMP_TRACE("break found, patching break: %d", off);
+            patchBreak(cur, off, offset == 0 ? end : NULL);
             numFound++;
         }
         cur = cur->next;
@@ -1991,7 +2019,7 @@ static void emitNode(Node *n) {
         emitOp0(OP_POP);
         emitLoop(beforeTest);
         patchJump(forJump, -1, NULL);
-        patchBreaks(forJump, currentIseq()->tail, 1);
+        patchBreaks(forJump, currentIseq()->tail, 2);
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
         popScope(COMPILE_SCOPE_FOR);
@@ -2035,7 +2063,12 @@ static void emitNode(Node *n) {
         Insn *beforeForeach = currentIseq()->tail;
         eLoopType lastLoopType = curLoopType;
         curLoopType = LOOP_T_FOREACH;
+
+        int oldLoopLocalCount = loopLocalCount;
+        loopLocalCount = current->localCount;
         emitNode(n->children->data[i]); // foreach block
+        loopLocalCount = oldLoopLocalCount;
+
         curLoopType = lastLoopType;
         Insn *afterForeach = currentIseq()->tail;
         patchContinuesBetween(beforeForeach, afterForeach);
@@ -2065,8 +2098,7 @@ static void emitNode(Node *n) {
         if (curLoopType == LOOP_T_BLOCK) {
             emitOp0(OP_BLOCK_BREAK);
         } else {
-            Insn *in = emitJump(OP_JUMP);
-            in->flags = INSN_FL_BREAK;
+            emitBreak();
         }
         break; // I heard you like break statements, so I put a break in your break
     }
@@ -2084,6 +2116,7 @@ static void emitNode(Node *n) {
         } else if (curLoopType == LOOP_T_FOREACH) {
             Insn *in = emitJump(OP_JUMP);
             in->flags = INSN_FL_CONTINUE;
+            in->extra = current->localCount-loopLocalCount;
         } else {
             ASSERT(curLoopType == LOOP_T_WHILE || curLoopType == LOOP_T_FOR);
             emitLoop(loopStart); // WHILE or FOR
@@ -2474,6 +2507,8 @@ static void initializeCompiler(void) {
     blockDepth = 0;
     breakBlock = false;
     curScope = NULL;
+    loopLocalCount = 0;
+    nextInsnIsLabel = false;
 }
 
 ObjFunction *compile_src(char *src, CompileErr *err) {

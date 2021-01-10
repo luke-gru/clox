@@ -180,6 +180,8 @@ const char *opName(OpCode code) {
         return "OP_JUMP";
     case OP_LOOP:
         return "OP_LOOP";
+    case OP_BREAK:
+        return "OP_BREAK";
     case OP_CLASS:
         return "OP_CLASS";
     case OP_MODULE:
@@ -506,6 +508,14 @@ static int printLoopInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     return i+2;
 }
 
+static int printBreakInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
+    bytecode_t breakOffset = chunk->code[i + 1];
+    bytecode_t numpops = chunk->code[i + 2];
+    int addr = i*4+breakOffset*4;
+    fprintf(f, "%-16s %4d (addr=%04d) (pops=%d)\n", op, breakOffset, addr, numpops);
+    return i+3;
+}
+
 static int loopInstruction(ObjString *buf, const char *op, Chunk *chunk, int i) {
     char *cbuf = (char*)calloc(1, strlen(op)+1+18);
     ASSERT_MEM(cbuf);
@@ -717,6 +727,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
             return printJumpInstruction(f, opName(byte), chunk, i);
         case OP_LOOP:
             return printLoopInstruction(f, opName(byte), chunk, i);
+        case OP_BREAK:
+            return printBreakInstruction(f, opName(byte), chunk, i);
         case OP_CALL:
             return printCallInstruction(f, opName(byte), chunk, i, funcs);
         case OP_INVOKE:
