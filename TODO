@@ -30,10 +30,10 @@ all VM stacks, ex: cref stack, this stack, etc. [MEDIUM]
 * Add inline method call cache, to skip method invocation lookup for method
 calls. 1 callcache object per invocation of a method, inline in the bytecode.
 Make it polymorphic, and measure the difference.
-* Add Clox::AST lib
-* Add clacc yacc compiler
-* Add optparse lib
-* Add make install target
+* Add Clox::AST lib [BIG]
+* Add clacc yacc compiler [BIG]
+* Add optparse lib [MEDIUM]
+* Add make install target [SMALL]
 
 Improvements
 ------------

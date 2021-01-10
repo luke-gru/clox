@@ -286,7 +286,7 @@ void printFunctionTables(FILE *f, ObjFunction *func) {
       const char *scope_name = compileScopeName(var->scope->type);
       int slot = var->slot;
       fprintf(f, "%s: %d (%s [%d-%d])\n", name, slot, scope_name,
-          var->bytecode_declare_start, var->scope->bytecode_end);
+          var->bytecode_declare_start*BYTES_IN_INSTRUCTION, var->scope->bytecode_end*BYTES_IN_INSTRUCTION);
   }
   fprintf(f, "-/local table--\n");
 }

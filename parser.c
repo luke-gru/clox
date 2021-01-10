@@ -210,7 +210,7 @@ static Node *classOrModuleBody(const char *name);
 static Node *statement(void);
 static Node *printStatement(void);
 static Node *blockStatements(void);
-static Node *expressionStatement(void);
+static Node *expressionStatement(bool);
 
 
 Node *parseExpression(Parser *p) {
@@ -525,7 +525,7 @@ static Node *statement() {
             if (check(TOKEN_VAR)) {
                 initializer = declaration();
             } else {
-                initializer = expressionStatement();
+                initializer = expressionStatement(true);
             }
         }
         nodeAddChild(forNode, initializer);
@@ -533,7 +533,7 @@ static Node *statement() {
         if (match(TOKEN_SEMICOLON)) {
             // leave NULL
         } else {
-            expr = expression();
+            expr = expressionStatement(false);
             consume(TOKEN_SEMICOLON, "Expected ';' after test expression in 'for'");
         }
         nodeAddChild(forNode, expr);
@@ -711,7 +711,7 @@ static Node *statement() {
         TRACE_END("statement");
         return inNode;
     }
-    Node *ret = expressionStatement();
+    Node *ret = expressionStatement(true);
     TRACE_END("statement");
     return ret;
 }
@@ -748,7 +748,7 @@ static Node *blockStatements() {
     return stmtList;
 }
 
-static Node *expressionStatement() {
+static Node *expressionStatement(bool expectSemi) {
     TRACE_START("expressionStatement");
     Token tok = current->current;
     Node *expr = expression();
@@ -758,7 +758,9 @@ static Node *expressionStatement() {
     };
     Node *exprStmt = createNode(stmtT, tok, NULL);
     nodeAddChild(exprStmt, expr);
-    consume(TOKEN_SEMICOLON, "Expected ';' after expression");
+    if (expectSemi) {
+        consume(TOKEN_SEMICOLON, "Expected ';' after expression");
+    }
     TRACE_END("expressionStatement");
     return exprStmt;
 }

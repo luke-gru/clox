@@ -62,7 +62,7 @@ static int nodeWidth = -1;
 static int blockDepth = 0;
 static bool breakBlock = false;
 static Scope *curScope = NULL;
-static int loopLocalCount; // for continue statement
+static int loopLocalCount = 0; // for continue statement
 static int nextInsnIsLabel = false;
 
 CompilerOpts compilerOpts; // [external]
@@ -928,7 +928,6 @@ static void patchContinuesBetween(Insn *a, Insn *b) {
 }
 
 // Emit a jump backwards (loop) instruction from the current code count to offset `loopStart`
-// TODO: make the offset bigger than 1 byte!
 static void emitLoop(int loopStart) {
 
   int offset = (currentIseq()->wordCount - loopStart)+2;
@@ -1978,7 +1977,12 @@ static void emitNode(Node *n) {
         eLoopType oldLoopType = curLoopType;
         curLoopType = LOOP_T_WHILE;
         pushScope(COMPILE_SCOPE_WHILE);
+
+        int oldLoopLocalCount = loopLocalCount;
+        loopLocalCount = current->localCount;
         emitNode(n->children->data[1]); // while block
+        loopLocalCount = oldLoopLocalCount;
+
         curLoopType = oldLoopType;
         loopLabel->jumpTo = whileJumpStart;
         whileJumpStart->isLabel = true;
@@ -2010,16 +2014,21 @@ static void emitNode(Node *n) {
         Node *forBlock = vec_last(n->children);
         eLoopType lastLoopType = curLoopType;
         curLoopType = LOOP_T_FOR;
+
+        int oldLoopLocalCount = loopLocalCount;
+        loopLocalCount = current->localCount;
         emitNode(forBlock);
+        loopLocalCount = oldLoopLocalCount;
+
         curLoopType = lastLoopType;
         Node *incrExpr = n->children->data[2];
         if (incrExpr) {
             emitNode(incrExpr);
         }
-        emitOp0(OP_POP);
         emitLoop(beforeTest);
         patchJump(forJump, -1, NULL);
-        patchBreaks(forJump, currentIseq()->tail, 2);
+        // TODO: patch continues
+        patchBreaks(forJump, currentIseq()->tail, 2); // breaks go after the previous jump
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
         popScope(COMPILE_SCOPE_FOR);
