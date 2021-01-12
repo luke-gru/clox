@@ -168,6 +168,8 @@ const char *opName(OpCode code) {
         return "OP_POP_CREF";
     case OP_POP_N:
         return "OP_POP_N";
+    case OP_POP_DEBUG:
+        return "OP_POP_DEBUG";
     case OP_JUMP_IF_FALSE:
         return "OP_JUMP_IF_FALSE";
     case OP_JUMP_IF_TRUE:
@@ -647,6 +649,13 @@ static int printSimpleInstruction(FILE *f, const char *op, int i) {
     return i+1;
 }
 
+static int printOpPopDebugInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
+    bytecode_t constantIdx = chunk->code[i+1];
+    Value localName = getConstant(chunk, constantIdx);
+    fprintf(f, "%s (%s)\n", op, AS_CSTRING(localName));
+    return i+2;
+}
+
 static int printByteInstruction(FILE *f, const char *op, Chunk *chunk, int i) {
     bytecode_t byte = chunk->code[i+1];
     fprintf(f, "%s\t%d\n", op, byte);
@@ -779,6 +788,8 @@ int printDisassembledInstruction(FILE *f, Chunk *chunk, int i, vec_funcp_t *func
             return printSimpleInstruction(f, opName(byte), i);
         case OP_POP_N:
             return printByteInstruction(f, opName(byte), chunk, i);
+        case OP_POP_DEBUG:
+            return printOpPopDebugInstruction(f, opName(byte), chunk, i);
         default:
             fprintf(f, "Unknown opcode %" PRId8 " (%s)\n", byte, opName(byte));
             return -1;

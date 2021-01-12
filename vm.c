@@ -2705,6 +2705,12 @@ vmLoop:
           VM_POP();
           DISPATCH_BOTTOM();
       }
+      CASE_OP(POP_DEBUG): {
+          Value reason = READ_CONSTANT();
+          (void)reason;
+          VM_POP();
+          DISPATCH_BOTTOM();
+      }
       CASE_OP(POP_CREF): {
           ASSERT(th->v_crefStack.length > 0);
           ObjClass *oldKlass = vec_pop(&th->v_crefStack);
@@ -2917,11 +2923,11 @@ vmLoop:
       CASE_OP(BREAK): {
           bytecode_t ipOffset = READ_WORD();
           ASSERT(ipOffset > 0);
-          int numPops = READ_WORD();
+          bytecode_t numPops = READ_WORD();
           while (numPops > 0) {
               VM_POP(); numPops--;
           }
-          frame->ip += (ipOffset-2);
+          frame->ip += (ipOffset-3); // -3 to for the 2 just read instructions, and 1 more to go to 1 before the instruction
           VM_CHECK_INTS(vm.curThread);
           DISPATCH_BOTTOM();
       }

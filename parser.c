@@ -533,7 +533,7 @@ static Node *statement() {
         if (match(TOKEN_SEMICOLON)) {
             // leave NULL
         } else {
-            expr = expressionStatement(false);
+            expr = expression();
             consume(TOKEN_SEMICOLON, "Expected ';' after test expression in 'for'");
         }
         nodeAddChild(forNode, expr);
@@ -542,7 +542,7 @@ static Node *statement() {
         if (check(TOKEN_RIGHT_PAREN)) {
             // leave NULL
         } else {
-            incrExpr = expression();
+            incrExpr = expressionStatement(false);
         }
         nodeAddChild(forNode, incrExpr);
         consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'for' increment/decrement expression");

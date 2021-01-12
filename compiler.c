@@ -259,6 +259,16 @@ static void emitCloseUpvalue(void) {
     emitOp0(OP_CLOSE_UPVALUE);
 }
 
+static bool DEBUG_OP_POP = false;
+static bytecode_t identifierLocal(Local *local);
+static void popLocal(Local *local) {
+    if (DEBUG_OP_POP) {
+        emitOp1(OP_POP_DEBUG, identifierLocal(local));
+    } else {
+        emitOp0(OP_POP);
+    }
+}
+
 static void popScope(CompileScopeType stype) {
     COMP_TRACE("popScope: %s (depth=%d)", compileScopeName(stype), current->scopeDepth);
     while (current->localCount > 0 && current->locals[current->localCount - 1].depth >= current->scopeDepth) {
@@ -269,7 +279,7 @@ static void popScope(CompileScopeType stype) {
         } else {
             if (current->type != FUN_TYPE_BLOCK && local->popOnScopeEnd) {
                 COMP_TRACE("popScope emitting OP_POP");
-                emitOp0(OP_POP);
+                popLocal(local);
             }
         }
         current->localCount--;
@@ -502,8 +512,13 @@ static void rmInsnAndPatchJumps(Iseq *seq, Insn *insn) {
         // to the removed instruction or after it, then patch the jump
         if (idx < insnIdx && isJump(in)) {
             OPT_DEBUG(2, "Found jump at %d", idx);
-            ASSERT(in->jumpTo);
-            int jumpToIndex = iseqInsnIndex(seq, in->jumpTo);
+            ASSERT(in->jumpTo || in->jumpToPrev);
+            Insn *jumpTo = in->jumpTo;
+            if (!jumpTo) {
+                jumpTo = in->jumpToPrev->next;
+            }
+            ASSERT(jumpTo);
+            int jumpToIndex = iseqInsnIndex(seq, jumpTo);
             ASSERT(jumpToIndex >= 0);
             OPT_DEBUG(2, "Jump to index: %d", jumpToIndex);
             if (jumpToIndex >= insnIdx) {
@@ -604,6 +619,11 @@ static inline bool isPopType(Insn *insn) {
     return insn->code == OP_POP || insn->code == OP_POP_N;
 }
 
+static inline bool isPopType2(Insn *insn) {
+    return insn->code == OP_POP || insn->code == OP_POP_N ||
+        insn->code == OP_POP_DEBUG;
+}
+
 static inline bool isJumpTarget(Insn *insn) {
     return insn->isLabel;
 }
@@ -630,13 +650,18 @@ static void addInsnOperand(Iseq *seq, Insn *insn, bytecode_t operand) {
         // to the removed instruction or after it, then patch the jump
         if (idx < insnIdx && isJump(in)) {
             OPT_DEBUG(2, "Found jump at %d", idx);
-            ASSERT(in->jumpTo);
-            int jumpToIndex = iseqInsnIndex(seq, in->jumpTo);
+            Insn *jumpTo = in->jumpTo;
+            if (!jumpTo) {
+                jumpTo = in->jumpToPrev->next;
+            }
+            ASSERT(jumpTo);
+            int jumpToIndex = iseqInsnIndex(seq, jumpTo);
             ASSERT(jumpToIndex >= 0);
             OPT_DEBUG(2, "Jump to index: %d", jumpToIndex);
             if (jumpToIndex >= insnIdx) {
                 if (jumpToIndex == insnIdx) {
                     in->jumpTo = insn->next; // TODO: might be last instruction, in which case the jump should be removed
+                    in->jumpToPrev = NULL;
                 }
                 OPT_DEBUG(2, "Patching jump, offset before: %d", in->operands[0]);
                 patchJumpInsnWithOffset(in, 1);
@@ -834,6 +859,17 @@ static bytecode_t identifierConstant(Token *name) {
     return makeConstant(OBJ_VAL(ident), CONST_T_STRLIT);
 }
 
+static bytecode_t identifierLocal(Local *local) {
+    return identifierConstant(&local->name);
+}
+// Add constant to constant pool from the token's lexeme, return index to it
+static bytecode_t identifierString(const char *str) {
+    DBG_ASSERT(vm.inited);
+    ObjString *ident = INTERN(str);
+    STRING_SET_STATIC(ident);
+    return makeConstant(OBJ_VAL(ident), CONST_T_STRLIT);
+}
+
 // emits a constant instruction with the given operand
 static Insn *emitConstant(Value constant, ConstType ctype) {
     Insn *ret = emitOp1(OP_CONSTANT, makeConstant(constant, ctype));
@@ -884,19 +920,27 @@ static int insnOffset(Insn *start, Insn *end) {
 }
 
 // patch jump forwards instruction by given offset
-// TODO: make the offset bigger than 1 byte!
 static void patchJump(Insn *toPatch, int jumpoffset, Insn *jumpTo) {
     ASSERT(toPatch->operands[0] == 0);
     ASSERT(toPatch->jumpTo == NULL);
+    bool jumpToNext = false;
     if (jumpoffset == -1) {
         if (!jumpTo) {
             jumpTo = currentIseq()->tail;
         }
         jumpoffset = insnOffset(toPatch, jumpTo)+jumpTo->numOperands;
+        if (jumpTo->next == NULL) {
+            jumpToNext = true;
+        }
     }
     toPatch->operands[0] = jumpoffset;
-    toPatch->jumpTo = jumpTo; // FIXME: should be jumpToPrev
-    jumpTo->isLabel = true;
+    if (jumpToNext) {
+        nextInsnIsLabel = true;
+        toPatch->jumpToPrev = jumpTo;
+    } else {
+        toPatch->jumpTo = jumpTo;
+        jumpTo->isLabel = true;
+    }
 }
 
 static inline bool isContinue(Insn *in) {
@@ -920,6 +964,9 @@ static void patchContinuesBetween(Insn *a, Insn *b) {
     if (isContinue(cur)) {
       int insn_tail_index = cur->extra; // number of pops to keep
       Insn *jumpTo = getInsnTail(insn_tail_index);
+      if (insn_tail_index > 0) {
+          ASSERT(isPopType2(jumpTo));
+      }
       patchJump(cur, -1, jumpTo);
       COMP_TRACE("jump offset found, patching continue (pops=%d)", insn_tail_index);
     }
@@ -959,7 +1006,10 @@ static void patchBreaks(Insn *start, Insn *end, int offset) {
             if (offset > 0) {
                 nextInsnIsLabel = true;
             }
-            int off = insnOffset(cur, end)+offset;
+            int off = insnOffset(cur, end);
+            if (offset > 0) {
+                off += end->numOperands+1;
+            }
             COMP_TRACE("break found, patching break: %d", off);
             patchBreak(cur, off, offset == 0 ? end : NULL);
             numFound++;
@@ -1781,6 +1831,17 @@ static Value valueFromConstNode(Node *n) {
     }
 }
 
+static void popReason(const char *reason) {
+    if (DEBUG_OP_POP) {
+        emitOp1(OP_POP_DEBUG, identifierString(reason));
+    } else {
+        emitOp0(OP_POP);
+    }
+}
+
+static void popExprStatement(void) {
+    popReason("expr stmt");
+}
 
 static void emitNode(Node *n) {
     if (current->hadError) return;
@@ -1794,7 +1855,7 @@ static void emitNode(Node *n) {
     }
     case EXPR_STMT: {
         emitChildren(n);
-        emitOp0(OP_POP);
+        popExprStatement();
         break;
     }
     case BINARY_EXPR:
@@ -1988,7 +2049,7 @@ static void emitNode(Node *n) {
         whileJumpStart->isLabel = true;
         emitLoop(loopStart);
         patchJump(whileJumpStart, -1, NULL);
-        patchBreaks(whileJumpStart, currentIseq()->tail, 1);
+        patchBreaks(whileJumpStart, currentIseq()->tail, 1); // 1 to go after the loop
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
         popScope(COMPILE_SCOPE_WHILE);
@@ -2013,8 +2074,8 @@ static void emitNode(Node *n) {
         Insn *forJump = emitJump(OP_JUMP_IF_FALSE);
         Node *forBlock = vec_last(n->children);
         eLoopType lastLoopType = curLoopType;
-        curLoopType = LOOP_T_FOR;
 
+        curLoopType = LOOP_T_FOR;
         int oldLoopLocalCount = loopLocalCount;
         loopLocalCount = current->localCount;
         emitNode(forBlock);
@@ -2028,10 +2089,10 @@ static void emitNode(Node *n) {
         emitLoop(beforeTest);
         patchJump(forJump, -1, NULL);
         // TODO: patch continues
-        patchBreaks(forJump, currentIseq()->tail, 2); // breaks go after the previous jump
+        patchBreaks(forJump, currentIseq()->tail, 2); // breaks go after the previous loop
         loopStart = oldLoopStart;
         breakBlock = oldBreakBlock;
-        popScope(COMPILE_SCOPE_FOR);
+        popScope(COMPILE_SCOPE_FOR); // pop loop variable, if declared new one
         break;
     }
     case FOREACH_STMT: {
@@ -2093,8 +2154,8 @@ static void emitNode(Node *n) {
         emitLoop(beforeIterNext);
         popScope(COMPILE_SCOPE_FOREACH);
         patchJump(iterDone, -1, NULL);
-        patchBreaks(beforeForeach, currentIseq()->tail, 0);
         emitOp0(OP_POP); // pop the iterator value
+        patchBreaks(beforeForeach, currentIseq()->tail, 0);
         emitOp0(OP_POP); // pop the iterator
         vec_deinit(&v_slots);
         break;

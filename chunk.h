@@ -69,6 +69,7 @@ typedef struct Insn {
     struct Insn *next;
     struct Insn *prev;
     struct Insn *jumpTo; // for jump instructions
+    struct Insn *jumpToPrev; // for jump instructions
     NodeLvl nlvl;
     int extra; // extra information, sometimes used by compiler
     bool isLabel; // is this a jump target?
