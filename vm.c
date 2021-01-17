@@ -397,10 +397,13 @@ static inline void push_EC(bool allocateStack) {
     initTable(&ectx->roGlobals);
     ectx->frameCount = 0;
     if (allocateStack) {
-      ectx->stack = ALLOCATE(Value, STACK_MAX);
+      ectx->stack = ALLOCATE(Value, STACK_INITIAL);
+      ectx->stack_capa = STACK_INITIAL;
       ectx->stackAllocated = true;
       ectx->stackTop = ectx->stack;
     }
+    ectx->frames = ALLOCATE(CallFrame, FRAMES_INITIAL);
+    ectx->frames_capa = FRAMES_INITIAL;
     vec_push(&th->v_ecs, ectx);
     th->ec = ectx; // EC = ectx
 }
@@ -411,8 +414,9 @@ static inline void pop_EC(void) {
     ASSERT(th->v_ecs.length > 0);
     VMExecContext *ctx = (VMExecContext*)vec_pop(&th->v_ecs);
     if (ctx->stackAllocated) {
-      FREE_SIZE(sizeof(Value)*STACK_MAX, ctx->stack);
+      FREE_SIZE(sizeof(Value)*ctx->stack_capa, ctx->stack);
     }
+    FREE_SIZE(sizeof(CallFrame)*ctx->frames_capa, ctx->frames);
     freeTable(&ctx->roGlobals);
     FREE(VMExecContext, ctx);
     if (th->v_ecs.length == 0) {
@@ -671,6 +675,10 @@ void push(Value value) {
         vm.curThread->status = THREAD_ZOMBIE;
         vm.numLivingThreads--;
         pthread_exit(&status);
+    }
+    if (UNLIKELY(ctx->stackTop >= ctx->stack + ctx->stack_capa)) {
+        ctx->stack = GROW_ARRAY(ctx->stack, Value, ctx->stack_capa, ctx->stack_capa*2);
+        ctx->stack_capa *= 2;
     }
     if (IS_OBJ(value)) {
         DBG_ASSERT(AS_OBJ(value)->type != OBJ_T_NONE);
@@ -1374,6 +1382,10 @@ CallFrame *pushFrame(ObjFunction *userFunc) {
     if (UNLIKELY(ec->frameCount >= FRAMES_MAX)) {
         throwErrorFmt(lxErrClass, "Stackoverflow, max number of call frames (%d)", FRAMES_MAX);
         UNREACHABLE_RETURN(NULL);
+    }
+    if (UNLIKELY(ec->frameCount >= ec->frames_capa)) {
+        ec->frames = GROW_ARRAY(ec->frames, CallFrame, ec->frames_capa, ec->frames_capa*2);
+        ec->frames_capa *= 2;
     }
     CallFrame *prev = getFrameOrNull();
     CallFrame *frame = &ec->frames[ec->frameCount++];
@@ -3632,6 +3644,7 @@ static Value doVMEval(char *src, char *filename, int lineno, ObjInstance *instan
     VMExecContext *ectx = EC;
     ectx->evalContext = true;
     ectx->stack = oldFrame->slots;
+    ectx->stack_capa = old_ectx->stack_capa;
     ectx->stackTop = old_ectx->stackTop;
     VM_DEBUG(1, "VM eval called in func '%s', ip: %d", callFrameName(prevFrame),
         prevFrame->ip - prevFrame->closure->function->chunk->code);

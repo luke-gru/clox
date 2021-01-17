@@ -15,8 +15,10 @@
 extern "C" {
 #endif
 
-#define STACK_MAX 256
-#define FRAMES_MAX 64
+#define STACK_INITIAL 256
+#define STACK_MAX 1024
+#define FRAMES_INITIAL 64
+#define FRAMES_MAX 1024
 
 #ifndef NDEBUG
 #define THREAD_DEBUG(lvl, ...) thread_debug(lvl, __VA_ARGS__)
@@ -33,7 +35,7 @@ typedef struct CallFrame {
     ObjString *name; // name of function
     bytecode_t *ip; // ip into closure's bytecode chunk, if callable is not a C function
     int start; // starting instruction offset in parent (for throw/catch)
-    Value *slots; // local variables and function arguments
+    Value *slots; // start of local variables and function arguments
     ObjScope *scope;
     ObjInstance *instance; // if function is a method
     ObjClass *klass; // if function is a method
@@ -75,11 +77,13 @@ typedef struct ErrTagInfo {
 // This is per-thread
 typedef struct VMExecContext {
     Value *stack; // allocated by push_EC()
+    size_t stack_capa;
     Value *stackTop;
     // NOTE: the current callframe contains the closure, which contains the
     // function, which contains the chunk of bytecode for the current function
     // (or top-level)
-    CallFrame frames[FRAMES_MAX];
+    CallFrame *frames;
+    size_t frames_capa;
     unsigned frameCount;
     Table roGlobals; // per-script readonly global vars (ex: __FILE__)
     ObjString *filename;

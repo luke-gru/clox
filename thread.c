@@ -197,8 +197,12 @@ static ObjInstance *newThreadSetup(LxThread *parentThread) {
     vec_foreach(&parentThread->v_ecs, ctx, ctxIdx) {
         VMExecContext *newCtx = ALLOCATE(VMExecContext, 1);
         memcpy(newCtx, ctx, sizeof(VMExecContext));
-        newCtx->stack = ALLOCATE(Value, STACK_MAX);
-        memcpy(newCtx->stack, ctx->stack, sizeof(Value)*STACK_MAX);
+        newCtx->stack = ALLOCATE(Value, ctx->stack_capa);
+        newCtx->stack_capa = ctx->stack_capa;
+        memcpy(newCtx->stack, ctx->stack, sizeof(Value)*newCtx->stack_capa);
+        newCtx->frames = ALLOCATE(CallFrame, ctx->frames_capa);
+        newCtx->frames_capa = ctx->frames_capa;
+        memcpy(newCtx->frames, ctx->frames, sizeof(CallFrame)*ctx->frames_capa);
         newCtx->stackTop = newCtx->stack + (ctx->stackTop-ctx->stack);
         newCtx->stackTop--; // for the two current stack objects that newThread() creates
         newCtx->stackTop--;
