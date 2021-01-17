@@ -1335,7 +1335,6 @@ void popFrame(void) {
     } else {
         closeUpvalues(newTop);
     }
-    frame->popped = true;
     if (frame->klass != NULL) {
         ASSERT(th->v_crefStack.length > 0);
         VM_DEBUG(3, "popping cref from popFrame");
@@ -1401,11 +1400,6 @@ const char *callFrameName(CallFrame *frame) {
     return fnName ? fnName->chars : "<main>";
 }
 
-static long newFrameCookie() {
-  static long cookie = 0;
-  return cookie++;
-}
-
 static void pushNativeFrame(ObjNative *native) {
     DBG_ASSERT(vm.inited);
     DBG_ASSERT(native);
@@ -1424,7 +1418,6 @@ static void pushNativeFrame(ObjNative *native) {
     newFrame->nativeFunc = native;
     newFrame->name = native->name;
     newFrame->file = EC->filename;
-    newFrame->cookie = newFrameCookie();
     BlockStackEntry *bentry = vec_last_or(&vm.curThread->v_blockStack, NULL);
     if (bentry && bentry->frame == NULL) {
         bentry->frame = newFrame;
