@@ -1,0 +1,30 @@
+class OptParser {
+    class Error < Error {}
+
+    init(argv = ARGV) {
+        this.argv = argv;
+        this.options = %{};
+    }
+    on(option, &block) {
+        this.options[option] = block;
+    }
+    parse() {
+        foreach(arg in this.argv) {
+            var found = false;
+            foreach (opt, blk in this.options) {
+                if (opt.class == Regex and opt.match(arg)) {
+                    blk.yield();
+                    found = true;
+                } else {
+                    if (opt == arg) {
+                        blk.yield();
+                        found = true;
+                    }
+                }
+            }
+            if (!found) {
+                throw Error("unhandled argument ${arg}");
+            }
+        }
+    }
+}

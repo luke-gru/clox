@@ -80,6 +80,7 @@ static Value lxBlockYield(int argCount, Value *args) {
     SETUP_BLOCK(block, bentry, status, th->errInfo)
     if (status == TAG_NONE) {
     } else if (status == TAG_RAISE) {
+        pop();
         ObjInstance *errInst = AS_INSTANCE(th->lastErrorThrown);
         ASSERT(errInst);
         if (errInst->klass == lxBreakBlockErrClass) {

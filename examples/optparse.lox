@@ -1,0 +1,12 @@
+requireScript("optparse");
+var opts = OptParser(["--short"]);
+
+opts.on(%"short") -> () {
+    print "short option";
+};
+
+opts.parse();
+
+__END__
+-- expect: --
+short option
