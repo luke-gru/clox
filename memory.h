@@ -90,7 +90,7 @@ void pushRememberSet(Obj *obj);
 #define IS_YOUNG_OBJ(obj) ((obj)->GCGen == GC_GEN_MIN)
 static inline void objWrite(Value owner, Value pointed) {
     bool hasFinalizer = false;
-    if ((IS_OBJ(pointed) && IS_YOUNG_VAL(pointed)) && (IS_OLD_VAL(owner) || (hasFinalizer = OBJ_HAS_FINALIZER(AS_OBJ(owner))))) {
+    if (IS_OBJ(pointed) && IS_YOUNG_VAL(pointed)) {
         if (hasFinalizer) {
             OBJ_SET_HAS_FINALIZER(AS_OBJ(pointed));
         }

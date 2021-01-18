@@ -378,9 +378,7 @@ void collectYoungGarbage() {
         Obj *stackObjPtr = NULL; int stIdx = 0;
         vec_foreach(&curThread->stackObjects, stackObjPtr, stIdx) {
             numStackObjects++;
-            if (!OBJ_IS_PUSHED_VM_STACK(stackObjPtr)) {
-                grayObject(stackObjPtr);
-            }
+            grayObject(stackObjPtr);
         }
     }
     GC_TRACE_DEBUG(2, "# C-call stack objects found: %d", numStackObjects);
@@ -421,16 +419,14 @@ void collectYoungGarbage() {
                 }
             }
         }
-        // NOTE: stack frames not grayed, they should be on the VM stack, which is already grayed
-        /*if (th->openUpvalues) {*/
-            /*ObjUpvalue *up = th->openUpvalues;*/
-            /*while (up) {*/
-                /*ASSERT(up->value);*/
-                /*grayValue(*up->value);*/
-                /*up = up->next;*/
-                /*numOpenUpsFound++;*/
-            /*}*/
-        /*}*/
+        if (th->openUpvalues) {
+            ObjUpvalue *up = th->openUpvalues;
+            while (up) {
+                ASSERT(up->value);
+                grayValue(*up->value);
+                up = up->next;
+            }
+        }
     }
     if (vm.printBuf) {
         GC_TRACE_DEBUG(3, "Marking VM print buf");
@@ -456,11 +452,23 @@ void collectYoungGarbage() {
         grayCount += (newCount-oldCount);
     }
 
+    int numNotYoung = 0;
+    int numHidden = 0;
     for (int i = 0; i < youngStackSz; i++) {
         Obj *youngObj = youngStack[i];
         DBG_ASSERT(youngObj);
         if (youngObj->GCGen > GC_GEN_MIN || OBJ_IS_HIDDEN(youngObj)) {
-            numPromotedOther++;
+            if (OBJ_IS_HIDDEN(youngObj)) {
+                numHidden++;
+            // sometimes objects are created with NEWOBJ_FLAG_NONE and then
+            // `GC_PROMOTE`d in the code sometime later (usually right after creation).
+            } else if (youngObj->GCGen > GC_GEN_MIN) {
+                /*fprintf(stderr, "typeof obj: %s\n", typeOfObj(youngObj));*/
+                /*if (OBJ_IS_INSTANCE_LIKE(youngObj)) {*/
+                    /*fprintf(stderr, "class: %s\n", CLASSINFO(TO_INSTANCE(youngObj)->klass)->name->chars);*/
+                /*}*/
+                numNotYoung++;
+            }
             OBJ_UNSET_DARK(youngObj);
             continue;
         }
@@ -501,10 +509,12 @@ void collectYoungGarbage() {
         OBJ_UNSET_DARK(marked);
     }
 
-    GC_TRACE_DEBUG(2, "done FREE (young) process");
+    GC_TRACE_DEBUG(2, "done FREE (young) process (%d young)", youngStackSz);
+    GC_TRACE_DEBUG(2, "Num not young: %d", numNotYoung);
+    GC_TRACE_DEBUG(2, "Num promoted (hidden): %d", numHidden);
     GC_TRACE_DEBUG(2, "Num promoted (dark): %d", numPromotedDark);
     GC_TRACE_DEBUG(2, "Num promoted (remembered): %d", numPromotedRemembered);
-    GC_TRACE_DEBUG(2, "Num promoted (manual): %d", numPromotedOther);
+    GC_TRACE_DEBUG(2, "Num promoted (finalizers): %d", numPromotedOther);
     GC_TRACE_DEBUG(2, "Num collected: %d", numCollected);
     vec_clear(&rememberSet);
     stopGCRunProfileTimer(&tRunStart, &GCProf.totalGCYoungTime);
@@ -1133,9 +1143,6 @@ void hideFromGC(Obj *obj) {
     DBG_ASSERT(obj);
     DBG_ASSERT(vm.inited);
     if (!OBJ_IS_HIDDEN(obj)) {
-        if (IS_YOUNG_OBJ(obj)) {
-            GC_PROMOTE_ONCE(obj);
-        }
         vec_push(&vm.hiddenObjs, obj);
         OBJ_SET_HIDDEN(obj);
     }
