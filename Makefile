@@ -2,12 +2,13 @@ ifeq ($(strip $(CC)),)
 CC=gcc
 endif
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-DEFINES=-D_GNU_SOURCE -DNAN_TAGGING -DCOMPUTED_GOTO -DLX_BUILT_DIR=$(ROOT_DIR)
-GCC_CFLAGS=-std=c99 -Wall -Wextra -Wmissing-prototypes -Wno-shadow -Wvla -Wno-clobbered -Wno-unused-parameter -Wno-unused-label -I. -Ivendor -pthread ${DEFINES}
-GPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
+DEFINES=-DNAN_TAGGING -DCOMPUTED_GOTO -DLX_BUILT_DIR=$(ROOT_DIR)
+GCC_DEFINES=-D_GNU_SOURCE
+GCC_CFLAGS=-std=c99 -Wall -Wextra -Wmissing-prototypes -Wno-shadow -Wvla -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-label -Wno-stringop-truncation -I. -Ivendor -pthread ${DEFINES} ${GCC_DEFINES}
+GPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES} ${GCC_DEFINES}
 # NOTE: clang++ doesn't compile yet, too many C++ type errors
 CLANGPP_CFLAGS=-std=c++11 -w -fpermissive -I. -Ivendor -pthread ${DEFINES}
-CLANG_CFLAGS=-std=c99 -Wall -Wextra -Wmissing-prototypes -I. -Ivendor -Wno-unused-parameter -Wno-unused-label -pthread ${DEFINES}
+CLANG_CFLAGS=-std=c99 -Wall -Wextra -Wmissing-prototypes -I. -Ivendor -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-label -pthread ${DEFINES}
 ifneq (,$(findstring clang,$(CC)))
 	ifneq (,$(findstring clang++,$(CC)))
 		CFLAGS=${CLANGPP_CFLAGS}
@@ -26,7 +27,7 @@ TEST_SRCS = debug.c   memory.c chunk.c value.c scanner.c compiler.c vm.c object.
 TEST_FILES = test/test_object.c test/test_nodes.c test/test_compiler.c test/test_vm.c test/test_gc.c test/test_examples.c test/test_regex.c
 DEBUG_FLAGS=-O2 -g -rdynamic
 GPROF_FLAGS=-O3 -pg -DNDEBUG
-TEST_FLAGS=-O2 -g -rdynamic -Itest/include -I. -DLOX_TEST
+TEST_FLAGS=-O0 -g -rdynamic -Itest/include -I. -DLOX_TEST
 RELEASE_FLAGS=-O3 -DNDEBUG -Wno-unused-function
 BUILD_DIR=bin
 BUILD_FILE_RELEASE=clox

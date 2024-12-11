@@ -357,7 +357,7 @@ static Value lxThreadScheduleStatic(int argCount, Value *args) {
     releaseGVL(THREAD_STOPPED);
 // not available on OSX
 #ifdef __linux__
-    pthread_yield();
+    sched_yield();
 #else
     threadSleepNano(oldTh, 100);
 #endif
@@ -385,7 +385,7 @@ void threadSchedule(LxThread *th) {
     releaseGVL(THREAD_STOPPED);
     pthread_cond_signal(&th->sleepCond);
 #ifdef __linux__
-    pthread_yield();
+    sched_yield();
 #else
     threadSleepNano(oldTh, 100);
 #endif
