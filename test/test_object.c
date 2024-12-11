@@ -30,7 +30,7 @@ cleanup:
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initVM();
-    INIT_TESTS();
+    INIT_TESTS("test_object");
     RUN_TEST(test_string_object);
     RUN_TEST(test_string_pushCStringFmt);
     freeVM();

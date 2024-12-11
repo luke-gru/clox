@@ -118,6 +118,7 @@ static int test_run_example_files(void) {
         numEntsFound++;
         CompileErr cerr = COMPILE_ERR_NONE;
         fprintf(stdout, "Compiling file '%s'...\n", ent->d_name);
+        fflush(stdout);
         initVM();
         ObjFunction *func = compile_file(fbuf, &cerr);
         if (cerr != COMPILE_ERR_NONE || !func) {
@@ -129,6 +130,7 @@ static int test_run_example_files(void) {
             continue;
         }
         fprintf(stdout, "Running file '%s'...\n", ent->d_name);
+        fflush(stdout);
         ObjString *outputStr = hiddenString("", 0, NEWOBJ_FLAG_OLD);
         setPrintBuf(outputStr, true);
         unhideFromGC((Obj*)outputStr);
@@ -136,6 +138,7 @@ static int test_run_example_files(void) {
         // so that __DIR__ is populated correctly for the script.
         InterpretResult ires = interpret(func, fbuf);
         if (ires != INTERPRET_OK) {
+            fflush(stdout);
             fprintf(stderr, "Error during interpretation: (%d)\n", ires);
             vec_push(&vfiles_failed, strdup(fbuf));
             numErrors++;
@@ -147,9 +150,11 @@ static int test_run_example_files(void) {
         ObjString *outputExpect = fileExpectStr(f);
         if (outputExpect == NULL || stringDiff(outputStr, outputExpect) == 0) {
             fprintf(stdout, "Success\n");
+            fflush(stdout);
             numSuccesses++;
             T_ASSERT(true);
         } else {
+            fflush(stdout);
             fprintf(stderr, "---- Expected: ----\n");
             fprintf(stderr, "%s\n", outputExpect->chars);
             fprintf(stderr, "---- Actual: ----\n");
@@ -164,6 +169,7 @@ static int test_run_example_files(void) {
         fclose(f);
         _freeVM();
     }
+    fflush(stdout);
 
     if (numEntsFound == 0) {
         fprintf(stderr, "[ERROR]: Cannot read directory entry, error: '%s'\n", strerror(errno));
@@ -201,7 +207,7 @@ int main(int argc, char *argv[]) {
     copyArgv(argc, argv);
     parseTestOptions(argc, argv);
     initCoreSighandlers();
-    INIT_TESTS();
+    INIT_TESTS("test_examples");
     RUN_TEST(test_run_example_files);
     END_TESTS();
 }

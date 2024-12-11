@@ -41,7 +41,8 @@ bool jmpset = false;
 typedef void (*t_func_on_fail_cb)(void);
 static t_func_on_fail_cb assertion_failure_cb = NULL;
 
-static inline void INIT_TESTS(void) {
+static inline void INIT_TESTS(const char *name) {
+    fprintf(stderr, "=== Running %s ===\n", name);
     assertions_passed = 0;
     assertions_failed = 0;
     tests_passed = 0;

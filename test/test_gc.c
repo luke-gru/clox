@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initCoreSighandlers();
 
-    INIT_TESTS();
+    INIT_TESTS("test_gc");
     REGISTER_T_ASSERT_ON_FAIL(freeVM);
     RUN_TEST(test_string_collected);
     RUN_TEST(test_hiding_keeps_gc_from_reclaiming);

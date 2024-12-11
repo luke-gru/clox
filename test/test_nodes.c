@@ -495,7 +495,7 @@ cleanup:
 int main(int argc, char *argv[]) {
     parseTestOptions(argc, argv);
     initVM();
-    INIT_TESTS();
+    INIT_TESTS("test_nodes");
     RUN_TEST(test_output_node_literal_string);
     RUN_TEST(test_output_node_literal_number);
     RUN_TEST(test_output_nodes_from_parser_vardecl);

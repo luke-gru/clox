@@ -377,7 +377,7 @@ int main(int argc, char *argv[]) {
 
     initVM();
     turnGCOff(); // FIXME: why is this here?
-    INIT_TESTS();
+    INIT_TESTS("test_compiler");
     RUN_TEST(test_compile_addition);
     RUN_TEST(test_compile_global_variable);
     RUN_TEST(test_compile_local_variable);

@@ -729,7 +729,7 @@ int main(int argc, char *argv[]) {
     compilerOpts.noRemoveUnusedExpressions = true;
     initCoreSighandlers();
 
-    INIT_TESTS();
+    INIT_TESTS("test_vm");
     REGISTER_T_ASSERT_ON_FAIL(freeVM);
     RUN_TEST(test_addition);
     RUN_TEST(test_subtraction);

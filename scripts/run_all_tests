@@ -1,0 +1,42 @@
+#!/bin/bash
+
+rc=0;
+counter=0;
+failures=()
+
+# each test file failure sets the next bit to 1 if it fails
+./bin/test_regex || let "rc += 1 << $counter"; let counter+=1;
+./bin/test_object || let "rc += 1 << $counter"; let counter+=1;
+./bin/test_vm || let "rc += 1 << $counter"; let counter+=1;
+./bin/test_gc || let "rc += 1 << $counter"; let counter+=1;
+./bin/test_examples || let "rc += 1 << $counter"; let counter+=1;
+
+if ((($rc & 0x01) != 0)); then
+  failures+=("test_regex")
+fi
+
+if ((($rc & 0x02) != 0)); then
+  failures+=("test_object")
+fi
+
+if ((($rc & 0x04) != 0)); then
+  failures+=("test_vm")
+fi
+
+if ((($rc & 0x08) != 0)); then
+  failures+=("test_gc")
+fi
+
+if ((($rc & 0xF0) != 0)); then
+  failures+=("test_examples")
+fi
+
+if (($rc != 0)); then
+  echo "The following test files failed:"
+fi
+
+for failure in ${failures[@]}; do
+ echo $failure
+done
+
+exit $rc
