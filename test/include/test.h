@@ -6,6 +6,41 @@
 #include "options.h"
 #include "debug.h"
 
+/*
+ * Unit test library in a header file. Each test function that is registered
+ * is run in order, and any assertion that fails makes the execution jump
+ * out of the function and continue with the next one, recording it as a failed
+ * assertion and failed test.
+ *
+ * You can pass options to the test file when running it, like so:
+ *   ./bin/test/test_example --only test_pass
+ * or:
+ *   ./bin/test/test_example --skip test_fail
+ *
+ * You can pass --only and/or --skip multiple times
+ *
+ * Usage:
+ *
+ * static int test_pass(void) {
+ *   T_ASSERT_EQ(true, true);
+ *   return 0;
+ * }
+ *
+ * static int test_fail(void) {
+ *   T_ASSERT_EQ(false, true);
+ *   return 0;
+ * }
+ *
+ * int main(int argc, char *argv[]) {
+ *   parseTestOptions(argc, argv);
+ *   INIT_TESTS("test_example");
+ *   RUN_TEST(test_pass);
+ *   RUN_TEST(test_fail);
+ *   END_TESTS();
+ * }
+ *
+ */
+
 #include "vec.h"
 
 #ifndef CLOX_TEST
@@ -16,6 +51,7 @@
 #define LOG_ERR(...) (fprintf(stderr, __VA_ARGS__))
 #endif
 
+// colors
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
 #define KGRN  "\x1B[32m"

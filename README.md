@@ -51,7 +51,40 @@ OS/compiler support
 * Only tested on linux (Ubuntu 16.04) and mac OS, uses fork() and libpthread, as well as some C99 features
 * Tested with gcc and clang
 * Almost C++ compliant (g++ compiles, clang++ doesn't)
-* There appear to be issues on macOS arm architectures, I'm working on fixing them soon
+
+Building
+--------
+
+Build a release version to bin/release/clox
+
+> make release
+
+Build a debug version to bin/debug/clox
+
+> make debug
+
+Running Tests
+-------------
+
+> make test
+
+Install
+-------
+
+Set the PREFIX environment variable or install by default to /usr/local/bin
+
+> sudo make install
+
+Usage
+-----
+
+To run a file:
+
+> ./bin/release/clox -f my_file.lox
+
+For more details:
+
+> ./bin/release/clox -h
 
 Examples
 --------
@@ -98,15 +131,8 @@ Benchmark.start(name: "array", iterations: 1, &bench);
 ```
 
 See the examples folder for more examples, and the lib folder for the standard library.
-The files in the examples folder are also tests run by the ./bin/test\_examples
+The files in the examples folder are also tests run by the ./bin/test/test\_examples
 binary (see Makefile for more details).
-
-Use
----
-
-To run a file:
-
-> ./bin/clox -f my_file.lox
 
 Thanks
 ------

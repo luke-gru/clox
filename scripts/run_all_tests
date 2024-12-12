@@ -5,11 +5,11 @@ counter=0;
 failures=()
 
 # each test file failure sets the next bit to 1 if it fails
-./bin/test_regex || let "rc += 1 << $counter"; let counter+=1;
-./bin/test_object || let "rc += 1 << $counter"; let counter+=1;
-./bin/test_vm || let "rc += 1 << $counter"; let counter+=1;
-./bin/test_gc || let "rc += 1 << $counter"; let counter+=1;
-./bin/test_examples || let "rc += 1 << $counter"; let counter+=1;
+./bin/test/test_regex || let "rc += 1 << $counter"; let counter+=1;
+./bin/test/test_object || let "rc += 1 << $counter"; let counter+=1;
+./bin/test/test_vm || let "rc += 1 << $counter"; let counter+=1;
+./bin/test/test_gc || let "rc += 1 << $counter"; let counter+=1;
+./bin/test/test_examples || let "rc += 1 << $counter"; let counter+=1;
 
 if ((($rc & 0x01) != 0)); then
   failures+=("test_regex")
