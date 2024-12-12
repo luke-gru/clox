@@ -1,8 +1,6 @@
 Clox
 ====
 
-[![Build Status](https://travis-ci.com/luke-gru/clox.svg?branch=master)](https://travis-ci.com/luke-gru/clox)
-
 Lox (clox) is an object-oriented scripting language developed alongside the reading of
 craftinginterpreters (craftinginterpreters.com) by Bob Nystrom.
 
@@ -53,6 +51,7 @@ OS/compiler support
 * Only tested on linux (Ubuntu 16.04) and mac OS, uses fork() and libpthread, as well as some C99 features
 * Tested with gcc and clang
 * Almost C++ compliant (g++ compiles, clang++ doesn't)
+* There appear to be issues on macOS arm architectures, I'm working on fixing them soon
 
 Examples
 --------
@@ -101,6 +100,13 @@ Benchmark.start(name: "array", iterations: 1, &bench);
 See the examples folder for more examples, and the lib folder for the standard library.
 The files in the examples folder are also tests run by the ./bin/test\_examples
 binary (see Makefile for more details).
+
+Use
+---
+
+To run a file:
+
+> ./bin/clox -f my_file.lox
 
 Thanks
 ------
