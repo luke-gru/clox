@@ -1,6 +1,11 @@
 TODO
 ====
 
+needs fixing:
+examples/in.lox (something with test script)
+examples/signals.lox (something with test script)
+examples/temple.lox (bad library)
+
 NOTE: This is just a brainstorm of things to do, in no special order. Not
 all listed features/improvements are going to get done.
 

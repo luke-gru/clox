@@ -497,7 +497,7 @@ static inline ObjString *emptyString(void) {
 void clearString(Value self);
 void pushString(Value self, Value pushed);
 void stringInsertAt(Value self, Value insert, size_t at, bool replaceAt);
-Value stringSubstr(Value self, size_t startIdx, size_t len);
+Value stringSubstr(Value self, size_t startIdx, int len);
 Value stringIndexGet(Value self, size_t index);
 Value stringIndexSet(Value self, size_t index, char c);
 bool stringEquals(Value a, Value b);

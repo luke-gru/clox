@@ -89,6 +89,7 @@ static int test_run_example_files(void) {
     size_t filePrefixLen = strlen(filePrefix);
     vec_str_t vfiles_failed;
     vec_init(&vfiles_failed);
+    // TODO: reorder the files to read them in alphabetical order, as this is not guaranteed
     while ((ent = readdir(d))) {
         if (ent->d_type != DT_REG) { // reg. file
             continue;

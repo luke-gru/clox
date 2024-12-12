@@ -3,6 +3,11 @@
 #include "memory.h"
 #include "debug.h"
 
+/*
+ * File for bytecode chunks, instruction sequences and instructions
+ *
+ */
+
 void initChunk(Chunk *chunk) {
     chunk->count = 0;
     chunk->capacity = 0;

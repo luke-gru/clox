@@ -491,19 +491,18 @@ static void patchJumpInsnWithOffset(Insn *jump, int offset) {
     jump->operands[0] += offset;
 }
 
+/* Remove the given instruction. If there's a forward jump to this instruction or
+ * to an instruction after it, the jump needs to be patched. If there's a backwards jump
+ * to this instruction or to an instruction before it, the jump needs to be patched.
+ */
 static void rmInsnAndPatchJumps(Iseq *seq, Insn *insn) {
     int insnIdx = iseqInsnIndex(seq, insn);
     ASSERT(insnIdx >= 0);
     OPT_DEBUG(2, "rmInsnAndPatchLabels insnIdx: %d\n", insnIdx);
-    if (insnIdx == 0) {
-        OPT_DEBUG(2, "insnIdx == 0\n");
-        iseqRmInsn(seq, insn);
-        return;
-    }
     Insn *in = seq->insns;
     int idx = 0;
     while (in) {
-        if (in == insn) {
+        if (in == insn) { // it will be removed at the end of the function
             in = in->next;
             idx++;
             continue;
@@ -631,7 +630,7 @@ static inline bool isJumpTarget(Insn *insn) {
 static void addInsnOperand(Iseq *seq, Insn *insn, bytecode_t operand) {
     ASSERT(insn->numOperands >= 0);
     if (insn->numOperands == MAX_INSN_OPERANDS) {
-        ASSERT(0); // TODO: error out
+        UNREACHABLE("too many operands"); // TODO: error out
     }
     insn->operands[insn->numOperands] = operand;
     insn->numOperands+=1;
@@ -646,8 +645,8 @@ static void addInsnOperand(Iseq *seq, Insn *insn, bytecode_t operand) {
             idx++;
             continue;
         }
-        // jump instruction found before removed instruction, if it jumps
-        // to the removed instruction or after it, then patch the jump
+        // jump instruction found before altered instruction, if it jumps
+        // to the altered instruction or after it, then patch the jump
         if (idx < insnIdx && isJump(in)) {
             OPT_DEBUG(2, "Found jump at %d", idx);
             Insn *jumpTo = in->jumpTo;
@@ -719,17 +718,16 @@ static void optimizeIseq(Iseq *iseq) {
         }
 
         // consolidate OP_POPs
-        if (prev && isPopType(cur) && isPopType(prev) && !isJumpTarget(prev) && !isJumpTarget(cur)) {
-            int n = cur->code == OP_POP ? 1 : cur->operands[0];
-            rmInsnAndPatchJumps(iseq, cur);
-            if (prev->code == OP_POP) {
-                addInsnOperand(iseq, prev, n+1);
-                prev->code = OP_POP_N;
+        if (prev && isPopType(prev) && isPopType(cur) && !isJumpTarget(prev) && !isJumpTarget(cur)) {
+            int n = prev->code == OP_POP ? 1 : prev->operands[0];
+            rmInsnAndPatchJumps(iseq, prev);
+            if (cur->code == OP_POP) {
+                addInsnOperand(iseq, cur, n+1);
+                cur->code = OP_POP_N;
             } else {
-                ASSERT(prev->code == OP_POP_N);
-                prev->operands[0] += n;
+                ASSERT(cur->code == OP_POP_N);
+                cur->operands[0] += n;
             }
-            cur = prev;
         }
 
          // jump to next insn replacement/deletion

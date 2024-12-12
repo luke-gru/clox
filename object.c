@@ -111,7 +111,7 @@ ObjString *takeString(char *chars, size_t length, int flags) {
 }
 
 // use copy of `*chars` as the underlying storage for the new string object
-// NOTE: length here is strlen(chars)
+// NOTE: length here is strlen(chars), without NUL byte
 ObjString *copyString(char *chars, size_t length, int flags) {
     if (strlen(chars) < length) {
         fprintf(stderr, "chars: '%s', length: %d", chars, (int)length);
@@ -845,22 +845,24 @@ void stringInsertAt(Value self, Value insert, size_t at, bool replaceAt) {
     insertObjString(selfBuf, insertBuf, at, replaceAt);
 }
 
-Value stringSubstr(Value self, size_t startIdx, size_t len) {
-    /*if (startIdx < 0) {*/
-        /*throwArgErrorFmt("%s", "start index must be positive, is: %d", startIdx);*/
-    /*}*/
+Value stringSubstr(Value self, size_t startIdx, int len) {
     ObjString *buf = AS_STRING(self);
     ObjString *substr = NULL;
     if (startIdx >= buf->length) {
         substr = copyString("", 0, NEWOBJ_FLAG_NONE);
     } else {
-        size_t maxlen = buf->length-startIdx; // "abc"
-        // TODO: support negative len, like `-2` also,
-        // to mean up to 2nd to last char
-        if (len > maxlen) {
+        char *start = buf->chars + startIdx;
+        size_t maxlen = buf->length - startIdx;
+        if (len < 0) {
+            len = maxlen + len + 1;
+            if (len < 0) {
+                len = 0;
+            }
+        }
+        if ((size_t)len > maxlen) {
             len = maxlen;
         }
-        substr = copyString(buf->chars+startIdx, len, NEWOBJ_FLAG_NONE);
+        substr = copyString(start, len, NEWOBJ_FLAG_NONE);
     }
 
     return OBJ_VAL(substr);

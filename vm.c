@@ -1726,11 +1726,11 @@ static bool doCallCallable(Value callable, int argCount, bool isMethod, CallInfo
     }
 
     vec_nodep_t *params = (vec_nodep_t*)nodeGetData(func->funcNode);
-    ASSERT(params);
 
     Value kwargsMap = NIL_VAL;
     // keyword arg processing
     if (func->numKwargs > 0 && callInfo) {
+        ASSERT(params);
         if (!IS_NIL(blockInstance) && IS_A_BLOCK(peek(0))) {
             argCount--;
             poppedBlockInstance = pop();
@@ -2622,6 +2622,7 @@ vmLoop:
 #ifndef NDEBUG
           // used during testing
           if (vm.printBuf) {
+              // NOTE: valueToString() must be equal to printValue()
               ObjString *out = valueToString(val, hiddenString, NEWOBJ_FLAG_NONE);
               ASSERT(out);
               pushCString(vm.printBuf, out->chars, strlen(out->chars));
