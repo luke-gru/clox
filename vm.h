@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <setjmp.h>
+#include <unistd.h>
 #include "chunk.h"
 #include "object.h"
 #include "table.h"
@@ -113,13 +114,16 @@ typedef struct BlockStackEntry {
 } BlockStackEntry;
 
 #define INTERRUPT_NONE 0
+// internal exit interrupt in VM
 #define INTERRUPT_GENERAL 1
+// all signals use this interrupt
 #define INTERRUPT_TRAP 2
 #define SET_TRAP_INTERRUPT(th) (th->interruptFlags |= INTERRUPT_TRAP)
 #define SET_INTERRUPT(th) (th->interruptFlags |= INTERRUPT_GENERAL)
 #define INTERRUPTED_ANY(th) (th->interruptFlags != INTERRUPT_NONE)
 typedef struct LxThread {
     pthread_t tid;
+    pid_t pid;
     volatile ThreadStatus status;
     VMExecContext *ec; // current execution context of vm
     vec_void_t v_ecs; // stack of execution contexts. Top of stack is current context.
@@ -138,7 +142,7 @@ typedef struct LxThread {
     bool returnedFromNativeErr;
     jmp_buf cCallJumpBuf;
     bool cCallJumpBufSet;
-    int vmRunLvl;
+    int vmRunLvl; // how many calls to vm_run() are in the current thread's native stack
     int lastSplatNumArgs;
     // stack of object pointers created during C function calls. When
     // control returns to the VM, these are popped. Stack objects aren't
@@ -149,7 +153,7 @@ typedef struct LxThread {
     pthread_mutex_t sleepMutex;
     pthread_cond_t sleepCond;
     pthread_mutex_t interruptLock;
-    int interruptFlags;
+    volatile int interruptFlags;
     int opsRemaining;
     int exitStatus;
     int lastOp; // for debugging
@@ -266,7 +270,7 @@ typedef struct SigHandler {
 extern SigHandler *sigHandlers;
 void removeVMSignalHandlers(void);
 void enqueueSignal(int signo);
-void execSignal(LxThread *th, int signo);
+int execSignal(LxThread *th, int signo);
 void threadCheckSignals(LxThread *th);
 int getSignal(void);
 

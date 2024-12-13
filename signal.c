@@ -37,29 +37,28 @@ int getSignal() {
     return -1;
 }
 
-void execSignal(LxThread *th, int signum) {
+/* Execute one queued signal handler on the main thread */
+int execSignal(LxThread *th, int signum) {
     (void)th;
     SigHandler *cur = sigHandlers;
     while (cur) {
         if (cur->signum == signum) {
+            ASSERT(th == vm.mainThread);
             (void)callFunctionValue(OBJ_VAL(cur->callable), 0, NULL);
+            return 0;
         }
         cur = cur->next;
     }
+    return -1;
 }
 
-// callback when a native signal gets sent
+// Callback when a native signal gets sent to the process. We enqueue the signal
+// and set the interrupt flag on the main thread.
 static void sigHandlerFunc(int signum, siginfo_t *sinfo, void *_context) {
     enqueueSignal(signum);
     pthread_mutex_lock(&vm.mainThread->interruptLock);
     SET_TRAP_INTERRUPT(vm.mainThread);
     pthread_mutex_unlock(&vm.mainThread->interruptLock);
-    // execute the interrupts on the main thread
-    if (vm.mainThread != vm.curThread) {
-        threadSchedule(vm.mainThread);
-    } else {
-        vmCheckInts(vm.curThread);
-    }
 }
 
 void removeVMSignalHandlers(void) {

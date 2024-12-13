@@ -465,6 +465,7 @@ static ObjInstance *initMainThread(void) {
 
     pthread_t tid = pthread_self();
     threadSetId(mainThread, tid);
+    th->pid = getpid();
     vm.numLivingThreads++;
     threadSetStatus(mainThread, THREAD_RUNNING);
     acquireGVL();
@@ -1326,7 +1327,7 @@ static void closeUpvalues(Value *last);
 
 void popFrame(void) {
     DBG_ASSERT(vm.inited);
-    register LxThread *th = vm.curThread;
+    LxThread *th = vm.curThread;
     ASSERT(EC->frameCount >= 1);
     CallFrame *frame = getFrame();
     Value *newTop = frame->slots;
@@ -2192,18 +2193,19 @@ NORETURN void throwErrorFmt(ObjClass *klass, const char *format, ...) {
 
 void printVMStack(FILE *f, LxThread *th) {
     pthread_t tid = 0;
+    pid_t pid = th->pid;
     if (th != vm.mainThread) {
         tid = th->tid;
     }
     if (th->ec->stackTop == th->ec->stack && th->v_ecs.length == 1) {
-        fprintf(f, "[DEBUG %d (th=%lu)]: Stack: empty\n", th->vmRunLvl, (unsigned long)tid);
+        fprintf(f, "[DEBUG %d (pid=%d, th=%lu)]: Stack: empty\n", th->vmRunLvl, (int)pid, (unsigned long)tid);
         return;
     }
     VMExecContext *ec = NULL; int i = 0;
     int numCallFrames = VMNumCallFrames();
     int numStackFrames = VMNumStackFrames();
-    fprintf(f, "[DEBUG %d (th=%lu)]: Stack (%d stack frames, %d call frames):\n", th->vmRunLvl,
-            (unsigned long)tid, numStackFrames, numCallFrames);
+    fprintf(f, "[DEBUG %d (pid=%d, th=%lu)]: Stack (%d stack frames, %d call frames):\n", th->vmRunLvl,
+            (int)pid, (unsigned long)tid, numStackFrames, numCallFrames);
     // print VM stack values from bottom of stack to top
     fprintf(f, "[DEBUG %d]: ", th->vmRunLvl);
     int callFrameIdx = 0;
@@ -2354,12 +2356,12 @@ static InterpretResult vm_run0() {
  * Run the VM's instructions.
  */
 static InterpretResult vm_run() {
-    register LxThread *th = vm.curThread;
-    register Chunk *ch = currentChunk();
-    register Value *constantSlots = ch->constants->values;
-    register CallFrame *frame = getFrame();
+    LxThread *th = vm.curThread;
+    Chunk *ch = currentChunk();
+    Value *constantSlots = ch->constants->values;
+    CallFrame *frame = getFrame();
     ObjScope *scope = frame->scope;
-    register VMExecContext *ctx = EC;
+    VMExecContext *ctx = EC;
     th->vmRunLvl++;
     if (ch->catchTbl != NULL) {
         int jumpRes = setjmp(frame->jmpBuf);
@@ -2458,10 +2460,12 @@ vmLoop:
     if (CLOX_OPTION_T(stepVMExecution) && vm.instructionStepperOn) {
         fprintf(stderr, "STEPPER> ");
         while (getline(&stepLine, &stepLineSz, stdin)) {
+            // continue, turn off stepper
             if (strcmp("c\n", stepLine) == 0) {
                 vm.instructionStepperOn = false;
                 xfree(stepLine);
                 break;
+            // next instruction
             } else if (strcmp("n\n", stepLine) == 0) {
                 xfree(stepLine);
                 break;
@@ -2877,7 +2881,7 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
-          VM_CHECK_INTS(vm.curThread);
+          VM_CHECK_INTS(th);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_TRUE): {
@@ -2887,7 +2891,7 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
-          VM_CHECK_INTS(vm.curThread);
+          VM_CHECK_INTS(th);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_FALSE_PEEK): {
@@ -2897,7 +2901,7 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
-          VM_CHECK_INTS(vm.curThread);
+          VM_CHECK_INTS(th);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP_IF_TRUE_PEEK): {
@@ -2907,14 +2911,14 @@ vmLoop:
               DBG_ASSERT(ipOffset > 0);
               frame->ip += (ipOffset-1);
           }
-          VM_CHECK_INTS(vm.curThread);
+          VM_CHECK_INTS(th);
           DISPATCH_BOTTOM();
       }
       CASE_OP(JUMP): {
           bytecode_t ipOffset = READ_WORD();
           ASSERT(ipOffset > 0);
           frame->ip += (ipOffset-1);
-          VM_CHECK_INTS(vm.curThread);
+          VM_CHECK_INTS(th);
           DISPATCH_BOTTOM();
       }
       CASE_OP(LOOP): {
@@ -2923,7 +2927,7 @@ vmLoop:
           // add 1 for the instruction we just read, and 1 to go 1 before the
           // instruction we want to execute next.
           frame->ip -= (ipOffset+2);
-          VM_CHECK_INTS(vm.curThread);
+          VM_CHECK_INTS(th);
           DISPATCH_BOTTOM();
       }
       CASE_OP(BREAK): {
@@ -2934,7 +2938,7 @@ vmLoop:
               VM_POP(); numPops--;
           }
           frame->ip += (ipOffset-3); // -3 to for the 2 just read instructions, and 1 more to go to 1 before the instruction
-          VM_CHECK_INTS(vm.curThread);
+          VM_CHECK_INTS(th);
           DISPATCH_BOTTOM();
       }
       CASE_OP(BLOCK_BREAK): {
@@ -3952,8 +3956,6 @@ void terminateThreads() {
     vm.numLivingThreads = 1;
 }
 
-// TODO: rename to exitThread(), as this either stops the VM or exits the
-// current non-main thread
 NORETURN void stopVM(int status) {
     LxThread *th = vm.curThread;
     if (th == vm.mainThread) {

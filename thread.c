@@ -52,19 +52,23 @@ const char *threadStatusName(ThreadStatus status) {
     }
 }
 
+/*
+ * Execute all interrupt signal handlers on the main thread.
+ */
 void threadExecuteInterrupts(LxThread *th) {
     ASSERT(vm.curThread == th);
     int interrupt = 0;
     while ((interrupt = threadGetInterrupt(th)) != INTERRUPT_NONE) {
         if (interrupt == INTERRUPT_TRAP && th == vm.mainThread) {
-            ASSERT(th == vm.mainThread);
             th->interruptFlags &= (~interrupt);
-            int sig = -1;
+            int sig;
             while ((sig = getSignal()) != -1) {
-                execSignal(th, sig);
+                if (execSignal(th, sig) != 0) {
+                    break;
+                }
             }
-        } else if (interrupt == INTERRUPT_GENERAL) { // kill signal
-            THREAD_DEBUG(1, "Thread %lu got interrupt, exiting", th->tid);
+        } else if (interrupt == INTERRUPT_GENERAL) { // sent 'exit' interrupt to living thread
+            THREAD_DEBUG(1, "Thread %lu got exit interrupt, exiting", th->tid);
             ASSERT(th != vm.mainThread);
             if (GVLOwner == th->tid) {
                 THREAD_DEBUG(1, "thread releasing GVL before exit");
@@ -177,10 +181,8 @@ typedef struct NewThreadArgs {
     LxThread *th;
 } NewThreadArgs;
 
-// NOTE: vm.curThread is NOT the current thread here, and doesn't hold
-// the GVL. We can't call ANY functions that call THREAD() in them, as they'll
-// fail (phthread_self() tid is NOT in vm.threads vector until end of
-// function).
+// NOTE: This thread is not running yet, this is just setting it up.
+// It doesn't have a thread id (tid) or its own stack yet.
 static ObjInstance *newThreadSetup(LxThread *parentThread) {
     ASSERT(parentThread);
     THREAD_DEBUG(3, "New thread setup");
@@ -241,11 +243,9 @@ static void *runCallableInNewThread(void *arg) {
     NewThreadArgs *tArgs = (NewThreadArgs*)arg;
     pthread_t tid = pthread_self();
     LxThread *th = tArgs->th;
-    if (th->tid != 0) {
-        ASSERT(th->tid == tid);
-    }
     ASSERT(th->status == THREAD_READY);
     th->tid = tid;
+    th->pid = getpid();
     ASSERT(th->tid > 0);
     THREAD_DEBUG(2, "switching to newly created thread, acquiring lock %lu", th->tid);
     THREAD_DEBUG(2, "acquiring GVL");
@@ -273,7 +273,7 @@ static void *runCallableInNewThread(void *arg) {
     th->status = THREAD_RUNNING;
     callCallable(OBJ_VAL(closure), 0, false, NULL);
     THREAD_DEBUG(2, "Exiting thread (returned) %lu", pthread_self());
-    stopVM(0); // actually just exits the thread
+    stopVM(0); // actually just exits the thread if it's not the main thread
 }
 
 
@@ -297,6 +297,7 @@ Value lxNewThread(int argCount, Value *args) {
     releaseGVL(THREAD_STOPPED);
     if (pthread_create(&tnew, NULL, runCallableInNewThread, thArgs) == 0) {
         acquireGVL();
+        // it's important the new thread has a tid even if it hasn't started running yet
         if (th->tid == 0) {
             th->tid = tnew;
         }

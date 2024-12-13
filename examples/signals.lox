@@ -1,10 +1,10 @@
 var stop = false;
 Signal.trap(Signal::QUIT, fun() {
-  print "In handler";
+  print "In signal handler";
   stop = true;
 });
 
-// make sure signal handlers functions are marked
+// test that signal handler functions get marked during GC and are not collected
 GC.collect();
 GC.collect();
 
@@ -13,10 +13,9 @@ var childPid = Process.fork(fun() {
   print "Signalling from child";
   Process.signal(Process.ppid(), Signal::QUIT);
 });
-Process.detach(childPid);
 
 print "Looping in parent";
-while(stop == false) {
+while (stop == false) {
 }
 print "Loop stopped";
 
@@ -25,5 +24,5 @@ print "Loop stopped";
 __END__
 -- expect: --
 Looping in parent
-In handler
+In signal handler
 Loop stopped

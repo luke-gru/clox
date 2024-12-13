@@ -42,6 +42,7 @@ static Value lxForkStatic(int argCount, Value *args) {
         return NUMBER_VAL(pid);
     } else { // in child
         if (argCount == 2) {
+            vm.mainThread->pid = getpid();
             callCallable(func, 0, false, NULL);
             stopVM(0);
         }
