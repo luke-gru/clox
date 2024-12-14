@@ -1,8 +1,18 @@
-#!/bin/bash
+#!/usr/bin/env sh
+
+# cd to clox root directory if not there already
+parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
+cd "$parent_path"/..
+
+file_ulimit=$(ulimit -n)
+
+if (( $file_ulimit < 1024 )); then
+  ulimit -n 1024
+fi
 
 rc=0;
 counter=0;
-failures=()
+failures=();
 
 # each test file failure sets the next bit to 1 if it fails
 ./bin/test/test_regex || let "rc += 1 << $counter"; let counter+=1;
