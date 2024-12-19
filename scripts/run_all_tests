@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 # cd to clox root directory if not there already
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
